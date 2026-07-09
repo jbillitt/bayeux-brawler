@@ -53,7 +53,7 @@ object GameData {
         GearItem("head_longbow", "Welsh Longbow", ItemType.WEAPON_HEAD, 1.2f, pierce = 25f, reach = 10.0f, isRanged = true, description = "A massive yew bow that can punch through chainmail at long range.", color = Color(0xFF5D4831)),
         GearItem("head_claymore", "Highland Claymore", ItemType.WEAPON_HEAD, 3.5f, slash = 30f, pierce = 10f, reach = 2.0f, description = "A massive two-handed sword. Cleaves shields in twain.", color = Color(0xFF9AA0A3)),
         GearItem("head_scythe", "War Scythe", ItemType.WEAPON_HEAD, 2.2f, slash = 25f, pierce = 10f, reach = 2.5f, description = "A farmer's tool turned lethal weapon. Reaches around shields.", color = Color(0xFF6C7175)),
-        GearItem("head_crossbow", "Heavy Crossbow", ItemType.WEAPON_HEAD, 3.0f, pierce = 40f, reach = 12.0f, isRanged = true, description = "A mechanical bow. Immense armor piercing, but slow to crank.", color = Color(0xFF4A3B2C))
+        GearItem("head_crossbow", "Heavy Crossbow", ItemType.WEAPON_HEAD, 1.5f, pierce = 65f, reach = 12.0f, isRanged = true, description = "A mechanical bow. High armor piercing and fast to crank.", color = Color(0xFF4A3B2C))
     )
 
     val WEAPON_HANDLES = listOf(
@@ -167,7 +167,9 @@ data class FighterState(
     val handleExtensionCount: Int = 0,
     val rangedUpgrades: List<String> = emptyList(),
     var poisonDuration: Float = 0f,
-    val isMounted: Boolean = false
+    var bleedDuration: Float = 0f,
+    val isMounted: Boolean = false,
+    var kills: Int = 0
 ) {
     // Simulated Base Stats
     val totalMass: Float
@@ -237,9 +239,9 @@ data class FighterState(
     val attackSpeedDelay: Float
         get() {
             val baseDelay = if (isRanged) {
-                if (weaponHead.id == "head_slingshot") 0.9f
-                else if (weaponHead.id == "head_longbow") 2.2f
-                else 1.6f
+                if (weaponHead.id == "head_slingshot") 1.8f // Slower slingshot
+                else if (weaponHead.id == "head_longbow") 2.5f
+                else 2.0f
             } else 1.1f
             // Weight slows you down slightly
             val weightFactor = 1f + (totalMass * 0.035f) + (size - 1f) * 0.5f
@@ -332,7 +334,8 @@ data class BattleSimState(
     
     // Level Up Choice State
     val pendingLevelUpChoices: List<LevelUpChoice> = emptyList(),
-    val showLevelUpScreen: Boolean = false
+    val showLevelUpScreen: Boolean = false,
+    val totalKills: Int = 0
 ) {
     val totalHpBoost: Float
         get() = unlockedAncillaries.sumOf { id -> GameData.ANCILLARIES.find { it.id == id }?.hpBoost?.toDouble() ?: 0.0 }.toFloat()

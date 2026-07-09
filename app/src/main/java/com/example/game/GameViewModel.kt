@@ -536,20 +536,24 @@ class GameViewModel : ViewModel() {
             fighter.poisonDuration -= dt
             val poisonDmg = 8f * dt // deals 8 damage per second
             if (fighter.hp > 0f) {
-                fighter.hp = (fighter.hp - poisonDmg).coerceAtLeast(0f)
                 if (Random.nextFloat() < dt * 1.5f) { // occasionally show green "+POISON+" popup
                     addPopup("POISON!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFF2E7D32))
                     addBloodParticles(fighter.posX, 100f, count = 2) // tiny droplets
                 }
-                if (fighter.hp <= 0f) {
-                    fighter.isDying = true
-                    fighter.animFrame = 0f
-                    fighter.deathType = Random.nextInt(0, 6)
-                    fighter.deathTime = System.currentTimeMillis()
-                    MedievalAudioSynth.playSound(SoundType.OUCH)
-                    val deathShout = if (fighter.isPlayer) "VÆ MIHI MORTIS!" else "AARRGGHH!"
-                    addPopup(deathShout, fighter.posX, 130f, Color.DarkGray)
+                applyFlatDamage(poisonDmg, fighter, isPlayerSource = !fighter.isPlayer)
+            }
+        }
+        
+        // Bleed tick over time
+        if (fighter.bleedDuration > 0f) {
+            fighter.bleedDuration -= dt
+            val bleedDmg = 12f * dt // deals 12 damage per second
+            if (fighter.hp > 0f) {
+                if (Random.nextFloat() < dt * 1.5f) {
+                    addPopup("BLEED!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFFA62B2B))
+                    addBloodParticles(fighter.posX, 100f, count = 3)
                 }
+                applyFlatDamage(bleedDmg, fighter, isPlayerSource = !fighter.isPlayer)
             }
         }
 
@@ -600,6 +604,10 @@ class GameViewModel : ViewModel() {
                     triggerAttack(fighter)
                 }
             }
+            
+            // Clamp position to screen bounds
+            fighter.posX = fighter.posX.coerceIn(30f, 970f)
+
         }
     }
 
@@ -748,7 +756,7 @@ class GameViewModel : ViewModel() {
                     // Still take minimal blunt impact damage
                     val blockDamage = (attacker.damageBlunt * 0.15f * damageFalloff).coerceAtLeast(1f)
                     if (blockDamage > 5f && kotlin.random.Random.nextBoolean()) MedievalAudioSynth.playSound(SoundType.CRUNCH)
-                    applyFlatDamage(blockDamage, currTarget)
+                    applyFlatDamage(blockDamage, currTarget, attacker.isPlayer)
                 } else {
                     // Full hit!
                     val slash = attacker.damageSlash * damageFalloff
@@ -761,7 +769,7 @@ class GameViewModel : ViewModel() {
                     
                     val totalDamage = (slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt
                     
-                    applyFlatDamage(totalDamage, currTarget)
+                    applyFlatDamage(totalDamage, currTarget, attacker.isPlayer)
 
                     // Play hit sounds & comedically yell in latin!
                     if (totalDamage > 0f) {
@@ -798,7 +806,7 @@ class GameViewModel : ViewModel() {
                         if (attacker.isPlayer) {
                             _enemiesState.value.forEach { enemy ->
                                 if (enemy != currTarget && !enemy.isDead && !enemy.isDying && abs(enemy.posX - currTarget.posX) < 100f) {
-                                    applyFlatDamage(splashDmg, enemy)
+                                    applyFlatDamage(splashDmg, enemy, attacker.isPlayer)
                                     addPopup("CLEAVE!", enemy.posX, 120f, Color(0xFF9E3624))
                                 }
                             }
@@ -824,7 +832,7 @@ class GameViewModel : ViewModel() {
         } else {
             val armorFactor = (1f - (defender.totalArmor / 100f)).coerceIn(0.15f, 1f)
             val totalDamage = (proj.damage * armorFactor) + (proj.blunt * 0.6f)
-            applyFlatDamage(totalDamage, defender)
+            applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
 
             if (totalDamage > 0f) {
                 val hitShout = LatinShouts.getRandomShout(SoundType.OUCH)
@@ -836,6 +844,12 @@ class GameViewModel : ViewModel() {
                 defender.poisonDuration = 5.0f
                 addPopup("+POISONED+", defender.posX, 120f, Color(0xFF2E7D32))
             }
+            
+            // Apply Spikes Bleed
+            if (proj.hasSpikes) {
+                defender.bleedDuration = 4.0f
+                addPopup("+BLEEDING+", defender.posX, 120f, Color(0xFFA62B2B))
+            }
 
             // Apply Splash Upgrade
             if (proj.isSplash) {
@@ -844,14 +858,14 @@ class GameViewModel : ViewModel() {
                 if (proj.isPlayerOwned) {
                     _enemiesState.value.forEach { enemy ->
                         if (enemy != defender && !enemy.isDead && !enemy.isDying && abs(enemy.posX - defender.posX) < 120f) {
-                            applyFlatDamage(splashDmg, enemy)
+                            applyFlatDamage(splashDmg, enemy, proj.isPlayerOwned)
                             addPopup("SPLASH!", enemy.posX, 140f, Color(0xFF9E3624))
                         }
                     }
                 } else {
                     _playerState.value?.let { player ->
                         if (player != defender && !player.isDead && !player.isDying && abs(player.posX - defender.posX) < 120f) {
-                            applyFlatDamage(splashDmg, player)
+                            applyFlatDamage(splashDmg, player, proj.isPlayerOwned)
                             addPopup("SPLASH!", player.posX, 140f, Color(0xFF9E3624))
                         }
                     }
@@ -860,7 +874,7 @@ class GameViewModel : ViewModel() {
         }
     }
 
-    private fun applyFlatDamage(dmg: Float, defender: FighterState) {
+    private fun applyFlatDamage(dmg: Float, defender: FighterState, isPlayerSource: Boolean = false) {
         if (defender.isDead || defender.isDying) return
         val finalDmg = dmg.coerceAtLeast(1f).toInt().toFloat()
         defender.hp = (defender.hp - finalDmg).coerceAtLeast(0f)
@@ -881,6 +895,9 @@ class GameViewModel : ViewModel() {
             MedievalAudioSynth.playSound(SoundType.OUCH)
             val deathShout = if (defender.isPlayer) "VÆ MIHI MORTIS!" else "AARRGGHH!"
             addPopup(deathShout, defender.posX, 130f, Color.DarkGray)
+            if (isPlayerSource && !defender.isPlayer) {
+                _uiState.value = _uiState.value.copy(totalKills = _uiState.value.totalKills + 1)
+            }
         }
     }
 

@@ -293,20 +293,33 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
+            if (uiState.showLevelUpScreen || uiState.pendingLevelUpChoices.isNotEmpty()) {
+                Text(
+                    text = "VICTORY!",
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,
+                    color = TapestryRed,
+                    modifier = Modifier.drawBehind {
+                        val y = size.height + 4f
+                        drawLine(TapestryDark, Offset(0f, y), Offset(size.width, y), strokeWidth = 3f)
+                    }
+                )
+            } else {
+                Text(
+                    text = "LEVEL ${uiState.level}",
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,
+                    color = TapestryDark,
+                    modifier = Modifier.drawBehind {
+                        val y = size.height + 4f
+                        drawLine(TapestryDark, Offset(0f, y), Offset(size.width, y), strokeWidth = 3f)
+                    }
+                )
+            }
             Text(
-                text = "YE HASTINGS MELEE",
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-                color = TapestryDark,
-                modifier = Modifier.drawBehind {
-                    // Stitched underline
-                    val y = size.height + 4f
-                    drawLine(TapestryDark, Offset(0f, y), Offset(size.width, y), strokeWidth = 3f)
-                }
-            )
-            Text(
-                text = "Level ${uiState.level}: The shoreline scuffle",
+                text = "The shoreline scuffle",
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
@@ -1086,7 +1099,7 @@ fun StatsAndLaunchPanel(
                     .fillMaxWidth()
                     .height(48.dp)
                     .testTag("commence_fight_btn"),
-                contentPadding = PaddingValues(0.dp)
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
             ) {
                 Text(
                     text = "COMMENCE YE FIGHT!",
@@ -1315,11 +1328,22 @@ fun BattlefieldScene(
                 viewModel.particlesState.value.forEach { part ->
                     val px = part.x * playerScaleX
                     val py = 200f + (part.y - 200f) * scaleFactor
-                    drawCircle(
-                        color = Color(0xFF9E3624).copy(alpha = 1f - (part.age / part.maxAge)),
-                        radius = 2.5f + (Math.random() * 2f).toFloat(),
-                        center = Offset(px, py)
-                    )
+                    
+                    if (part.y >= 240f) {
+                        val poolWidth = 5f + (part.age / part.maxAge) * 15f
+                        val poolHeight = 2f + (part.age / part.maxAge) * 5f
+                        drawOval(
+                            color = Color(0xFF9E3624).copy(alpha = (1f - (part.age / part.maxAge) * 0.5f).coerceIn(0f, 1f)),
+                            topLeft = Offset(px - poolWidth / 2, py - poolHeight / 2),
+                            size = Size(poolWidth, poolHeight)
+                        )
+                    } else {
+                        drawCircle(
+                            color = Color(0xFF9E3624).copy(alpha = (1f - (part.age / part.maxAge)).coerceIn(0f, 1f)),
+                            radius = 2.5f + (Math.random() * 2f).toFloat(),
+                            center = Offset(px, py)
+                        )
+                    }
                 }
 
                 // 6. Draw Floating Comic popups (e.g. *CLANGUS*, *THWACKUS*)
@@ -1361,17 +1385,64 @@ fun BattlefieldScene(
                         color = if (isWin) TapestryGreen else TapestryRed
                     )
 
-                    Text(
-                        text = if (isWin) {
-                            "Thy valiant Norman Knight hath vanquished Harold's Anglo-Saxon defenders! Thy gear score multiplier of x%.1f earned thee massive points.".format(uiState.scoreMultiplier)
-                        } else {
-                            "Thy knight hath collapsed in battle! The Saxon defenders stand victorious. Strip thy gear further to gain points, or steel thyself with heavier armor."
-                        },
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Serif,
-                        color = TapestryDark,
-                        textAlign = TextAlign.Center
-                    )
+                    
+                    if (isWin) {
+                        Text(
+                            text = "Thy valiant Norman Knight hath vanquished Harold's Anglo-Saxon defenders! Thy gear score multiplier of x%.1f earned thee massive points.".format(uiState.scoreMultiplier),
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Serif,
+                            color = TapestryDark,
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        val player = viewModel.playerState.collectAsState().value
+                        val quote = remember { listOf(
+                            "\"Time and tide wait for no man.\"\n- Geoffrey Chaucer",
+                            "\"All good things must come to an end.\"\n- Geoffrey Chaucer",
+                            "\"The greatest scholars are not usually the wisest people.\"\n- Geoffrey Chaucer",
+                            "\"Patience is a conquering virtue.\"\n- Geoffrey Chaucer",
+                            "\"Nothing ventured, nothing gained.\"\n- Geoffrey Chaucer"
+                        ).random() }
+                        
+                        Text(
+                            text = quote,
+                            fontSize = 12.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            fontFamily = FontFamily.Serif,
+                            color = Color(0xFF6B4423),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Box(modifier = Modifier.size(60.dp).background(Color(0xFFE5D3B3), RoundedCornerShape(4.dp)).border(2.dp, TapestryDark, RoundedCornerShape(4.dp))) {
+                                Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val sc = size.width / 40f
+                                    withTransform({
+                                        scale(sc, sc, pivot = Offset.Zero)
+                                        translate(20f, 35f)
+                                    }) {
+                                        if (player != null) {
+                                            // Draw just head without helmet
+                                            val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
+                                            com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Name: ${uiState.playerName}", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                Text("Weapon: ${player?.weaponHead?.name ?: "None"}", fontSize = 10.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                val anc = uiState.unlockedAncillaries.mapNotNull { id -> com.example.game.GameData.ANCILLARIES.find { it.id == id }?.name }.joinToString(", ")
+                                Text("Ancillaries: ${if (anc.isEmpty()) "None" else anc}", fontSize = 10.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                Text("Kills: ${uiState.totalKills}", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryRed)
+                            }
+                        }
+                    }
 
                     Button(
                         onClick = onDismiss,
@@ -1391,6 +1462,28 @@ fun BattlefieldScene(
                 }
             }
         }
+    }
+}
+
+private fun drawStatusEffects(scope: androidx.compose.ui.graphics.drawscope.DrawScope, x: Float, y: Float, fighter: com.example.game.FighterState) {
+    var offsetX = x - 10f
+    val iconRadius = 4f
+    
+    if (fighter.poisonDuration > 0f) {
+        // Draw poison symbol (green circle with P?) We can just draw a little green bubble
+        scope.drawCircle(color = Color(0xFF2E7D32), radius = iconRadius, center = Offset(offsetX, y))
+        offsetX += 12f
+    }
+    if (fighter.bleedDuration > 0f) {
+        // Draw bleed symbol (red droplet)
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(offsetX, y - iconRadius)
+            lineTo(offsetX + iconRadius, y + iconRadius * 0.5f)
+            arcTo(androidx.compose.ui.geometry.Rect(offsetX - iconRadius, y - iconRadius * 0.5f, offsetX + iconRadius, y + iconRadius * 1.5f), 0f, 180f, false)
+            close()
+        }
+        scope.drawPath(path, color = Color(0xFFA62B2B))
+        offsetX += 12f
     }
 }
 

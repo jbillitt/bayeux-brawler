@@ -233,7 +233,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                     // Left: Character Preview
                     Box(
                         modifier = Modifier
-                            .weight(0.35f)
+                            .weight(0.24f)
                             .fillMaxHeight()
                     ) {
                         CharacterPreviewCard(uiState = uiState)
@@ -242,7 +242,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                     // Middle: Tabbed Component Lists or Level Up Screen
                     Box(
                         modifier = Modifier
-                            .weight(0.42f)
+                            .weight(0.53f)
                             .fillMaxHeight()
                     ) {
                         if (uiState.showLevelUpScreen || uiState.level > 1) {
@@ -499,13 +499,14 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                     facingRight = true,
                     size = uiState.characterSize,
                     hairColor = uiState.hairColor,
-                    hairStyle = uiState.hairStyle
+                    hairStyle = uiState.hairStyle,
+                    isMounted = uiState.unlockedAncillaries.contains("anc_mount_horse")
                 )
 
                 // Render at massive scale (Fancam style!)
                 // Center it slightly lower so the head doesn't clip
                 translate(top = -40f) {
-                    TapestryRenderer.drawCharacter(this, dummyFighter, scale = 1.9f)
+                    TapestryRenderer.drawCharacter(this, dummyFighter, scale = 1.35f)
                 }
             }
         }
@@ -525,19 +526,19 @@ fun LevelUpScreen(uiState: BattleSimState, onSelectChoice: (String) -> Unit, onS
     ) {
         // Distinct, grand level up callout
         Text(
-            "VICTORY & ASCENSION!",
-            fontSize = 28.sp,
+            "Victory!",
+            fontSize = 24.sp,
             fontWeight = FontWeight.ExtraBold,
             color = TapestryRed,
             fontFamily = FontFamily.Serif,
             modifier = Modifier.padding(bottom = 4.dp)
         )
         Text(
-            "Select thy spoils of war to forge thy legendary saga:",
-            fontSize = 14.sp,
+            "Select thy spoils of war:",
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = TapestryDark.copy(alpha = 0.85f),
-            modifier = Modifier.padding(bottom = 20.dp)
+            modifier = Modifier.padding(bottom = 12.dp)
         )
 
         if (uiState.pendingLevelUpChoices.isEmpty()) {
@@ -555,75 +556,80 @@ fun LevelUpScreen(uiState: BattleSimState, onSelectChoice: (String) -> Unit, onS
             ) {
                 Text("Proceed to Next Battle", color = Color.White, fontWeight = FontWeight.Bold)
             }
-        } else {
+                } else {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 uiState.pendingLevelUpChoices.forEach { choice ->
                     // Choose colors and tags based on upgrade types
                     val (bannerColor, titleColor, tagLabel) = when (choice.type) {
-                        "follower" -> Triple(Color(0xFFE3F2FD), TapestryBlue, "ENTOURAGE")
-                        "attachment" -> Triple(Color(0xFFFFEBEE), TapestryRed, "WEAPON HEAD")
-                        "extension" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "HAFT UPGRADE")
-                        "armor" -> Triple(Color(0xFFFFF8E1), Color(0xFF8D6E63), "LAYERED ARMOR")
-                        else -> Triple(Color(0xFFF5F5F5), TapestryDark, "UPGRADE")
+                        "follower" -> Triple(Color(0xFFE3F2FD), TapestryBlue, "Entourage")
+                        "attachment" -> Triple(Color(0xFFFFEBEE), TapestryRed, "Weapon Head")
+                        "extension" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "Haft Upgrade")
+                        "armor" -> Triple(Color(0xFFFFF8E1), Color(0xFF8D6E63), "Layered Armor")
+                        else -> Triple(Color(0xFFF5F5F5), TapestryDark, "Upgrade")
                     }
-
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(vertical = 2.dp)
                             .clickable { onSelectChoice(choice.id) },
                         colors = CardDefaults.cardColors(containerColor = bannerColor),
                         border = BorderStroke(1.5.dp, titleColor),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Column(
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                                horizontalAlignment = Alignment.Start
+                            ) {
                                 Text(
                                     tagLabel,
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = titleColor,
                                     modifier = Modifier
                                         .background(Color.White, RoundedCornerShape(3.dp))
                                         .border(0.5.dp, titleColor, RoundedCornerShape(3.dp))
-                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     choice.title,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                     color = TapestryDark,
-                                    fontFamily = FontFamily.Serif
+                                    fontFamily = FontFamily.Serif,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     choice.description,
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     lineHeight = 14.sp,
-                                    color = TapestryDark.copy(alpha = 0.8f)
+                                    color = TapestryDark.copy(alpha = 0.85f)
                                 )
                             }
                             
                             // Beautiful right arrow for M3 interaction
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
-                                    .background(titleColor, RoundedCornerShape(14.dp)),
+                                    .size(36.dp)
+                                    .background(titleColor, RoundedCornerShape(18.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("⚔", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("⚔", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -661,20 +667,7 @@ fun GearSelectionTabs(
             .border(2.dp, TapestryDark, RoundedCornerShape(8.dp))
             .padding(6.dp)
     ) {
-        // Dual Wield Toggle (above tabs)
-        if (uiState.shield.id == "shield_none") {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).clickable { onToggleDualWield() },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                androidx.compose.material3.Checkbox(
-                    checked = uiState.isDualWielding,
-                    onCheckedChange = { onToggleDualWield() },
-                    modifier = Modifier.scale(0.8f)
-                )
-                Text("Dual Wield", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
-            }
-        }
+
         // Tab Headers
         androidx.compose.material3.ScrollableTabRow(
             selectedTabIndex = selectedTab,
@@ -796,6 +789,25 @@ fun GearSelectionTabs(
                     }
                 }
             } else {
+                if (selectedTab == 0 && uiState.shield.id == "shield_none") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .background(TapestryLinenCard, RoundedCornerShape(4.dp))
+                            .border(1.dp, TapestryDark, RoundedCornerShape(4.dp))
+                            .clickable { onToggleDualWield() },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = uiState.isDualWielding,
+                            onCheckedChange = { onToggleDualWield() },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                        Text("Dual Wield (Copies main weapon to off-hand)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
+                    }
+                }
+                
                 val itemsToShow = when (selectedTab) {
                     0 -> GameData.WEAPON_HEADS.filter { it.id in uiState.unlockedGearIds }
                     1 -> GameData.SHIELDS.filter { it.id in uiState.unlockedGearIds }
@@ -966,7 +978,8 @@ fun StatsAndLaunchPanel(
             armor = uiState.armor,
             headgear = uiState.headgear,
             isDualWielding = uiState.isDualWielding,
-            posX = 0f, targetX = 0f
+            posX = 0f, targetX = 0f,
+            isMounted = uiState.unlockedAncillaries.contains("anc_mount_horse")
         )
     }
 

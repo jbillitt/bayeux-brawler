@@ -26,7 +26,8 @@ enum class SoundType {
     THWACK,  // Soft tissue hit / blunt force
     SWOOSH,  // Weapon swing or flying projectile
     OUCH,    // Comedic pain screech
-    HUZZAH   // Victory trumpet fanfare
+    HUZZAH,  // Victory trumpet fanfare
+    CRUNCH   // Bone breaking / heavy smash
 }
 
 object MedievalAudioSynth {
@@ -73,17 +74,18 @@ object MedievalAudioSynth {
                 val duration = 0.25f
                 val numSamples = (SAMPLE_RATE * duration).toInt()
                 val samples = ShortArray(numSamples)
+                val baseFreq = 700 + Math.random() * 400
                 for (i in 0 until numSamples) {
                     val t = i.toFloat() / SAMPLE_RATE
                     val envelope = (1.0f - t / duration) * (1.0f - t / duration)
-                    val sine = sin(2 * PI * 880 * t) + 0.6 * sin(2 * PI * 1320 * t) + 0.4 * sin(2 * PI * 1760 * t)
+                    val sine = sin(2 * PI * baseFreq * t) + 0.6 * sin(2 * PI * baseFreq * 1.5 * t) + 0.4 * sin(2 * PI * baseFreq * 2.0 * t)
                     val noise = (Math.random() * 2 - 1) * 0.15
                     val value = ((sine + noise) / 1.75 * envelope * 28000).toInt()
                     samples[i] = value.coerceIn(-32768, 32767).toShort()
                 }
                 samples
             }
-            SoundType.THWACK -> {
+                        SoundType.THWACK -> {
                 val duration = 0.18f
                 val numSamples = (SAMPLE_RATE * duration).toInt()
                 val samples = ShortArray(numSamples)
@@ -91,9 +93,31 @@ object MedievalAudioSynth {
                     val t = i.toFloat() / SAMPLE_RATE
                     val envelope = (1.0f - t / duration)
                     val freq = 160f - (100f * (t / duration))
-                    val sine = sin(2 * PI * freq * t)
+                    val sine = kotlin.math.sin(2 * kotlin.math.PI * freq * t)
                     val noise = (Math.random() * 2 - 1) * 0.1
                     val value = ((sine + noise) / 1.1 * envelope * 30000).toInt()
+                    samples[i] = value.coerceIn(-32768, 32767).toShort()
+                }
+                samples
+            }
+            SoundType.CRUNCH -> {
+                val duration = 0.25f
+                val numSamples = (SAMPLE_RATE * duration).toInt()
+                val samples = ShortArray(numSamples)
+                for (i in 0 until numSamples) {
+                    val t = i.toFloat() / SAMPLE_RATE
+                    val envelope = kotlin.math.exp(-15.0 * t) // fast decay
+                    val freq = 80f * kotlin.math.exp(-5.0 * t) // pitch drop
+                    val sine = kotlin.math.sin(2 * kotlin.math.PI * freq * t)
+                    
+                    // heavily distorted noise for bone crushing
+                    var noise = (Math.random() * 2 - 1) * 0.6
+                    noise = 1.5 * noise - 0.5 * noise * noise * noise // crude saturation
+                    
+                    // some higher frequency artifacts for snapping bones
+                    val snap = if (t < 0.05f) (Math.random() * 2 - 1) * 0.4 else 0.0
+                    
+                    val value = ((sine + noise + snap) * envelope * 32000).toInt()
                     samples[i] = value.coerceIn(-32768, 32767).toShort()
                 }
                 samples
@@ -320,9 +344,9 @@ object ProceduralMedievalComposer {
         val result = mutableListOf<Pair<Int, Boolean>>()
         var remaining = stepsInPhrase
         // At low levels: slow, free rhythm (longer notes). Higher levels: more pulse.
-        val minNoteSteps = if (level <= 2) 2 else 1
-        val maxNoteSteps = if (level <= 2) 6 else if (level <= 4) 4 else 3
-        val restChance    = if (level <= 2) 0.18f else 0.08f
+        val minNoteSteps = 1
+        val maxNoteSteps = if (level <= 2) 4 else 3
+        val restChance    = if (level <= 2) 0.12f else 0.08f
 
         while (remaining > 0) {
             val actualMin = min(minNoteSteps, remaining)
@@ -335,6 +359,41 @@ object ProceduralMedievalComposer {
     }
 
     // ---- PCM sample generators ----
+
+    private fun luteNote(freq: Float, durationMs: Int, velocity: Float, sampleRate: Int): ShortArray {
+        val numSamples = (sampleRate * durationMs / 1000.0).toInt()
+        val samples = ShortArray(numSamples)
+        val fD = freq.toDouble()
+        val velD = velocity.toDouble()
+        for (i in 0 until numSamples) {
+            val t = i.toDouble() / sampleRate
+            // Faster decay than harp, sharper pluck
+            val envelope = if (t < 0.002) (t / 0.002) else kotlin.math.exp(-4.5 * (t - 0.002))
+            val wave = (kotlin.math.sin(2 * kotlin.math.PI * fD * t)
+                + 0.7 * kotlin.math.sin(2 * kotlin.math.PI * 2 * fD * t) * kotlin.math.exp(-2.0 * t)
+                + 0.5 * kotlin.math.sin(2 * kotlin.math.PI * 3 * fD * t) * kotlin.math.exp(-4.0 * t)
+                + 0.2 * kotlin.math.sin(2 * kotlin.math.PI * 4 * fD * t) * kotlin.math.exp(-6.0 * t))
+            val noise = if (t < 0.01) (Math.random() * 2.0 - 1.0) * 0.25 * (1.0 - t / 0.01) else 0.0
+            samples[i] = ((wave + noise) * envelope * velD * 6000.0).toInt().coerceIn(-32768, 32767).toShort()
+        }
+        return samples
+    }
+
+    private fun tambourineHit(durationMs: Int, sampleRate: Int, velocity: Float): ShortArray {
+        val numSamples = (sampleRate * durationMs / 1000.0).toInt()
+        val samples = ShortArray(numSamples)
+        val velD = velocity.toDouble()
+        for (i in 0 until numSamples) {
+            val t = i.toDouble() / sampleRate
+            val envelope = kotlin.math.exp(-12.0 * t)
+            // Metallic noise (jingles)
+            val noise = (Math.random() * 2.0 - 1.0)
+            // High-pass filter approximation by subtracting smoothed noise
+            val jingle = noise * kotlin.math.sin(2 * kotlin.math.PI * 8000.0 * t)
+            samples[i] = (jingle * envelope * velD * 10000.0).toInt().coerceIn(-32768, 32767).toShort()
+        }
+        return samples
+    }
 
     private fun harpNote(freq: Float, durationMs: Int, velocity: Float, sampleRate: Int): ShortArray {
         val numSamples = (sampleRate * durationMs / 1000.0).toInt()
@@ -385,9 +444,9 @@ object ProceduralMedievalComposer {
                 t > dur - release -> (dur - t) / release
                 else              -> 1.0
             }.coerceIn(0.0, 1.0)
-            // Gentle vibrato (5 Hz) – recorder/flute character
-            val vibrato = 1.0 + 0.012 * sin(2 * PI * 5.0 * t)
-            val wave = sin(2 * PI * fD * vibrato * t) + 0.1 * sin(2 * PI * 3 * fD * vibrato * t)
+            // Gentle vibrato (5 Hz)
+            val p = 2 * PI * fD * t + 0.15 * sin(2 * PI * 5.0 * t)
+            val wave = sin(p) + 0.1 * sin(3 * p)
             val breath = (Math.random() * 2.0 - 1.0) * 0.04
             samples[i] = ((wave + breath) * env * velD * 4200.0).toInt().coerceIn(-32768, 32767).toShort()
         }
@@ -499,14 +558,14 @@ object ProceduralMedievalComposer {
         // Level 1: sparse, slow arpeggios. Higher levels: denser, more rhythmic.
         writeHarpLayer(master, scale, markovMatrix, rng, stepMs, totalSteps, level, sampleRate)
 
-        // ---- LAYER 2: DRONE STRINGS (level 2+) ----
+        // ---- LAYER 2: LUTE CHORDS (level 2+) ----
         if (level >= 2) {
-            writeDroneLayer(master, modeRoot, totalMs, rng, destiny, sampleRate)
+            writeLuteLayer(master, scale, rng, stepMs, totalSteps, sampleRate)
         }
 
-        // ---- LAYER 3: RECORDER MELODY (level 3+) ----
+        // ---- LAYER 3: DRONE STRINGS (level 3+) ----
         if (level >= 3) {
-            writeRecorderLayer(master, scale, markovMatrix, rng, stepMs, totalSteps, level, sampleRate)
+            writeDroneLayer(master, modeRoot, totalMs, rng, destiny, sampleRate)
         }
 
         // ---- LAYER 4: BODHRAN / WAR DRUM (level 4+) ----
@@ -514,13 +573,23 @@ object ProceduralMedievalComposer {
             writeBodhranLayer(master, stepMs, totalSteps, rng, destiny, sampleRate)
         }
 
-        // ---- LAYER 5: HORN ORGANUM (level 5+) ----
+        // ---- LAYER 5: RECORDER MELODY (level 5+) ----
         if (level >= 5) {
+            writeRecorderLayer(master, scale, markovMatrix, rng, stepMs, totalSteps, level, sampleRate)
+        }
+
+        // ---- LAYER 6: TAMBOURINE (level 6+) ----
+        if (level >= 6) {
+            writeTambourineLayer(master, stepMs, totalSteps, rng, sampleRate)
+        }
+
+        // ---- LAYER 7: HORN ORGANUM (level 7+) ----
+        if (level >= 7) {
             writeHornLayer(master, scale, markovMatrix, rng, stepMs, totalSteps, destiny, sampleRate)
         }
 
-        // ---- LAYER 6: PSALTERY COUNTER-MELODY (level 6+ / ORCHESTRAL destiny) ----
-        if (level >= 6 && destiny == MusicalDestiny.ORCHESTRAL) {
+        // ---- LAYER 8: PSALTERY COUNTER-MELODY (level 8+ / ORCHESTRAL destiny) ----
+        if (level >= 8 && destiny == MusicalDestiny.ORCHESTRAL) {
             writePsalteryLayer(master, scale, markovMatrix, rng, stepMs, totalSteps, sampleRate)
         }
 
@@ -529,10 +598,85 @@ object ProceduralMedievalComposer {
             writeTrumpeterLayer(master, scale, rng, stepMs, totalSteps, sampleRate)
         }
 
+        // --- MASTERING: CAVERNOUS CASTLE REVERB (Wrap-around Delay) ---
+        // We use a dotted-8th note delay (3 steps) to create rhythmic echoes
+        // that bleed beautifully across the loop seam.
+        val delaySamples = sampleRate * (stepMs * 3) / 1000
+        val feedback = 0.4f
+        val wetMix = 0.5f // 50% wet
+        
+        // We need a temporary buffer to avoid feedback explosion during the loop pass
+        val wetBuffer = ShortArray(totalSamples)
+        for (i in 0 until totalSamples) {
+            val srcIndex = (i - delaySamples + totalSamples) % totalSamples
+            // Simple low-pass filter on the echo to make it darker (castle walls)
+            val prevSrc = (srcIndex - 1 + totalSamples) % totalSamples
+            val echoRaw = (master[srcIndex] * 0.6f + master[prevSrc] * 0.4f)
+            val echo = (echoRaw * feedback) + (wetBuffer[srcIndex] * feedback * 0.5f)
+            wetBuffer[i] = echo.toInt().coerceIn(-32768, 32767).toShort()
+        }
+        
+        // Mix dry + wet and apply a subtle soft-clipper/limiter
+        for (i in 0 until totalSamples) {
+            val dry = master[i].toFloat()
+            val wet = wetBuffer[i].toFloat() * wetMix
+            var out = dry + wet
+            // Soft clipping
+            out = 32767f * kotlin.math.tanh(out / 32767f)
+            master[i] = out.toInt().coerceIn(-32768, 32767).toShort()
+        }
+
         return master
     }
 
     // ---- LAYER WRITERS ----
+
+    private fun writeLuteLayer(
+        master: ShortArray, scale: FloatArray,
+        rng: kotlin.random.Random, stepMs: Int, totalSteps: Int, sampleRate: Int
+    ) {
+        // Lute plays rhythmic arpeggiated chords
+        val stepsPerBar = 8
+        val numBars = totalSteps / stepsPerBar
+        
+        for (bar in 0 until numBars) {
+            // Pick a chord root for this bar (I, IV, V, or VI)
+            val rootDeg = listOf(0, 3, 4, 5).random(rng).coerceIn(0, scale.size - 1)
+            val thirdDeg = (rootDeg + 2).coerceIn(0, scale.size - 1)
+            val fifthDeg = (rootDeg + 4).coerceIn(0, scale.size - 1)
+            
+            val rFreq = scale[rootDeg]
+            val tFreq = scale[thirdDeg]
+            val fFreq = scale[fifthDeg]
+            
+            // Arpeggiate rhythmically: root on beat 0, fifth on beat 2, third on beat 4, octave on beat 6
+            val barStartStep = bar * stepsPerBar
+            
+            val dur = stepMs * 2
+            mix(master, luteNote(rFreq, dur, 0.8f, sampleRate), sampleOffset((barStartStep * stepMs).toFloat(), sampleRate), 0.7f)
+            mix(master, luteNote(fFreq, dur, 0.6f, sampleRate), sampleOffset(((barStartStep + 2) * stepMs).toFloat(), sampleRate), 0.6f)
+            mix(master, luteNote(tFreq, dur, 0.7f, sampleRate), sampleOffset(((barStartStep + 4) * stepMs).toFloat(), sampleRate), 0.65f)
+            mix(master, luteNote(rFreq * 2f, dur, 0.6f, sampleRate), sampleOffset(((barStartStep + 6) * stepMs).toFloat(), sampleRate), 0.6f)
+        }
+    }
+
+    private fun writeTambourineLayer(
+        master: ShortArray, stepMs: Int, totalSteps: Int,
+        rng: kotlin.random.Random, sampleRate: Int
+    ) {
+        // Tambourine plays on off-beats (steps 2, 6)
+        for (i in 0 until totalSteps) {
+            if (i % 4 == 2) {
+                val startMs = (i * stepMs).toFloat()
+                val vel = 0.5f + rng.nextFloat() * 0.3f
+                mix(master, tambourineHit(stepMs, sampleRate, vel), sampleOffset(startMs, sampleRate), 0.8f)
+            } else if (i % 4 == 0 && rng.nextFloat() < 0.2f) {
+                // Occasional on-beat accent
+                val startMs = (i * stepMs).toFloat()
+                mix(master, tambourineHit(stepMs, sampleRate, 0.9f), sampleOffset(startMs, sampleRate), 0.9f)
+            }
+        }
+    }
 
     private fun writeHarpLayer(
         master: ShortArray, scale: FloatArray,

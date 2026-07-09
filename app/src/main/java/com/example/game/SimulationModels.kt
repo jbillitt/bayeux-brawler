@@ -52,7 +52,8 @@ object GameData {
         GearItem("head_flail", "Spiked Flail", ItemType.WEAPON_HEAD, 2.0f, blunt = 18f, pierce = 5f, reach = 1.5f, description = "A spiked ball on a chain. Unpredictable and hard to block.", color = Color(0xFF535C61)),
         GearItem("head_longbow", "Welsh Longbow", ItemType.WEAPON_HEAD, 1.2f, pierce = 25f, reach = 10.0f, isRanged = true, description = "A massive yew bow that can punch through chainmail at long range.", color = Color(0xFF5D4831)),
         GearItem("head_claymore", "Highland Claymore", ItemType.WEAPON_HEAD, 3.5f, slash = 30f, pierce = 10f, reach = 2.0f, description = "A massive two-handed sword. Cleaves shields in twain.", color = Color(0xFF9AA0A3)),
-        GearItem("head_scythe", "War Scythe", ItemType.WEAPON_HEAD, 2.2f, slash = 25f, pierce = 10f, reach = 2.5f, description = "A farmer's tool turned lethal weapon. Reaches around shields.", color = Color(0xFF6C7175))
+        GearItem("head_scythe", "War Scythe", ItemType.WEAPON_HEAD, 2.2f, slash = 25f, pierce = 10f, reach = 2.5f, description = "A farmer's tool turned lethal weapon. Reaches around shields.", color = Color(0xFF6C7175)),
+        GearItem("head_crossbow", "Heavy Crossbow", ItemType.WEAPON_HEAD, 3.0f, pierce = 40f, reach = 12.0f, isRanged = true, description = "A mechanical bow. Immense armor piercing, but slow to crank.", color = Color(0xFF4A3B2C))
     )
 
     val WEAPON_HANDLES = listOf(
@@ -61,6 +62,8 @@ object GameData {
         GearItem("handle_medium", "Hickory Shaft", ItemType.WEAPON_HANDLE, 0.8f, reach = 0.3f, speedPenalty = 0.05f, description = "A sturdy medium wooden handle. Balanced and reliable.", color = Color(0xFF8C6F47)),
         GearItem("handle_long", "Long Ash Pole", ItemType.WEAPON_HANDLE, 1.8f, reach = 1.2f, speedPenalty = 0.2f, description = "A lengthy 6-foot spear haft. Drastically increases reach but is slow to turn.", color = Color(0xFF735835)),
         GearItem("handle_iron", "Iron-shod Haft", ItemType.WEAPON_HANDLE, 2.5f, reach = 0.5f, speedPenalty = 0.15f, description = "A heavy, iron-reinforced shaft. Hits harder but swings slower.", color = Color(0xFF636A6E)),
+        GearItem("handle_wheel", "Cart Wheel", ItemType.WEAPON_HANDLE, 3.5f, reach = 0.6f, speedPenalty = 0.4f, description = "A literal wooden cart wheel as a handle. Ludicrously heavy, but incredible momentum.", color = Color(0xFF6E5536)),
+        GearItem("handle_pick", "Mining Pick Handle", ItemType.WEAPON_HANDLE, 1.2f, reach = 0.4f, speedPenalty = 0.08f, description = "An angled wooden pick handle. Grants weird but effective striking angles.", color = Color(0xFF7A654C)),
         GearItem("handle_chain", "Bayeux Iron Chain", ItemType.WEAPON_HANDLE, 1.5f, reach = 0.8f, speedPenalty = 0.25f, description = "An iron chain linking your grip to the weapon. Swings wildly in a floppy arc! Slower, but hits with high momentum.", color = Color(0xFF4C5154)),
         GearItem("handle_double_ended", "Double-Ended Pole", ItemType.WEAPON_HANDLE, 2.0f, reach = 1.0f, speedPenalty = 0.35f, description = "A wooden pole allowing heads on BOTH ends! Slower, but covers both ends and deals 1.5x damage.", color = Color(0xFF5D4831))
     )
@@ -92,6 +95,8 @@ object GameData {
         Ancillary("anc_squire", "Baldrick", "Squire", "A useless but enthusiastic lad carrying your spare tunics.", hpBoost = 20f, color = Color(0xFF539462)),
         Ancillary("anc_herald", "Sir Boast-a-lot", "Herald", "Announces your presence loudly. Intimidates peasants.", speedBoost = 0.2f, color = Color(0xFFB03131)),
         Ancillary("anc_trumpeter", "Tooty", "Trumpeter", "Plays off-key trumpet blasts during battle.", hpBoost = 10f, speedBoost = 0.1f, color = Color(0xFFD6A420)),
+        Ancillary("anc_crossbowman", "Gaston", "Crossbowman", "Slow but devastating ranged cover fire. Pierces mail.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF3B2F2F)),
+        Ancillary("anc_mount_horse", "Warhorse", "Destrier", "A towering Norman warhorse. Grants massive speed and HP.", hpBoost = 80f, speedBoost = 0.5f, color = Color(0xFF452E1B)),
         Ancillary("anc_cupbearer", "Geoffrey", "Cupbearer", "Refills your goblet with fine wine mid-swing.", hpBoost = 40f, speedBoost = -0.1f, color = Color(0xFF632873)),
         Ancillary("anc_archer", "Robin", "Longbowman", "Fires covering arrows into the fray. Just mind your back.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFF4C613D))
     )
@@ -116,12 +121,12 @@ data class FighterState(
     var ghostHp: Float = hp,
     
     // Equipped gear
-    val weaponHead: GearItem,
-    val weaponHandle: GearItem,
-    val shield: GearItem,
-    val armor: GearItem,
-    val headgear: GearItem,
-    val isDualWielding: Boolean = false,
+    var weaponHead: GearItem,
+    var weaponHandle: GearItem,
+    var shield: GearItem,
+    var armor: GearItem,
+    var headgear: GearItem,
+    var isDualWielding: Boolean = false,
 
     // Dynamic state
     var posX: Float, // 0 to 1000 representing the scrollable battlefield
@@ -150,6 +155,10 @@ data class FighterState(
     var deathType: Int = 0,
     var deathTime: Long = 0L,
     
+    // Status effects
+    var missingArm: Boolean = false,
+    var isCrumpled: Boolean = false,
+    
     val speedBoost: Float = 0f,
 
     // Roguelike attachments and layers (Level Up Upgrades)
@@ -157,7 +166,8 @@ data class FighterState(
     val extraArmors: List<GearItem> = emptyList(),
     val handleExtensionCount: Int = 0,
     val rangedUpgrades: List<String> = emptyList(),
-    var poisonDuration: Float = 0f
+    var poisonDuration: Float = 0f,
+    val isMounted: Boolean = false
 ) {
     // Simulated Base Stats
     val totalMass: Float
@@ -233,11 +243,12 @@ data class FighterState(
             } else 1.1f
             // Weight slows you down slightly
             val weightFactor = 1f + (totalMass * 0.035f) + (size - 1f) * 0.5f
-            // Two-handing (no shield) doubles weapon speed!
-            val shieldFactor = if (shield.id == "shield_none") 0.5f else 1.0f
+            // Two-handing (no shield) doubles weapon speed! Missing an arm means you can't two-hand.
+            val shieldFactor = if (missingArm) 1.0f else if (shield.id == "shield_none" && !isDualWielding) 0.5f else if (isDualWielding) 0.6f else 1.0f
             // Speed penalty from handle choices
             val handleSpeedPenalty = weaponHandle.speedPenalty + (if (weaponHandle.id == "handle_double_ended") 0.15f else 0f)
-            val finalDelay = baseDelay * weightFactor * shieldFactor * (1f + handleSpeedPenalty)
+            val crumpleFactor = if (isCrumpled) 1.5f else 1.0f
+            val finalDelay = baseDelay * weightFactor * shieldFactor * (1f + handleSpeedPenalty) * crumpleFactor
             return max(0.4f, finalDelay)
         }
 
@@ -247,8 +258,9 @@ data class FighterState(
             val baseSpeed = if (isPlayer) 75f else 60f // Pixels per second
             // Bigger characters move slower base speed
             val sizeSpeed = baseSpeed / size
+            val crumplePenalty = if (isCrumpled) 0.5f else 1.0f
             val penaltyFactor = 1f - (totalMass * 0.025f).coerceIn(0f, 0.6f)
-            return (sizeSpeed * penaltyFactor) * (1f + speedBoost)
+            return (sizeSpeed * penaltyFactor) * (1f + speedBoost) * crumplePenalty
         }
 
     // Multiplier for points: naked = high risk = huge bonus points!
@@ -284,7 +296,7 @@ class BloodParticle(
     var vx: Float,
     var vy: Float,
     var age: Float = 0f,
-    val maxAge: Float = 0.6f + Random.nextFloat() * 0.4f
+    val maxAge: Float = 4.0f + Random.nextFloat() * 4.0f // linger longer on the ground!
 )
 
 // Main Game State
@@ -359,7 +371,7 @@ object LatinShouts {
     fun getRandomShout(type: SoundType, strikeType: String = ""): String {
         return when (type) {
             SoundType.CLANG -> BLOCK_SHOUTS.random()
-            SoundType.THWACK -> {
+            SoundType.THWACK, SoundType.CRUNCH -> {
                 when (strikeType) {
                     "pierce" -> PIERCE_SHOUTS.random()
                     "slash" -> SLASH_SHOUTS.random()
@@ -369,6 +381,7 @@ object LatinShouts {
             SoundType.OUCH -> DAMAGE_SHOUTS.random()
             SoundType.HUZZAH -> VICTORY_SHOUTS.random()
             SoundType.SWOOSH -> "SWOOSHUS!"
+            else -> ""
         }
     }
 }

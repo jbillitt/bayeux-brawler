@@ -249,7 +249,8 @@ class GameViewModel : ViewModel() {
             extraArmors = state.extraArmors.mapNotNull { id -> GameData.ARMOR_PIECES.find { it.id == id } },
             handleExtensionCount = state.handleExtensionCount,
             speedBoost = state.totalSpeedBoost,
-            rangedUpgrades = state.rangedUpgrades
+            rangedUpgrades = state.rangedUpgrades,
+            isMounted = state.unlockedAncillaries.contains("anc_mount_horse")
         )
 
         // Create Saxon enemies based on level
@@ -284,43 +285,57 @@ class GameViewModel : ViewModel() {
         val names = listOf(
             "Harold of Essex", "Gyrth Shield-Cleaver", "Leofwine", "Tostig Dunce", 
             "Aldred the Bald", "Godwin the Grumpy", "Sigurd Skull-Basher", "Ethelred the Unready",
-            "Cerdic the Giant", "Wulfric", "Odo the Swift"
+            "Cerdic the Giant", "Wulfric", "Odo the Swift", "Aelfric", "Leofric", "Edric"
         )
         val saxonName = if (index < names.size) names[index] else "Saxon Foe ${index + 1}"
 
         // Scale Saxon health slightly with level
-        val baseHp = 60f + (level * 8f)
+        val baseHp = 50f + (level * 10f)
 
-        // Saxon gear is randomly compiled from weapon options
-        val weaponHeads = listOf(
-            GameData.WEAPON_HEADS[1], // pike
-            GameData.WEAPON_HEADS[2], // axe
-            GameData.WEAPON_HEADS[3], // sword
-            GameData.WEAPON_HEADS[4], // morningstar
-            GameData.WEAPON_HEADS[6], // spear
-            GameData.WEAPON_HEADS[7], // dagger
-            GameData.WEAPON_HEADS[8], // bow
-            GameData.WEAPON_HEADS[9], // slingshot
-            GameData.WEAPON_HEADS[10] // halberd
-        )
-        val selectedHead = weaponHeads.random()
-        val selectedHandle = if (selectedHead.isRanged) GameData.WEAPON_HANDLES[0] else listOf(GameData.WEAPON_HANDLES[1], GameData.WEAPON_HANDLES[2], GameData.WEAPON_HANDLES[4]).random()
-        
-        // Saxon shields: some have shields, some don't
-        val saxonShields = listOf(GameData.SHIELDS[0], GameData.SHIELDS[1], GameData.SHIELDS[2], GameData.SHIELDS[3])
-        val selectedShield = if (selectedHead.isRanged) GameData.SHIELDS[0] else saxonShields.random()
+        // Poor gear for early levels
+        val selectedHead: com.example.game.GearItem
+        val selectedHandle: com.example.game.GearItem
+        val selectedShield: com.example.game.GearItem
+        val selectedArmor: com.example.game.GearItem
+        val selectedHelm: com.example.game.GearItem
 
-        // Saxon armor: mostly padded or chainmail depending on level
-        val armorOptions = if (level > 2) {
-            listOf(GameData.ARMOR_PIECES[1], GameData.ARMOR_PIECES[2], GameData.ARMOR_PIECES[3], GameData.ARMOR_PIECES[4])
+        if (level <= 2) {
+            // Early levels: pitchforks, clubs, slingshots, mostly shirtless or tunic
+            val earlyHeads = listOf("head_bare", "head_pitchfork", "head_club", "head_slingshot", "head_dagger")
+            val head = GameData.WEAPON_HEADS.filter { it.id in earlyHeads }.randomOrNull() ?: GameData.WEAPON_HEADS[0]
+            selectedHead = head
+            selectedHandle = if (head.isRanged || head.id == "head_bare") GameData.WEAPON_HANDLES[0] else GameData.WEAPON_HANDLES.filter { it.id in listOf("handle_short", "handle_medium") }.random()
+            selectedShield = GameData.SHIELDS[0] // No shield early
+            val armors = GameData.ARMOR_PIECES.filter { it.id in listOf("armor_bare", "armor_padded") }
+            selectedArmor = if (armors.isNotEmpty()) armors.random() else GameData.ARMOR_PIECES[0]
+            val helms = GameData.HEADGEAR_PIECES.filter { it.id in listOf("helm_none", "helm_coif") }
+            selectedHelm = if (helms.isNotEmpty()) helms.random() else GameData.HEADGEAR_PIECES[0]
+        } else if (level <= 4) {
+            // Mid levels: spears, axes, shields
+            val midHeads = listOf("head_spear", "head_axe", "head_sword", "head_bow", "head_club")
+            val head = GameData.WEAPON_HEADS.filter { it.id in midHeads }.randomOrNull() ?: GameData.WEAPON_HEADS.random()
+            selectedHead = head
+            selectedHandle = if (head.isRanged) GameData.WEAPON_HANDLES[0] else GameData.WEAPON_HANDLES.filter { it.id in listOf("handle_medium", "handle_long") }.random()
+            selectedShield = if (head.isRanged) GameData.SHIELDS[0] else GameData.SHIELDS.filter { it.id in listOf("shield_none", "shield_buckler", "shield_tower") }.random()
+            val armors = GameData.ARMOR_PIECES.filter { it.id in listOf("armor_padded", "armor_leather") }
+            selectedArmor = if (armors.isNotEmpty()) armors.random() else GameData.ARMOR_PIECES[0]
+            val helms = GameData.HEADGEAR_PIECES.filter { it.id in listOf("helm_coif", "helm_conical") }
+            selectedHelm = if (helms.isNotEmpty()) helms.random() else GameData.HEADGEAR_PIECES[0]
         } else {
-            listOf(GameData.ARMOR_PIECES[0], GameData.ARMOR_PIECES[1], GameData.ARMOR_PIECES[2])
-        }
-        val selectedArmor = armorOptions.random()
+            // High levels: good gear
+            val weaponHeads = GameData.WEAPON_HEADS.filter { it.id !in listOf("head_bare", "head_pitchfork", "head_club", "head_slingshot") }
+            selectedHead = weaponHeads.random()
+            selectedHandle = if (selectedHead.isRanged) GameData.WEAPON_HANDLES[0] else listOf(GameData.WEAPON_HANDLES[1], GameData.WEAPON_HANDLES[2], GameData.WEAPON_HANDLES[4]).random()
+            
+            val saxonShields = listOf(GameData.SHIELDS[0], GameData.SHIELDS[1], GameData.SHIELDS[2], GameData.SHIELDS[3])
+            selectedShield = if (selectedHead.isRanged) GameData.SHIELDS[0] else saxonShields.random()
 
-        // Saxon helmet
-        val helmOptions = listOf(GameData.HEADGEAR_PIECES[0], GameData.HEADGEAR_PIECES[1], GameData.HEADGEAR_PIECES[2])
-        val selectedHelm = helmOptions.random()
+            val armorOptions = listOf(GameData.ARMOR_PIECES[1], GameData.ARMOR_PIECES[2], GameData.ARMOR_PIECES[3], GameData.ARMOR_PIECES[4])
+            selectedArmor = armorOptions.random()
+
+            val helmOptions = listOf(GameData.HEADGEAR_PIECES[0], GameData.HEADGEAR_PIECES[1], GameData.HEADGEAR_PIECES[2])
+            selectedHelm = helmOptions.random()
+        }
 
         // Random physical traits
         val sizeMultiplier = Random.nextFloat() * 0.4f + 0.9f // 0.9 to 1.3
@@ -376,9 +391,11 @@ class GameViewModel : ViewModel() {
         val particles = _particlesState.value
         particles.forEach { 
             it.age += dt 
-            it.x += it.vx * dt
-            it.y += it.vy * dt
-            it.vy += 200f * dt // gravity
+            if (it.y < 240f) {
+                it.x += it.vx * dt
+                it.y += it.vy * dt
+                it.vy += 400f * dt // gravity
+            }
         }
         _particlesState.value = particles.filter { it.age < it.maxAge }
 
@@ -557,7 +574,7 @@ class GameViewModel : ViewModel() {
         // Decide movement & actions
         if (target != null && !target.isDead) {
             val dist = abs(fighter.posX - target.posX)
-            val reachPixels = fighter.reach * 40f // scale reach meter to pixels
+            val reachPixels = fighter.reach * 40f + 40f // generous hitbox
 
             fighter.facingRight = target.posX > fighter.posX
 
@@ -565,7 +582,17 @@ class GameViewModel : ViewModel() {
                 // Walk closer
                 val direction = if (target.posX > fighter.posX) 1f else -1f
                 fighter.posX += direction * fighter.moveSpeed * dt
-                fighter.animFrame = (fighter.animFrame + dt * 10f) % 4f // 4-frame walk cycle
+                // Desync animations slightly based on maxHp to avoid identical marching
+                fighter.animFrame = (fighter.animFrame + dt * (9f + (fighter.maxHp % 3f))) % 4f 
+            } else if (dist < reachPixels * 0.7f && fighter.moveSpeed > 0f) {
+                // Step back to keep them at the tip of our longer weapon!
+                val direction = if (target.posX > fighter.posX) -1f else 1f
+                fighter.posX += direction * (fighter.moveSpeed * 0.45f) * dt
+                fighter.animFrame = (fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))) % 4f 
+                
+                if (fighter.attackCooldown <= 0 && !fighter.isAttacking) {
+                    triggerAttack(fighter)
+                }
             } else {
                 // Wield weapon/Attack!
                 fighter.animFrame = 0f // stand
@@ -686,67 +713,101 @@ class GameViewModel : ViewModel() {
             _projectilesState.value = _projectilesState.value + proj
         } else {
             // Melee hit
-            // Check if still in range
-            val dist = abs(attacker.posX - defender.posX)
             val reachPixels = attacker.reach * 40f + 40f // generous hitbox
-            if (dist > reachPixels) {
+            val isPiercingWeapon = attacker.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd")
+            
+            // Gather all targets in a line if we are using a piercing weapon
+            val targets = if (attacker.isPlayer && isPiercingWeapon) {
+                val dir = if (attacker.facingRight) 1f else -1f
+                _enemiesState.value.filter { 
+                    !it.isDead && !it.isDying && abs(attacker.posX - it.posX) <= reachPixels && 
+                    ((dir > 0 && it.posX >= attacker.posX) || (dir < 0 && it.posX <= attacker.posX))
+                }.sortedBy { abs(attacker.posX - it.posX) }
+            } else {
+                listOf(defender)
+            }
+            
+            if (targets.isEmpty() || abs(attacker.posX - defender.posX) > reachPixels) {
                 // Missed!
                 MedievalAudioSynth.playSound(SoundType.SWOOSH)
                 addPopup("SWISH!", attacker.posX + if(attacker.facingRight) 40f else -40f, 120f, Color.Gray)
                 return
             }
-
-            val isBlocked = defender.shield.id != "shield_none" && Random.nextFloat() < (defender.shield.defense / 100f)
             
-            if (isBlocked) {
-                // Blocked by shield!
-                MedievalAudioSynth.playSound(SoundType.CLANG)
-                val shout = LatinShouts.getRandomShout(SoundType.CLANG)
-                addPopup(shout, defender.posX, 120f, Color(0xFFB08221))
-                
-                // Still take minimal blunt impact damage
-                val blockDamage = (attacker.damageBlunt * 0.15f).coerceAtLeast(1f)
-                applyFlatDamage(blockDamage, defender)
-            } else {
-                // Full hit!
-                val slash = attacker.damageSlash
-                val pierce = attacker.damagePierce
-                val blunt = attacker.damageBlunt
+            var damageFalloff = 1f
 
-                // Calculate damage reduction based on defender armor
-                // Armor reduces slash and pierce, but blunt damage partially ignores armor
-                val armorFactor = (1f - (defender.totalArmor / 100f)).coerceIn(0.1f, 1f)
+            for (currTarget in targets) {
+                val isBlocked = currTarget.shield.id != "shield_none" && Random.nextFloat() < (currTarget.shield.defense / 100f)
                 
-                val totalDamage = (slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt
-                
-                applyFlatDamage(totalDamage, defender)
+                if (isBlocked) {
+                    // Blocked by shield!
+                    MedievalAudioSynth.playSound(SoundType.CLANG)
+                    val shout = LatinShouts.getRandomShout(SoundType.CLANG)
+                    addPopup(shout, currTarget.posX, 120f, Color(0xFFB08221))
+                    
+                    // Still take minimal blunt impact damage
+                    val blockDamage = (attacker.damageBlunt * 0.15f * damageFalloff).coerceAtLeast(1f)
+                    if (blockDamage > 5f && kotlin.random.Random.nextBoolean()) MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                    applyFlatDamage(blockDamage, currTarget)
+                } else {
+                    // Full hit!
+                    val slash = attacker.damageSlash * damageFalloff
+                    val pierce = attacker.damagePierce * damageFalloff
+                    val blunt = attacker.damageBlunt * damageFalloff
 
-                // Play hit sounds & comedically yell in latin!
-                if (totalDamage > 0f) {
-                    MedievalAudioSynth.playSound(SoundType.THWACK)
-                    val strikeType = if (pierce > slash && pierce > blunt) "pierce" else if (slash > blunt) "slash" else "blunt"
-                    val hitShout = LatinShouts.getRandomShout(SoundType.THWACK, strikeType)
-                    addPopup(hitShout, defender.posX, 140f, Color(0xFF9E3624))
-                }
+                    // Calculate damage reduction based on defender armor
+                    // Armor reduces slash and pierce, but blunt damage partially ignores armor
+                    val armorFactor = (1f - (currTarget.totalArmor / 100f)).coerceIn(0.1f, 1f)
+                    
+                    val totalDamage = (slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt
+                    
+                    applyFlatDamage(totalDamage, currTarget)
 
-                // Splash damage for big heavy weapons!
-                if (attacker.totalMass > 5.0f && attacker.damageSlash > 10f) { // heavy weapon like axe or claymore
-                    val splashDmg = (totalDamage * 0.4f).coerceAtLeast(2f)
-                    if (attacker.isPlayer) {
-                        _enemiesState.value.forEach { enemy ->
-                            if (enemy != defender && !enemy.isDead && !enemy.isDying && abs(enemy.posX - defender.posX) < 100f) {
-                                applyFlatDamage(splashDmg, enemy)
-                                addPopup("CLEAVE!", enemy.posX, 120f, Color(0xFF9E3624))
-                            }
+                    // Play hit sounds & comedically yell in latin!
+                    if (totalDamage > 0f) {
+                        val isCrunch = blunt > 15f && kotlin.random.Random.nextFloat() < 0.4f
+                        MedievalAudioSynth.playSound(if (isCrunch) SoundType.CRUNCH else SoundType.THWACK)
+                        val strikeType = if (pierce > slash && pierce > blunt) "pierce" else if (slash > blunt) "slash" else "blunt"
+                        val hitShout = LatinShouts.getRandomShout(if (isCrunch) SoundType.CRUNCH else SoundType.THWACK, strikeType)
+                        addPopup(hitShout, currTarget.posX, 140f, Color(0xFF9E3624))
+                    }
+
+                    // Limb loss mechanic! (heavy slash)
+                    if (slash > 18f && kotlin.random.Random.nextFloat() < 0.2f && !currTarget.missingArm) {
+                        currTarget.missingArm = true
+                        // Disarm off-hand/shield logically
+                        if (currTarget.isDualWielding || currTarget.shield.id != "shield_none") {
+                            currTarget.isDualWielding = false
+                            // Find 'shield_none' safely
+                            GameData.SHIELDS.find { it.id == "shield_none" }?.let { currTarget.shield = it }
                         }
-                    } else {
-                        _playerState.value?.let { p ->
-                            if (p != defender && !p.isDead && !p.isDying && abs(p.posX - defender.posX) < 100f) {
-                                applyFlatDamage(splashDmg, p)
-                                addPopup("CLEAVE!", p.posX, 120f, Color(0xFF9E3624))
+                        MedievalAudioSynth.playSound(SoundType.THWACK)
+                        addPopup("ARM SEVERED!", currTarget.posX, 160f, androidx.compose.ui.graphics.Color.Red)
+                    }
+                    
+                    // Crumple mechanic! (heavy blunt)
+                    if (blunt > 18f && kotlin.random.Random.nextFloat() < 0.25f && !currTarget.isCrumpled) {
+                        currTarget.isCrumpled = true
+                        MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                        addPopup("CRUMPLED!", currTarget.posX, 160f, androidx.compose.ui.graphics.Color.DarkGray)
+                    }
+
+                    // Splash damage for big heavy weapons!
+                    if (attacker.totalMass > 5.0f && attacker.damageSlash > 10f) { // heavy weapon like axe or claymore
+                        val splashDmg = (totalDamage * 0.4f).coerceAtLeast(2f)
+                        if (attacker.isPlayer) {
+                            _enemiesState.value.forEach { enemy ->
+                                if (enemy != currTarget && !enemy.isDead && !enemy.isDying && abs(enemy.posX - currTarget.posX) < 100f) {
+                                    applyFlatDamage(splashDmg, enemy)
+                                    addPopup("CLEAVE!", enemy.posX, 120f, Color(0xFF9E3624))
+                                }
                             }
                         }
                     }
+                }
+                
+                if (isPiercingWeapon) {
+                    damageFalloff *= 0.5f // Halve damage for each enemy it passes through
                 }
             }
         }
@@ -961,21 +1022,36 @@ class GameViewModel : ViewModel() {
         _uiState.update { state ->
             val isGameOver = state.battleLost
             if (isGameOver) {
+                // Generate a new song seed for the next run!
+                MedievalHarpPlayer.newGame()
+                val initialGear = mutableSetOf<String>()
+                initialGear.add("head_bare")
+                initialGear.add("handle_fists")
+                initialGear.add("shield_none")
+                initialGear.add("armor_none")
+                initialGear.add("head_none")
+                initialGear.addAll(GameData.WEAPON_HEADS.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.ARMOR_PIECES.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.HEADGEAR_PIECES.shuffled().take(2).map { it.id })
+                
                 // Completely random starter gear for the next attempt (each attempt starts fresh and unique!)
                 state.copy(
                     isBattleActive = false,
                     battleWon = false,
                     battleLost = false,
                     level = 1,
+                    unlockedGearIds = initialGear,
                     extraAttachments = emptyList(),
                     extraArmors = emptyList(),
                     handleExtensionCount = 0,
                     unlockedAncillaries = emptySet(),
-                    weaponHead = GameData.WEAPON_HEADS.random(),
-                    weaponHandle = GameData.WEAPON_HANDLES.random(),
-                    shield = if (Random.nextBoolean()) GameData.SHIELDS.random() else GameData.SHIELDS.first { it.id == "shield_none" },
-                    armor = GameData.ARMOR_PIECES.random(),
-                    headgear = GameData.HEADGEAR_PIECES.random()
+                    weaponHead = GameData.WEAPON_HEADS.filter { it.id in initialGear }.random(),
+                    weaponHandle = GameData.WEAPON_HANDLES.filter { it.id in initialGear }.random(),
+                    shield = GameData.SHIELDS.filter { it.id in initialGear }.random(),
+                    armor = GameData.ARMOR_PIECES.filter { it.id in initialGear }.random(),
+                    headgear = GameData.HEADGEAR_PIECES.filter { it.id in initialGear }.random()
                 )
             } else {
                 state.copy(

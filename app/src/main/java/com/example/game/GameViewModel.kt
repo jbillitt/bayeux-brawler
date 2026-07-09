@@ -31,7 +31,8 @@ data class Projectile(
     val launchedWeaponId: String? = null,
     val isSplash: Boolean = false,
     val isPoisonous: Boolean = false,
-    val isBallista: Boolean = false
+    val isBallista: Boolean = false,
+    val gravityMult: Float = 1f
 )
 
 class GameViewModel : ViewModel() {
@@ -225,7 +226,8 @@ class GameViewModel : ViewModel() {
         if (state.isBattleActive) return
 
         // Create player state with complete roguelike upgrade state
-        val totalPlayerMaxHp = (100f * state.characterSize) + state.totalHpBoost
+        val baseHp = 100f + state.totalHpBoost
+        val totalPlayerMaxHp = baseHp * state.characterSize
         val player = FighterState(
             id = "player_knight",
             name = state.playerName,
@@ -289,61 +291,86 @@ class GameViewModel : ViewModel() {
         )
         val saxonName = if (index < names.size) names[index] else "Saxon Foe ${index + 1}"
 
-        // Scale Saxon health slightly with level
-        val baseHp = 50f + (level * 10f)
-
-        // Poor gear for early levels
-        val selectedHead: com.example.game.GearItem
-        val selectedHandle: com.example.game.GearItem
-        val selectedShield: com.example.game.GearItem
-        val selectedArmor: com.example.game.GearItem
-        val selectedHelm: com.example.game.GearItem
-
-        if (level <= 2) {
-            // Early levels: pitchforks, clubs, slingshots, mostly shirtless or tunic
-            val earlyHeads = listOf("head_bare", "head_pitchfork", "head_club", "head_slingshot", "head_dagger")
-            val head = GameData.WEAPON_HEADS.filter { it.id in earlyHeads }.randomOrNull() ?: GameData.WEAPON_HEADS[0]
-            selectedHead = head
-            selectedHandle = if (head.isRanged || head.id == "head_bare") GameData.WEAPON_HANDLES[0] else GameData.WEAPON_HANDLES.filter { it.id in listOf("handle_short", "handle_medium") }.random()
-            selectedShield = GameData.SHIELDS[0] // No shield early
-            val armors = GameData.ARMOR_PIECES.filter { it.id in listOf("armor_bare", "armor_padded") }
-            selectedArmor = if (armors.isNotEmpty()) armors.random() else GameData.ARMOR_PIECES[0]
-            val helms = GameData.HEADGEAR_PIECES.filter { it.id in listOf("helm_none", "helm_coif") }
-            selectedHelm = if (helms.isNotEmpty()) helms.random() else GameData.HEADGEAR_PIECES[0]
+        val rng = kotlin.random.Random(System.currentTimeMillis() + index)
+        val r = rng.nextFloat()
+        
+        val arch = if (level <= 2) {
+            if (r < 0.7f) EnemyArchetype.FYRD_LEVY else if (r < 0.85f) EnemyArchetype.HOUSECARL else EnemyArchetype.ARCHER
         } else if (level <= 4) {
-            // Mid levels: spears, axes, shields
-            val midHeads = listOf("head_spear", "head_axe", "head_sword", "head_bow", "head_club")
-            val head = GameData.WEAPON_HEADS.filter { it.id in midHeads }.randomOrNull() ?: GameData.WEAPON_HEADS.random()
-            selectedHead = head
-            selectedHandle = if (head.isRanged) GameData.WEAPON_HANDLES[0] else GameData.WEAPON_HANDLES.filter { it.id in listOf("handle_medium", "handle_long") }.random()
-            selectedShield = if (head.isRanged) GameData.SHIELDS[0] else GameData.SHIELDS.filter { it.id in listOf("shield_none", "shield_buckler", "shield_tower") }.random()
-            val armors = GameData.ARMOR_PIECES.filter { it.id in listOf("armor_padded", "armor_leather") }
-            selectedArmor = if (armors.isNotEmpty()) armors.random() else GameData.ARMOR_PIECES[0]
-            val helms = GameData.HEADGEAR_PIECES.filter { it.id in listOf("helm_coif", "helm_conical") }
-            selectedHelm = if (helms.isNotEmpty()) helms.random() else GameData.HEADGEAR_PIECES[0]
+            if (r < 0.4f) EnemyArchetype.FYRD_LEVY else if (r < 0.65f) EnemyArchetype.HOUSECARL else if (r < 0.8f) EnemyArchetype.ARCHER else if (r < 0.9f) EnemyArchetype.SHIELD_WALL else EnemyArchetype.BERSERKER
+        } else if (level <= 6) {
+            if (r < 0.2f) EnemyArchetype.FYRD_LEVY else if (r < 0.4f) EnemyArchetype.HOUSECARL else if (r < 0.55f) EnemyArchetype.ARCHER else if (r < 0.65f) EnemyArchetype.SHIELD_WALL else if (r < 0.75f) EnemyArchetype.BERSERKER else if (r < 0.9f) EnemyArchetype.CAVALRY else EnemyArchetype.CHAMPION
         } else {
-            // High levels: good gear
-            val weaponHeads = GameData.WEAPON_HEADS.filter { it.id !in listOf("head_bare", "head_pitchfork", "head_club", "head_slingshot") }
-            selectedHead = weaponHeads.random()
-            selectedHandle = if (selectedHead.isRanged) GameData.WEAPON_HANDLES[0] else listOf(GameData.WEAPON_HANDLES[1], GameData.WEAPON_HANDLES[2], GameData.WEAPON_HANDLES[4]).random()
-            
-            val saxonShields = listOf(GameData.SHIELDS[0], GameData.SHIELDS[1], GameData.SHIELDS[2], GameData.SHIELDS[3])
-            selectedShield = if (selectedHead.isRanged) GameData.SHIELDS[0] else saxonShields.random()
-
-            val armorOptions = listOf(GameData.ARMOR_PIECES[1], GameData.ARMOR_PIECES[2], GameData.ARMOR_PIECES[3], GameData.ARMOR_PIECES[4])
-            selectedArmor = armorOptions.random()
-
-            val helmOptions = listOf(GameData.HEADGEAR_PIECES[0], GameData.HEADGEAR_PIECES[1], GameData.HEADGEAR_PIECES[2])
-            selectedHelm = helmOptions.random()
+            if (r < 0.1f) EnemyArchetype.FYRD_LEVY else if (r < 0.25f) EnemyArchetype.HOUSECARL else if (r < 0.35f) EnemyArchetype.ARCHER else if (r < 0.45f) EnemyArchetype.SHIELD_WALL else if (r < 0.6f) EnemyArchetype.BERSERKER else if (r < 0.8f) EnemyArchetype.CAVALRY else EnemyArchetype.CHAMPION
         }
 
-        // Random physical traits
-        val sizeMultiplier = Random.nextFloat() * 0.4f + 0.9f // 0.9 to 1.3
-        val enemyHp = baseHp * sizeMultiplier
+        fun <T> List<T>.safeRandom(fallback: T): T = if (this.isEmpty()) fallback else this.random(rng)
+        fun safeHead(id: String) = GameData.WEAPON_HEADS.firstOrNull { it.id == id } ?: GameData.WEAPON_HEADS.first()
+        fun safeHandle(id: String) = GameData.WEAPON_HANDLES.firstOrNull { it.id == id } ?: GameData.WEAPON_HANDLES.first()
+        fun safeShield(id: String) = GameData.SHIELDS.firstOrNull { it.id == id } ?: GameData.SHIELDS.first()
+        fun safeArmor(id: String) = GameData.ARMOR_PIECES.firstOrNull { it.id == id } ?: GameData.ARMOR_PIECES.first()
+        fun safeHelm(id: String) = GameData.HEADGEAR_PIECES.firstOrNull { it.id == id } ?: GameData.HEADGEAR_PIECES.first()
+
+        val loadout = when (arch) {
+            EnemyArchetype.FYRD_LEVY -> Pair(listOf(
+                GameData.WEAPON_HEADS.filter { it.id in listOf("head_spear", "head_dagger", "head_bare", "head_pitchfork", "head_club") }.safeRandom(safeHead("head_bare")),
+                safeHandle("handle_short"),
+                safeShield(if (rng.nextFloat() < 0.3f) "shield_buckler" else "shield_none"),
+                safeArmor("armor_padded"),
+                safeHelm("helm_none")
+            ), false)
+            EnemyArchetype.HOUSECARL -> Pair(listOf(
+                safeHead("head_axe"),
+                safeHandle("handle_medium"),
+                safeShield("shield_none"),
+                safeArmor("armor_chainmail"),
+                safeHelm("helm_conical")
+            ), false)
+            EnemyArchetype.ARCHER -> Pair(listOf(
+                safeHead("head_bow"),
+                safeHandle("handle_fists"),
+                safeShield("shield_none"),
+                safeArmor("armor_leather"),
+                safeHelm("helm_none")
+            ), false)
+            EnemyArchetype.SHIELD_WALL -> Pair(listOf(
+                safeHead("head_spear"),
+                safeHandle("handle_medium"),
+                safeShield("shield_tower"),
+                safeArmor("armor_chainmail"),
+                safeHelm("helm_conical")
+            ), false)
+            EnemyArchetype.BERSERKER -> Pair(listOf(
+                GameData.WEAPON_HEADS.filter { it.id in listOf("head_axe", "head_sword", "head_flail", "head_mace", "head_war_flail") }.safeRandom(safeHead("head_axe")),
+                safeHandle("handle_short"),
+                safeShield("shield_none"),
+                safeArmor("armor_bare"),
+                safeHelm("helm_none")
+            ), false)
+            EnemyArchetype.CAVALRY -> Pair(listOf(
+                GameData.WEAPON_HEADS.filter { it.id in listOf("head_pike", "head_sword", "head_javelin") }.safeRandom(safeHead("head_sword")),
+                safeHandle("handle_medium"),
+                safeShield("shield_heater"),
+                safeArmor("armor_chainmail"),
+                safeHelm("helm_conical")
+            ), true)
+            EnemyArchetype.CHAMPION -> Pair(listOf(
+                GameData.WEAPON_HEADS.filter { it.id in listOf("head_claymore", "head_maul", "head_war_flail", "head_halberd") }.safeRandom(safeHead("head_maul")),
+                safeHandle("handle_iron"),
+                safeShield("shield_none"),
+                safeArmor("armor_scale"),
+                safeHelm("helm_great")
+            ), if (rng.nextFloat() < 0.5f) true else false)
+        }
+
+        val sizeMultiplier = if (arch == EnemyArchetype.CHAMPION) 1.25f else if (arch == EnemyArchetype.BERSERKER) 1.1f else rng.nextFloat() * 0.4f + 0.9f
+        val baseHp = 50f + (level * 10f)
+        var enemyHp = baseHp * sizeMultiplier
+        if (arch == EnemyArchetype.CHAMPION) enemyHp *= 1.5f
+
         val hairColors = listOf(Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF8A7156), Color(0xFF2C2219), Color(0xFFE5C09F))
         val hairStyles = listOf("short", "long", "bald")
 
-        // Saxon initial position: spread them out slightly
         val startX = 850f + (index * 130f)
 
         return FighterState(
@@ -352,18 +379,19 @@ class GameViewModel : ViewModel() {
             isPlayer = false,
             maxHp = enemyHp,
             hp = enemyHp,
-            weaponHead = selectedHead,
-            weaponHandle = selectedHandle,
-            shield = selectedShield,
-            armor = selectedArmor,
-            headgear = selectedHelm,
+            weaponHead = loadout.first[0],
+            weaponHandle = loadout.first[1],
+            shield = loadout.first[2],
+            armor = loadout.first[3],
+            headgear = loadout.first[4],
             posX = startX,
             targetX = startX,
             facingRight = false,
             size = sizeMultiplier,
-            hairColor = hairColors.random(),
-            hairStyle = hairStyles.random(),
-            level = level
+            hairColor = hairColors.random(rng),
+            hairStyle = hairStyles.random(rng),
+            level = level,
+            isMounted = loadout.second
         )
     }
 
@@ -418,7 +446,8 @@ class GameViewModel : ViewModel() {
         val targetableEnemies = enemies.filter { !it.isDead && !it.isDying }
 
         // 3. Update Player Fighter State
-        updateFighter(player, targetableEnemies.firstOrNull(), dt)
+        val closestEnemy = targetableEnemies.minByOrNull { kotlin.math.abs(it.posX - player.posX) }
+        updateFighter(player, closestEnemy, dt)
         if (player.ghostHp > player.hp) {
             player.ghostHp -= 20f * dt
             if (player.ghostHp < player.hp) player.ghostHp = player.hp
@@ -434,12 +463,32 @@ class GameViewModel : ViewModel() {
             }
         }
 
+        // Trample Logic
+        val allFighters = listOf(player) + targetableEnemies
+        for (f1 in allFighters) {
+            if (f1.isMounted) {
+                if (f1.trampleCooldown > 0f) f1.trampleCooldown -= dt
+                if (f1.trampleCooldown <= 0f) {
+                    for (f2 in allFighters) {
+                        if (f1.isPlayer != f2.isPlayer && f2.size < f1.size && !f2.isDead && !f2.isDying) {
+                            if (abs(f1.posX - f2.posX) < 30f) {
+                                applyFlatDamage(15f * f1.size, f2, f1.isPlayer)
+                                addPopup("TRAMPLE!", f2.posX, 110f, Color(0xFF6E5536))
+                                f1.trampleCooldown = 2.0f
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 5. Update Projectiles
         val remainingProjectiles = mutableListOf<Projectile>()
         projectiles.forEach { proj ->
             proj.posX += proj.velocityX * dt
             proj.posY += proj.velocityY * dt
-            proj.velocityY += 130f * dt // Gravity pulling it downwards!
+            proj.velocityY += (130f * proj.gravityMult) * dt // Gravity pulling it downwards!
 
             var hit = false
             // Check collisions
@@ -474,29 +523,41 @@ class GameViewModel : ViewModel() {
         }
         
         // 5b. Archer Entourage Fire
-        if (_uiState.value.unlockedAncillaries.contains("anc_archer") && !player.isDead && !player.isDying) {
-            if (Random.nextFloat() < dt * 0.4f) { // roughly every 2.5 seconds
+                // 5b. Archer & Crossbowman Entourage Fire
+        val hasArcher = _uiState.value.unlockedAncillaries.contains("anc_archer")
+        val hasCrossbow = _uiState.value.unlockedAncillaries.contains("anc_crossbowman")
+        if (!player.isDead && !player.isDying) {
+            val sortedAncs = _uiState.value.unlockedAncillaries.sorted()
+            val archerIdx = sortedAncs.indexOf("anc_archer")
+            val crossbowIdx = sortedAncs.indexOf("anc_crossbowman")
+            
+            if (hasArcher && Random.nextFloat() < dt * 0.4f) {
                 val dir = if (player.facingRight) 1f else -1f
-                val proj = Projectile(
-                    id = "arch_${System.currentTimeMillis()}_${Random.nextInt(100)}",
-                    isPlayerOwned = true,
-                    posX = player.posX - (80f * dir),
-                    posY = 230f,
-                    velocityX = dir * (300f + Random.nextFloat() * 80f),
-                    velocityY = -45f + (Random.nextFloat() * 10f - 5f),
-                    damage = 12f,
-                    pierce = 8f,
-                    blunt = 2f,
-                    type = "arrow",
-                    sizeMultiplier = 1f,
-                    hasSpikes = false,
-                    launchedWeaponId = null,
-                    isSplash = false,
-                    isPoisonous = false,
-                    isBallista = false
-                )
-                remainingProjectiles.add(proj)
+                val archerOffsetX = -80f - (archerIdx * 50f)
+                val spawnX = player.posX + (archerOffsetX * dir)
+                remainingProjectiles.add(Projectile(
+                    id = "arch__",
+                    isPlayerOwned = true, posX = spawnX, posY = 240f,
+                    velocityX = dir * (400f + Random.nextFloat() * 80f), velocityY = -30f + (Random.nextFloat() * 10f),
+                    damage = 12f, pierce = 8f, blunt = 2f, type = "arrow",
+                    sizeMultiplier = 1f, hasSpikes = false, launchedWeaponId = null,
+                    isSplash = false, isPoisonous = false, isBallista = false
+                ))
                 MedievalAudioSynth.playSound(SoundType.SWOOSH)
+            }
+            if (hasCrossbow && Random.nextFloat() < dt * 0.25f) {
+                val dir = if (player.facingRight) 1f else -1f
+                val crossbowOffsetX = -80f - (crossbowIdx * 50f)
+                val spawnX = player.posX + (crossbowOffsetX * dir)
+                remainingProjectiles.add(Projectile(
+                    id = "xbow__",
+                    isPlayerOwned = true, posX = spawnX, posY = 230f,
+                    velocityX = dir * (600f + Random.nextFloat() * 50f), velocityY = -5f,
+                    damage = 25f, pierce = 20f, blunt = 10f, type = "arrow",
+                    sizeMultiplier = 1f, hasSpikes = false, launchedWeaponId = null,
+                    isSplash = false, isPoisonous = false, isBallista = true
+                ))
+                MedievalAudioSynth.playSound(SoundType.THWACK)
             }
         }
         
@@ -559,13 +620,16 @@ class GameViewModel : ViewModel() {
 
         // Cooldown tick
         if (fighter.attackCooldown > 0) {
-            fighter.attackCooldown -= dt
+            val cooldownRate = if (!fighter.isPlayer && fighter.armor.id == "armor_bare") 1.3f else 1f
+            fighter.attackCooldown -= dt * cooldownRate
         }
 
         // Update Swing Progress
         if (fighter.isAttacking) {
             fighter.swingProgress += dt * (1.2f / fighter.attackSpeedDelay)
-            if (fighter.swingProgress >= 1f) {
+            val chainDelay = if (fighter.weaponHandle.id == "handle_chain") 0.15f else 0f
+            val effectiveSwingProgress = (fighter.swingProgress - chainDelay).coerceAtLeast(0f)
+            if (effectiveSwingProgress >= 1f) {
                 // Land strike!
                 if (target != null) {
                     performStrike(fighter, target)
@@ -579,19 +643,23 @@ class GameViewModel : ViewModel() {
         if (target != null && !target.isDead) {
             val dist = abs(fighter.posX - target.posX)
             val reachPixels = fighter.reach * 40f + 40f // generous hitbox
+            val optimalDistance = if (fighter.isRanged) reachPixels * 0.8f else reachPixels
+            val isShieldWall = !fighter.isPlayer && fighter.shield.id == "shield_tower"
 
             fighter.facingRight = target.posX > fighter.posX
 
-            if (dist > reachPixels) {
+            if (dist > optimalDistance) {
                 // Walk closer
                 val direction = if (target.posX > fighter.posX) 1f else -1f
-                fighter.posX += direction * fighter.moveSpeed * dt
+                val moveMult = if (isShieldWall) 0.6f else 1f
+                fighter.posX += direction * fighter.moveSpeed * moveMult * dt
                 // Desync animations slightly based on maxHp to avoid identical marching
                 fighter.animFrame = (fighter.animFrame + dt * (9f + (fighter.maxHp % 3f))) % 4f 
-            } else if (dist < reachPixels * 0.7f && fighter.moveSpeed > 0f) {
+            } else if (dist < optimalDistance * 0.7f && fighter.moveSpeed > 0f) {
                 // Step back to keep them at the tip of our longer weapon!
                 val direction = if (target.posX > fighter.posX) -1f else 1f
-                fighter.posX += direction * (fighter.moveSpeed * 0.45f) * dt
+                val retreatSpeed = if (fighter.isRanged) fighter.moveSpeed else (fighter.moveSpeed * 0.45f)
+                fighter.posX += direction * retreatSpeed * dt
                 fighter.animFrame = (fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))) % 4f 
                 
                 if (fighter.attackCooldown <= 0 && !fighter.isAttacking) {
@@ -630,7 +698,8 @@ class GameViewModel : ViewModel() {
             
             // Stats based on weapon head
             val isSlingshot = attacker.weaponHead.id == "head_slingshot"
-            val projType = if (isSlingshot) "stone" else "arrow"
+            val isJavelin = attacker.weaponHead.id == "head_javelin"
+            val projType = if (isSlingshot) "stone" else if (isJavelin) "javelin" else "arrow"
             
             var sizeMult = 1f
             var spikes = false
@@ -643,6 +712,7 @@ class GameViewModel : ViewModel() {
             var finalBlunt = attacker.damageBlunt
             var velY = -55f // slightly arched trajectory
             var velX = dir * 350f
+            var gravMult = 1f
 
             if (isSlingshot) {
                 if (attacker.rangedUpgrades.contains("slingshot_bigger")) {
@@ -665,6 +735,10 @@ class GameViewModel : ViewModel() {
                 if (attacker.rangedUpgrades.contains("slingshot_poison")) {
                     poison = true
                 }
+            } else if (isJavelin) {
+                gravMult = 0.4f // glide!
+                velY = -30f
+                velX = dir * 380f
             } else {
                 // Bow performance variance
                 val varianceMult = Random.nextFloat() * 0.9f + 0.6f // 0.6 to 1.5
@@ -745,7 +819,13 @@ class GameViewModel : ViewModel() {
             var damageFalloff = 1f
 
             for (currTarget in targets) {
-                val isBlocked = currTarget.shield.id != "shield_none" && Random.nextFloat() < (currTarget.shield.defense / 100f)
+                var blockChance = currTarget.shield.defense / 100f
+                if (!currTarget.isPlayer && currTarget.shield.id == "shield_tower") blockChance = 0.8f
+                
+                val shieldBypass = if (attacker.weaponHead.id == "head_flail" || attacker.weaponHead.id == "head_war_flail" || attacker.weaponHandle.id == "handle_flail_chain") 0.4f else 0f
+                blockChance *= (1f - shieldBypass)
+                
+                val isBlocked = currTarget.shield.id != "shield_none" && Random.nextFloat() < blockChance
                 
                 if (isBlocked) {
                     // Blocked by shield!
@@ -876,18 +956,28 @@ class GameViewModel : ViewModel() {
 
     private fun applyFlatDamage(dmg: Float, defender: FighterState, isPlayerSource: Boolean = false) {
         if (defender.isDead || defender.isDying) return
-        val finalDmg = dmg.coerceAtLeast(1f).toInt().toFloat()
-        defender.hp = (defender.hp - finalDmg).coerceAtLeast(0f)
-        defender.damageIndicator = "-${finalDmg.toInt()}"
+        var finalDmg = dmg
+        if (!defender.isPlayer && defender.armor.id == "armor_bare") {
+            finalDmg *= 1.5f
+        }
+        val finalDmgInt = finalDmg.coerceAtLeast(1f).toInt().toFloat()
+        defender.hp = (defender.hp - finalDmgInt).coerceAtLeast(0f)
+        defender.damageIndicator = "-${finalDmgInt.toInt()}"
         defender.damageIndicatorTimer = 0.5f
         
         // Trigger screenshake on hit!
-        _screenshake.value = (finalDmg * 1.5f).coerceIn(10f, 35f)
+        _screenshake.value = (finalDmgInt * 1.5f).coerceIn(10f, 35f)
         
         // Spawn blood particles based on damage
-        addBloodParticles(defender.posX, 100f, count = (finalDmg / 2).toInt().coerceIn(5, 20))
+        addBloodParticles(defender.posX, 100f, count = (finalDmgInt / 2).toInt().coerceIn(5, 20))
 
         if (defender.hp <= 0f) {
+            if (defender.isMounted && Random.nextFloat() < 0.5f) {
+                defender.hp = 1f
+                defender.isMounted = false
+                addPopup("DISMOUNTED!", defender.posX, 130f, Color.Gray)
+                return
+            }
             defender.isDying = true
             defender.animFrame = 0f
             defender.deathType = kotlin.random.Random.nextInt(0, 6) // 0 to 5 for different ragdolls

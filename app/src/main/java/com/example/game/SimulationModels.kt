@@ -10,6 +10,25 @@ enum class ItemType {
     WEAPON_HEAD, WEAPON_HANDLE, SHIELD, ARMOR, HEADGEAR
 }
 
+data class SizePreset(
+    val id: String,
+    val label: String,
+    val size: Float,
+    val description: String
+)
+
+val SIZE_PRESETS = listOf(
+    SizePreset("tiny",   "Wee Runt",        0.65f, "Fastest. Fragile as wet parchment. Damage: ×0.42"),
+    SizePreset("small",  "Nimble Scout",     0.80f, "Quick and evasive. Damage: ×0.64"),
+    SizePreset("medium", "Average Norman",   1.00f, "Balanced. The default Hastings experience."),
+    SizePreset("large",  "Burly Knight",     1.20f, "Slow but hits hard. Damage: ×1.44. Tankier."),
+    SizePreset("huge",   "ABSOLUTE UNIT",    1.45f, "Glacial. Damage: ×2.10. Walking siege tower.")
+)
+
+enum class EnemyArchetype {
+    FYRD_LEVY, HOUSECARL, ARCHER, SHIELD_WALL, BERSERKER, CAVALRY, CHAMPION
+}
+
 data class Ancillary(
     val id: String,
     val name: String,
@@ -53,7 +72,10 @@ object GameData {
         GearItem("head_longbow", "Welsh Longbow", ItemType.WEAPON_HEAD, 1.2f, pierce = 25f, reach = 10.0f, isRanged = true, description = "A massive yew bow that can punch through chainmail at long range.", color = Color(0xFF5D4831)),
         GearItem("head_claymore", "Highland Claymore", ItemType.WEAPON_HEAD, 3.5f, slash = 30f, pierce = 10f, reach = 2.0f, description = "A massive two-handed sword. Cleaves shields in twain.", color = Color(0xFF9AA0A3)),
         GearItem("head_scythe", "War Scythe", ItemType.WEAPON_HEAD, 2.2f, slash = 25f, pierce = 10f, reach = 2.5f, description = "A farmer's tool turned lethal weapon. Reaches around shields.", color = Color(0xFF6C7175)),
-        GearItem("head_crossbow", "Heavy Crossbow", ItemType.WEAPON_HEAD, 1.5f, pierce = 65f, reach = 12.0f, isRanged = true, description = "A mechanical bow. High armor piercing and fast to crank.", color = Color(0xFF4A3B2C))
+        GearItem("head_crossbow", "Heavy Crossbow", ItemType.WEAPON_HEAD, 1.5f, pierce = 65f, reach = 12.0f, isRanged = true, description = "A mechanical bow. High armor piercing and fast to crank.", color = Color(0xFF4A3B2C)),
+        GearItem("head_mace", "Iron Mace", ItemType.WEAPON_HEAD, 2.0f, blunt = 20f, pierce = 3f, reach = 1.4f, description = "A simple but devastating flanged mace. Crushes helmets.", color = Color(0xFF636A6E)),
+        GearItem("head_javelin", "Throwing Javelin", ItemType.WEAPON_HEAD, 0.6f, pierce = 12f, reach = 7.0f, isRanged = true, description = "A light throwing spear. Short range for a missile, but fast.", color = Color(0xFF8C969E)),
+        GearItem("head_war_flail", "Twin War Flail", ItemType.WEAPON_HEAD, 3.5f, blunt = 22f, pierce = 8f, reach = 1.8f, description = "Two spiked balls on branching chains. Absolute chaos.", color = Color(0xFF535C61))
     )
 
     val WEAPON_HANDLES = listOf(
@@ -65,7 +87,8 @@ object GameData {
         GearItem("handle_wheel", "Cart Wheel", ItemType.WEAPON_HANDLE, 3.5f, reach = 0.6f, speedPenalty = 0.4f, description = "A literal wooden cart wheel as a handle. Ludicrously heavy, but incredible momentum.", color = Color(0xFF6E5536)),
         GearItem("handle_pick", "Mining Pick Handle", ItemType.WEAPON_HANDLE, 1.2f, reach = 0.4f, speedPenalty = 0.08f, description = "An angled wooden pick handle. Grants weird but effective striking angles.", color = Color(0xFF7A654C)),
         GearItem("handle_chain", "Bayeux Iron Chain", ItemType.WEAPON_HANDLE, 1.5f, reach = 0.8f, speedPenalty = 0.25f, description = "An iron chain linking your grip to the weapon. Swings wildly in a floppy arc! Slower, but hits with high momentum.", color = Color(0xFF4C5154)),
-        GearItem("handle_double_ended", "Double-Ended Pole", ItemType.WEAPON_HANDLE, 2.0f, reach = 1.0f, speedPenalty = 0.35f, description = "A wooden pole allowing heads on BOTH ends! Slower, but covers both ends and deals 1.5x damage.", color = Color(0xFF5D4831))
+        GearItem("handle_double_ended", "Double-Ended Pole", ItemType.WEAPON_HANDLE, 2.0f, reach = 1.0f, speedPenalty = 0.35f, description = "A wooden pole allowing heads on BOTH ends! Slower, but covers both ends and deals 1.5x damage.", color = Color(0xFF5D4831)),
+        GearItem("handle_flail_chain", "Flail Chain", ItemType.WEAPON_HANDLE, 1.2f, reach = 1.0f, speedPenalty = 0.30f, description = "A short iron chain with a swivel joint. Makes any head a flail. Bypasses shields.", color = Color(0xFF4C5154))
     )
 
     val SHIELDS = listOf(
@@ -110,6 +133,15 @@ data class LevelUpChoice(
     val description: String, // Comedic and informative description
     val type: String,        // "follower", "attachment", "extension", "armor"
     val itemId: String       // Underlying GearItem or Ancillary ID
+)
+
+data class EmbeddedProjectile(
+    val type: String,
+    val isBallista: Boolean,
+    val hasSpikes: Boolean,
+    val offsetX: Float,
+    val offsetY: Float,
+    val angle: Float
 )
 
 data class FighterState(
@@ -168,8 +200,10 @@ data class FighterState(
     val rangedUpgrades: List<String> = emptyList(),
     var poisonDuration: Float = 0f,
     var bleedDuration: Float = 0f,
-    val isMounted: Boolean = false,
-    var kills: Int = 0
+    var isMounted: Boolean = false,
+    var trampleCooldown: Float = 0f,
+    var kills: Int = 0,
+    var stuckArrows: Int = 0
 ) {
     // Simulated Base Stats
     val totalMass: Float
@@ -198,7 +232,8 @@ data class FighterState(
         get() {
             val baseReach = (weaponHead.reach + weaponHandle.reach) * size
             val extensionReach = handleExtensionCount * 0.35f
-            return baseReach + extensionReach
+            val mountReach = if (isMounted) 1.5f else 0f
+            return baseReach + extensionReach + mountReach
         }
 
     val baseDamage: Float

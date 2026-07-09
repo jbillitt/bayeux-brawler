@@ -70,7 +70,11 @@ object TapestryRenderer {
             if (fighter.isDead || fighter.isDying) {
                 val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
                 
-                when (fighter.deathType) {
+                if (fighter.isMounted) {
+                    rotationAngle = if (fighter.facingRight) 90f * progress else -90f * progress
+                    offsetY = 30f * progress
+                    offsetX = if (fighter.facingRight) -30f * progress else 30f * progress
+                } else when (fighter.deathType) {
                     0 -> { // Fall backwards
                         rotationAngle = if (fighter.facingRight) -90f * progress else 90f * progress
                         offsetY = 65f * progress
@@ -101,29 +105,81 @@ object TapestryRenderer {
                 }
             }
 
+            if (fighter.isMounted) {
+                var horseRot = 0f
+                if (fighter.isDead || fighter.isDying) {
+                    val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
+                    horseRot = if (fighter.facingRight) -15f * progress else 15f * progress
+                }
+                withTransform({ rotate(horseRot, pivot = Offset(cx, cy + 80f)) }) {
+                    drawHorse(this, cx, cy, fighter)
+                }
+            }
+
+            // Draw blood pool and stream BEFORE the ragdoll transform so it stays flat on the floor AND underneath the body!
+            if ((fighter.isDead || fighter.isDying) && fighter.deathType == 5) {
+                val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
+                val fountainProgress = progress.coerceIn(0f, 1f)
+                if (fountainProgress > 0.05f) {
+                    val flyDir = if (fighter.facingRight) -1f else 1f
+                    
+                    // Track world position of the rotating neck
+                    val angleRad = Math.toRadians(rotationAngle.toDouble())
+                    val nx = cx + (-70f * Math.sin(angleRad)).toFloat() * fighter.size
+                    val ny = (cy + 80f) + (-70f * Math.cos(angleRad)).toFloat() * fighter.size
+                    
+                    // The pool is where the neck ultimately lands
+                    val poolCenterX = cx + flyDir * 70f * fighter.size
+                    val poolCenterY = cy + 90f 
+                    
+                    // 1. Draw Stream FIRST (so pool overlaps it)
+                    val streamPath = Path().apply {
+                        moveTo(nx, ny)
+                        quadraticTo(
+                            nx + flyDir * 35f * fountainProgress,
+                            ny - 80f * fountainProgress,
+                            poolCenterX,
+                            poolCenterY
+                        )
+                    }
+                    drawScope.drawPath(streamPath, Color(0xFF9E3624), style = Stroke(width = 10f * fighter.size, cap = StrokeCap.Round))
+                    drawScope.drawPath(streamPath, Color(0xFFBF4040), style = Stroke(width = 5f * fighter.size, cap = StrokeCap.Round))
+                    
+                    // 2. Draw Pool (overlaps stream)
+                    val poolProgress = ((fountainProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                    if (poolProgress > 0f) {
+                        val poolW = 45f * poolProgress * fighter.size
+                        val poolH = 15f * poolProgress * fighter.size
+                        drawScope.drawOval(
+                            color = Color(0xFF9E3624).copy(alpha = 0.85f),
+                            topLeft = Offset(poolCenterX - poolW, poolCenterY - poolH),
+                            size = androidx.compose.ui.geometry.Size(poolW * 2f, poolH * 2f)
+                        )
+                        drawScope.drawOval(
+                            color = Color(0xFF6E2215).copy(alpha = 0.5f),
+                            topLeft = Offset(poolCenterX - poolW * 0.6f, poolCenterY - poolH * 0.4f),
+                            size = androidx.compose.ui.geometry.Size(poolW * 1.2f, poolH * 0.8f)
+                        )
+                    }
+                }
+            }
+
             withTransform({
                 translate(offsetX, offsetY)
                 rotate(rotationAngle, pivot = Offset(cx, cy + 80f))
                 scale(1f, scaleY, pivot = Offset(cx, cy + 80f))
             }) {
-                if (fighter.isMounted) {
-                    drawHorse(this, cx, cy, fighter)
+                if (!fighter.isMounted) {
+                    drawLegs(this, cx, cy, fighter)
                 }
 
-                // 1. Draw Legs (Walking cycle)
-                drawLegs(this, cx, cy, fighter)
-
-                // 2. Draw Back Arm and Shield (behind torso)
-                drawBackArmAndShield(this, cx, cy, fighter)
-
-                // 3. Draw Tunic / Torso with Chainmail Ring-texture if equipped
-                drawTorso(this, cx, cy, fighter)
-
-                // 4. Draw Head (Skin, hair cut, mustache, helmet)
-                drawHead(this, cx, cy, fighter)
-
-                // 5. Draw Front Arm & Weapon (swinging angle)
-                drawFrontArmAndWeapon(this, cx, cy, fighter)
+                val mountOffsetY = if (fighter.isMounted) -35f else 0f
+                withTransform({ translate(0f, mountOffsetY) }) {
+                    drawTorso(this, cx, cy, fighter)
+                    drawHead(this, cx, cy, fighter)
+                    drawBackArmAndShield(this, cx, cy, fighter)
+                    drawFrontArmAndWeapon(this, cx, cy, fighter)
+                }
             }
         }
     }
@@ -235,19 +291,18 @@ object TapestryRenderer {
         }
 
         // Battle Scars / Arrows on the body
-        if (fighter.level > 2) {
-            val numArrows = ((fighter.level - 2) / 2).coerceAtMost(3)
-            for (i in 0 until numArrows) {
-                // Draw broken arrows stuck in the armor
-                val ax = cx - 10f + (i * 12f)
-                val ay = cy + 40f + (i * 15f % 30f)
-                // Arrow shaft sticking out
-                scope.drawLine(Color(0xFF8A5E38), Offset(ax - 20f, ay - 10f), Offset(ax, ay), strokeWidth = 2f)
-                // Fletching
-                scope.drawLine(Color.White, Offset(ax - 20f, ay - 10f), Offset(ax - 25f, ay - 15f), strokeWidth = 1.5f)
-                // Blood stain where it entered
-                scope.drawCircle(Color(0xFF9E3624).copy(alpha = 0.6f), radius = 6f, center = Offset(ax, ay))
-            }
+        val numArrows = fighter.stuckArrows.coerceAtMost(6)
+        for (i in 0 until numArrows) {
+            // Draw broken arrows stuck in the armor
+            val ax = cx - 15f + (i * 12f)
+            val ay = cy + 40f + (i * 18f % 40f)
+            // Arrow shaft sticking out
+            scope.drawLine(Color(0xFF8A5E38), Offset(ax - 35f, ay - 15f), Offset(ax, ay), strokeWidth = 4.5f)
+            // Fletching
+            scope.drawLine(Color.White, Offset(ax - 35f, ay - 15f), Offset(ax - 42f, ay - 22f), strokeWidth = 3f)
+            scope.drawLine(Color.White, Offset(ax - 35f, ay - 15f), Offset(ax - 42f, ay - 8f), strokeWidth = 3f)
+            // Blood stain where it entered
+            scope.drawCircle(Color(0xFF9E3624).copy(alpha = 0.6f), radius = 8f, center = Offset(ax, ay))
         }
     }
 
@@ -264,12 +319,7 @@ object TapestryRenderer {
             headOffsetY = -150f * sin(progress * Math.PI).toFloat() + 50f * progress
             headRot = flyDir * 360f * progress * 2f
             
-            // Draw a blood fountain from the neck stump
-            val fountainPath = Path().apply {
-                moveTo(cx - 5f, cy + 10f)
-                quadraticTo(cx + flyDir * 20f * progress, cy - 50f * progress, cx + flyDir * 40f * progress, cy - 10f * progress)
-            }
-            scope.drawPath(fountainPath, Color(0xFF9E3624), style = Stroke(width = 8f, cap = StrokeCap.Round, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f))))
+            // Blood fountain is now drawn in world-space in drawCharacter() so it connects properly to the pool!
         }
 
         scope.withTransform({
@@ -470,7 +520,7 @@ object TapestryRenderer {
             when (fighter.weaponHandle.id) {
                 "handle_long" -> 110f
                 "handle_medium" -> 55f
-                "handle_chain" -> 60f
+                "handle_chain", "handle_flail_chain" -> 60f
                 "handle_double_ended" -> 80f
                 else -> 30f // short, iron, wheel, pick, fists
             }
@@ -479,38 +529,33 @@ object TapestryRenderer {
         // Handle shaft (wooden)
         val shaftEnd = androidx.compose.ui.geometry.Offset(hx + handleLen * 0.8f, hy - handleLen * 0.4f)
         var headPos = shaftEnd
-        if (!isBowOrSlingshot) {
-            if (fighter.weaponHandle.id == "handle_chain") {
-                // Draw a flailing chain
-                val timeSecs = System.currentTimeMillis() / 1000f
-                val flailAmount = kotlin.math.sin(timeSecs * 10f + fighter.posX) * 15f
-                val flailAmountY = kotlin.math.cos(timeSecs * 12f + fighter.posX) * 10f
-                
-                var cx = hx - 10f
-                var cy = hy + 5f
-                val linkCount = 8
-                val dx = (shaftEnd.x - cx) / linkCount
-                val dy = (shaftEnd.y - cy) / linkCount
-                for (i in 0..linkCount) {
-                    val progress = i.toFloat() / linkCount
-                    val pX = cx + dx * i + (flailAmount * progress)
-                    val pY = cy + dy * i + (flailAmountY * progress) + (progress * 15f) // sag
-                    scope.drawCircle(
-                        color = fighter.weaponHandle.color,
-                        radius = 3f,
-                        center = androidx.compose.ui.geometry.Offset(pX, pY)
-                    )
-                    scope.drawCircle(
-                        color = ThreadColor,
-                        radius = 3f,
-                        center = androidx.compose.ui.geometry.Offset(pX, pY),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f)
-                    )
-                    if (i == linkCount) {
-                        headPos = androidx.compose.ui.geometry.Offset(pX, pY)
-                    }
-                }
-            } else if (fighter.weaponHandle.id == "handle_wheel") {
+        val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
+        if (isChainHandle && !isBowOrSlingshot) {
+            val swing = fighter.swingProgress
+            val gripEnd = Offset(hx - 10f, hy + 5f)
+            val sagAmount = when {
+                fighter.isAttacking && swing < 0.5f -> -30f * swing
+                fighter.isAttacking                 -> 15f * (swing - 0.5f) / 0.5f
+                else                                -> 20f
+            }
+            val numLinks = 6
+            for (i in 0 until numLinks) {
+                val t0 = i.toFloat() / numLinks
+                val t1 = (i + 1).toFloat() / numLinks
+                val x0 = gripEnd.x + (shaftEnd.x - gripEnd.x) * t0
+                val y0 = gripEnd.y + (shaftEnd.y - gripEnd.y) * t0 +
+                         sagAmount * sin(t0 * Math.PI.toFloat()) * (1f - t0)
+                val x1 = gripEnd.x + (shaftEnd.x - gripEnd.x) * t1
+                val y1 = gripEnd.y + (shaftEnd.y - gripEnd.y) * t1 +
+                         sagAmount * sin(t1 * Math.PI.toFloat()) * (1f - t1)
+                scope.drawLine(Color(0xFF636A6E), Offset(x0, y0), Offset(x1, y1),
+                    strokeWidth = 4f, cap = StrokeCap.Round)
+                scope.drawLine(ThreadColor, Offset(x0, y0), Offset(x1, y1),
+                    strokeWidth = 1.5f, cap = StrokeCap.Round)
+            }
+            headPos = shaftEnd
+        } else if (!isBowOrSlingshot) {
+            if (fighter.weaponHandle.id == "handle_wheel") {
                 // Draw a wheel!
                 val midX = (hx - 25f + shaftEnd.x) / 2
                 val midY = (hy + 12f + shaftEnd.y) / 2
@@ -678,9 +723,62 @@ object TapestryRenderer {
                         scope.drawLine(androidx.compose.ui.graphics.Color(0xFFE4D6B6), androidx.compose.ui.geometry.Offset(headPos.x - 18f, headPos.y - 45f), androidx.compose.ui.geometry.Offset(headPos.x - 18f, headPos.y + 45f), strokeWidth = 2f)
                     }
                     "head_flail" -> {
-                        val ballPos = androidx.compose.ui.geometry.Offset(headPos.x + 20f, headPos.y + 25f)
-                        scope.drawLine(ThreadColor, headPos, ballPos, strokeWidth = 3f)
-                        scope.drawCircle(fighter.weaponHead.color, radius = 10f, center = ballPos)
+                        val swing = fighter.swingProgress
+                        val chainAngle: Float = when {
+                            fighter.isAttacking && swing < 0.4f ->
+                                (Math.PI * 0.3 + swing * Math.PI * 0.5).toFloat()
+                            fighter.isAttacking ->
+                                (Math.PI * 0.8 - (swing - 0.4f) / 0.6f * Math.PI).toFloat()
+                            else ->
+                                (Math.PI * 0.25 + sin(fighter.animFrame * 0.8f) * 0.15f).toFloat()
+                        }
+                        val chainLength = 38f
+                        val ballPos = Offset(
+                            headPos.x + cos(chainAngle) * chainLength,
+                            headPos.y + sin(chainAngle) * chainLength
+                        )
+                        scope.drawLine(Color(0xFF636A6E), headPos, ballPos, strokeWidth = 4f, cap = StrokeCap.Round)
+                        scope.drawLine(ThreadColor, headPos, ballPos, strokeWidth = 1.5f, cap = StrokeCap.Round)
+                        scope.drawCircle(fighter.weaponHead.color, radius = 11f, center = ballPos)
+                        scope.drawCircle(ThreadColor, radius = 11f, center = ballPos, style = StitchedStroke)
+                        for (i in 0 until 6) {
+                            val spikeAngle = chainAngle + i * (Math.PI * 2.0 / 6.0).toFloat()
+                            val sp = Offset(
+                                ballPos.x + cos(spikeAngle) * 17f,
+                                ballPos.y + sin(spikeAngle) * 17f
+                            )
+                            scope.drawLine(ThreadColor, ballPos, sp, strokeWidth = 2.5f, cap = StrokeCap.Round)
+                        }
+                    }
+                    "head_war_flail" -> {
+                        val swing = fighter.swingProgress
+                        val baseChainAngle: Float = when {
+                            fighter.isAttacking && swing < 0.4f ->
+                                (Math.PI * 0.3 + swing * Math.PI * 0.5).toFloat()
+                            fighter.isAttacking ->
+                                (Math.PI * 0.8 - (swing - 0.4f) / 0.6f * Math.PI).toFloat()
+                            else ->
+                                (Math.PI * 0.25 + sin(fighter.animFrame * 0.8f) * 0.15f).toFloat()
+                        }
+                        listOf(baseChainAngle, baseChainAngle - (Math.PI / 4).toFloat()).forEach { chainAngle ->
+                            val chainLength = 38f
+                            val ballPos = Offset(
+                                headPos.x + cos(chainAngle) * chainLength,
+                                headPos.y + sin(chainAngle) * chainLength
+                            )
+                            scope.drawLine(Color(0xFF636A6E), headPos, ballPos, strokeWidth = 4f, cap = StrokeCap.Round)
+                            scope.drawLine(ThreadColor, headPos, ballPos, strokeWidth = 1.5f, cap = StrokeCap.Round)
+                            scope.drawCircle(fighter.weaponHead.color, radius = 11f, center = ballPos)
+                            scope.drawCircle(ThreadColor, radius = 11f, center = ballPos, style = StitchedStroke)
+                            for (i in 0 until 6) {
+                                val spikeAngle = chainAngle + i * (Math.PI * 2.0 / 6.0).toFloat()
+                                val sp = Offset(
+                                    ballPos.x + cos(spikeAngle) * 17f,
+                                    ballPos.y + sin(spikeAngle) * 17f
+                                )
+                                scope.drawLine(ThreadColor, ballPos, sp, strokeWidth = 2.5f, cap = StrokeCap.Round)
+                            }
+                        }
                     }
                     "head_scythe" -> {
                         val bladeLen = 60f
@@ -752,61 +850,66 @@ object TapestryRenderer {
         val isBowOrSlingshot = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
         
         var thrustOffset = Offset.Zero
+        val isLanceCompatible = fighter.weaponHead.id in listOf("head_pike", "head_spear", "head_halberd")
         val armAngle = if (fighter.isDead || fighter.isDying) {
             if (fighter.isDying) {
-                // Wild, hilarious ragdoll flailing!
                 sin(fighter.animFrame * 1.5f) * 85f
             } else {
-                // Limply sprawling on the floor
                 45f
             }
         } else if (fighter.isAttacking) {
             if (isThrusting) {
-                // Thrust animation (mostly forward motion, slight angle)
                 if (swing < 0.3f) {
-                    // Pull back
                     thrustOffset = Offset(-25f * (swing / 0.3f), 0f)
                     -10f * (swing / 0.3f)
                 } else {
-                    // Thrust forward
                     val thrustExt = sin((swing - 0.3f) / 0.7f * Math.PI).toFloat()
                     thrustOffset = Offset(55f * thrustExt, -5f * thrustExt)
                     -10f + 15f * thrustExt
                 }
             } else if (isScythe) {
-                // Wide horizontal/lower sweep
                 if (swing < 0.3f) {
-                    20f * (swing / 0.3f) // pull back lower
+                    20f * (swing / 0.3f)
                 } else {
-                    20f - 100f * ((swing - 0.3f) / 0.7f) // sweep up
+                    20f - 100f * ((swing - 0.3f) / 0.7f)
                 }
             } else if (isHeavy) {
-                // Massive overhead smash
                 if (swing < 0.5f) {
-                    -75f * (swing / 0.5f) // pull back very high
+                    -75f * (swing / 0.5f)
                 } else {
-                    -75f + 160f * ((swing - 0.5f) / 0.5f) // slam down
+                    -75f + 160f * ((swing - 0.5f) / 0.5f)
                 }
             } else if (isBowOrSlingshot) {
-                // Raise arm and hold, then snap forward
                 if (swing < 0.4f) {
-                    -35f * (swing / 0.4f) // raise arm
+                    -35f * (swing / 0.4f)
                 } else if (swing < 0.85f) {
-                    -35f // hold tension
+                    -35f
                 } else {
-                    -35f + 45f * ((swing - 0.85f) / 0.15f) // release
+                    -35f + 45f * ((swing - 0.85f) / 0.15f)
                 }
             } else {
-                // Standard Smash down arc
                 if (swing < 0.4f) {
-                    -45f * (swing / 0.4f) // back
+                    -45f * (swing / 0.4f)
                 } else {
-                    -45f + 130f * ((swing - 0.4f) / 0.6f) // smash forward
+                    -45f + 130f * ((swing - 0.4f) / 0.6f)
                 }
             }
+        } else if (fighter.isMounted && isLanceCompatible && kotlin.math.abs(fighter.velocityX) > 30f) {
+            -25f
         } else {
-            // Idle breathing swing
             sin(fighter.animFrame * 0.5f) * 10f
+        }
+
+        if (fighter.missingArm) {
+            scope.withTransform({
+                rotate(armAngle, pivot = Offset(cx - 15f, cy + 25f))
+            }) {
+                val sleeveColor = if (fighter.isPlayer) Color(0xFF265063) else Color(0xFF9E3624)
+                drawStitchedStrap(this, Offset(cx - 15f, cy + 25f), Offset(cx + 4f, cy + 28f), sleeveColor)
+                scope.drawCircle(Color(0xFF9E3624), radius = 8f, center = Offset(cx + 4f, cy + 28f))
+                scope.drawCircle(Color(0xFFBF2A2A), radius = 4f, center = Offset(cx + 4f, cy + 28f))
+            }
+            return
         }
 
         // Draw weapon and arm together
@@ -833,61 +936,54 @@ object TapestryRenderer {
 
 
     private fun drawBackArmAndShield(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val shieldArmAngle = if (fighter.isDead || fighter.isDying) {
+            if (fighter.isDying) -cos(fighter.animFrame * 1.5f) * 85f else -30f
+        } else {
+            -sin(fighter.animFrame * 0.5f) * 10f
+        }
+        
         if (fighter.missingArm) {
-            // Draw a bloody stump
-            val sleeveColor = if (fighter.isPlayer) androidx.compose.ui.graphics.Color(0xFF1E3F4F) else androidx.compose.ui.graphics.Color(0xFF8A2E1E)
-            scope.drawLine(sleeveColor, androidx.compose.ui.geometry.Offset(cx - 5f, cy + 25f), androidx.compose.ui.geometry.Offset(cx - 5f, cy + 30f), strokeWidth = 10f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-            scope.drawCircle(androidx.compose.ui.graphics.Color(0xFF9E3624), radius = 5f, center = androidx.compose.ui.geometry.Offset(cx - 5f, cy + 30f))
+            scope.withTransform({ rotate(shieldArmAngle, pivot = Offset(cx + 5f, cy + 25f)) }) {
+                val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
+                drawStitchedStrap(this, Offset(cx + 5f, cy + 25f), Offset(cx + 10f, cy + 35f), sleeveColor)
+                scope.drawCircle(Color(0xFF9E3624), radius = 7f, center = Offset(cx + 10f, cy + 35f))
+                scope.drawCircle(Color(0xFFBF2A2A), radius = 3.5f, center = Offset(cx + 10f, cy + 35f))
+            }
             return
         }
+
         val sColor = fighter.shield.color
         val hasKite = fighter.shield.id == "shield_kite"
         val hasTower = fighter.shield.id == "shield_tower"
 
         if (fighter.shield.id == "shield_none") {
             if (fighter.isDualWielding) {
-                // Dual Wielding! Draw weapon in the back arm
                 val swing = fighter.swingProgress
-                // Offhand swings opposite to main hand, or just lags behind
                 val armAngle = if (fighter.isDead || fighter.isDying) {
-                    if (fighter.isDying) {
-                        // Opposite wild flail!
-                        -cos(fighter.animFrame * 1.5f) * 85f
-                    } else {
-                        -30f
-                    }
+                    if (fighter.isDying) -cos(fighter.animFrame * 1.5f) * 85f else -30f
                 } else if (fighter.isAttacking) {
-                    if (swing < 0.5f) {
-                        -20f + 80f * (swing / 0.5f)
-                    } else {
-                        60f - 80f * ((swing - 0.5f) / 0.5f)
-                    }
+                    if (swing < 0.5f) -20f + 80f * (swing / 0.5f) else 60f - 80f * ((swing - 0.5f) / 0.5f)
                 } else {
                     -sin(fighter.animFrame * 0.5f) * 10f
                 }
 
                 scope.withTransform({
-                    rotate(armAngle, pivot = Offset(cx - 5f, cy + 30f))
+                    rotate(armAngle, pivot = Offset(cx + 5f, cy + 30f))
                 }) {
-                    val hx = cx - 5f
-                    val hy = cy + 45f
-                    // Back sleeve
+                    val hx = cx + 25f
+                    val hy = cy + 40f
                     val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
-                    drawStitchedStrap(this, Offset(cx - 5f, cy + 25f), Offset(hx, hy), sleeveColor)
-                    // Back hand
+                    drawStitchedStrap(this, Offset(cx + 5f, cy + 25f), Offset(hx, hy), sleeveColor)
                     scope.drawCircle(Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
                     
-                    // Weapon - Drop if dead or dying
                     if (!fighter.isDead && !fighter.isDying) {
                         drawWeapon(this, hx, hy, fighter)
                     }
                 }
             } else {
-                // NOT dual wielding
                 val isTwoHanded = fighter.weaponHead.id in listOf("head_claymore", "head_longbow", "head_halberd", "head_pike", "head_scythe", "head_bow")
                 if (isTwoHanded) {
-                    // Two handing grip, swing aligns roughly with front arm
                     val swing = fighter.swingProgress
                     val isThrusting = fighter.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd", "head_dagger")
                     val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe")
@@ -895,11 +991,7 @@ object TapestryRenderer {
 
                     var thrustOffset = Offset.Zero
                     val armAngle = if (fighter.isDead || fighter.isDying) {
-                        if (fighter.isDying) {
-                            -cos(fighter.animFrame * 1.5f) * 85f
-                        } else {
-                            -30f
-                        }
+                        if (fighter.isDying) -cos(fighter.animFrame * 1.5f) * 85f else -30f
                     } else if (fighter.isAttacking) {
                         if (isThrusting) {
                             if (swing < 0.3f) {
@@ -925,31 +1017,31 @@ object TapestryRenderer {
                         translate(thrustOffset.x, thrustOffset.y)
                         rotate(armAngle, pivot = Offset(cx - 5f, cy + 30f))
                     }) {
-                        val hx = cx - 15f
-                        val hy = cy + 40f
+                        val handleLen = when (fighter.weaponHandle.id) {
+                            "handle_long"   -> 110f
+                            "handle_medium" -> 55f
+                            else            -> 30f
+                        }
+                        val frontHandX = cx + 25f
+                        val frontHandY = cy + 30f
+                        val gripFraction = 0.35f
+                        val hx = frontHandX + handleLen * 0.8f * gripFraction
+                        val hy = frontHandY - handleLen * 0.4f * gripFraction
+                        
                         val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
                         drawStitchedStrap(this, Offset(cx - 5f, cy + 25f), Offset(hx, hy), sleeveColor)
                         scope.drawCircle(Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
                         scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
                     }
                 } else {
-                    // One-handed weapon, shield_none, NOT dual wielding: just draw a simple resting back arm
-                    val armAngle = if (fighter.isDead || fighter.isDying) {
-                        if (fighter.isDying) {
-                            -cos(fighter.animFrame * 1.5f) * 85f
-                        } else {
-                            -30f
-                        }
-                    } else {
-                        -sin(fighter.animFrame * 0.5f) * 10f
-                    }
+                    val armAngle = shieldArmAngle
                     scope.withTransform({
-                        rotate(armAngle, pivot = Offset(cx - 5f, cy + 30f))
+                        rotate(armAngle, pivot = Offset(cx + 5f, cy + 30f))
                     }) {
-                        val hx = cx - 5f
+                        val hx = cx + 8f
                         val hy = cy + 45f
                         val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
-                        drawStitchedStrap(this, Offset(cx - 5f, cy + 25f), Offset(hx, hy), sleeveColor)
+                        drawStitchedStrap(this, Offset(cx + 5f, cy + 25f), Offset(hx, hy), sleeveColor)
                         scope.drawCircle(Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
                         scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
                     }
@@ -958,33 +1050,18 @@ object TapestryRenderer {
             return
         }
 
-        // --- WITH SHIELD OPTION ---
-        // As requested: "I think maybe shield should be visible, follow however bayeaux tapestry showed both arms."
-        // We draw the back arm sleeve holding the shield straps behind it first!
-        val shieldArmAngle = if (fighter.isDead || fighter.isDying) {
-            if (fighter.isDying) {
-                -cos(fighter.animFrame * 1.5f) * 85f
-            } else {
-                -30f
-            }
-        } else {
-            -sin(fighter.animFrame * 0.5f) * 10f
-        }
-
-        // Back Arm Sleeve (extending to center of shield)
         scope.withTransform({
-            rotate(shieldArmAngle, pivot = Offset(cx - 5f, cy + 25f))
+            rotate(shieldArmAngle, pivot = Offset(cx + 5f, cy + 25f))
         }) {
-            val hx = cx - 8f
+            val hx = cx + 8f
             val hy = cy + 45f
             val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
-            drawStitchedStrap(this, Offset(cx - 5f, cy + 25f), Offset(hx, hy), sleeveColor)
+            drawStitchedStrap(this, Offset(cx + 5f, cy + 25f), Offset(hx, hy), sleeveColor)
             scope.drawCircle(Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
             scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
         }
 
-        // Draw Shield
-        val shx = cx - 8f
+        val shx = cx + 8f
         val shy = cy + 45f
         
         val shieldFlailAngle = if (fighter.isDying) {
@@ -997,21 +1074,18 @@ object TapestryRenderer {
 
         val shieldPath = Path().apply {
             if (hasKite) {
-                // Teardrop kite shield
-                moveTo(shx - 18f, shy - 25f)
-                lineTo(shx + 18f, shy - 25f)
-                quadraticTo(shx + 18f, shy + 5f, shx, shy + 45f) // tapered long point
-                quadraticTo(shx - 18f, shy + 5f, shx - 18f, shy - 25f)
+                moveTo(shx - 20f, shy - 30f)
+                lineTo(shx + 20f, shy - 30f)
+                quadraticTo(shx + 20f, shy + 20f, shx, shy + 65f)
+                quadraticTo(shx - 20f, shy + 20f, shx - 20f, shy - 30f)
                 close()
             } else if (hasTower) {
-                // Heavy square shield wall shield
-                moveTo(shx - 22f, shy - 35f)
-                lineTo(shx + 22f, shy - 35f)
-                lineTo(shx + 22f, shy + 35f)
-                lineTo(shx - 22f, shy + 35f)
+                moveTo(shx - 25f, shy - 45f)
+                lineTo(shx + 25f, shy - 45f)
+                lineTo(shx + 25f, shy + 45f)
+                lineTo(shx - 25f, shy + 45f)
                 close()
             } else {
-                // Buckler - Round wooden shield
                 addOval(androidx.compose.ui.geometry.Rect(shx - 18f, shy - 18f, shx + 18f, shy + 18f))
             }
         }
@@ -1019,51 +1093,35 @@ object TapestryRenderer {
         scope.withTransform({
             rotate(shieldFlailAngle, pivot = Offset(shx, shy))
         }) {
-            // Fill background
             drawStitchedFill(scope, shieldPath, sColor)
 
-            // Draw classic Norman patterns on the shield! (Stripes/Crosses typical of Hastings tapestries)
-            withTransform({
-                clipPath(shieldPath)
-            }) {
+            withTransform({ clipPath(shieldPath) }) {
                 if (hasKite) {
-                    // Cross pattern in contrasted gold/red
                     val crossCol = if (sColor == Color(0xFF9E3624)) Color(0xFFB08221) else Color(0xFF9E3624)
                     drawLine(crossCol, Offset(shx - 30f, shy - 10f), Offset(shx + 30f, shy - 10f), strokeWidth = 10f)
                     drawLine(crossCol, Offset(shx, shy - 30f), Offset(shx, shy + 50f), strokeWidth = 10f)
-                    
-                    // Draw 4 studs on the cross
                     drawCircle(ThreadColor, radius = 2f, center = Offset(shx - 10f, shy - 10f))
                     drawCircle(ThreadColor, radius = 2f, center = Offset(shx + 10f, shy - 10f))
                     drawCircle(ThreadColor, radius = 2f, center = Offset(shx, shy - 20f))
                     drawCircle(ThreadColor, radius = 2f, center = Offset(shx, shy + 10f))
-
                 } else if (hasTower) {
-                    // Checkerboard pattern
                     val checkerCol = Color(0xFF382F22)
-                    drawRect(checkerCol, Offset(shx - 22f, shy - 35f), Size(22f, 35f))
-                    drawRect(checkerCol, Offset(shx, shy), Size(22f, 35f))
-                    // Outline border of shield
-                    drawLine(ThreadColor, Offset(shx - 22f, shy - 35f), Offset(shx + 22f, shy - 35f), strokeWidth = 4f)
-                    drawLine(ThreadColor, Offset(shx - 22f, shy + 35f), Offset(shx + 22f, shy + 35f), strokeWidth = 4f)
-                    drawLine(ThreadColor, Offset(shx - 22f, shy - 35f), Offset(shx - 22f, shy + 35f), strokeWidth = 4f)
-                    drawLine(ThreadColor, Offset(shx + 22f, shy - 35f), Offset(shx + 22f, shy + 35f), strokeWidth = 4f)
-                    
+                    drawRect(checkerCol, Offset(shx - 25f, shy - 45f), Size(25f, 45f))
+                    drawRect(checkerCol, Offset(shx, shy), Size(25f, 45f))
+                    drawLine(ThreadColor, Offset(shx - 25f, shy - 45f), Offset(shx + 25f, shy - 45f), strokeWidth = 4f)
+                    drawLine(ThreadColor, Offset(shx - 25f, shy + 45f), Offset(shx + 25f, shy + 45f), strokeWidth = 4f)
+                    drawLine(ThreadColor, Offset(shx - 25f, shy - 45f), Offset(shx - 25f, shy + 45f), strokeWidth = 4f)
+                    drawLine(ThreadColor, Offset(shx + 25f, shy - 45f), Offset(shx + 25f, shy + 45f), strokeWidth = 4f)
                 } else {
-                    // Iron boss in center of buckler
                     drawCircle(Color(0xFF6B7882), radius = 6f, center = Offset(shx, shy))
                     drawCircle(ThreadColor, radius = 6f, center = Offset(shx, shy), style = StitchedStroke)
-                    // Draw wood planks
                     drawLine(ThreadColor.copy(alpha=0.4f), Offset(shx - 10f, shy - 16f), Offset(shx - 10f, shy + 16f), strokeWidth = 1f)
                     drawLine(ThreadColor.copy(alpha=0.4f), Offset(shx + 10f, shy - 16f), Offset(shx + 10f, shy + 16f), strokeWidth = 1f)
                     drawLine(ThreadColor.copy(alpha=0.4f), Offset(shx - 4f, shy - 18f), Offset(shx - 4f, shy + 18f), strokeWidth = 1f)
                     drawLine(ThreadColor.copy(alpha=0.4f), Offset(shx + 4f, shy - 18f), Offset(shx + 4f, shy + 18f), strokeWidth = 1f)
-                    
-                    // Outer iron rim
                     drawCircle(Color(0xFF727A80), radius = 17f, center = Offset(shx, shy), style = Stroke(width = 3f))
                 }
 
-                // Shield Battle Scars! (Arrows stuck in the shield)
                 if (fighter.level > 3) {
                     val numArrows = ((fighter.level - 3) / 2).coerceAtMost(4)
                     for (i in 0 until numArrows) {
@@ -1071,15 +1129,13 @@ object TapestryRenderer {
                         val ay = shy - 10f + (i * 12f % 30f)
                         drawLine(Color(0xFF8A5E38), Offset(ax - 25f, ay - 8f), Offset(ax, ay), strokeWidth = 2f)
                         drawLine(Color.White, Offset(ax - 25f, ay - 8f), Offset(ax - 30f, ay - 12f), strokeWidth = 1.5f)
-                        drawCircle(Color(0xFF2C2219), radius = 1.5f, center = Offset(ax, ay)) // Impact hole
+                        drawCircle(Color(0xFF2C2219), radius = 1.5f, center = Offset(ax, ay))
                     }
                 }
             }
-            // Outer outline
             drawPath(shieldPath, ThreadColor, style = StitchedStroke)
         }
     }
-
     private fun drawDamageFlurry(scope: DrawScope, cx: Float, cy: Float) {
         // Dynamic blood-stitch threads sprouting out comedicly!
         for (i in 0 until 5) {
@@ -1329,6 +1385,35 @@ object TapestryRenderer {
                             drawPath(trumpetPath, ThreadColor, style = Stroke(width = 2f))
                         }
                     }
+                    "anc_crossbowman" -> {
+                        // Crossbow
+                        val armAngle = -15f
+                        withTransform({ rotate(armAngle, pivot = Offset(cx, cy + 50f)) }) {
+                            // stock
+                            drawLine(Color(0xFF5C4033), Offset(cx - 10f, cy + 40f), Offset(cx + 40f, cy + 30f), strokeWidth = 5f)
+                            // bow limbs
+                            val bowPath = Path().apply {
+                                moveTo(cx + 35f, cy + 10f)
+                                quadraticBezierTo(cx + 45f, cy + 30f, cx + 35f, cy + 50f)
+                            }
+                            drawPath(bowPath, Color(0xFF2E2E2E), style = Stroke(width = 4f))
+                            // string
+                            drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 10f), Offset(cx + 10f, cy + 35f), strokeWidth = 1.5f)
+                            drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 50f), Offset(cx + 10f, cy + 35f), strokeWidth = 1.5f)
+                        }
+                    }
+                    "anc_archer" -> {
+                        // Longbow
+                        val armAngle = -30f
+                        withTransform({ rotate(armAngle, pivot = Offset(cx, cy + 50f)) }) {
+                            val bowPath = Path().apply {
+                                moveTo(cx + 30f, cy - 10f)
+                                quadraticBezierTo(cx + 45f, cy + 40f, cx + 30f, cy + 90f)
+                            }
+                            drawPath(bowPath, Color(0xFF6E5536), style = Stroke(width = 4.5f))
+                            drawLine(Color(0xFFDDDDDD), Offset(cx + 30f, cy - 10f), Offset(cx + 30f, cy + 90f), strokeWidth = 1f)
+                        }
+                    }
                     "anc_cupbearer" -> {
                         // Small golden pitcher or goblet
                         val gobletPath = Path().apply {
@@ -1409,39 +1494,67 @@ object TapestryRenderer {
 
     private fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val anim = fighter.animFrame
-        val horseColor = Color(0xFF452E1B)
-        
-        val horseBodyPath = Path().apply {
-            moveTo(cx - 50f, cy + 40f)
-            lineTo(cx + 40f, cy + 40f)
-            lineTo(cx + 50f, cy + 90f)
-            lineTo(cx - 50f, cy + 90f)
+        val walking = !fighter.isDead && !fighter.isDying
+        val legSwing = if (walking) sin(anim) * 18f else 0f
+        val horseColor = Color(0xFF6B4F2E)
+        val legColor   = Color(0xFF5A3F22)
+
+        val bodyPath = Path().apply {
+            addOval(androidx.compose.ui.geometry.Rect(cx - 55f, cy + 60f, cx + 55f, cy + 130f))
+        }
+        drawStitchedFill(scope, bodyPath, horseColor)
+        scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+
+        val neckPath = Path().apply {
+            moveTo(cx + 35f, cy + 65f)
+            lineTo(cx + 55f, cy + 30f)
+            lineTo(cx + 70f, cy + 35f)
+            lineTo(cx + 55f, cy + 75f)
             close()
         }
-        drawStitchedFill(scope, horseBodyPath, horseColor)
-        scope.drawPath(horseBodyPath, ThreadColor, style = StitchedStroke)
-        
-        // Head
-        val headAngle = if (fighter.isDead || fighter.isDying) 60f else sin(anim * 2f) * 10f
-        scope.withTransform({ rotate(headAngle, pivot = Offset(cx + 40f, cy + 40f)) }) {
-            val headPath = Path().apply {
-                moveTo(cx + 40f, cy + 40f)
-                lineTo(cx + 70f, cy - 10f)
-                lineTo(cx + 85f, cy + 10f)
-                lineTo(cx + 50f, cy + 60f)
-                close()
-            }
-            drawStitchedFill(scope, headPath, horseColor)
-            scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
-            scope.drawCircle(Color.White, radius = 4f, center = Offset(cx + 65f, cy))
-            scope.drawCircle(if (fighter.isDead || fighter.isDying) Color.Black else ThreadColor, radius = 1.5f, center = Offset(cx + 66f, cy))
+        drawStitchedFill(scope, neckPath, Color(0xFF7A5A34))
+        scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
+
+        val headPath = Path().apply {
+            moveTo(cx + 50f, cy + 20f)
+            lineTo(cx + 82f, cy + 14f)
+            lineTo(cx + 87f, cy + 26f)
+            lineTo(cx + 72f, cy + 42f)
+            lineTo(cx + 48f, cy + 39f)
+            close()
         }
-        
-        val legSwing = if (fighter.isDead || fighter.isDying) 0f else sin(anim * 4f) * 20f
-        scope.drawLine(horseColor, Offset(cx + 30f, cy + 90f), Offset(cx + 30f + legSwing, cy + 150f), strokeWidth = 12f)
-        scope.drawLine(ThreadColor, Offset(cx + 30f, cy + 90f), Offset(cx + 30f + legSwing, cy + 150f), strokeWidth = 2f)
-        scope.drawLine(horseColor, Offset(cx - 30f, cy + 90f), Offset(cx - 30f - legSwing, cy + 150f), strokeWidth = 12f)
-        scope.drawLine(ThreadColor, Offset(cx - 30f, cy + 90f), Offset(cx - 30f - legSwing, cy + 150f), strokeWidth = 2f)
+        drawStitchedFill(scope, headPath, horseColor)
+        scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+        scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(cx + 70f, cy + 22f))
+
+        scope.drawLine(Color(0xFF2C2219), Offset(cx + 42f, cy + 26f), Offset(cx + 56f, cy + 31f), strokeWidth = 5f, cap = StrokeCap.Round)
+        scope.drawLine(Color(0xFF2C2219), Offset(cx + 48f, cy + 31f), Offset(cx + 62f, cy + 36f), strokeWidth = 4f, cap = StrokeCap.Round)
+
+        val legs = listOf(
+            Triple(cx + 32f, cy + 120f, legSwing),
+            Triple(cx + 42f, cy + 120f, -legSwing),
+            Triple(cx - 32f, cy + 120f, -legSwing * 0.8f),
+            Triple(cx - 42f, cy + 120f, legSwing * 0.8f)
+        )
+        legs.forEach { (lx, ly, angle) ->
+            scope.withTransform({ rotate(angle, pivot = Offset(lx, ly)) }) {
+                val ex = lx + (if (lx > cx) 2f else -2f)
+                val ey = ly + 55f
+                scope.drawLine(legColor, Offset(lx, ly), Offset(ex, ey), strokeWidth = 9f, cap = StrokeCap.Round)
+                scope.drawLine(ThreadColor, Offset(lx, ly), Offset(ex, ey), strokeWidth = 2f, cap = StrokeCap.Round)
+                scope.drawCircle(Color(0xFF2C2219), radius = 6f, center = Offset(ex, ey))
+            }
+        }
+
+        val saddlePath = Path().apply {
+            moveTo(cx - 18f, cy + 65f)
+            lineTo(cx + 22f, cy + 60f)
+            lineTo(cx + 22f, cy + 92f)
+            lineTo(cx - 18f, cy + 97f)
+            close()
+        }
+        drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
+        scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
     }
 
     private fun radToDeg(rad: Float): Float {

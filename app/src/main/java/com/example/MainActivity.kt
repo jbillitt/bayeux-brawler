@@ -26,6 +26,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -570,15 +571,15 @@ fun LevelUpScreen(uiState: BattleSimState, onSelectChoice: (String) -> Unit, onS
                 Text("Proceed to Next Battle", color = Color.White, fontWeight = FontWeight.Bold)
             }
                 } else {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                uiState.pendingLevelUpChoices.forEach { choice ->
-                    // Choose colors and tags based on upgrade types
+                for (index in uiState.pendingLevelUpChoices.indices) {
+                    val choice = uiState.pendingLevelUpChoices[index]
                     val (bannerColor, titleColor, tagLabel) = when (choice.type) {
                         "follower" -> Triple(Color(0xFFE3F2FD), TapestryBlue, "Entourage")
                         "attachment" -> Triple(Color(0xFFFFEBEE), TapestryRed, "Weapon Head")
@@ -588,61 +589,55 @@ fun LevelUpScreen(uiState: BattleSimState, onSelectChoice: (String) -> Unit, onS
                     }
                     Card(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp)
+                            .weight(1f)
+                            .fillMaxHeight()
                             .clickable { onSelectChoice(choice.id) },
                         colors = CardDefaults.cardColors(containerColor = bannerColor),
-                        border = BorderStroke(1.5.dp, titleColor),
+                        border = BorderStroke(2.dp, titleColor),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column(
-                                modifier = Modifier.weight(1f).padding(end = 12.dp),
-                                horizontalAlignment = Alignment.Start
-                            ) {
-                                Text(
-                                    tagLabel,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = titleColor,
-                                    modifier = Modifier
-                                        .background(Color.White, RoundedCornerShape(3.dp))
-                                        .border(0.5.dp, titleColor, RoundedCornerShape(3.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    choice.title,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = TapestryDark,
-                                    fontFamily = FontFamily.Serif,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    choice.description,
-                                    fontSize = 12.sp,
-                                    lineHeight = 14.sp,
-                                    color = TapestryDark.copy(alpha = 0.85f)
-                                )
-                            }
+                            Text(
+                                tagLabel,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = titleColor,
+                                modifier = Modifier
+                                    .background(Color.White, RoundedCornerShape(4.dp))
+                                    .border(1.dp, titleColor, RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
                             
-                            // Beautiful right arrow for M3 interaction
+                            Text(
+                                choice.title,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = TapestryDark,
+                                fontFamily = FontFamily.Serif,
+                                textAlign = TextAlign.Center
+                            )
+                            
+                            Text(
+                                choice.description,
+                                fontSize = 14.sp,
+                                lineHeight = 18.sp,
+                                color = TapestryDark.copy(alpha = 0.85f),
+                                textAlign = TextAlign.Center
+                            )
+                            
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .background(titleColor, RoundedCornerShape(18.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("⚔", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Text("⚔", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -743,7 +738,9 @@ fun GearSelectionTabs(
                         Text("BODY SIZE (Affects Mass/Speed)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(0.8f to "Slight", 1.0f to "Average", 1.25f to "Hulking").forEach { (sizeVal, label) ->
+                            com.example.game.SIZE_PRESETS.forEach { preset ->
+                                val sizeVal = preset.size
+                                val label = preset.label
                                 val isSelected = uiState.characterSize == sizeVal
                                 Box(
                                     modifier = Modifier
@@ -1270,11 +1267,39 @@ fun BattlefieldScene(
                             drawPath(hPath, Color(0xFF8C969E))
                             drawPath(hPath, TapestryDark, style = Stroke(width = 1.5f))
                         }
+                    } else if (proj.type == "javelin") {
+                        // Draw huge spear
+                        val shaftColor = Color(0xFF6E5536) // Darker wood
+                        val strokeW = 9f
+                        val length = 110f
+                        
+                        // Shaft
+                        drawLine(
+                            color = shaftColor,
+                            start = Offset(sx, sy),
+                            end = Offset(sx - (length * arrowDir), sy + 3f),
+                            strokeWidth = strokeW,
+                            cap = StrokeCap.Round
+                        )
+                        // Giant Iron Spear Tip
+                        val hPath = Path().apply {
+                            moveTo(sx - (6f * arrowDir), sy)
+                            lineTo(sx + (25f * arrowDir), sy - 8f)
+                            lineTo(sx + (35f * arrowDir), sy)
+                            lineTo(sx + (25f * arrowDir), sy + 8f)
+                            close()
+                        }
+                        drawPath(hPath, Color(0xFF8C969E))
+                        drawPath(hPath, TapestryDark, style = Stroke(width = 1.5f))
+                        
+                        // Some leather bindings
+                        drawLine(TapestryDark, Offset(sx - (4f * arrowDir), sy - 3f), Offset(sx - (4f * arrowDir), sy + 3f), strokeWidth = 3f)
+                        drawLine(TapestryDark, Offset(sx - (8f * arrowDir), sy - 3f), Offset(sx - (8f * arrowDir), sy + 3f), strokeWidth = 3f)
                     } else if (proj.type == "arrow") {
                         // Draw flying arrow line with feathers
                         val shaftColor = if (proj.isBallista) Color(0xFF8A7156) else TapestryDark
-                        val strokeW = if (proj.isBallista) 6.5f else 3.5f
-                        val length = if (proj.isBallista) 42f else 22f
+                        val strokeW = if (proj.isBallista) 10f else 7f
+                        val length = if (proj.isBallista) 45f else 65f
                         
                         // Arrow Shaft
                         drawLine(
@@ -1285,20 +1310,20 @@ fun BattlefieldScene(
                             cap = StrokeCap.Round
                         )
                         // Arrow Iron Tip
-                        val tipRadius = if (proj.isBallista) 5f else 2.5f
+                        val tipRadius = if (proj.isBallista) 11f else 6f
                         drawCircle(Color(0xFF868C91), radius = tipRadius, center = Offset(sx, sy))
                         
                         // Spiked Broadhead extra barbs
                         if (proj.hasSpikes) {
-                            drawLine(TapestryDark, Offset(sx, sy), Offset(sx - (8f * arrowDir), sy + 6f), strokeWidth = 2.5f)
-                            drawLine(TapestryDark, Offset(sx, sy), Offset(sx - (8f * arrowDir), sy - 6f), strokeWidth = 2.5f)
+                            drawLine(TapestryDark, Offset(sx, sy), Offset(sx - (10f * arrowDir), sy + 8f), strokeWidth = 3f)
+                            drawLine(TapestryDark, Offset(sx, sy), Offset(sx - (10f * arrowDir), sy - 8f), strokeWidth = 3f)
                         }
 
                         // Arrow feather fletching (Embroidered texture)
-                        drawLine(TapestryRed, Offset(sx - (length * 0.7f * arrowDir), sy + 2f), Offset(sx - (length * arrowDir), sy + 8f), strokeWidth = 2.5f, cap = StrokeCap.Round)
-                        drawLine(TapestryRed, Offset(sx - (length * 0.7f * arrowDir), sy + 2f), Offset(sx - (length * arrowDir), sy - 4f), strokeWidth = 2.5f, cap = StrokeCap.Round)
-                        drawLine(TapestryRed, Offset(sx - (length * 0.8f * arrowDir), sy + 2f), Offset(sx - (length * 1.1f * arrowDir), sy + 7f), strokeWidth = 2.5f, cap = StrokeCap.Round)
-                        drawLine(TapestryRed, Offset(sx - (length * 0.8f * arrowDir), sy + 2f), Offset(sx - (length * 1.1f * arrowDir), sy - 3f), strokeWidth = 2.5f, cap = StrokeCap.Round)
+                        drawLine(TapestryRed, Offset(sx - (length * 0.7f * arrowDir), sy + 2f), Offset(sx - (length * arrowDir), sy + 14f), strokeWidth = 5f, cap = StrokeCap.Round)
+                        drawLine(TapestryRed, Offset(sx - (length * 0.7f * arrowDir), sy - 2f), Offset(sx - (length * arrowDir), sy - 14f), strokeWidth = 5f, cap = StrokeCap.Round)
+                        drawLine(TapestryRed, Offset(sx - (length * 0.8f * arrowDir), sy + 2f), Offset(sx - (length * 1.1f * arrowDir), sy + 9f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+                        drawLine(TapestryRed, Offset(sx - (length * 0.8f * arrowDir), sy + 2f), Offset(sx - (length * 1.1f * arrowDir), sy - 5f), strokeWidth = 3.5f, cap = StrokeCap.Round)
                         
                     } else {
                         // Sling stone circle (woven rock)
@@ -1365,7 +1390,7 @@ fun BattlefieldScene(
             Card(
                 colors = CardDefaults.cardColors(containerColor = TapestryLinenCard),
                 modifier = Modifier
-                    .width(360.dp)
+                    .width(420.dp)
                     .border(4.dp, if (isWin) TapestryGreen else TapestryRed, RoundedCornerShape(8.dp))
                     .padding(4.dp),
                 shape = RoundedCornerShape(8.dp)
@@ -1386,6 +1411,7 @@ fun BattlefieldScene(
                     )
 
                     
+                    val player = viewModel.playerState.collectAsState().value
                     if (isWin) {
                         Text(
                             text = "Thy valiant Norman Knight hath vanquished Harold's Anglo-Saxon defenders! Thy gear score multiplier of x%.1f earned thee massive points.".format(uiState.scoreMultiplier),
@@ -1395,7 +1421,6 @@ fun BattlefieldScene(
                             textAlign = TextAlign.Center
                         )
                     } else {
-                        val player = viewModel.playerState.collectAsState().value
                         val quote = remember { listOf(
                             "\"Time and tide wait for no man.\"\n- Geoffrey Chaucer",
                             "\"All good things must come to an end.\"\n- Geoffrey Chaucer",
@@ -1416,14 +1441,14 @@ fun BattlefieldScene(
                         
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                         ) {
-                            Box(modifier = Modifier.size(60.dp).background(Color(0xFFE5D3B3), RoundedCornerShape(4.dp)).border(2.dp, TapestryDark, RoundedCornerShape(4.dp))) {
+                            Box(modifier = Modifier.size(70.dp).background(Color(0xFFE5D3B3), RoundedCornerShape(4.dp)).border(2.dp, TapestryDark, RoundedCornerShape(4.dp)).clipToBounds()) {
                                 Canvas(modifier = Modifier.fillMaxSize()) {
-                                    val sc = size.width / 40f
+                                    val sc = size.width / 80f
                                     withTransform({
                                         scale(sc, sc, pivot = Offset.Zero)
-                                        translate(20f, 35f)
+                                        translate(40f, -140f) // shift up to where cy=200 is
                                     }) {
                                         if (player != null) {
                                             // Draw just head without helmet
@@ -1435,29 +1460,55 @@ fun BattlefieldScene(
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                Text("Name: ${uiState.playerName}", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryDark)
-                                Text("Weapon: ${player?.weaponHead?.name ?: "None"}", fontSize = 10.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                Text("Name: ${uiState.playerName}", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                Text("Weapon: ${player?.weaponHead?.name ?: "None"}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
                                 val anc = uiState.unlockedAncillaries.mapNotNull { id -> com.example.game.GameData.ANCILLARIES.find { it.id == id }?.name }.joinToString(", ")
-                                Text("Ancillaries: ${if (anc.isEmpty()) "None" else anc}", fontSize = 10.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
-                                Text("Kills: ${uiState.totalKills}", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryRed)
+                                Text("Ancillaries: ${if (anc.isEmpty()) "None" else anc}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                Text("Kills: ${uiState.totalKills}", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryRed)
                             }
                         }
                     }
-
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isWin) TapestryGreen else TapestryRed
-                        ),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.testTag("dismiss_result_btn")
+                    
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        Text(
-                            text = if (isWin) "To the Armory! (Proceed)" else "Mend thy wounds & Try Again",
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Bold,
-                            color = TapestryLight
-                        )
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isWin) TapestryGreen else TapestryRed
+                            ),
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.testTag("dismiss_result_btn")
+                        ) {
+                            Text(
+                                text = if (isWin) "To the Armory!" else "Try Again",
+                                fontFamily = FontFamily.Serif,
+                                fontWeight = FontWeight.Bold,
+                                color = TapestryLight
+                            )
+                        }
+                        
+                        if (!isWin) {
+                            Button(
+                                onClick = {
+                                    val uri = generateShareImage(context, player, uiState.scoreMultiplier, uiState.totalKills, isWin)
+                                    if (uri != null) {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                            type = "image/png"
+                                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(intent, "Share Tale"))
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text("Share Tale", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryLight)
+                            }
+                        }
                     }
                 }
             }
@@ -1613,5 +1664,72 @@ private fun drawTapestryBorder(
         scope.drawCircle(TapestryRed.copy(alpha = 0.5f), radius = 3f, center = Offset(x + 15f, yTop + borderH / 2 - 10f))
         
         x += 160f
+    }
+}
+
+fun generateShareImage(context: android.content.Context, player: com.example.game.FighterState?, score: Float, kills: Int, isWin: Boolean): android.net.Uri? {
+    if (player == null) return null
+    val width = 800
+    val height = 800
+    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+    val androidCanvas = android.graphics.Canvas(bitmap)
+    val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+    
+    // Background
+    androidCanvas.drawColor(android.graphics.Color.parseColor("#E5D3B3"))
+    
+    // Title
+    val paint = android.graphics.Paint().apply {
+        color = android.graphics.Color.parseColor("#3B291A")
+        textSize = 60f
+        isAntiAlias = true
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
+        textAlign = android.graphics.Paint.Align.CENTER
+    }
+    androidCanvas.drawText("Bayeux Brawler", width / 2f, 100f, paint)
+    
+    paint.textSize = 35f
+    paint.typeface = android.graphics.Typeface.SERIF
+    val statusText = if(isWin) "Vanquished" else "Perished"
+    androidCanvas.drawText("Status: " + statusText + " | Score: " + score + "x | Kills: " + kills, width / 2f, 160f, paint)
+    
+    val wpnBase = player.weaponHead.name + " on a " + player.weaponHandle.name
+    val wpnName = if (player.extraAttachments.isNotEmpty()) {
+        player.extraAttachments.joinToString(", ") { it.name } + " attached to " + wpnBase
+    } else wpnBase
+    paint.textSize = 24f
+    androidCanvas.drawText("Wielding: " + wpnName, width / 2f, 200f, paint)
+    
+    // Draw character
+    val drawScope = androidx.compose.ui.graphics.drawscope.CanvasDrawScope()
+    val size = androidx.compose.ui.geometry.Size(width.toFloat(), height.toFloat())
+    
+    drawScope.draw(
+        androidx.compose.ui.unit.Density(context),
+        androidx.compose.ui.unit.LayoutDirection.Ltr,
+        composeCanvas,
+        size
+    ) {
+        withTransform({
+            scale(3.5f, 3.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
+            translate(110f, 10f) 
+        }) {
+            val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
+            com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
+        }
+    }
+    
+    // Save to cache
+    return try {
+        val cachePath = java.io.File(context.cacheDir, "")
+        val file = java.io.File(cachePath, "share.png")
+        val stream = java.io.FileOutputStream(file)
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+        stream.close()
+        
+        androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
 }

@@ -1,0 +1,6 @@
+{
+  "name": "Bayeux Battle Sim",
+  "description": "An authentic medieval Bayeux tapestry combat simulator! Assemble custom crude weapon parts, dress up your Norman knight, balance gear mass and armor for optimal score multipliers, and lead him to victory in simulated combat against waves of chainmail-clad foes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

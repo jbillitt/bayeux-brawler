@@ -123,29 +123,11 @@ object TapestryRenderer {
                 if (fountainProgress > 0.05f) {
                     val flyDir = if (fighter.facingRight) -1f else 1f
                     
-                    // Track world position of the rotating neck
-                    val angleRad = Math.toRadians(rotationAngle.toDouble())
-                    val nx = cx + (-70f * Math.sin(angleRad)).toFloat() * fighter.size
-                    val ny = (cy + 80f) + (-70f * Math.cos(angleRad)).toFloat() * fighter.size
-                    
                     // The pool is where the neck ultimately lands, but clamped to the floor level (cy+150f is feet)
                     val poolCenterX = cx + flyDir * 70f * fighter.size
                     val poolCenterY = cy + 150f 
                     
-                    // 1. Draw Stream FIRST (so pool overlaps it)
-                    val streamPath = Path().apply {
-                        moveTo(nx, ny)
-                        quadraticTo(
-                            nx + flyDir * 35f * fountainProgress,
-                            ny - 80f * fountainProgress,
-                            poolCenterX,
-                            poolCenterY
-                        )
-                    }
-                    drawScope.drawPath(streamPath, Color(0xFF9E3624), style = Stroke(width = 10f * fighter.size, cap = StrokeCap.Round))
-                    drawScope.drawPath(streamPath, Color(0xFFBF4040), style = Stroke(width = 5f * fighter.size, cap = StrokeCap.Round))
-                    
-                    // 2. Draw Pool (overlaps stream)
+                    // 2. Draw Pool
                     val poolProgress = ((fountainProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
                     if (poolProgress > 0f) {
                         val poolW = 45f * poolProgress * fighter.size

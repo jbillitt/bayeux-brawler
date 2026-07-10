@@ -91,9 +91,12 @@ class GameViewModel : ViewModel() {
         _uiState.update { state ->
             val choice = state.pendingLevelUpChoices.find { it.id == choiceId }
             if (choice == null) {
+                val bonus = (250 * state.level * state.scoreMultiplier).toInt()
                 return@update state.copy(
                     showLevelUpScreen = false,
-                    pendingLevelUpChoices = emptyList()
+                    pendingLevelUpChoices = emptyList(),
+                    score = state.score + bonus,
+                    pendingSkipBonus = bonus
                 )
             }
             
@@ -112,6 +115,19 @@ class GameViewModel : ViewModel() {
                 rangedUpgrades = newRangedUpgrades,
                 showLevelUpScreen = false,
                 pendingLevelUpChoices = emptyList()
+            )
+        }
+    }
+
+    fun selectMusicMood(mood: String) {
+        _uiState.update { state ->
+            // ponytail: only apply mood 70% of the time to preserve variance
+            val applied = if (kotlin.random.Random.nextFloat() < 0.7f) state.appliedMusicMoods + mood else state.appliedMusicMoods
+            state.copy(
+                showMusicDecision = false,
+                pendingMusicOptions = emptyList(),
+                appliedMusicMoods = applied,
+                showLevelUpScreen = true // proceed to reward after music choice
             )
         }
     }
@@ -256,7 +272,9 @@ class GameViewModel : ViewModel() {
         )
 
         // Create Saxon enemies based on level
-        val enemiesCount = 1 + (state.level / 2) + Random.nextInt(0, 2)
+        // Difficulty scales with performance (kill speed + hp remaining)
+        val perfBonus = ((state.performanceScore - 0.5f) * 2f).coerceIn(-0.3f, 0.5f)
+        val enemiesCount = (1 + (state.level / 2) + Random.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(1)
         val enemies = List(enemiesCount) { index ->
             generateRandomSaxon(index, state.level)
         }
@@ -391,7 +409,8 @@ class GameViewModel : ViewModel() {
             hairColor = hairColors.random(rng),
             hairStyle = hairStyles.random(rng),
             level = level,
-            isMounted = loadout.second
+            isMounted = loadout.second,
+            speedBoost = if (loadout.second) 0.45f else 0f
         )
     }
 
@@ -839,9 +858,18 @@ class GameViewModel : ViewModel() {
                     applyFlatDamage(blockDamage, currTarget, attacker.isPlayer)
                 } else {
                     // Full hit!
-                    val slash = attacker.damageSlash * damageFalloff
-                    val pierce = attacker.damagePierce * damageFalloff
-                    val blunt = attacker.damageBlunt * damageFalloff
+                    val distToTarget = abs(attacker.posX - currTarget.posX)
+                    val attachmentDmgMultiplier = if (attacker.isRanged && distToTarget > 80f) 0f else 1f
+                    val attachSlash = attacker.extraAttachments.sumOf { it.slash.toDouble() * 0.5 }.toFloat()
+                    val attachPierce = attacker.extraAttachments.sumOf { it.pierce.toDouble() * 0.5 }.toFloat()
+                    val attachBlunt = attacker.extraAttachments.sumOf { it.blunt.toDouble() * 0.5 }.toFloat()
+                    val scaleLvl = if (attacker.isPlayer) 1.0f + (attacker.level - 1) * 0.12f else 1.0f
+                    val effectiveSlash = ((attacker.damageSlash - attachSlash * scaleLvl) + attachSlash * scaleLvl * attachmentDmgMultiplier) * damageFalloff
+                    val effectivePierce = ((attacker.damagePierce - attachPierce * scaleLvl) + attachPierce * scaleLvl * attachmentDmgMultiplier) * damageFalloff
+                    val effectiveBlunt = ((attacker.damageBlunt - attachBlunt * scaleLvl) + attachBlunt * scaleLvl * attachmentDmgMultiplier) * damageFalloff
+                    val slash = effectiveSlash
+                    val pierce = effectivePierce
+                    val blunt = effectiveBlunt
 
                     // Calculate damage reduction based on defender armor
                     // Armor reduces slash and pierce, but blunt damage partially ignores armor
@@ -861,7 +889,8 @@ class GameViewModel : ViewModel() {
                     }
 
                     // Limb loss mechanic! (heavy slash)
-                    if (slash > 18f && kotlin.random.Random.nextFloat() < 0.2f && !currTarget.missingArm) {
+                    val canLoseArm = !currTarget.isPlayer || (currTarget.hp / currTarget.maxHp < 0.10f)
+                    if (slash > 18f && kotlin.random.Random.nextFloat() < 0.2f && !currTarget.missingArm && canLoseArm) {
                         currTarget.missingArm = true
                         // Disarm off-hand/shield logically
                         if (currTarget.isDualWielding || currTarget.shield.id != "shield_none") {
@@ -969,13 +998,14 @@ class GameViewModel : ViewModel() {
         _screenshake.value = (finalDmgInt * 1.5f).coerceIn(10f, 35f)
         
         // Spawn blood particles based on damage
-        addBloodParticles(defender.posX, 100f, count = (finalDmgInt / 2).toInt().coerceIn(5, 20))
+        addBloodParticles(defender.posX, 160f * defender.size, count = (finalDmgInt / 2).toInt().coerceIn(5, 20))
 
         if (defender.hp <= 0f) {
             if (defender.isMounted && Random.nextFloat() < 0.5f) {
                 defender.hp = 1f
                 defender.isMounted = false
                 addPopup("DISMOUNTED!", defender.posX, 130f, Color.Gray)
+                if (isPlayerSource) _uiState.value = _uiState.value.copy(totalKills = _uiState.value.totalKills + 1)
                 return
             }
             defender.isDying = true
@@ -1020,7 +1050,14 @@ class GameViewModel : ViewModel() {
 
             val pendingChoices = mutableListOf<LevelUpChoice>()
             var showLevelUp = false
+            var newPerf = state.performanceScore
             if (won) {
+                // Compute performance from hp ratio + kill rate
+                val hpRatio = (state.playerHp / state.playerMaxHp).coerceIn(0f, 1f)
+                val killRate = (state.totalKills.toFloat() / (state.level.toFloat() + 1f)).coerceIn(0f, 1f)
+                newPerf = (hpRatio * 0.6f + killRate * 0.4f).coerceIn(0f, 1f)
+
+                val triggerMusicDecision = (state.level % 5 == 0)
                 // 1. Follower option
                 val availableAncs = GameData.ANCILLARIES.filter { it.id !in state.unlockedAncillaries }
                 if (availableAncs.isNotEmpty()) {
@@ -1113,7 +1150,10 @@ class GameViewModel : ViewModel() {
                 highscore = newHighscore,
                 level = nextLevel,
                 pendingLevelUpChoices = pendingChoices,
-                showLevelUpScreen = showLevelUp
+                showLevelUpScreen = showLevelUp,
+                performanceScore = newPerf,
+                showMusicDecision = if (won && (state.level % 5 == 0)) true else state.showMusicDecision,
+                pendingMusicOptions = if (won && (state.level % 5 == 0)) listOf("More Tempo", "Happier", "Mournful", "More Bass", "Complex Drums", "More Fanfares") else state.pendingMusicOptions
             )
         }
 
@@ -1168,6 +1208,11 @@ class GameViewModel : ViewModel() {
                 )
             }
         }
+    }
+
+
+    fun clearSkipBonus() {
+        _uiState.update { it.copy(pendingSkipBonus = 0) }
     }
 
     override fun onCleared() {

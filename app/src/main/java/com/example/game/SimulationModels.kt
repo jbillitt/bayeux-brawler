@@ -243,6 +243,11 @@ data class FighterState(
             // Player gets 12% extra base damage per level survived to scale up against high level mobs
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
             val doubleEndedMultiplier = if (isPlayer && weaponHandle.id == "handle_double_ended") 1.5f else 1.0f
+            if (missingArm && isPlayer) {
+                // Reduced to fist-fighting
+                val fist = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
+                return fist.blunt * size * size * scaleLvl
+            }
             return (base + attachmentsDmg) * scaleLvl * doubleEndedMultiplier
         }
 
@@ -370,7 +375,15 @@ data class BattleSimState(
     // Level Up Choice State
     val pendingLevelUpChoices: List<LevelUpChoice> = emptyList(),
     val showLevelUpScreen: Boolean = false,
-    val totalKills: Int = 0
+    val totalKills: Int = 0,
+
+    // Music decision state
+    val showMusicDecision: Boolean = false,
+    val pendingMusicOptions: List<String> = emptyList(),
+    val appliedMusicMoods: List<String> = emptyList(), // accumulated player music choices
+
+    val pendingSkipBonus: Int = 0, // score to award on next dismiss of level-up screen when skipped
+    val performanceScore: Float = 0.5f // dynamic difficulty: 0=struggling, 1=dominating
 ) {
     val totalHpBoost: Float
         get() = unlockedAncillaries.sumOf { id -> GameData.ANCILLARIES.find { it.id == id }?.hpBoost?.toDouble() ?: 0.0 }.toFloat()

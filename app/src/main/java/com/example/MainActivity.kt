@@ -43,8 +43,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.game.*
 import com.example.ui.theme.*
 import kotlin.math.cos
@@ -90,10 +92,11 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
     var musicOn by remember { mutableStateOf(true) }
     val uiState by viewModel.uiState.collectAsState()
     val hasTrumpeter = uiState.unlockedAncillaries.contains("anc_trumpeter")
+    val appliedMusicMoods = uiState.appliedMusicMoods
 
-    LaunchedEffect(musicOn, uiState.level, hasTrumpeter) {
+    LaunchedEffect(musicOn, uiState.level, hasTrumpeter, appliedMusicMoods) {
         if (musicOn) {
-            MedievalHarpPlayer.startMusic(level = uiState.level, hasTrumpeter = hasTrumpeter)
+            MedievalHarpPlayer.startMusic(level = uiState.level, hasTrumpeter = hasTrumpeter, moods = appliedMusicMoods)
         } else {
             MedievalHarpPlayer.stopMusic()
         }
@@ -213,7 +216,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
         Column(modifier = Modifier.fillMaxSize()) {
             
             // 1. HUD / HEADER BAR
-            HeaderBar(uiState = uiState, musicOn = musicOn, onToggleMusic = onToggleMusic)
+            HeaderBar(uiState = uiState, musicOn = musicOn, onToggleMusic = onToggleMusic, playerState = playerFighter)
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -246,11 +249,18 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                             .weight(0.53f)
                             .fillMaxHeight()
                     ) {
-                        if (uiState.showLevelUpScreen || uiState.level > 1) {
+                        if (uiState.showMusicDecision) {
+                            MusicDecisionScreen(
+                                options = uiState.pendingMusicOptions,
+                                onSelect = { viewModel.selectMusicMood(it) }
+                            )
+                        } else if (uiState.showLevelUpScreen || uiState.level > 1) {
                             LevelUpScreen(
                                 uiState = uiState,
                                 onSelectChoice = { viewModel.selectLevelUpChoice(it) },
-                                onStartBattle = { viewModel.startBattle() }
+                                onStartBattle = { viewModel.startBattle() },
+                                onSkipReward = { viewModel.selectLevelUpChoice("") },
+                                onClearSkipBonus = { viewModel.clearSkipBonus() }
                             )
                         } else {
                             GearSelectionTabs(
@@ -283,7 +293,52 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
 // --- SUB-COMPONENTS ---
 
 @Composable
-fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Unit) {
+fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Unit, playerState: FighterState? = null) {
+    var showStatsPopup by remember { mutableStateOf(false) }
+
+    if (showStatsPopup) {
+        val p = playerState
+        Dialog(onDismissRequest = { showStatsPopup = false }) {
+            Card(
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(2.dp, TapestryDark),
+                colors = CardDefaults.cardColors(containerColor = TapestryLinenCard)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "KNIGHT STATISTICS",
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp,
+                        color = TapestryRed,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    if (p != null) {
+                        StatText("HP", "${p.hp.toInt()} / ${p.maxHp.toInt()}")
+                        StatText("DPS", "${"%.1f".format(p.baseDamage / p.attackSpeedDelay)}/s")
+                        StatText("Armor", "${p.totalArmor.toInt()}")
+                        StatText("Move Speed", "${p.moveSpeed.toInt()} px/s")
+                        StatText("Reach", "${"%.1f".format(p.reach)} m")
+                        StatText("Score Mult", "×${"%.1f".format(p.scoreMultiplier)}")
+                    } else {
+                        Text("No active battle data.", fontSize = 11.sp, color = TapestryDark.copy(alpha = 0.7f))
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { showStatsPopup = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = TapestryRed),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Close", color = TapestryLight, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -294,30 +349,24 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            if (uiState.showLevelUpScreen || uiState.pendingLevelUpChoices.isNotEmpty()) {
-                Text(
-                    text = "VICTORY!",
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 18.sp,
-                    color = TapestryRed,
-                    modifier = Modifier.drawBehind {
-                        val y = size.height + 4f
-                        drawLine(TapestryDark, Offset(0f, y), Offset(size.width, y), strokeWidth = 3f)
-                    }
-                )
-            } else {
-                Text(
-                    text = "LEVEL ${uiState.level}",
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 18.sp,
-                    color = TapestryDark,
-                    modifier = Modifier.drawBehind {
-                        val y = size.height + 4f
-                        drawLine(TapestryDark, Offset(0f, y), Offset(size.width, y), strokeWidth = 3f)
-                    }
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Stats popup button (replaced level text)
+                Box(
+                    modifier = Modifier
+                        .background(TapestryDark.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                        .border(1.dp, TapestryDark.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                        .clickable { showStatsPopup = true }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (uiState.showLevelUpScreen || uiState.pendingLevelUpChoices.isNotEmpty()) "⚔ STATS" else "⚔ STATS",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = if (uiState.showLevelUpScreen || uiState.pendingLevelUpChoices.isNotEmpty()) TapestryRed else TapestryDark
+                    )
+                }
             }
             Text(
                 text = "The shoreline scuffle",
@@ -375,7 +424,7 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
                     .testTag("toggle_harp_music_btn")
             ) {
                 Text(
-                    text = if (musicOn) "🔊 HARP" else "🔇 MUTE",
+                    text = if (musicOn) "🔊 MUSIC" else "🔇 MUTE",
                     color = TapestryLight,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
@@ -528,7 +577,25 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
 }
 
 @Composable
-fun LevelUpScreen(uiState: BattleSimState, onSelectChoice: (String) -> Unit, onStartBattle: () -> Unit = {}) {
+fun LevelUpScreen(
+    uiState: BattleSimState,
+    onSelectChoice: (String) -> Unit,
+    onStartBattle: () -> Unit = {},
+    onSkipReward: () -> Unit = {},
+    onClearSkipBonus: () -> Unit = {}
+) {
+    // Skip bonus popup
+    var showSkipBonusPopup by remember { mutableStateOf(false) }
+    var skipBonusAmount by remember { mutableStateOf(0) }
+    LaunchedEffect(uiState.pendingSkipBonus) {
+        if (uiState.pendingSkipBonus > 0) {
+            skipBonusAmount = uiState.pendingSkipBonus
+            showSkipBonusPopup = true
+            kotlinx.coroutines.delay(2000)
+            showSkipBonusPopup = false
+            onClearSkipBonus()
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -571,75 +638,151 @@ fun LevelUpScreen(uiState: BattleSimState, onSelectChoice: (String) -> Unit, onS
                 Text("Proceed to Next Battle", color = Color.White, fontWeight = FontWeight.Bold)
             }
                 } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                for (index in uiState.pendingLevelUpChoices.indices) {
-                    val choice = uiState.pendingLevelUpChoices[index]
-                    val (bannerColor, titleColor, tagLabel) = when (choice.type) {
-                        "follower" -> Triple(Color(0xFFE3F2FD), TapestryBlue, "Entourage")
-                        "attachment" -> Triple(Color(0xFFFFEBEE), TapestryRed, "Weapon Head")
-                        "extension" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "Haft Upgrade")
-                        "armor" -> Triple(Color(0xFFFFF8E1), Color(0xFF8D6E63), "Layered Armor")
-                        else -> Triple(Color(0xFFF5F5F5), TapestryDark, "Upgrade")
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (index in uiState.pendingLevelUpChoices.indices) {
+                        val choice = uiState.pendingLevelUpChoices[index]
+                        val (bannerColor, titleColor, tagLabel) = when (choice.type) {
+                            "follower" -> Triple(Color(0xFFE3F2FD), TapestryBlue, "Entourage")
+                            "attachment" -> Triple(Color(0xFFFFEBEE), TapestryRed, "Weapon Head")
+                            "extension" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "Haft Upgrade")
+                            "armor" -> Triple(Color(0xFFFFF8E1), Color(0xFF8D6E63), "Layered Armor")
+                            else -> Triple(Color(0xFFF5F5F5), TapestryDark, "Upgrade")
+                        }
+                        Card(
+                            modifier = Modifier
+                                .width(220.dp)
+                                .fillMaxHeight()
+                                .clickable { onSelectChoice(choice.id) },
+                            colors = CardDefaults.cardColors(containerColor = bannerColor),
+                            border = BorderStroke(2.dp, titleColor),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    tagLabel,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = titleColor,
+                                    modifier = Modifier
+                                        .background(Color.White, RoundedCornerShape(4.dp))
+                                        .border(1.dp, titleColor, RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                                Text(
+                                    choice.title,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp,
+                                    color = TapestryDark,
+                                    fontFamily = FontFamily.Serif,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    choice.description,
+                                    fontSize = 13.sp,
+                                    lineHeight = 17.sp,
+                                    color = TapestryDark.copy(alpha = 0.85f),
+                                    textAlign = TextAlign.Center,
+                                    overflow = TextOverflow.Visible
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(titleColor, RoundedCornerShape(18.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("⚔", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
+
+                    // No-Reward card
                     Card(
                         modifier = Modifier
-                            .weight(1f)
+                            .width(180.dp)
                             .fillMaxHeight()
-                            .clickable { onSelectChoice(choice.id) },
-                        colors = CardDefaults.cardColors(containerColor = bannerColor),
-                        border = BorderStroke(2.dp, titleColor),
+                            .clickable { onSkipReward() },
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+                        border = BorderStroke(2.dp, TapestryDark.copy(alpha = 0.4f)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(16.dp),
-                            verticalArrangement = Arrangement.SpaceEvenly,
+                            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                tagLabel,
+                                "No Reward",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = titleColor,
+                                color = TapestryDark.copy(alpha = 0.6f),
                                 modifier = Modifier
                                     .background(Color.White, RoundedCornerShape(4.dp))
-                                    .border(1.dp, titleColor, RoundedCornerShape(4.dp))
+                                    .border(1.dp, TapestryDark.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             )
-                            
                             Text(
-                                choice.title,
+                                "Decline all spoils",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp,
+                                fontSize = 15.sp,
                                 color = TapestryDark,
                                 fontFamily = FontFamily.Serif,
                                 textAlign = TextAlign.Center
                             )
-                            
                             Text(
-                                choice.description,
-                                fontSize = 14.sp,
-                                lineHeight = 18.sp,
-                                color = TapestryDark.copy(alpha = 0.85f),
-                                textAlign = TextAlign.Center
+                                "Thou art too proud for gifts. Earn bonus glory instead.",
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                color = TapestryDark.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Center,
+                                overflow = TextOverflow.Visible
                             )
-                            
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .background(titleColor, RoundedCornerShape(18.dp)),
+                                    .background(TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(18.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("⚔", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                Text("✗", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
+                }
+
+                // Skip bonus popup overlay
+                if (showSkipBonusPopup) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp)
+                            .background(TapestryRed, RoundedCornerShape(8.dp))
+                            .border(2.dp, TapestryDark, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "+$skipBonusAmount GLORY!",
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 18.sp,
+                            color = TapestryLight
+                        )
                     }
                 }
             }
@@ -1490,24 +1633,22 @@ fun BattlefieldScene(
                             )
                         }
                         
-                        if (!isWin) {
-                            Button(
-                                onClick = {
-                                    val uri = generateShareImage(context, player, uiState.scoreMultiplier, uiState.totalKills, isWin)
-                                    if (uri != null) {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                            type = "image/png"
-                                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        context.startActivity(android.content.Intent.createChooser(intent, "Share Tale"))
+                        Button(
+                            onClick = {
+                                val uri = generateShareImage(context, player, uiState.scoreMultiplier, uiState.totalKills, isWin)
+                                if (uri != null) {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "image/png"
+                                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text("Share Tale", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryLight)
-                            }
+                                    context.startActivity(android.content.Intent.createChooser(intent, "Share Tale"))
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text("Share Tale", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryLight)
                         }
                     }
                 }
@@ -1711,14 +1852,48 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
         size
     ) {
         withTransform({
-            scale(3.5f, 3.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
-            translate(110f, 10f) 
+            scale(2.5f, 2.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
+            translate(250f, 50f)
         }) {
             val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
             com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
         }
     }
     
+    // Player name text
+    val namePaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.parseColor("#3B291A")
+        textSize = 52f
+        isAntiAlias = true
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
+        textAlign = android.graphics.Paint.Align.CENTER
+    }
+    androidCanvas.drawText(player.name, width / 2f, 700f, namePaint)
+
+    // Kills count
+    val killsPaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.parseColor("#9E3624")
+        textSize = 38f
+        isAntiAlias = true
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
+        textAlign = android.graphics.Paint.Align.CENTER
+    }
+    androidCanvas.drawText("$kills kills", width / 2f, 750f, killsPaint)
+
+    // Ancillary labels
+    val ancNames = player.extraAttachments.take(4).mapIndexed { i, g -> g.name }
+    if (ancNames.isNotEmpty()) {
+        val ancPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#3B291A")
+            textSize = 22f
+            isAntiAlias = true
+            typeface = android.graphics.Typeface.SERIF
+            textAlign = android.graphics.Paint.Align.CENTER
+            alpha = 180
+        }
+        androidCanvas.drawText("Attachments: " + ancNames.joinToString(", "), width / 2f, 790f, ancPaint)
+    }
+
     // Save to cache
     return try {
         val cachePath = java.io.File(context.cacheDir, "")
@@ -1731,5 +1906,68 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
     } catch (e: Exception) {
         e.printStackTrace()
         null
+    }
+}
+
+@Composable
+fun MusicDecisionScreen(
+    options: List<String>,
+    onSelect: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            "THE BARDS AWAIT THY COMMAND",
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            color = TapestryRed
+        )
+        Text(
+            "Howsoever shall the music evolve?",
+            fontFamily = FontFamily.Serif,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+            fontSize = 16.sp,
+            color = TapestryDark,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+        // Simple 2-column grid-like layout for cards
+        val chunked = options.chunked(2)
+        chunked.forEach { rowOptions ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                rowOptions.forEach { option ->
+                    Card(
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .weight(1f)
+                            .height(100.dp)
+                            .clickable { onSelect(option) },
+                        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = TapestryLight),
+                        border = androidx.compose.foundation.BorderStroke(2.dp, TapestryDark),
+                        elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                option,
+                                fontWeight = FontWeight.Bold,
+                                color = TapestryDark,
+                                fontFamily = FontFamily.Serif,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+                // Fill remaining space if odd number
+                if (rowOptions.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f).padding(8.dp))
+                }
+            }
+        }
     }
 }

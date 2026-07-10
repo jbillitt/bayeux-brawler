@@ -164,6 +164,16 @@ object TapestryRenderer {
                 }
             }
 
+            // Persistent blood pool for dead fighters (all death types except deathType 5 which has its own)
+            if (fighter.isDead && fighter.deathType != 5) {
+                val groundY = cy + 90f
+                drawScope.drawOval(
+                    color = Color(0xAA600000),
+                    topLeft = Offset(cx - 25f, groundY - 6f),
+                    size = androidx.compose.ui.geometry.Size(50f, 12f)
+                )
+            }
+
             withTransform({
                 translate(offsetX, offsetY)
                 rotate(rotationAngle, pivot = Offset(cx, cy + 80f))
@@ -304,6 +314,18 @@ object TapestryRenderer {
             // Blood stain where it entered
             scope.drawCircle(Color(0xFF9E3624).copy(alpha = 0.6f), radius = 8f, center = Offset(ax, ay))
         }
+
+        // Blood pool beneath heavily wounded fighter (drawn at feet level ~cy+155)
+        val hpRatioTorso = if (fighter.maxHp > 0f) fighter.hp / fighter.maxHp else 1f
+        if (fighter.missingArm || hpRatioTorso < 0.5f) {
+            val groundY = cy + 158f
+            val poolAlpha = if (fighter.missingArm) 0.75f else (0.5f - hpRatioTorso).coerceIn(0f, 0.5f) * 1.5f
+            scope.drawOval(
+                color = Color(0x88800000).copy(alpha = poolAlpha),
+                topLeft = Offset(cx - 20f, groundY - 5f),
+                size = androidx.compose.ui.geometry.Size(40f, 10f)
+            )
+        }
     }
 
     private fun drawHead(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
@@ -387,6 +409,37 @@ object TapestryRenderer {
                 scope.drawLine(Color(0xFF9E3624), Offset(hx - 8f, scarY - 2f), Offset(hx + 2f, scarY + 2f), strokeWidth = 1.5f)
                 scope.drawLine(ThreadColor, Offset(hx - 6f, scarY), Offset(hx - 4f, scarY), strokeWidth = 1f) // stitches
             }
+        }
+
+        // Bandage strip across forehead for high-level fighters
+        if (fighter.level > 3) {
+            scope.withTransform({ rotate(-5f, pivot = Offset(hx, hy)) }) {
+                scope.drawRect(
+                    color = Color(0xFFF5F0E8),
+                    topLeft = Offset(hx - 14f, hy - 3f),
+                    size = androidx.compose.ui.geometry.Size(28f, 6f)
+                )
+                // Brown cross-stitching on bandage
+                scope.drawLine(Color(0xFFA8906A), Offset(hx - 6f, hy - 3f), Offset(hx - 6f, hy + 3f), strokeWidth = 1.5f)
+                scope.drawLine(Color(0xFFA8906A), Offset(hx + 2f, hy - 3f), Offset(hx + 2f, hy + 3f), strokeWidth = 1.5f)
+                scope.drawLine(Color(0xFFA8906A), Offset(hx - 14f, hy), Offset(hx + 14f, hy), strokeWidth = 1f)
+            }
+        }
+
+        // HP-based wounds: extra cuts when below 50% HP
+        val hpRatio = if (fighter.maxHp > 0f) fighter.hp / fighter.maxHp else 1f
+        if (hpRatio < 0.5f) {
+            // Extra horizontal slash cuts on cheek
+            scope.drawLine(Color(0xFFBF3030), Offset(hx + 4f, hy + 8f), Offset(hx + 14f, hy + 7f), strokeWidth = 2f)
+            scope.drawLine(Color(0xFFBF3030), Offset(hx + 3f, hy + 12f), Offset(hx + 12f, hy + 11f), strokeWidth = 1.5f)
+        }
+        // Puffy swollen eyes when near death (<25%)
+        if (hpRatio < 0.25f) {
+            // Swollen arc below each eye
+            val puffPath = androidx.compose.ui.graphics.Path().apply {
+                addArc(androidx.compose.ui.geometry.Rect(hx + 1f, hy + 3f, hx + 11f, hy + 10f), 0f, 180f)
+            }
+            scope.drawPath(puffPath, Color(0xFFD4624A), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f, cap = StrokeCap.Round))
         }
 
             // Hair
@@ -533,27 +586,33 @@ object TapestryRenderer {
         if (isChainHandle && !isBowOrSlingshot) {
             val swing = fighter.swingProgress
             val gripEnd = Offset(hx - 10f, hy + 5f)
-            val sagAmount = when {
-                fighter.isAttacking && swing < 0.5f -> -30f * swing
-                fighter.isAttacking                 -> 15f * (swing - 0.5f) / 0.5f
-                else                                -> 20f
+            // Physics pendulum: chain head lags on windup, whips forward on release, dangles idle
+            val pendulumAngle = when {
+                fighter.isAttacking && swing < 0.3f -> -45f + swing * 100f   // lag behind on windup
+                fighter.isAttacking && swing < 0.7f -> 30f + (swing - 0.3f) * 120f // whip forward
+                fighter.isAttacking                 -> 78f - (swing - 0.7f) * 80f  // snap back
+                else -> sin(fighter.animFrame * 3f) * 25f + 15f  // idle natural dangle
             }
+            val chainLen = 45f
+            val angleRad = Math.toRadians(pendulumAngle.toDouble())
+            // Chain head is offset from the grip end by pendulum physics
+            val chainHeadX = gripEnd.x + cos(angleRad).toFloat() * chainLen
+            val chainHeadY = gripEnd.y + sin(angleRad).toFloat() * chainLen
+            val chainHeadPos = Offset(chainHeadX, chainHeadY)
             val numLinks = 6
             for (i in 0 until numLinks) {
                 val t0 = i.toFloat() / numLinks
                 val t1 = (i + 1).toFloat() / numLinks
-                val x0 = gripEnd.x + (shaftEnd.x - gripEnd.x) * t0
-                val y0 = gripEnd.y + (shaftEnd.y - gripEnd.y) * t0 +
-                         sagAmount * sin(t0 * Math.PI.toFloat()) * (1f - t0)
-                val x1 = gripEnd.x + (shaftEnd.x - gripEnd.x) * t1
-                val y1 = gripEnd.y + (shaftEnd.y - gripEnd.y) * t1 +
-                         sagAmount * sin(t1 * Math.PI.toFloat()) * (1f - t1)
+                val x0 = gripEnd.x + (chainHeadX - gripEnd.x) * t0
+                val y0 = gripEnd.y + (chainHeadY - gripEnd.y) * t0
+                val x1 = gripEnd.x + (chainHeadX - gripEnd.x) * t1
+                val y1 = gripEnd.y + (chainHeadY - gripEnd.y) * t1
                 scope.drawLine(Color(0xFF636A6E), Offset(x0, y0), Offset(x1, y1),
                     strokeWidth = 4f, cap = StrokeCap.Round)
                 scope.drawLine(ThreadColor, Offset(x0, y0), Offset(x1, y1),
                     strokeWidth = 1.5f, cap = StrokeCap.Round)
             }
-            headPos = shaftEnd
+            headPos = chainHeadPos
         } else if (!isBowOrSlingshot) {
             if (fighter.weaponHandle.id == "handle_wheel") {
                 // Draw a wheel!
@@ -602,8 +661,15 @@ object TapestryRenderer {
 
         // Dangle rotation if it's on a chain!
         val isChain = fighter.weaponHandle.id == "handle_chain"
-        val timeSecs = System.currentTimeMillis() / 1000f
-        val dangleAngle = if (isChain) kotlin.math.sin(timeSecs * 5f + fighter.posX) * 20f + 70f else 0f
+        val dangleAngle = if (isChain) {
+            val swing = fighter.swingProgress
+            when {
+                fighter.isAttacking && swing < 0.3f -> -45f + swing * 100f
+                fighter.isAttacking && swing < 0.7f -> 30f + (swing - 0.3f) * 120f
+                fighter.isAttacking                 -> 78f - (swing - 0.7f) * 80f
+                else -> sin(fighter.animFrame * 3f) * 25f + 15f
+            }
+        } else 0f
         val isPick = fighter.weaponHandle.id == "handle_pick"
 
         for (i in headsToDraw.indices) {
@@ -833,9 +899,49 @@ object TapestryRenderer {
                     }
                 }
 
+                // Rear-head swoosh arc for double-ended weapons during attack
+                if (isBackHead && fighter.isAttacking && fighter.swingProgress > 0.2f && fighter.swingProgress < 0.8f) {
+                    val swooshPath = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(headPos.x - 20f, headPos.y + 10f)
+                        quadraticTo(
+                            headPos.x - 35f, headPos.y - 15f,
+                            headPos.x - 15f, headPos.y - 30f
+                        )
+                    }
+                    scope.drawPath(
+                        swooshPath,
+                        color = androidx.compose.ui.graphics.Color(0x559E3624),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f, cap = StrokeCap.Round)
+                    )
+                }
+
                 // Bloody weapon?
                 if (fighter.level > 1 && !isBowOrSlingshot) {
                     scope.drawLine(androidx.compose.ui.graphics.Color(0xFF9E3624), headPos, androidx.compose.ui.geometry.Offset(headPos.x + 5f, headPos.y - 5f), strokeWidth = 2f)
+                }
+            }
+        }
+
+        // Extra attachments welded at offset angles
+        if (fighter.extraAttachments.isNotEmpty()) {
+            val attachPos = Offset(hx + handleLen * 0.4f, hy - handleLen * 0.2f)
+            fighter.extraAttachments.forEachIndexed { idx, attachment ->
+                val attachAngle = if (idx % 2 == 0) 30f else -30f
+                scope.withTransform({
+                    rotate(attachAngle, pivot = attachPos)
+                }) {
+                    val bladeTip = Offset(attachPos.x + 28f, attachPos.y - 14f)
+                    scope.drawLine(attachment.color, attachPos, bladeTip, strokeWidth = 5f, cap = StrokeCap.Round)
+                    scope.drawLine(ThreadColor, attachPos, bladeTip, strokeWidth = 1.5f, cap = StrokeCap.Round)
+                    // Small blade triangle
+                    val bladePath = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(bladeTip.x, bladeTip.y)
+                        lineTo(bladeTip.x + 12f, bladeTip.y - 8f)
+                        lineTo(bladeTip.x + 5f, bladeTip.y + 4f)
+                        close()
+                    }
+                    scope.drawPath(bladePath, attachment.color)
+                    scope.drawPath(bladePath, ThreadColor, style = StitchedStroke)
                 }
             }
         }

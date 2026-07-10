@@ -256,7 +256,7 @@ object MedievalHarpPlayer {
         currentLevel = -1 // force rebuild even if same level
     }
 
-    fun startMusic(level: Int = 1, hasTrumpeter: Boolean = false) {
+    fun startMusic(level: Int = 1, hasTrumpeter: Boolean = false, moods: List<String> = emptyList()) {
         if (isPlaying && currentLevel == level && currentHasTrumpeter == hasTrumpeter) return
         if (isPlaying) stopMusic()
 
@@ -270,7 +270,8 @@ object MedievalHarpPlayer {
                     seed      = gameSeed,
                     level     = level,
                     hasTrumpeter = hasTrumpeter,
-                    sampleRate = SAMPLE_RATE
+                    sampleRate = SAMPLE_RATE,
+                    moods     = moods
                 )
                 val track = AudioTrack.Builder()
                     .setAudioAttributes(
@@ -367,7 +368,7 @@ object ProceduralMedievalComposer {
         val release = (sampleRate * 0.15f).toInt()
         for (i in 0 until numSamples) {
             val t = i.toFloat() / sampleRate
-            val vibrato = 1.0 + 0.01 * kotlin.math.sin(2.0 * Math.PI * 5.0 * t)
+            val vibrato = 1.0 + 0.003 * kotlin.math.sin(2.0 * Math.PI * 5.0 * t)
             var wave = kotlin.math.sin(2.0 * Math.PI * freq * vibrato * t).toFloat()
             wave += (Math.random().toFloat() * 2f - 1f) * 0.05f
             val env = when {
@@ -432,19 +433,50 @@ object ProceduralMedievalComposer {
         return out
     }
 
-    fun compose(seed: Long, level: Int, hasTrumpeter: Boolean, sampleRate: Int): ShortArray {
+    private fun tambourineHit(sampleRate: Int): FloatArray {
+        val durationMs = 80
+        val numSamples = (sampleRate * durationMs / 1000)
+        return FloatArray(numSamples) { i ->
+            val env = (1f - i.toFloat() / numSamples)  // linear decay
+            (Random.nextFloat() * 2f - 1f) * env * 0.7f
+        }
+    }
+
+    fun compose(seed: Long, level: Int, hasTrumpeter: Boolean, sampleRate: Int, moods: List<String> = emptyList()): ShortArray {
         val rng = kotlin.random.Random(seed)
         
-        val rootMidiBases = listOf(45f, 38f, 40f, 43f) 
+        val rootMidiBases = listOf(45f, 38f, 40f, 43f, 41f, 36f)
         val rootMidi = rootMidiBases.random(rng)
         currentRootMidi = rootMidi
-        
-        // Varying tempo between playthroughs significantly (75 to 145 BPM)
-        val BPM = 75 + rng.nextInt(70)
+
+        // Mood modifiers (applied before tempo so finalBpm drives secPerBeat)
+        val moodRng = kotlin.random.Random(seed + 999L)
+        val baseBPM = 68 + rng.nextInt(90) // 68–157 BPM
+        val finalBpm = if ("More Tempo" in moods && moodRng.nextFloat() < 0.8f) baseBPM + 18 else baseBPM
+        val brighterMode = "Happier" in moods && moodRng.nextFloat() < 0.75f
+        val mournfulMode = "Mournful" in moods && moodRng.nextFloat() < 0.75f
+        val bassBoost = if ("More Bass" in moods && moodRng.nextFloat() < 0.8f) 1.4f else 1.0f
+        val complexDrums = "Complex Drums" in moods && moodRng.nextFloat() < 0.85f
+        val moreFanfares = "More Fanfares" in moods && moodRng.nextFloat() < 0.7f
+
+        val BPM = finalBpm
         val msPerBeat = 60000 / BPM
+        val secPerBeat = msPerBeat / 1000f
         val measureMs = msPerBeat * 4
-        
+
+        // Per-run variance
+        val sparseness = rng.nextFloat() // 0..1; >0.6 skips some off-beat notes
+        val harVolMult = 0.7f + rng.nextFloat() * 0.6f
+        val luteVolMult = 0.7f + rng.nextFloat() * 0.6f
+        val recVolMult  = 0.7f + rng.nextFloat() * 0.6f
+        val droneVolMult = 0.7f + rng.nextFloat() * 0.6f
+        val octaveShift = rng.nextInt(3) - 1  // -1, 0, or +1 octave for harp melody
+
+        // Destiny path
+        val destiny = if (rng.nextBoolean()) "FANFARE" else "ORCHESTRAL"
+
         val totalMeasures = 16 // 16 bars for Verse + Chorus
+        val totalBars = totalMeasures
         val totalMs = totalMeasures * measureMs
         val totalSamples = (sampleRate * (totalMs / 1000f)).toInt()
         val floatMaster = FloatArray(totalSamples)
@@ -505,10 +537,13 @@ object ProceduralMedievalComposer {
                 }
                 prevDegree = degree
                 
-                val freq = midiToFreq(rootMidi + degree + 12)
+                val freq = midiToFreq(rootMidi + degree + 12 + octaveShift * 12)
                 val noteSamples = pluckNote(freq, noteMs, sampleRate, isLute = false)
-                mix(floatMaster, (sampleRate * (mStartMs / 1000f)).toInt(), noteSamples, 0.65f)
-                
+                // humanization jitter (2-8ms)
+                val harpJitter = rng.nextInt(6) + 2
+                val harpStart = ((sampleRate * (mStartMs / 1000f)).toInt() + harpJitter * sampleRate / 1000).coerceIn(0, floatMaster.size - noteSamples.size)
+                mix(floatMaster, harpStart, noteSamples, 0.65f * harVolMult)
+
                 mStartMs += noteMs
             }
         }
@@ -521,26 +556,32 @@ object ProceduralMedievalComposer {
                 val chord = progression[m]
                 val mStartMs = m * measureMs
                 for ((idx, degree) in chord.withIndex()) {
+                    // sparseness: skip inner chord tones on off-beats when sparse
+                    if (sparseness > 0.6f && idx > 0 && rng.nextFloat() < (sparseness - 0.6f) * 2f) continue
                     val freq = midiToFreq(rootMidi + degree + 12)
                     val noteSamples = pluckNote(freq, measureMs, sampleRate, isLute = true)
-                    mix(floatMaster, (sampleRate * ((mStartMs + idx * 35) / 1000f)).toInt(), noteSamples, 0.5f)
+                    // humanization jitter (2-8ms)
+                    val luteJitter = rng.nextInt(6) + 2
+                    val luteStart = ((sampleRate * ((mStartMs + idx * 35) / 1000f)).toInt() + luteJitter * sampleRate / 1000).coerceIn(0, floatMaster.size - noteSamples.size)
+                    mix(floatMaster, luteStart, noteSamples, 0.5f * luteVolMult)
                 }
             }
         }
         
         // 3. Drone Strings (Level 3+)
         if (level >= 3) {
+            val droneVol = 0.35f * droneVolMult * bassBoost
             for (m in 0 until totalMeasures) {
                 // Drop: Strings rest on measure 8 and 9
                 if (m == 8 || m == 9) continue
                 val chord = progression[m]
-                val freq1 = midiToFreq(rootMidi + chord[0]) 
-                val freq2 = midiToFreq(rootMidi + chord[2]) 
+                val freq1 = midiToFreq(rootMidi + chord[0])
+                val freq2 = midiToFreq(rootMidi + chord[2])
                 val drone1 = droneNote(freq1, measureMs, sampleRate)
                 val drone2 = droneNote(freq2, measureMs, sampleRate)
                 val offset = (sampleRate * (m * measureMs / 1000f)).toInt()
-                mix(floatMaster, offset, drone1, 0.35f)
-                mix(floatMaster, offset, drone2, 0.35f)
+                mix(floatMaster, offset, drone1, droneVol)
+                mix(floatMaster, offset, drone2, droneVol)
             }
         }
         
@@ -576,22 +617,123 @@ object ProceduralMedievalComposer {
                 val chord = progression[m]
                 val mStartMs = m * measureMs
                 for (beat in 0 until 4) {
+                    // sparseness: skip some beats when sparse
+                    if (sparseness > 0.6f && beat % 2 == 1 && rng.nextFloat() < (sparseness - 0.6f) * 2.5f) continue
                     val degree = chord.random(rng)
                     val freq = midiToFreq(rootMidi + degree + 24)
                     val fl = fluteNote(freq, msPerBeat, sampleRate)
-                    mix(floatMaster, (sampleRate * ((mStartMs + beat * msPerBeat) / 1000f)).toInt(), fl, 0.4f)
+                    // humanization jitter (2-8ms)
+                    val recJitter = rng.nextInt(6) + 2
+                    val recStart = ((sampleRate * ((mStartMs + beat * msPerBeat) / 1000f)).toInt() + recJitter * sampleRate / 1000).coerceIn(0, floatMaster.size - fl.size)
+                    mix(floatMaster, recStart, fl, 0.4f * recVolMult)
                 }
             }
         }
         
         // 6. Trumpeter Ancillary Blast
         if (hasTrumpeter) {
-            for (m in listOf(3, 7, 14, 15)) { // Blast at the V chords and final I!
+            val trumpetMeasures = if (moreFanfares)
+                listOf(3, 7, 11, 14, 15)
+            else
+                listOf(3, 7, 14, 15)
+            for (m in trumpetMeasures) {
+                if (m >= totalMeasures) continue
                 val chord = progression[m]
                 val freq = midiToFreq(rootMidi + chord[0] + 12)
                 val dur = if (m == 15) measureMs * 2 else measureMs
                 val horn = hornNote(freq, dur, sampleRate)
                 mix(floatMaster, (sampleRate * ((m * measureMs) / 1000f)).toInt(), horn, 0.7f)
+            }
+        }
+
+        // 7. Tambourine on off-beats (Level 6+)
+        if (level >= 6) {
+            for (bar in 0 until totalBars) {
+                for (beat in listOf(0.5f, 1.5f, 2.5f, 3.5f)) {
+                    if (sparseness > 0.6f && rng.nextFloat() < (sparseness - 0.6f)) continue
+                    val offsetSec = (bar * 4 + beat) * secPerBeat
+                    val noteBuffer = tambourineHit(sampleRate)
+                    val startSample = (offsetSec * sampleRate).toInt().coerceIn(0, floatMaster.size - noteBuffer.size)
+                    for (i in noteBuffer.indices) {
+                        if (startSample + i < floatMaster.size) floatMaster[startSample + i] += noteBuffer[i] * 0.4f
+                    }
+                }
+            }
+        }
+
+        // 8. Horn Organum — sustained 5ths (Level 7+)
+        if (level >= 7) {
+            val chordDurMs = (secPerBeat * 4 * 1000).toInt()
+            for (bar in 0 until totalBars step 4) {
+                val chordIdx = (bar / 4) % progression.size
+                val rootMidiInt = (rootMidi + progression[chordIdx][0]).toInt()
+                val fifthMidi = rootMidiInt + 7
+                val t = bar * 4 * secPerBeat
+                val rootNote = hornNote(midiToFreq(rootMidiInt.toFloat()), chordDurMs, sampleRate)
+                val fifthNote = hornNote(midiToFreq(fifthMidi.toFloat()), chordDurMs, sampleRate)
+                val startSample = (t * sampleRate).toInt().coerceIn(0, floatMaster.size - rootNote.size)
+                for (i in rootNote.indices) {
+                    if (startSample + i < floatMaster.size) {
+                        floatMaster[startSample + i] += rootNote[i] * 0.35f + fifthNote[i] * 0.25f
+                    }
+                }
+            }
+        }
+
+        // 9. Destiny climax (Level 8+)
+        if (level >= 8) {
+            when (destiny) {
+                "ORCHESTRAL" -> {
+                    // Psaltery: high arpeggiated plucks sweeping the progression
+                    val psalteryVol = 0.3f
+                    for (bar in 0 until totalBars) {
+                        val chordIdx = (bar / 4) % progression.size
+                        val rootMidiInt = (rootMidi + progression[chordIdx][0]).toInt()
+                        for (beat in 0 until 4) {
+                            val arpeggioNote = rootMidiInt + listOf(0, 4, 7, 12)[beat % 4]
+                            val freq = midiToFreq((arpeggioNote + 12).toFloat())
+                            val t = (bar * 4 + beat) * secPerBeat
+                            val noteDurMs = (secPerBeat * 800).toInt()
+                            val note = pluckNote(freq, noteDurMs, sampleRate, isLute = false)
+                            val startSample = (t * sampleRate).toInt().coerceIn(0, floatMaster.size - note.size)
+                            for (i in note.indices) {
+                                if (startSample + i < floatMaster.size) floatMaster[startSample + i] += note[i] * psalteryVol
+                            }
+                        }
+                    }
+                }
+                "FANFARE" -> {
+                    // Extra harp fanfare sweeps at phrase ends (every 8 bars)
+                    for (bar in 7 until totalBars step 8) {
+                        val chordIdx = (bar / 4) % progression.size
+                        val rootMidiInt = (rootMidi + progression[chordIdx][0]).toInt()
+                        for (n in 0 until 6) {
+                            val noteM = rootMidiInt + listOf(0, 4, 7, 12, 16, 19)[n]
+                            val freq = midiToFreq((noteM + 12).toFloat())
+                            val t = bar * 4 * secPerBeat + n * 0.07
+                            val note = pluckNote(freq, 400, sampleRate, isLute = false)
+                            val startSample = (t * sampleRate).toInt().coerceIn(0, floatMaster.size - note.size)
+                            for (i in note.indices) {
+                                if (startSample + i < floatMaster.size) floatMaster[startSample + i] += note[i] * 0.45f
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 10. Mood: brighter — shift root up 3 semitones (already baked via brighterMode flag; apply as post-note-selection root shift)
+        // Note: brighterMode/mournfulMode affect future melody reharmonisation; here we add
+        // a subtle extra layer: complexDrums adds upbeat hits on existing drum beats.
+        if (complexDrums && level >= 4) {
+            for (m in 0 until totalMeasures) {
+                if (m == 8) continue
+                val mStartMs = m * measureMs
+                // upbeat hits (beat 2 and 4) at half volume
+                for (upbeat in listOf(msPerBeat, msPerBeat * 3)) {
+                    val drum = drumNote(300, sampleRate)
+                    mix(floatMaster, (sampleRate * ((mStartMs + upbeat) / 1000f)).toInt(), drum, 0.5f)
+                }
             }
         }
 

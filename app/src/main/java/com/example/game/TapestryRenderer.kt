@@ -128,9 +128,9 @@ object TapestryRenderer {
                     val nx = cx + (-70f * Math.sin(angleRad)).toFloat() * fighter.size
                     val ny = (cy + 80f) + (-70f * Math.cos(angleRad)).toFloat() * fighter.size
                     
-                    // The pool is where the neck ultimately lands
+                    // The pool is where the neck ultimately lands, but clamped to the floor level (cy+150f is feet)
                     val poolCenterX = cx + flyDir * 70f * fighter.size
-                    val poolCenterY = cy + 90f 
+                    val poolCenterY = cy + 150f 
                     
                     // 1. Draw Stream FIRST (so pool overlaps it)
                     val streamPath = Path().apply {
@@ -556,9 +556,212 @@ object TapestryRenderer {
             
             // Cross studs / brass trim
             scope.drawLine(Color(0xFFB08221), Offset(hx + 10f, hy - 20f), Offset(hx + 10f, hy + 18f), strokeWidth = 2f)
-            scope.drawLine(Color(0xFFB08221), Offset(hx - 16f, hy - 2f), Offset(hx + 18f, hy - 2f), strokeWidth = 2f)
+        scope.drawLine(Color(0xFFB08221), Offset(hx - 16f, hy - 2f), Offset(hx + 18f, hy - 2f), strokeWidth = 2f)
         }
         } // Close withTransform
+    }
+
+    private fun drawWeaponHead(
+        scope: DrawScope,
+        headId: String,
+        headColor: Color,
+        headPos: Offset,
+        animFrame: Float,
+        swingProgress: Float,
+        isAttacking: Boolean
+    ) {
+        when (headId) {
+            "head_bare" -> {
+                // skip
+            }
+            "head_pike", "head_spear" -> {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(headPos.x, headPos.y)
+                    lineTo(headPos.x + 18f, headPos.y - 12f)
+                    lineTo(headPos.x + 35f, headPos.y - 15f) // point
+                    lineTo(headPos.x + 22f, headPos.y - 3f)
+                    close()
+                }
+                scope.drawPath(path, headColor)
+                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+            }
+            "head_axe" -> {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(headPos.x - 5f, headPos.y + 2f)
+                    lineTo(headPos.x + 20f, headPos.y - 25f) // top corner
+                    lineTo(headPos.x + 22f, headPos.y - 5f)  // blade edge
+                    lineTo(headPos.x + 8f, headPos.y + 12f)  // beard hanging down
+                    close()
+                }
+                scope.drawPath(path, headColor)
+                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+            }
+            "head_sword", "head_claymore", "head_dagger" -> {
+                val isClaymore = headId == "head_claymore"
+                val isDagger = headId == "head_dagger"
+                val bladeLen = if (isClaymore) 80f else if (isDagger) 25f else 50f
+                val bladeEnd = androidx.compose.ui.geometry.Offset(headPos.x + bladeLen * 0.8f, headPos.y - bladeLen * 0.4f)
+                scope.drawLine(
+                    color = headColor,
+                    start = headPos,
+                    end = bladeEnd,
+                    strokeWidth = if (isClaymore) 8f else 5f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+                // crossguard
+                scope.drawLine(
+                    color = androidx.compose.ui.graphics.Color(0xFFCFB53B),
+                    start = androidx.compose.ui.geometry.Offset(headPos.x - 6f, headPos.y - 12f),
+                    end = androidx.compose.ui.geometry.Offset(headPos.x + 6f, headPos.y + 12f),
+                    strokeWidth = 4f
+                )
+                // line down middle
+                scope.drawLine(
+                    color = ThreadColor,
+                    start = headPos,
+                    end = bladeEnd,
+                    strokeWidth = 1f
+                )
+            }
+            "head_morningstar" -> {
+                scope.drawCircle(headColor, radius = 12f, center = headPos)
+                scope.drawCircle(ThreadColor, radius = 12f, center = headPos, style = StitchedStroke)
+                for (i in 0 until 8) {
+                    val angle = i * Math.PI / 4
+                    val sp = androidx.compose.ui.geometry.Offset(headPos.x + kotlin.math.cos(angle).toFloat() * 19f, headPos.y + kotlin.math.sin(angle).toFloat() * 19f)
+                    scope.drawLine(ThreadColor, headPos, sp, strokeWidth = 3f)
+                }
+            }
+            "head_maul" -> {
+                scope.drawRect(
+                    color = headColor,
+                    topLeft = androidx.compose.ui.geometry.Offset(headPos.x - 8f, headPos.y - 18f),
+                    size = androidx.compose.ui.geometry.Size(25f, 35f)
+                )
+                scope.drawRect(
+                    color = ThreadColor,
+                    topLeft = androidx.compose.ui.geometry.Offset(headPos.x - 8f, headPos.y - 18f),
+                    size = androidx.compose.ui.geometry.Size(25f, 35f),
+                    style = StitchedStroke
+                )
+            }
+            "head_bow" -> {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(headPos.x - 12f, headPos.y - 30f)
+                    quadraticTo(headPos.x + 18f, headPos.y, headPos.x - 12f, headPos.y + 30f)
+                }
+                scope.drawPath(path, headColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
+                scope.drawPath(path, ThreadColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+                // Bowstring
+                scope.drawLine(androidx.compose.ui.graphics.Color(0xFFE4D6B6), androidx.compose.ui.geometry.Offset(headPos.x - 12f, headPos.y - 30f), androidx.compose.ui.geometry.Offset(headPos.x - 12f, headPos.y + 30f), strokeWidth = 1.5f)
+            }
+            "head_slingshot" -> {
+                // draw Y shape
+                scope.drawLine(headColor, headPos, androidx.compose.ui.geometry.Offset(headPos.x + 10f, headPos.y - 15f), strokeWidth = 4f)
+                scope.drawLine(headColor, headPos, androidx.compose.ui.geometry.Offset(headPos.x + 10f, headPos.y + 15f), strokeWidth = 4f)
+                scope.drawCircle(ThreadColor, radius = 3f, center = headPos)
+            }
+            "head_longbow" -> {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(headPos.x - 18f, headPos.y - 45f)
+                    quadraticTo(headPos.x + 25f, headPos.y, headPos.x - 18f, headPos.y + 45f)
+                }
+                scope.drawPath(path, headColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f))
+                scope.drawPath(path, ThreadColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+                scope.drawLine(androidx.compose.ui.graphics.Color(0xFFE4D6B6), androidx.compose.ui.geometry.Offset(headPos.x - 18f, headPos.y - 45f), androidx.compose.ui.geometry.Offset(headPos.x - 18f, headPos.y + 45f), strokeWidth = 2f)
+            }
+            "head_flail" -> {
+                val swing = swingProgress
+                val chainAngle: Float = when {
+                    isAttacking && swing < 0.4f ->
+                        (Math.PI * 0.3 + swing * Math.PI * 0.5).toFloat()
+                    isAttacking ->
+                        (Math.PI * 0.8 - (swing - 0.4f) / 0.6f * Math.PI).toFloat()
+                    else ->
+                        (Math.PI * 0.25 + sin(animFrame * 0.8f) * 0.15f).toFloat()
+                }
+                val chainLength = 38f
+                val ballPos = Offset(
+                    headPos.x + cos(chainAngle) * chainLength,
+                    headPos.y + sin(chainAngle) * chainLength
+                )
+                scope.drawLine(Color(0xFF636A6E), headPos, ballPos, strokeWidth = 4f, cap = StrokeCap.Round)
+                scope.drawLine(ThreadColor, headPos, ballPos, strokeWidth = 1.5f, cap = StrokeCap.Round)
+                scope.drawCircle(headColor, radius = 11f, center = ballPos)
+                scope.drawCircle(ThreadColor, radius = 11f, center = ballPos, style = StitchedStroke)
+                for (i in 0 until 6) {
+                    val spikeAngle = chainAngle + i * (Math.PI * 2.0 / 6.0).toFloat()
+                    val sp = Offset(
+                        ballPos.x + cos(spikeAngle) * 17f,
+                        ballPos.y + sin(spikeAngle) * 17f
+                    )
+                    scope.drawLine(ThreadColor, ballPos, sp, strokeWidth = 2.5f, cap = StrokeCap.Round)
+                }
+            }
+            "head_war_flail" -> {
+                val swing = swingProgress
+                val baseChainAngle: Float = when {
+                    isAttacking && swing < 0.4f ->
+                        (Math.PI * 0.3 + swing * Math.PI * 0.5).toFloat()
+                    isAttacking ->
+                        (Math.PI * 0.8 - (swing - 0.4f) / 0.6f * Math.PI).toFloat()
+                    else ->
+                        (Math.PI * 0.25 + sin(animFrame * 0.8f) * 0.15f).toFloat()
+                }
+                listOf(baseChainAngle, baseChainAngle - (Math.PI / 4).toFloat()).forEach { chainAngle ->
+                    val chainLength = 38f
+                    val ballPos = Offset(
+                        headPos.x + cos(chainAngle) * chainLength,
+                        headPos.y + sin(chainAngle) * chainLength
+                    )
+                    scope.drawLine(Color(0xFF636A6E), headPos, ballPos, strokeWidth = 4f, cap = StrokeCap.Round)
+                    scope.drawLine(ThreadColor, headPos, ballPos, strokeWidth = 1.5f, cap = StrokeCap.Round)
+                    scope.drawCircle(headColor, radius = 11f, center = ballPos)
+                    scope.drawCircle(ThreadColor, radius = 11f, center = ballPos, style = StitchedStroke)
+                    for (i in 0 until 6) {
+                        val spikeAngle = chainAngle + i * (Math.PI * 2.0 / 6.0).toFloat()
+                        val sp = Offset(
+                            ballPos.x + cos(spikeAngle) * 17f,
+                            ballPos.y + sin(spikeAngle) * 17f
+                        )
+                        scope.drawLine(ThreadColor, ballPos, sp, strokeWidth = 2.5f, cap = StrokeCap.Round)
+                    }
+                }
+            }
+            "head_scythe" -> {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(headPos.x, headPos.y)
+                    quadraticTo(headPos.x + 20f, headPos.y - 40f, headPos.x + 40f, headPos.y - 20f) // outer curve
+                    quadraticTo(headPos.x + 15f, headPos.y - 20f, headPos.x, headPos.y + 5f) // inner curve
+                    close()
+                }
+                scope.drawPath(path, headColor)
+            }
+            "head_crossbow" -> {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(headPos.x - 10f, headPos.y + 10f)
+                    lineTo(headPos.x + 30f, headPos.y - 20f)
+                }
+                scope.drawPath(path, androidx.compose.ui.graphics.Color(0xFF6E5536), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f))
+                val bowPath = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(headPos.x + 20f, headPos.y - 35f)
+                    quadraticTo(headPos.x + 35f, headPos.y - 15f, headPos.x + 40f, headPos.y - 5f)
+                }
+                scope.drawPath(bowPath, androidx.compose.ui.graphics.Color.DarkGray, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
+            }
+            "head_halberd" -> {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(headPos.x, headPos.y)
+                    lineTo(headPos.x + 30f, headPos.y - 15f) // top spike
+                    lineTo(headPos.x + 15f, headPos.y - 5f)
+                    lineTo(headPos.x + 15f, headPos.y + 15f) // axe blade bottom
+                    lineTo(headPos.x - 5f, headPos.y + 5f) // back hook
+                    close()
+                }
+                scope.drawPath(path, headColor)
+                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+            }
+        }
     }
 
     private fun drawWeapon(scope: DrawScope, hx: Float, hy: Float, fighter: FighterState) {
@@ -566,17 +769,18 @@ object TapestryRenderer {
         
         val isBowOrSlingshot = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
 
-        // Determine direction vector of the handle/pole
+        // Determine direction vector of the handle/pole (visually lengthen based on haft extensions)
         val handleLen = if (isBowOrSlingshot) {
             0f
         } else {
-            when (fighter.weaponHandle.id) {
+            val baseLen = when (fighter.weaponHandle.id) {
                 "handle_long" -> 110f
                 "handle_medium" -> 55f
                 "handle_chain", "handle_flail_chain" -> 60f
                 "handle_double_ended" -> 80f
                 else -> 30f // short, iron, wheel, pick, fists
             }
+            baseLen + fighter.handleExtensionCount * 25f
         }
 
         // Handle shaft (wooden)
@@ -687,261 +891,102 @@ object TapestryRenderer {
                     rotate(80f, pivot = hPos)
                 }
             }) {
-                val headPos = hPos
-                when (fighter.weaponHead.id) {
-                    "head_bare" -> {
-                        // skip
-                    }
-                    "head_pike", "head_spear" -> {
-                        val path = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(headPos.x, headPos.y)
-                            lineTo(headPos.x + 18f, headPos.y - 12f)
-                            lineTo(headPos.x + 35f, headPos.y - 15f) // point
-                            lineTo(headPos.x + 22f, headPos.y - 3f)
-                            close()
-                        }
-                        scope.drawPath(path, fighter.weaponHead.color)
-                        scope.drawPath(path, ThreadColor, style = StitchedStroke)
-                    }
-                    "head_axe" -> {
-                        val path = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(headPos.x - 5f, headPos.y + 2f)
-                            lineTo(headPos.x + 20f, headPos.y - 25f) // top corner
-                            lineTo(headPos.x + 22f, headPos.y - 5f)  // blade edge
-                            lineTo(headPos.x + 8f, headPos.y + 12f)  // beard hanging down
-                            close()
-                        }
-                        scope.drawPath(path, fighter.weaponHead.color)
-                        scope.drawPath(path, ThreadColor, style = StitchedStroke)
-                    }
-                    "head_sword", "head_claymore", "head_dagger" -> {
-                        val isClaymore = fighter.weaponHead.id == "head_claymore"
-                        val isDagger = fighter.weaponHead.id == "head_dagger"
-                        val bladeLen = if (isClaymore) 80f else if (isDagger) 25f else 50f
-                        val bladeEnd = androidx.compose.ui.geometry.Offset(headPos.x + bladeLen * 0.8f, headPos.y - bladeLen * 0.4f)
-                        scope.drawLine(
-                            color = fighter.weaponHead.color,
-                            start = headPos,
-                            end = bladeEnd,
-                            strokeWidth = if (isClaymore) 8f else 5f,
-                            cap = androidx.compose.ui.graphics.StrokeCap.Round
-                        )
-                        // crossguard
-                        scope.drawLine(
-                            color = androidx.compose.ui.graphics.Color(0xFFCFB53B),
-                            start = androidx.compose.ui.geometry.Offset(headPos.x - 6f, headPos.y - 12f),
-                            end = androidx.compose.ui.geometry.Offset(headPos.x + 6f, headPos.y + 12f),
-                            strokeWidth = 4f
-                        )
-                        // line down middle
-                        scope.drawLine(
-                            color = ThreadColor,
-                            start = headPos,
-                            end = bladeEnd,
-                            strokeWidth = 1f
-                        )
-                    }
-                    "head_morningstar" -> {
-                        scope.drawCircle(fighter.weaponHead.color, radius = 12f, center = headPos)
-                        scope.drawCircle(ThreadColor, radius = 12f, center = headPos, style = StitchedStroke)
-                        for (i in 0 until 8) {
-                            val angle = i * Math.PI / 4
-                            val sp = androidx.compose.ui.geometry.Offset(headPos.x + kotlin.math.cos(angle).toFloat() * 19f, headPos.y + kotlin.math.sin(angle).toFloat() * 19f)
-                            scope.drawLine(ThreadColor, headPos, sp, strokeWidth = 3f)
-                        }
-                    }
-                    "head_maul" -> {
-                        scope.drawRect(
-                            color = fighter.weaponHead.color,
-                            topLeft = androidx.compose.ui.geometry.Offset(headPos.x - 8f, headPos.y - 18f),
-                            size = androidx.compose.ui.geometry.Size(25f, 35f)
-                        )
-                        scope.drawRect(
-                            color = ThreadColor,
-                            topLeft = androidx.compose.ui.geometry.Offset(headPos.x - 8f, headPos.y - 18f),
-                            size = androidx.compose.ui.geometry.Size(25f, 35f),
-                            style = StitchedStroke
-                        )
-                    }
-                    "head_bow" -> {
-                        val path = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(headPos.x - 12f, headPos.y - 30f)
-                            quadraticTo(headPos.x + 18f, headPos.y, headPos.x - 12f, headPos.y + 30f)
-                        }
-                        scope.drawPath(path, fighter.weaponHead.color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
-                        scope.drawPath(path, ThreadColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
-                        // Bowstring
-                        scope.drawLine(androidx.compose.ui.graphics.Color(0xFFE4D6B6), androidx.compose.ui.geometry.Offset(headPos.x - 12f, headPos.y - 30f), androidx.compose.ui.geometry.Offset(headPos.x - 12f, headPos.y + 30f), strokeWidth = 1.5f)
-                    }
-                    "head_slingshot" -> {
-                        // draw Y shape
-                        scope.drawLine(fighter.weaponHead.color, headPos, androidx.compose.ui.geometry.Offset(headPos.x + 10f, headPos.y - 15f), strokeWidth = 4f)
-                        scope.drawLine(fighter.weaponHead.color, headPos, androidx.compose.ui.geometry.Offset(headPos.x + 10f, headPos.y + 15f), strokeWidth = 4f)
-                        scope.drawCircle(ThreadColor, radius = 3f, center = headPos)
-                    }
-                    "head_longbow" -> {
-                        val path = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(headPos.x - 18f, headPos.y - 45f)
-                            quadraticTo(headPos.x + 25f, headPos.y, headPos.x - 18f, headPos.y + 45f)
-                        }
-                        scope.drawPath(path, fighter.weaponHead.color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f))
-                        scope.drawPath(path, ThreadColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
-                        scope.drawLine(androidx.compose.ui.graphics.Color(0xFFE4D6B6), androidx.compose.ui.geometry.Offset(headPos.x - 18f, headPos.y - 45f), androidx.compose.ui.geometry.Offset(headPos.x - 18f, headPos.y + 45f), strokeWidth = 2f)
-                    }
-                    "head_flail" -> {
-                        val swing = fighter.swingProgress
-                        val chainAngle: Float = when {
-                            fighter.isAttacking && swing < 0.4f ->
-                                (Math.PI * 0.3 + swing * Math.PI * 0.5).toFloat()
-                            fighter.isAttacking ->
-                                (Math.PI * 0.8 - (swing - 0.4f) / 0.6f * Math.PI).toFloat()
-                            else ->
-                                (Math.PI * 0.25 + sin(fighter.animFrame * 0.8f) * 0.15f).toFloat()
-                        }
-                        val chainLength = 38f
-                        val ballPos = Offset(
-                            headPos.x + cos(chainAngle) * chainLength,
-                            headPos.y + sin(chainAngle) * chainLength
-                        )
-                        scope.drawLine(Color(0xFF636A6E), headPos, ballPos, strokeWidth = 4f, cap = StrokeCap.Round)
-                        scope.drawLine(ThreadColor, headPos, ballPos, strokeWidth = 1.5f, cap = StrokeCap.Round)
-                        scope.drawCircle(fighter.weaponHead.color, radius = 11f, center = ballPos)
-                        scope.drawCircle(ThreadColor, radius = 11f, center = ballPos, style = StitchedStroke)
-                        for (i in 0 until 6) {
-                            val spikeAngle = chainAngle + i * (Math.PI * 2.0 / 6.0).toFloat()
-                            val sp = Offset(
-                                ballPos.x + cos(spikeAngle) * 17f,
-                                ballPos.y + sin(spikeAngle) * 17f
-                            )
-                            scope.drawLine(ThreadColor, ballPos, sp, strokeWidth = 2.5f, cap = StrokeCap.Round)
-                        }
-                    }
-                    "head_war_flail" -> {
-                        val swing = fighter.swingProgress
-                        val baseChainAngle: Float = when {
-                            fighter.isAttacking && swing < 0.4f ->
-                                (Math.PI * 0.3 + swing * Math.PI * 0.5).toFloat()
-                            fighter.isAttacking ->
-                                (Math.PI * 0.8 - (swing - 0.4f) / 0.6f * Math.PI).toFloat()
-                            else ->
-                                (Math.PI * 0.25 + sin(fighter.animFrame * 0.8f) * 0.15f).toFloat()
-                        }
-                        listOf(baseChainAngle, baseChainAngle - (Math.PI / 4).toFloat()).forEach { chainAngle ->
-                            val chainLength = 38f
-                            val ballPos = Offset(
-                                headPos.x + cos(chainAngle) * chainLength,
-                                headPos.y + sin(chainAngle) * chainLength
-                            )
-                            scope.drawLine(Color(0xFF636A6E), headPos, ballPos, strokeWidth = 4f, cap = StrokeCap.Round)
-                            scope.drawLine(ThreadColor, headPos, ballPos, strokeWidth = 1.5f, cap = StrokeCap.Round)
-                            scope.drawCircle(fighter.weaponHead.color, radius = 11f, center = ballPos)
-                            scope.drawCircle(ThreadColor, radius = 11f, center = ballPos, style = StitchedStroke)
-                            for (i in 0 until 6) {
-                                val spikeAngle = chainAngle + i * (Math.PI * 2.0 / 6.0).toFloat()
-                                val sp = Offset(
-                                    ballPos.x + cos(spikeAngle) * 17f,
-                                    ballPos.y + sin(spikeAngle) * 17f
-                                )
-                                scope.drawLine(ThreadColor, ballPos, sp, strokeWidth = 2.5f, cap = StrokeCap.Round)
-                            }
-                        }
-                    }
-                    "head_scythe" -> {
-                        val bladeLen = 60f
-                        val bladeEnd = androidx.compose.ui.geometry.Offset(headPos.x + bladeLen * 0.8f, headPos.y - bladeLen * 0.4f)
-                        val path = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(headPos.x, headPos.y)
-                            quadraticTo(headPos.x + 20f, headPos.y - 40f, headPos.x + 40f, headPos.y - 20f) // outer curve
-                            quadraticTo(headPos.x + 15f, headPos.y - 20f, headPos.x, headPos.y + 5f) // inner curve
-                            close()
-                        }
-                        scope.drawPath(path, fighter.weaponHead.color)
-                    }
-                    "head_crossbow" -> {
-                        val path = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(headPos.x - 10f, headPos.y + 10f)
-                            lineTo(headPos.x + 30f, headPos.y - 20f)
-                        }
-                        scope.drawPath(path, androidx.compose.ui.graphics.Color(0xFF6E5536), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f))
-                        val bowPath = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(headPos.x + 20f, headPos.y - 35f)
-                            quadraticTo(headPos.x + 35f, headPos.y - 15f, headPos.x + 40f, headPos.y - 5f)
-                        }
-                        scope.drawPath(bowPath, androidx.compose.ui.graphics.Color.DarkGray, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
-                    }
-                    "head_halberd" -> {
-                        val path = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(headPos.x, headPos.y)
-                            lineTo(headPos.x + 30f, headPos.y - 15f) // top spike
-                            lineTo(headPos.x + 15f, headPos.y - 5f)
-                            lineTo(headPos.x + 15f, headPos.y + 15f) // axe blade bottom
-                            lineTo(headPos.x - 5f, headPos.y + 5f) // back hook
-                            close()
-                        }
-                        scope.drawPath(path, fighter.weaponHead.color)
-                        scope.drawPath(path, ThreadColor, style = StitchedStroke)
-                    }
-                }
-
-                // If thrusting or swinging, draw swoosh lines
-                if (fighter.isAttacking && fighter.swingProgress > 0.2f && fighter.swingProgress < 0.8f && !isBowOrSlingshot && !isBackHead) {
-                    val angle = if (fighter.swingProgress < 0.5f) -20f else 20f
-                    scope.withTransform({
-                        rotate(angle, pivot = headPos)
-                    }) {
-                        val endP = androidx.compose.ui.geometry.Offset(headPos.x + 25f, headPos.y - 15f)
-                        scope.drawLine(
-                            color = androidx.compose.ui.graphics.Color(0x44FFFFFF),
-                            start = headPos,
-                            end = endP,
-                            strokeWidth = 3f
-                        )
-                    }
-                }
-
-                // Rear-head swoosh arc for double-ended weapons during attack
-                if (isBackHead && fighter.isAttacking && fighter.swingProgress > 0.2f && fighter.swingProgress < 0.8f) {
-                    val swooshPath = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(headPos.x - 20f, headPos.y + 10f)
-                        quadraticTo(
-                            headPos.x - 35f, headPos.y - 15f,
-                            headPos.x - 15f, headPos.y - 30f
-                        )
-                    }
-                    scope.drawPath(
-                        swooshPath,
-                        color = androidx.compose.ui.graphics.Color(0x559E3624),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f, cap = StrokeCap.Round)
-                    )
-                }
-
-                // Bloody weapon?
-                if (fighter.level > 1 && !isBowOrSlingshot) {
-                    scope.drawLine(androidx.compose.ui.graphics.Color(0xFF9E3624), headPos, androidx.compose.ui.geometry.Offset(headPos.x + 5f, headPos.y - 5f), strokeWidth = 2f)
-                }
+                drawWeaponHead(
+                    scope = this,
+                    headId = fighter.weaponHead.id,
+                    headColor = fighter.weaponHead.color,
+                    headPos = hPos,
+                    animFrame = fighter.animFrame,
+                    swingProgress = fighter.swingProgress,
+                    isAttacking = fighter.isAttacking
+                )
             }
+        }
+
+        // If thrusting or swinging, draw swoosh lines
+        if (fighter.isAttacking && fighter.swingProgress > 0.2f && fighter.swingProgress < 0.8f && !isBowOrSlingshot) {
+            val angle = if (fighter.swingProgress < 0.5f) -20f else 20f
+            scope.withTransform({
+                rotate(angle, pivot = headPos)
+            }) {
+                val endP = androidx.compose.ui.geometry.Offset(headPos.x + 25f, headPos.y - 15f)
+                scope.drawLine(
+                    color = androidx.compose.ui.graphics.Color(0x44FFFFFF),
+                    start = headPos,
+                    end = endP,
+                    strokeWidth = 3f
+                )
+            }
+        }
+
+        // Rear-head swoosh arc for double-ended weapons during attack
+        if (fighter.weaponHandle.id == "handle_double_ended" && fighter.isAttacking && fighter.swingProgress > 0.2f && fighter.swingProgress < 0.8f) {
+            val backHeadPos = androidx.compose.ui.geometry.Offset(hx - handleLen * 0.8f, hy + handleLen * 0.4f)
+            val swooshPath = androidx.compose.ui.graphics.Path().apply {
+                moveTo(backHeadPos.x - 20f, backHeadPos.y + 10f)
+                quadraticTo(
+                    backHeadPos.x - 35f, backHeadPos.y - 15f,
+                    backHeadPos.x - 15f, backHeadPos.y - 30f
+                )
+            }
+            scope.drawPath(
+                swooshPath,
+                color = androidx.compose.ui.graphics.Color(0x559E3624),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f, cap = StrokeCap.Round)
+            )
+        }
+
+        // Bloody weapon?
+        if (fighter.level > 1 && !isBowOrSlingshot) {
+            scope.drawLine(androidx.compose.ui.graphics.Color(0xFF9E3624), headPos, androidx.compose.ui.geometry.Offset(headPos.x + 5f, headPos.y - 5f), strokeWidth = 2f)
         }
 
         // Extra attachments welded at offset angles
         if (fighter.extraAttachments.isNotEmpty()) {
-            val attachPos = Offset(hx + handleLen * 0.4f, hy - handleLen * 0.2f)
             fighter.extraAttachments.forEachIndexed { idx, attachment ->
-                val attachAngle = if (idx % 2 == 0) 30f else -30f
+                // Vary attachment position along handle / head:
+                // idx 0 -> near the head (0.85f of handle)
+                // idx 1 -> directly on the head itself (headPos)
+                // idx 2 -> mid-handle (0.6f of handle)
+                // idx 3 -> lower-handle (0.4f of handle)
+                // idx 4+ -> staggered on the head
+                val attachPos = when (idx) {
+                    0 -> Offset(hx + handleLen * 0.85f * 0.8f, hy - handleLen * 0.85f * 0.4f)
+                    1 -> headPos
+                    2 -> Offset(hx + handleLen * 0.6f * 0.8f, hy - handleLen * 0.6f * 0.4f)
+                    3 -> Offset(hx + handleLen * 0.4f * 0.8f, hy - handleLen * 0.4f * 0.4f)
+                    else -> Offset(headPos.x + (idx - 3) * 8f, headPos.y + (idx - 3) * 4f)
+                }
+
+                // Vary the angles widely
+                val baseAngle = when (idx % 4) {
+                    0 -> 45f
+                    1 -> -45f
+                    2 -> 90f
+                    else -> -90f
+                }
+                // Add a slight deterministic wiggle based on name/id to prevent uniformity
+                val deterministicOffset = (attachment.id.hashCode() % 15).toFloat()
+                val attachAngle = baseAngle + deterministicOffset
+
                 scope.withTransform({
                     rotate(attachAngle, pivot = attachPos)
                 }) {
                     val bladeTip = Offset(attachPos.x + 28f, attachPos.y - 14f)
+                    // Draw a little metal connector strap
                     scope.drawLine(attachment.color, attachPos, bladeTip, strokeWidth = 5f, cap = StrokeCap.Round)
                     scope.drawLine(ThreadColor, attachPos, bladeTip, strokeWidth = 1.5f, cap = StrokeCap.Round)
-                    // Small blade triangle
-                    val bladePath = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(bladeTip.x, bladeTip.y)
-                        lineTo(bladeTip.x + 12f, bladeTip.y - 8f)
-                        lineTo(bladeTip.x + 5f, bladeTip.y + 4f)
-                        close()
-                    }
-                    scope.drawPath(bladePath, attachment.color)
-                    scope.drawPath(bladePath, ThreadColor, style = StitchedStroke)
+                    
+                    // Render the actual selected weapon head!
+                    drawWeaponHead(
+                        scope = this,
+                        headId = attachment.id,
+                        headColor = attachment.color,
+                        headPos = bladeTip,
+                        animFrame = fighter.animFrame,
+                        swingProgress = fighter.swingProgress,
+                        isAttacking = fighter.isAttacking
+                    )
                 }
             }
         }

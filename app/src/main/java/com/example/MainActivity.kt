@@ -1633,22 +1633,24 @@ fun BattlefieldScene(
                             )
                         }
                         
-                        Button(
-                            onClick = {
-                                val uri = generateShareImage(context, player, uiState.scoreMultiplier, uiState.totalKills, isWin)
-                                if (uri != null) {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "image/png"
-                                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        if (!isWin) {
+                            Button(
+                                onClick = {
+                                    val uri = generateShareImage(context, player, uiState.scoreMultiplier, uiState.totalKills, isWin)
+                                    if (uri != null) {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                            type = "image/png"
+                                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(intent, "Share Tale"))
                                     }
-                                    context.startActivity(android.content.Intent.createChooser(intent, "Share Tale"))
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text("Share Tale", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryLight)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text("Share Tale", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryLight)
+                            }
                         }
                     }
                 }
@@ -1827,19 +1829,33 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
         textAlign = android.graphics.Paint.Align.CENTER
     }
-    androidCanvas.drawText("Bayeux Brawler", width / 2f, 100f, paint)
+    androidCanvas.drawText("Bayeux Brawler", width / 2f, 90f, paint)
     
     paint.textSize = 35f
     paint.typeface = android.graphics.Typeface.SERIF
     val statusText = if(isWin) "Vanquished" else "Perished"
-    androidCanvas.drawText("Status: " + statusText + " | Score: " + score + "x | Kills: " + kills, width / 2f, 160f, paint)
+    androidCanvas.drawText("Status: " + statusText + " | Score: " + score + "x | Kills: " + kills, width / 2f, 150f, paint)
     
     val wpnBase = player.weaponHead.name + " on a " + player.weaponHandle.name
     val wpnName = if (player.extraAttachments.isNotEmpty()) {
         player.extraAttachments.joinToString(", ") { it.name } + " attached to " + wpnBase
     } else wpnBase
-    paint.textSize = 24f
-    androidCanvas.drawText("Wielding: " + wpnName, width / 2f, 200f, paint)
+    
+    // StaticLayout handles the center alignment of lines, but TextPaint itself must be LEFT aligned
+    val textPaint = android.text.TextPaint(paint).apply { 
+        textSize = 24f 
+        textAlign = android.graphics.Paint.Align.LEFT
+    }
+    val wpnText = "Wielding: $wpnName"
+    val staticLayout = android.text.StaticLayout.Builder.obtain(wpnText, 0, wpnText.length, textPaint, width - 40)
+        .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
+        .build()
+        
+    androidCanvas.save()
+    // Weapon text vertically positioned at 190, horizontally aligned via ALIGN_CENTER in width-40
+    androidCanvas.translate(20f, 190f)
+    staticLayout.draw(androidCanvas)
+    androidCanvas.restore()
     
     // Draw character
     val drawScope = androidx.compose.ui.graphics.drawscope.CanvasDrawScope()
@@ -1852,8 +1868,12 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
         size
     ) {
         withTransform({
-            scale(2.5f, 2.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
-            translate(250f, 50f)
+            scale(3.5f, 3.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
+            // Head and shoulders shot: Zoomed in to 3.5x scale.
+            // Screen center is 400x400. Face local is (0, 175).
+            // tx = 114.28f -> 400 / 3.5
+            // ty = -50f -> (175 - 50) * 3.5 = 125 * 3.5 = 437.5f (puts face nicely centered vertically)
+            translate(114.3f, -50f)
         }) {
             val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
             com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
@@ -1868,7 +1888,7 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
         textAlign = android.graphics.Paint.Align.CENTER
     }
-    androidCanvas.drawText(player.name, width / 2f, 700f, namePaint)
+    androidCanvas.drawText(player.name, width / 2f, 660f, namePaint)
 
     // Kills count
     val killsPaint = android.graphics.Paint().apply {
@@ -1878,7 +1898,7 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
         textAlign = android.graphics.Paint.Align.CENTER
     }
-    androidCanvas.drawText("$kills kills", width / 2f, 750f, killsPaint)
+    androidCanvas.drawText("$kills kills", width / 2f, 720f, killsPaint)
 
     // Ancillary labels
     val ancNames = player.extraAttachments.take(4).mapIndexed { i, g -> g.name }
@@ -1891,7 +1911,7 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
             textAlign = android.graphics.Paint.Align.CENTER
             alpha = 180
         }
-        androidCanvas.drawText("Attachments: " + ancNames.joinToString(", "), width / 2f, 790f, ancPaint)
+        androidCanvas.drawText("Attachments: " + ancNames.joinToString(", "), width / 2f, 770f, ancPaint)
     }
 
     // Save to cache

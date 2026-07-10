@@ -1,4 +1,4 @@
-﻿package com.example.game
+package com.example.game
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -29,10 +29,11 @@ class GameDataTest {
         val ids = GameData.WEAPON_HEADS.map { it.id }
         
         val requiredIds = listOf(
-            "head_fists", "head_bare", "head_dagger", "head_shortsword",
+            "head_bare", "head_dagger",
             "head_sword", "head_axe", "head_mace", "head_spear",
             "head_javelin", "head_pike", "head_flail", "head_war_flail",
-            "head_maul", "head_halberd", "head_claymore", "head_bow"
+            "head_maul", "head_halberd", "head_claymore", "head_bow",
+            "head_crossbow", "head_scythe", "head_morningstar", "head_slingshot", "head_longbow"
         )
         
         requiredIds.forEach { id ->

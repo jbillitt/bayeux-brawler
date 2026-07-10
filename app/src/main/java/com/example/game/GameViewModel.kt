@@ -122,7 +122,7 @@ class GameViewModel : ViewModel() {
     fun selectMusicMood(mood: String) {
         _uiState.update { state ->
             // ponytail: only apply mood 70% of the time to preserve variance
-            val applied = if (kotlin.random.Random.nextFloat() < 0.7f) state.appliedMusicMoods + mood else state.appliedMusicMoods
+            val applied = if (mood != "No Change" && kotlin.random.Random.nextFloat() < 0.7f) state.appliedMusicMoods + mood else state.appliedMusicMoods
             state.copy(
                 showMusicDecision = false,
                 pendingMusicOptions = emptyList(),
@@ -1153,7 +1153,7 @@ class GameViewModel : ViewModel() {
                 showLevelUpScreen = showLevelUp,
                 performanceScore = newPerf,
                 showMusicDecision = if (won && (state.level % 5 == 0)) true else state.showMusicDecision,
-                pendingMusicOptions = if (won && (state.level % 5 == 0)) listOf("More Tempo", "Happier", "Mournful", "More Bass", "Complex Drums", "More Fanfares") else state.pendingMusicOptions
+                pendingMusicOptions = if (won && (state.level % 5 == 0)) listOf("More Tempo", "Happier", "Mournful", "More Bass", "Complex Drums", "More Fanfares", "No Change") else state.pendingMusicOptions
             )
         }
 

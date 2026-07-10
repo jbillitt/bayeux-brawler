@@ -17,7 +17,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(qualifiers = "w1024dp-h768dp-land", sdk = [36])
+@Config(qualifiers = "w1024dp-h768dp-land", sdk = [34])
 class GameIntegrationTest {
 
     @get:Rule

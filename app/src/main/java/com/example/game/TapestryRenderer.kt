@@ -164,14 +164,21 @@ object TapestryRenderer {
                 }
             }
 
-            // Persistent blood pool for dead fighters (all death types except deathType 5 which has its own)
-            if (fighter.isDead && fighter.deathType != 5) {
-                val groundY = cy + 90f
-                drawScope.drawOval(
-                    color = Color(0xAA600000),
-                    topLeft = Offset(cx - 25f, groundY - 6f),
-                    size = androidx.compose.ui.geometry.Size(50f, 12f)
-                )
+            // Persistent blood pool for dying/dead fighters (all death types except deathType 5 which has its own)
+            if ((fighter.isDead || fighter.isDying) && fighter.deathType != 5) {
+                val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
+                if (progress > 0.3f) {
+                    val poolProgress = ((progress - 0.3f) / 0.7f).coerceIn(0f, 1f)
+                    val groundY = cy + 155f
+                    val fallOffset = if (fighter.facingRight) -50f else 50f
+                    val poolW = 55f * poolProgress * fighter.size
+                    val poolH = 12f * poolProgress * fighter.size
+                    drawScope.drawOval(
+                        color = Color(0xAA600000).copy(alpha = 0.66f * poolProgress),
+                        topLeft = Offset((cx + fallOffset) - poolW, groundY - poolH),
+                        size = androidx.compose.ui.geometry.Size(poolW * 2f, poolH * 2f)
+                    )
+                }
             }
 
             withTransform({
@@ -317,7 +324,7 @@ object TapestryRenderer {
 
         // Blood pool beneath heavily wounded fighter (drawn at feet level ~cy+155)
         val hpRatioTorso = if (fighter.maxHp > 0f) fighter.hp / fighter.maxHp else 1f
-        if (fighter.missingArm || hpRatioTorso < 0.5f) {
+        if (!fighter.isDead && !fighter.isDying && (fighter.missingArm || hpRatioTorso < 0.5f)) {
             val groundY = cy + 158f
             val poolAlpha = if (fighter.missingArm) 0.75f else (0.5f - hpRatioTorso).coerceIn(0f, 0.5f) * 1.5f
             scope.drawOval(

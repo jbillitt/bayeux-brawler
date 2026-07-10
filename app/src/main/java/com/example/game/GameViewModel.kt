@@ -883,8 +883,7 @@ class GameViewModel : ViewModel() {
                     if (totalDamage > 0f) {
                         val isCrunch = blunt > 15f && kotlin.random.Random.nextFloat() < 0.4f
                         MedievalAudioSynth.playSound(if (isCrunch) SoundType.CRUNCH else SoundType.THWACK)
-                        val strikeType = if (pierce > slash && pierce > blunt) "pierce" else if (slash > blunt) "slash" else "blunt"
-                        val hitShout = LatinShouts.getRandomShout(if (isCrunch) SoundType.CRUNCH else SoundType.THWACK, strikeType)
+                        val hitShout = if (totalDamage > 15f) FlavourText.POPUPS_CRIT.random() else FlavourText.POPUPS_NORMAL.random()
                         addPopup(hitShout, currTarget.posX, 140f, Color(0xFF9E3624))
                     }
 
@@ -944,7 +943,7 @@ class GameViewModel : ViewModel() {
             applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
 
             if (totalDamage > 0f) {
-                val hitShout = LatinShouts.getRandomShout(SoundType.OUCH)
+                val hitShout = if (totalDamage > 15f) FlavourText.POPUPS_CRIT.random() else FlavourText.POPUPS_NORMAL.random()
                 addPopup(hitShout, defender.posX, 140f, Color(0xFF9E3624))
             }
 
@@ -1153,7 +1152,7 @@ class GameViewModel : ViewModel() {
                 showLevelUpScreen = showLevelUp,
                 performanceScore = newPerf,
                 showMusicDecision = if (won && (state.level % 5 == 0)) true else state.showMusicDecision,
-                pendingMusicOptions = if (won && (state.level % 5 == 0)) listOf("More Tempo", "Happier", "Mournful", "More Bass", "Complex Drums", "More Fanfares", "No Change") else state.pendingMusicOptions
+                pendingMusicOptions = if (won && (state.level % 5 == 0)) listOf("More Tempo", "Merrier", "More Solemn", "Wilder", "Nobler") else state.pendingMusicOptions
             )
         }
 

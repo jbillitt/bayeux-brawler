@@ -144,3 +144,88 @@ User Input → MainActivity (Compose events)
 3. **Procedural everything** — No asset files for audio or graphics; everything generated at runtime
 4. **Single file per concern** — Each major system lives in one file (large but self-contained)
 5. **Score multiplier = risk** — Naked/unarmed builds get massive score bonuses, creating interesting gear decisions
+# Architecture Notes - Procedural Music Engine v2
+
+(Merge this into the repo's architecture.md.)
+
+## Overview
+
+The music system generates a complete, seeded medieval piece per playthrough and re-renders it with more instruments as the player levels. Everything is synthesised at runtime - no audio assets. Same seed + same level = byte-identical audio; same seed + higher level = the identical tune with more forces (level changes crossfade in-phase).
+
+## Module map (`com.example.game`, app/src/main/java/com/example/game/)
+
+| File | Responsibility |
+|---|---|
+| MusicTheory.kt | Modes, harmonic grounds, seed → SongSpec (family/mode/final/metre/tempo/form); the three independent RNG streams |
+| MelodyGenerator.kt | SongSpec → SongEvents: melody with real cadences (antecedent/consequent, ficta, Landini), ornamented variant, counter-voice (gymel 3rds), ground bass, pad chords |
+| Orchestrator.kt | Seeded role pools and the level ladder (who plays what from which level), mood deltas, percussion/drone/sparkle/fanfare pattern generators, consort thickening past level 12 |
+| DspCore.kt | Foundation DSP: fractionally-tuned Karplus-Strong (<1 cent error), RBJ biquads, envelopes. All oscillators are phase-accumulator based - vibrato/pitch-drop is integrated, so runaway-detune bugs are structurally impossible |
+| InstrumentsPluck.kt | Voice enum + renderNote dispatcher; harp, lute, psaltery, recorder, panpipes |
+| InstrumentsBowBrass.kt | Vielle family, shawm, sackbut/horn, hurdy-gurdy (wheel drone + trompette rasp when durSec < 0.15s), portative organ; shared `normalise()` |
+| InstrumentsPerc.kt | Bells (inharmonic partials), nakers/timpani/bodhran (phase-correct membranes), tabor, tambourine (bandpassed jingles) |
+| MixMaster.kt | MixBus: constant-power pan, loop-aware Schroeder reverb (tail wraps to loop start), DC block, 70 Hz high-pass, soft-knee limiter (-3 dBFS ceiling), TPDF dither. NO normalisation - fixed gain budget only |
+| ProceduralMedievalComposer.kt | Facade. FROZEN API: `compose(seed, level, hasTrumpeter, sampleRate, moods): ShortArray` - returns INTERLEAVED STEREO; `currentRootMidi` feeds SFX pitches |
+| SfxGenerator.kt | Pure SFX buffers (SoundType enum lives here); per-hit pitch/decay variation; CRUNCH is tanh-saturated by design |
+| FlavourText.kt | Seeded battle names (≤44 chars guaranteed), Latin headlines, performance-aware victory quotes, defeat quotes, TTS barks, popup vocabulary |
+| MedievalHarpPlayer.kt | Streaming stereo AudioTrack player: feeder thread, seamless loop, in-phase 250 ms crossfade on level change, audio focus, pause()/resume() for lifecycle |
+| SoundSynth.kt | Thin remains: MedievalAudioSynth (SFX playback wrapper) + MedievalVocalizer (TTS) |
+
+## Data flow
+
+```
+seed ──► resolveSongSpec ──► SongSpec (family, mode, final, ground, tempo, form)
+             │                    │
+   melodyRng │          orchRng   │
+             ▼                    ▼
+        generateSong        planOrchestration
+        (SongEvents:        (assignments: voice × line × enterLevel × gain × pan;
+         melody, ornamented, ALL rng draws unconditional - level only filters)
+         counter, bass, pads)     │
+             └────────┬───────────┘
+                      ▼
+     facade: for each active assignment → renderNote(...) per event
+                      ▼
+     MixBus (pan, reverb send) → master chain → interleaved stereo PCM
+                      ▼
+     MedievalHarpPlayer (stream, loop, crossfade, focus)
+```
+
+## Invariants (do not break)
+
+1. **Frozen API**: compose() signature, currentRootMidi, midiToFreq; playSound(SoundType).
+2. **Determinism**: three RNG streams (`melodyRng`/`orchRng`/`humaniseRng`, seed-derived). A level check must NEVER gate an RNG draw - draw everything, render selectively. This is what makes level-up crossfades seamless.
+3. **Melody stays modal**: all melodic/ornament pitch maths goes through scale degrees (`degreeToMidi`/`nearestDegreeFor`), never raw semitone offsets (raw +2 caused audible clashes against pads - fixed at the listen gate).
+4. **Gain discipline**: no per-render normalisation anywhere; role gains + duckFactor + limiter own loudness; master high-pass 70 Hz protects small speakers.
+5. **Stereo semantics**: compose() output is L,R interleaved; length = totalSamples × 2.
+
+## Tune families
+
+| Family | Ground | Metre | Mode | Character |
+|---|---|---|---|---|
+| GREENSLEEVES | Romanesca i-VII-i-V | 6/8, ♩. 56-72 | Dorian | Wistful lilt |
+| MINUET | I-V pairs + IV/vi colour | 3/4, ♩ 92-112 | Ionian/Mixolydian | Courtly, ornamented |
+| TINTAGEL | i-i-VI-VII broad | 4/4, ♩ 60-76, 16 bars | Aeolian/Dorian | Noble arch, rising-4th opening |
+
+## Level ladder (role slots; seeded pools fill them, family-biased)
+
+1 soloist (self-accompanied) → 2 counter-voice → 3 bass takes the ground → 4 percussion → 5 drone → 6 third voice (divisions) → 7 pads/organum → 8 jingles → 9 waits band (shawm+sackbut) → 10 bells+psaltery → 11 timpani → 12 destiny (FANFARE or ORCHESTRAL, seeded) → 13+ thickening every ~2 levels (recorder II in 3rds, fiddle II, viola, octave doubles).
+
+Moods (stackable param deltas): More Tempo / Merrier / More Solemn / Wilder / Nobler.
+
+## Extending
+
+- **New instrument**: add Voice enum entry + renderer branch (InstrumentsPluck.kt dispatcher) + a VoiceAssignment in planOrchestration with gain/pan/enterLevel.
+- **New tune family**: ground table + branch in resolveSongSpec (metre/tempo/mode) - melody/orchestration machinery is family-agnostic.
+- **New mood**: deltas in resolveSongSpec (tempo/mode/ornament) and/or planOrchestration (gains/enterLevels).
+
+## Known quirks (reviewed, accepted)
+
+- The gurdy's drone line receives both root and fifth events while its wheel already synthesises the fifth internally, so a faint supertonic colour (final+14) rides Tintagel drones - quiet, ducked, passed the listen gate. If drones ever sound muddy, skip the +7 drone event for GURDY in the facade.
+- Tempo-changing moods crossfade two different-tempo loops for 250 ms (mechanically safe, momentary blur); level changes are perfectly in-phase.
+- The destiny fanfare arpeggiates a major triad regardless of mode - a deliberate Picardy-bright flourish.
+- Humanisation covers timing and velocity; the spec's ±2-cent tuning jitter was dropped (renderNote is integer-midi) - inaudible class.
+- On older devices, watch first-render wall time at level 12+ (no per-note cache; render runs on Dispatchers.IO and the crossfade masks latency).
+
+## Testing (desktop, not in the Android repo)
+
+The engine is pure JVM. The dev workspace (C:\dev\test) carries a kotlinc-based harness: 12 property-test suites (`test.ps1` - determinism, cadence-on-final, tuning ≤6 cents, -3 dBFS ceiling, loop seam, monotonic layering, variety-across-seeds) and `AuditionMain.kt` which renders a seeds×levels×moods WAV matrix for listening. Change engine code there first, keep tests green, listen, then port.

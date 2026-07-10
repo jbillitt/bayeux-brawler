@@ -34,6 +34,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalConfiguration
@@ -61,7 +66,8 @@ class MainActivity : ComponentActivity() {
         
         // Initialize the free, offline, local vocalization engine
         com.example.game.MedievalVocalizer.init(applicationContext)
-        
+        com.example.game.MedievalHarpPlayer.init(applicationContext)
+
         // Let's set the activity orientation request to user's sensor to encourage landscape,
         // but handle layout adaptation gracefully in Compose!
         setContent {
@@ -86,10 +92,10 @@ class MainActivity : ComponentActivity() {
 fun BayeuxAppContent(viewModel: GameViewModel) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    var forceBypass by remember { mutableStateOf(false) }
+    var forceBypass by rememberSaveable { mutableStateOf(false) }
 
     // Medieval Harp Background Music State
-    var musicOn by remember { mutableStateOf(true) }
+    var musicOn by rememberSaveable { mutableStateOf(true) }
     val uiState by viewModel.uiState.collectAsState()
     val hasTrumpeter = uiState.unlockedAncillaries.contains("anc_trumpeter")
     val appliedMusicMoods = uiState.appliedMusicMoods
@@ -100,6 +106,29 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
         } else {
             MedievalHarpPlayer.stopMusic()
         }
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, musicOn) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> MedievalHarpPlayer.pause()
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> if (musicOn) MedievalHarpPlayer.resume()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(uiState.battleWon) {
+        if (uiState.battleWon) MedievalVocalizer.speak(FlavourText.bark(BarkKind.VICTORY, MedievalHarpPlayer.gameSeed, uiState.level))
+    }
+    LaunchedEffect(uiState.battleLost) {
+        if (uiState.battleLost) MedievalVocalizer.speak(FlavourText.bark(BarkKind.DEFEAT, MedievalHarpPlayer.gameSeed, uiState.level))
+    }
+    LaunchedEffect(uiState.showLevelUpScreen) {
+        if (uiState.showLevelUpScreen) MedievalVocalizer.speak(FlavourText.bark(BarkKind.LEVEL_UP, MedievalHarpPlayer.gameSeed, uiState.level))
     }
 
     DisposableEffect(Unit) {
@@ -360,7 +389,7 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (uiState.showLevelUpScreen || uiState.pendingLevelUpChoices.isNotEmpty()) "⚔ STATS" else "⚔ STATS",
+                        text = "⚔ STATS",
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -369,7 +398,7 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
                 }
             }
             Text(
-                text = "The shoreline scuffle",
+                text = FlavourText.battleName(MedievalHarpPlayer.gameSeed, uiState.level),
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
@@ -480,6 +509,17 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
             label = "walk"
         )
 
+        val auraTransition = rememberInfiniteTransition(label = "aura")
+        val risePhase by auraTransition.animateFloat(
+            initialValue = 0f, targetValue = 350f,
+            animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart), label = "rise"
+        )
+        val swayPhase by auraTransition.animateFloat(
+            initialValue = 0f, targetValue = (2.0 * Math.PI).toFloat(),
+            animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Restart), label = "sway"
+        )
+        val auraTier = 1 + minOf(3, uiState.level / 3)
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -498,7 +538,7 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                 val centerY = size.height / 2
                 
                 // Pulsing Holy Aura Glow
-                val pulse = (sin(animFrame * 5f) + 1f) / 2f // 0 to 1
+                val pulse = (sin(swayPhase) + 1f) / 2f
                 
                 // Bossy Dark Vignette around edges
                 drawRect(
@@ -522,18 +562,23 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                             Color.Transparent
                         ),
                         center = Offset(centerX, centerY - 20f),
-                        radius = 280f + 30f * pulse
+                        radius = 240f + 40f * auraTier + 30f * pulse
                     )
                 )
-                
+
                 // Divine Sparks rising aggressively
-                for (i in 0 until 18) {
-                    val floatY = (centerY + 160f) - ((animFrame * 50f + i * 35f) % 350f)
-                    val floatX = centerX + sin(animFrame * 3f + i) * 110f
+                val sparkCount = 10 + 6 * auraTier
+                val sparkColor = if (auraTier >= 3) Color(0xFFFFFBE8) else Color(0xFFFFF1AA)
+                for (i in 0 until sparkCount) {
+                    val floatY = (centerY + 160f) - ((risePhase + i * 35f) % 350f)
+                    val floatX = centerX + sin(swayPhase * 3f + i) * 110f
                     val r = 2f + (i % 4)
-                    drawCircle(Color(0xFFFFF1AA).copy(alpha = 0.9f), radius = r, center = Offset(floatX, floatY))
-                    // Add spark trail
-                    drawLine(Color(0xFFFFF1AA).copy(alpha = 0.4f), Offset(floatX, floatY + r), Offset(floatX, floatY + r + 15f), strokeWidth = 1.5f)
+                    drawCircle(sparkColor.copy(alpha = 0.9f), radius = r, center = Offset(floatX, floatY))
+                    drawLine(sparkColor.copy(alpha = 0.4f), Offset(floatX, floatY + r), Offset(floatX, floatY + r + 15f), strokeWidth = 1.5f)
+                }
+                if (uiState.unlockedAncillaries.contains("anc_mount_horse")) {
+                    drawCircle(TapestryMustard.copy(alpha = 0.35f + 0.2f * pulse), radius = 150f + 8f * pulse,
+                        center = Offset(centerX, centerY), style = Stroke(width = 5f))
                 }
 
                 // Draw decorative grass tuft under knight
@@ -1299,6 +1344,8 @@ fun BattlefieldScene(
             .border(2.dp, TapestryDark, RoundedCornerShape(6.dp))
     ) {
         // Render Tapestry Canvas
+        val latinHeadline = remember(uiState.level) { FlavourText.latinHeadline(MedievalHarpPlayer.gameSeed, uiState.level) }
+        val borderSeed = remember(uiState.level) { MedievalHarpPlayer.gameSeed * 7L + uiState.level }
         Canvas(modifier = Modifier.fillMaxSize().testTag("bayeux_tapestry_canvas")) {
             // Force redraw on tick
             val currentTick = tick
@@ -1322,10 +1369,10 @@ fun BattlefieldScene(
             }
 
             // 1. Draw TOP Embroidered Border (characteristic of Bayeux)
-            drawTapestryBorder(this, isTop = true, textHeadline = "HIC MELEE COMEDICUS IN TERRA HASTINGS")
+            drawTapestryBorder(this, isTop = true, textHeadline = latinHeadline, motifSeed = borderSeed)
 
             // 2. Draw BOTTOM Embroidered Border (With decorative stags and some funny bones of fallen foes!)
-            drawTapestryBorder(this, isTop = false, textHeadline = "")
+            drawTapestryBorder(this, isTop = false, textHeadline = "", motifSeed = borderSeed + 1)
 
             val shakeAmt = shake
             val offsetX = if (shakeAmt > 0f) (kotlin.random.Random.nextFloat() * shakeAmt * 2f - shakeAmt) else 0f
@@ -1353,6 +1400,7 @@ fun BattlefieldScene(
                 val px = scaledPlayer.posX
                 val py = 60f
                 drawHealthBar(this, px, py, playerFighter.hp, playerFighter.ghostHp, playerFighter.maxHp)
+                drawStatusEffects(this, px, py - 10f, playerFighter)
 
                 // Draw Enemies
                 enemies.forEach { enemy ->
@@ -1364,6 +1412,7 @@ fun BattlefieldScene(
                     // Draw health bar for enemy
                     if (!enemy.isDead) {
                         drawHealthBar(this, scaledEnemy.posX, py, enemy.hp, enemy.ghostHp, enemy.maxHp)
+                        drawStatusEffects(this, scaledEnemy.posX, py - 10f, enemy)
                     }
                 }
 
@@ -1556,22 +1605,17 @@ fun BattlefieldScene(
                     
                     val player = viewModel.playerState.collectAsState().value
                     if (isWin) {
+                        val perf = player?.let {
+                            val frac = it.hp / it.maxHp
+                            when { frac >= 0.95f -> Perf.FLAWLESS; frac <= 0.25f -> Perf.PYRRHIC; else -> Perf.STANDARD }
+                        } ?: Perf.STANDARD
                         Text(
-                            text = "Thy valiant Norman Knight hath vanquished Harold's Anglo-Saxon defenders! Thy gear score multiplier of x%.1f earned thee massive points.".format(uiState.scoreMultiplier),
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Serif,
-                            color = TapestryDark,
-                            textAlign = TextAlign.Center
+                            text = FlavourText.victoryQuote(MedievalHarpPlayer.gameSeed, uiState.level, perf),
+                            fontSize = 11.sp, fontFamily = FontFamily.Serif, color = TapestryDark, textAlign = TextAlign.Center
                         )
                     } else {
-                        val quote = remember { listOf(
-                            "\"Time and tide wait for no man.\"\n- Geoffrey Chaucer",
-                            "\"All good things must come to an end.\"\n- Geoffrey Chaucer",
-                            "\"The greatest scholars are not usually the wisest people.\"\n- Geoffrey Chaucer",
-                            "\"Patience is a conquering virtue.\"\n- Geoffrey Chaucer",
-                            "\"Nothing ventured, nothing gained.\"\n- Geoffrey Chaucer"
-                        ).random() }
-                        
+                        val quote = remember { FlavourText.defeatQuote() }
+
                         Text(
                             text = quote,
                             fontSize = 12.sp,
@@ -1613,6 +1657,7 @@ fun BattlefieldScene(
                     }
                     
                     val context = androidx.compose.ui.platform.LocalContext.current
+                    val shareScope = rememberCoroutineScope()
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
@@ -1636,14 +1681,16 @@ fun BattlefieldScene(
                         if (!isWin) {
                             Button(
                                 onClick = {
-                                    val uri = generateShareImage(context, player, uiState.scoreMultiplier, uiState.totalKills, isWin)
-                                    if (uri != null) {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                            type = "image/png"
-                                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    shareScope.launch(Dispatchers.IO) {
+                                        val uri = generateShareImage(context, player, uiState.scoreMultiplier, uiState.totalKills, isWin)
+                                        if (uri != null) withContext(Dispatchers.Main) {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                type = "image/png"
+                                                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(android.content.Intent.createChooser(intent, "Share Tale"))
                                         }
-                                        context.startActivity(android.content.Intent.createChooser(intent, "Share Tale"))
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
@@ -1734,7 +1781,7 @@ private fun drawComicTextBubble(
         isAntiAlias = true
         textSize = 28f
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
-        setColor(color.copy(alpha = alpha).value.toInt())
+        setColor(color.copy(alpha = alpha).toArgb())
         textAlign = android.graphics.Paint.Align.CENTER
     }
 
@@ -1743,7 +1790,7 @@ private fun drawComicTextBubble(
         isAntiAlias = true
         textSize = 28f
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
-        setColor(TapestryDark.copy(alpha = alpha).value.toInt())
+        setColor(TapestryDark.copy(alpha = alpha).toArgb())
         style = android.graphics.Paint.Style.STROKE
         strokeWidth = 3f
         textAlign = android.graphics.Paint.Align.CENTER
@@ -1756,7 +1803,8 @@ private fun drawComicTextBubble(
 private fun drawTapestryBorder(
     scope: androidx.compose.ui.graphics.drawscope.DrawScope,
     isTop: Boolean,
-    textHeadline: String
+    textHeadline: String,
+    motifSeed: Long
 ) {
     val h = scope.size.height
     val w = scope.size.width
@@ -1787,26 +1835,54 @@ private fun drawTapestryBorder(
             isAntiAlias = true
             textSize = 20f
             typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
-            color = TapestryDark.value.toInt()
+            color = TapestryDark.toArgb()
             textAlign = android.graphics.Paint.Align.CENTER
         }
         scope.drawContext.canvas.nativeCanvas.drawText(textHeadline, w / 2, 28f, paint)
     }
 
-    // 3. Draw a few simple stylized beasts/vines in the margins
-    // We can sketch a couple of diagonal staves or birds
+    // 3. Bayeux margin bestiary - seeded motifs instead of one repeated twig
+    val motifRng = kotlin.random.Random(motifSeed)
     var x = 30f
-    while (x < w) {
-        // Draw simple stylized leaf/twig
-        scope.drawLine(
-            color = TapestryGreen.copy(alpha = 0.5f),
-            start = Offset(x, yTop + borderH / 2),
-            end = Offset(x + 15f, yTop + borderH / 2 - 10f),
-            strokeWidth = 2.5f
-        )
-        scope.drawCircle(TapestryRed.copy(alpha = 0.5f), radius = 3f, center = Offset(x + 15f, yTop + borderH / 2 - 10f))
-        
-        x += 160f
+    val cy = yTop + borderH / 2
+    while (x < w - 40f) {
+        when (if (isTop) motifRng.nextInt(5) else motifRng.nextInt(6)) {
+            0 -> { // STAG: body line, head, antlers
+                scope.drawLine(TapestryMustard, Offset(x, cy + 6f), Offset(x + 22f, cy + 6f), strokeWidth = 3f)
+                scope.drawLine(TapestryMustard, Offset(x + 4f, cy + 6f), Offset(x + 4f, cy + 14f), strokeWidth = 2.5f)
+                scope.drawLine(TapestryMustard, Offset(x + 18f, cy + 6f), Offset(x + 18f, cy + 14f), strokeWidth = 2.5f)
+                scope.drawLine(TapestryMustard, Offset(x + 22f, cy + 6f), Offset(x + 26f, cy - 2f), strokeWidth = 2.5f)
+                scope.drawLine(TapestryDark, Offset(x + 26f, cy - 2f), Offset(x + 22f, cy - 10f), strokeWidth = 2f)
+                scope.drawLine(TapestryDark, Offset(x + 26f, cy - 2f), Offset(x + 30f, cy - 10f), strokeWidth = 2f)
+            }
+            1 -> { // HOUND: low body, tail up
+                scope.drawLine(TapestryRed.copy(alpha = 0.8f), Offset(x, cy + 8f), Offset(x + 18f, cy + 8f), strokeWidth = 3.5f)
+                scope.drawLine(TapestryRed.copy(alpha = 0.8f), Offset(x + 18f, cy + 8f), Offset(x + 24f, cy + 2f), strokeWidth = 2.5f)
+                scope.drawLine(TapestryRed.copy(alpha = 0.8f), Offset(x, cy + 8f), Offset(x - 4f, cy), strokeWidth = 2f)
+                scope.drawCircle(TapestryDark, radius = 2f, center = Offset(x + 24f, cy + 1f))
+            }
+            2 -> { // RAVEN: wing chevrons
+                scope.drawLine(TapestryDark, Offset(x, cy), Offset(x + 8f, cy - 6f), strokeWidth = 2.5f)
+                scope.drawLine(TapestryDark, Offset(x + 8f, cy - 6f), Offset(x + 16f, cy), strokeWidth = 2.5f)
+                scope.drawCircle(TapestryDark, radius = 3f, center = Offset(x + 8f, cy - 2f))
+            }
+            3 -> { // POINTING HAND (manicula)
+                scope.drawLine(TapestryDark, Offset(x, cy), Offset(x + 14f, cy), strokeWidth = 4f)
+                scope.drawLine(TapestryDark, Offset(x + 14f, cy), Offset(x + 20f, cy), strokeWidth = 2f)
+                scope.drawCircle(TapestryDark, radius = 3.5f, center = Offset(x, cy))
+            }
+            4 -> { // VINE TWIG (the classic)
+                scope.drawLine(TapestryGreen.copy(alpha = 0.6f), Offset(x, cy), Offset(x + 15f, cy - 10f), strokeWidth = 2.5f)
+                scope.drawCircle(TapestryRed.copy(alpha = 0.6f), radius = 3f, center = Offset(x + 15f, cy - 10f))
+            }
+            else -> { // FALLEN FOE + bones (bottom border only - the comment's old promise, honoured)
+                scope.drawLine(TapestryDark.copy(alpha = 0.7f), Offset(x, cy + 6f), Offset(x + 16f, cy + 6f), strokeWidth = 3f)
+                scope.drawCircle(TapestryDark.copy(alpha = 0.7f), radius = 3f, center = Offset(x + 19f, cy + 6f))
+                scope.drawLine(TapestryLight, Offset(x + 4f, cy + 4f), Offset(x + 8f, cy + 8f), strokeWidth = 1.5f)
+                scope.drawLine(TapestryLight, Offset(x + 8f, cy + 4f), Offset(x + 4f, cy + 8f), strokeWidth = 1.5f)
+            }
+        }
+        x += 90f + motifRng.nextInt(70)
     }
 }
 

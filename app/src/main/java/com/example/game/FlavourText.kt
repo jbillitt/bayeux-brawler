@@ -1,0 +1,72 @@
+package com.example.game
+
+import kotlin.random.Random
+
+enum class Perf { FLAWLESS, STANDARD, PYRRHIC }
+enum class BarkKind { VICTORY, DEFEAT, LEVEL_UP }
+
+object FlavourText {
+    internal val ADJ = listOf("Muddy", "Lamentable", "Glorious", "Soggy", "Thunderous", "Ignoble", "Spirited", "Grievous", "Merry", "Dreadful", "Unseemly", "Valiant")
+    internal val NOUN = listOf("Kerfuffle", "Scuffle", "Fracas", "Melee", "Tussle", "Affray", "Reckoning", "Set-To", "Rumpus", "Donnybrook")
+    internal val PLACE = listOf("Pevensey Marsh", "Hastings Field", "Senlac Ridge", "the Old Mill", "Caldbec Hill", "the Salt Fen", "Bulverhythe", "the Orchard", "Telham Down", "the Fish Market")
+    private val L_VERB = listOf("PERCUSSIT", "TUMULTUAVIT", "CLAMAVIT", "BRAWLAVIT", "SMASHIVIT", "WALLOPAVIT")
+    private val L_PLACE = listOf("HASTINGAM", "PEVENSAE", "SENLACUM", "MOLENDINUM", "COLLEM CALDBEC", "FORUM PISCIUM")
+    private val L_HERO = listOf("WILLELMUS", "MILES NOSTER", "EQUES PARVUS", "BRAWLERUS")
+
+    private fun rng(seed: Long, level: Int) = Random(seed * 31L + level * 7L)
+
+    fun battleName(seed: Long, level: Int): String {
+        val r = rng(seed, level)
+        return "The ${ADJ[r.nextInt(ADJ.size)]} ${NOUN[r.nextInt(NOUN.size)]} at ${PLACE[r.nextInt(PLACE.size)]}"
+    }
+
+    fun latinHeadline(seed: Long, level: Int): String {
+        val r = rng(seed, level * 13 + 1)
+        return "HIC ${L_HERO[r.nextInt(L_HERO.size)]} ${L_VERB[r.nextInt(L_VERB.size)]} AD ${L_PLACE[r.nextInt(L_PLACE.size)]}"
+    }
+
+    private val VICTORY_FLAWLESS = listOf(
+        "Not a scratch upon thee! The chroniclers shall struggle to make this sound difficult.",
+        "A flawless rout! Even the tapestry weavers gasped.",
+        "Untouched and unbothered. Harold's men are filing a complaint."
+    )
+    private val VICTORY_STANDARD = listOf(
+        "Thy valiant knight hath carried the field! The score multiplier did its glorious work.",
+        "The field is thine! Somewhere, a monk writes this down approvingly.",
+        "Victory! The geese of Pevensey honk thy name."
+    )
+    private val VICTORY_PYRRHIC = listOf(
+        "Victory - though thy surgeon requests a word. And bandages.",
+        "Won by a whisker! The tapestry shall depict thee limping heroically.",
+        "The day is thine, barely. Perhaps sturdier armour next time?"
+    )
+
+    fun victoryQuote(seed: Long, level: Int, perf: Perf): String {
+        val pool = when (perf) { Perf.FLAWLESS -> VICTORY_FLAWLESS; Perf.STANDARD -> VICTORY_STANDARD; Perf.PYRRHIC -> VICTORY_PYRRHIC }
+        return pool[rng(seed, level * 17 + 3).nextInt(pool.size)]
+    }
+
+    private val DEFEAT = listOf(
+        "\"Time and tide wait for no man.\"\n- Geoffrey Chaucer",
+        "\"All good things must come to an end.\"\n- Geoffrey Chaucer",
+        "\"Patience is a conquering virtue.\"\n- Geoffrey Chaucer",
+        "\"Nothing ventured, nothing gained.\"\n- Geoffrey Chaucer",
+        "\"He who falls in the mud may yet rise smelling of glory. Eventually.\"\n- A Passing Monk",
+        "\"The arrow finds the knight who forgets to duck.\"\n- Wace, probably",
+        "\"It is no shame to fall. It is shame only to lie there complaining.\"\n- The Venerable Bede (apocryphal)",
+        "\"Get up. The tapestry looks better with thee in it.\"\n- Ye Olde Proverbe"
+    )
+    fun defeatQuote(): String = DEFEAT[Random.nextInt(DEFEAT.size)]
+
+    private val BARK_VICTORY = listOf("VICTORIA!", "DEUS VULT!", "GLORIA MAXIMA!", "HUZZAH ETERNUM!")
+    private val BARK_DEFEAT = listOf("MORTIS!", "LACRIMAE!", "O TEMPORA!", "CATASTROPHUS!")
+    private val BARK_LEVEL = listOf("ASCENDIMUS!", "GLORIA CRESCIT!", "SURSUM CORDA!")
+
+    fun bark(kind: BarkKind, seed: Long, level: Int): String {
+        val pool = when (kind) { BarkKind.VICTORY -> BARK_VICTORY; BarkKind.DEFEAT -> BARK_DEFEAT; BarkKind.LEVEL_UP -> BARK_LEVEL }
+        return pool[rng(seed, level * 23 + kind.ordinal).nextInt(pool.size)]
+    }
+
+    val POPUPS_NORMAL = listOf("CLANGUS", "THWACKUS", "BONKUS", "WALLOPUS", "SMACKETH", "CLONKUS")
+    val POPUPS_CRIT = listOf("MAXIMUS CRUNCHIMUS", "ULTIMA BONKA", "CATASTROPHUS TOTALIS")
+}

@@ -161,24 +161,24 @@ class GameViewModel : ViewModel() {
         val rng = kotlin.random.Random(seed)
         
         val firstNames = if (size > 1.1f) {
-            listOf("Guillaume", "Hugo", "Rollo", "Thorold", "Drogo", "Godfrey")
+            listOf("Guillaume", "Hugo", "Rollo", "Thorold", "Drogo", "Godfrey", "Taillefer", "Balduin", "Ranulf", "Fulk", "Goliath", "Gros-Jean")
         } else if (size < 0.9f) {
-            listOf("Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred")
+            listOf("Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred", "Wimund", "Bodo", "Osbern", "Wulfric", "Little John")
         } else {
-            listOf("William", "Robert", "Richard", "Odo", "Harold", "Edward")
+            listOf("William", "Robert", "Richard", "Odo", "Harold", "Edward", "Tostig", "Gyrth", "Leofwine", "Gamel", "Aldred")
         }
         val firstName = firstNames.random(rng)
         
         val lastName = if (hairStyle == "bald") {
-            "the Bald"
+            listOf("the Bald", "the Shorn", "the Smooth", "Bare-pate").random(rng)
         } else if (hairStyle == "long") {
-            listOf("the Wild", "the Mane", "Long-Locks").random(rng)
+            listOf("the Wild", "the Mane", "Long-Locks", "the Hairy", "the Untamed").random(rng)
         } else {
             when (hairColor) {
-                Color(0xFFE5C09F) -> "the Fair"
-                Color(0xFFC08030) -> "the Red"
-                Color(0xFF2C2219) -> "the Dark"
-                else -> "the Brown"
+                Color(0xFFE5C09F) -> listOf("the Fair", "the Pale", "Sun-kissed", "the Blond").random(rng)
+                Color(0xFFC08030) -> listOf("the Red", "Fire-top", "the Bloody", "Rufus").random(rng)
+                Color(0xFF2C2219) -> listOf("the Dark", "the Black", "Night-haired", "the Grim").random(rng)
+                else -> listOf("the Brown", "the Muddy", "Earth-born", "the Common").random(rng)
             }
         }
         val newName = "$firstName $lastName"
@@ -883,8 +883,6 @@ class GameViewModel : ViewModel() {
                     if (totalDamage > 0f) {
                         val isCrunch = blunt > 15f && kotlin.random.Random.nextFloat() < 0.4f
                         MedievalAudioSynth.playSound(if (isCrunch) SoundType.CRUNCH else SoundType.THWACK)
-                        val hitShout = if (totalDamage > 15f) FlavourText.POPUPS_CRIT.random() else FlavourText.POPUPS_NORMAL.random()
-                        addPopup(hitShout, currTarget.posX, 140f, Color(0xFF9E3624))
                     }
 
                     // Limb loss mechanic! (heavy slash)
@@ -942,10 +940,7 @@ class GameViewModel : ViewModel() {
             val totalDamage = (proj.damage * armorFactor) + (proj.blunt * 0.6f)
             applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
 
-            if (totalDamage > 0f) {
-                val hitShout = if (totalDamage > 15f) FlavourText.POPUPS_CRIT.random() else FlavourText.POPUPS_NORMAL.random()
-                addPopup(hitShout, defender.posX, 140f, Color(0xFF9E3624))
-            }
+            // (Removed hit popups to reduce visual clutter)
 
             // Apply Poison Upgrade
             if (proj.isPoisonous) {

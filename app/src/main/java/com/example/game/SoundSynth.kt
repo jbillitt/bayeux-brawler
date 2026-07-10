@@ -70,7 +70,7 @@ object MedievalVocalizer {
                     isInitialized = true
                     val result = tts?.setLanguage(java.util.Locale.forLanguageTag("la"))
                     if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                        tts?.setLanguage(java.util.Locale.US)
+                        tts?.setLanguage(java.util.Locale.UK)
                     }
                     tts?.setPitch(0.85f)
                     tts?.setSpeechRate(1.25f)
@@ -84,7 +84,14 @@ object MedievalVocalizer {
     fun speak(text: String) {
         if (!isInitialized) return
         try {
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "medieval_vocal_bark")
+            // "Oldspeak" phonetic overrides for TTS engine
+            val phoneticText = text
+                .replace("VÆ", "vay")
+                .replace("Æ", "e")
+                .replace("MIHI", "mee-hee")
+                .replace("MORTIS", "mortis")
+                .replace("OUCH", "owch")
+            tts?.speak(phoneticText, TextToSpeech.QUEUE_FLUSH, null, "medieval_vocal_bark")
         } catch (e: Exception) {
             e.printStackTrace()
         }

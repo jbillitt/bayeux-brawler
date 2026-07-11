@@ -309,9 +309,17 @@ object TapestryRenderer {
             }
 
             // Direction calculation (point opposite of velocity)
-            val dirX = if (proj.velocityX > 0) -1f else 1f
-            // Add some variance to y direction (pointing slightly upwards usually)
-            val dirY = -0.2f + ((i % 3) * 0.15f)
+            val mag = kotlin.math.hypot(proj.velocityX.toDouble(), proj.velocityY.toDouble()).toFloat().coerceAtLeast(0.001f)
+            val baseDirX = -(proj.velocityX / mag)
+            val baseDirY = -(proj.velocityY / mag)
+
+            // Add some variance to direction
+            val varianceAngle = -0.1f + ((i % 3) * 0.1f) // rads
+            val cosV = kotlin.math.cos(varianceAngle.toDouble()).toFloat()
+            val sinV = kotlin.math.sin(varianceAngle.toDouble()).toFloat()
+            
+            val dirX = baseDirX * cosV - baseDirY * sinV
+            val dirY = baseDirX * sinV + baseDirY * cosV
 
             val length = 35f * proj.size
             val tipX = ax + (dirX * length)
@@ -323,11 +331,15 @@ object TapestryRenderer {
 
             // Fletching (only for arrows/bolts)
             if (proj.type == "arrow" || proj.type == "bolt") {
-                val fletchX = ax + (dirX * (length + 7f))
-                val fletchY1 = tipY - 7f
-                val fletchY2 = tipY + 7f
-                scope.drawLine(Color.White, Offset(tipX, tipY), Offset(fletchX, fletchY1), strokeWidth = 3f)
-                scope.drawLine(Color.White, Offset(tipX, tipY), Offset(fletchX, fletchY2), strokeWidth = 3f)
+                val fletchLen = length + 7f
+                val fletchBaseX = ax + dirX * fletchLen
+                val fletchBaseY = ay + dirY * fletchLen
+                // perpendicular vector for the fletching width
+                val perpX = -dirY
+                val perpY = dirX
+                val fletchW = 7f
+                scope.drawLine(Color.White, Offset(tipX, tipY), Offset(fletchBaseX + perpX * fletchW, fletchBaseY + perpY * fletchW), strokeWidth = 3f)
+                scope.drawLine(Color.White, Offset(tipX, tipY), Offset(fletchBaseX - perpX * fletchW, fletchBaseY - perpY * fletchW), strokeWidth = 3f)
             }
 
             // Blood stain only if hit body

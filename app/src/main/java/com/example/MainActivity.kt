@@ -102,7 +102,7 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
     val hasTrumpeter = uiState.unlockedAncillaries.contains("anc_trumpeter")
     val appliedMusicMoods = uiState.appliedMusicMoods
 
-    LaunchedEffect(musicOn, uiState.level, hasTrumpeter, appliedMusicMoods) {
+    LaunchedEffect(musicOn, uiState.level, hasTrumpeter, appliedMusicMoods, uiState.gameCount) {
         if (musicOn) {
             MedievalHarpPlayer.startMusic(level = uiState.level, hasTrumpeter = hasTrumpeter, moods = appliedMusicMoods)
         } else {

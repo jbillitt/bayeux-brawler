@@ -154,6 +154,15 @@ class GameViewModel : ViewModel() {
             if (isTwoHanded && newState.shield.id != "shield_none") {
                 newState = newState.copy(shield = GameData.SHIELDS.first { it.id == "shield_none" })
             }
+            
+            // Enforce crossbow rule
+            if (newState.weaponHead.id == "head_crossbow" && newState.weaponHandle.id != "handle_fists") {
+                if (item.type == ItemType.WEAPON_HEAD) {
+                    newState = newState.copy(weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" })
+                } else if (item.type == ItemType.WEAPON_HANDLE) {
+                    newState = newState.copy(weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" })
+                }
+            }
             newState
         }
     }
@@ -1237,6 +1246,7 @@ class GameViewModel : ViewModel() {
                     battleWon = false,
                     battleLost = false,
                     level = 1,
+                    gameCount = state.gameCount + 1,
                     unlockedGearIds = initialGear,
                     extraAttachments = emptyList(),
                     extraArmors = emptyList(),

@@ -373,6 +373,7 @@ data class BattleSimState(
     val isBattleActive: Boolean = false,
     val battleWon: Boolean = false,
     val battleLost: Boolean = false,
+    val gameCount: Int = 0,
     
     // Selected gear (persistent between levels until customized)
     val weaponHead: GearItem = GameData.WEAPON_HEADS.random(),

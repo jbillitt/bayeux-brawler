@@ -742,19 +742,19 @@ fun LevelUpScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
                                     tagLabel,
-                                    fontSize = 14.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = titleColor,
                                     modifier = Modifier
                                         .background(Color.White, RoundedCornerShape(4.dp))
                                         .border(1.dp, titleColor, RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                                 Text(
                                     choice.title,
@@ -797,19 +797,19 @@ fun LevelUpScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
                                 "No Reward",
-                                fontSize = 14.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TapestryDark.copy(alpha = 0.6f),
                                 modifier = Modifier
                                     .background(Color.White, RoundedCornerShape(4.dp))
                                     .border(1.dp, TapestryDark.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                             Text(
                                 "Decline all spoils",

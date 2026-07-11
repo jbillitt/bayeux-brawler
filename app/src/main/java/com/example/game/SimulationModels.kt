@@ -26,7 +26,10 @@ val SIZE_PRESETS = listOf(
 )
 
 enum class EnemyArchetype {
-    FYRD_LEVY, HOUSECARL, ARCHER, SHIELD_WALL, BERSERKER, CAVALRY, CHAMPION
+    FYRD_LEVY, HOUSECARL, ARCHER, SHIELD_WALL, BERSERKER, CAVALRY, CHAMPION,
+    // 10 New archetypes
+    PEASANT, SLINGER, JAVELINEER, MACEMAN, PIKEMAN,
+    KNIGHT_DISMOUNTED, CHARIOT_ARCHER, CHARIOT_LANCER, LORD, KING
 }
 
 data class Ancillary(
@@ -75,7 +78,10 @@ object GameData {
         GearItem("head_crossbow", "Heavy Crossbow", ItemType.WEAPON_HEAD, 1.5f, pierce = 65f, reach = 12.0f, isRanged = true, description = "A mechanical bow. High armor piercing and fast to crank.", color = Color(0xFF4A3B2C)),
         GearItem("head_mace", "Iron Mace", ItemType.WEAPON_HEAD, 2.0f, blunt = 20f, pierce = 3f, reach = 1.4f, description = "A simple but devastating flanged mace. Crushes helmets.", color = Color(0xFF636A6E)),
         GearItem("head_javelin", "Throwing Javelin", ItemType.WEAPON_HEAD, 0.6f, pierce = 12f, reach = 7.0f, isRanged = true, description = "A light throwing spear. Short range for a missile, but fast.", color = Color(0xFF8C969E)),
-        GearItem("head_war_flail", "Twin War Flail", ItemType.WEAPON_HEAD, 3.5f, blunt = 22f, pierce = 8f, reach = 1.8f, description = "Two spiked balls on branching chains. Absolute chaos.", color = Color(0xFF535C61))
+        GearItem("head_war_flail", "Twin War Flail", ItemType.WEAPON_HEAD, 3.5f, blunt = 22f, pierce = 8f, reach = 1.8f, description = "Two spiked balls on branching chains. Absolute chaos.", color = Color(0xFF535C61)),
+        GearItem("head_broadsword", "Broadsword Blade", ItemType.WEAPON_HEAD, 1.4f, slash = 18f, pierce = 8f, reach = 1.5f, description = "A wide, brutal iron blade. Chips bones through mail.", color = Color(0xFF949B9E)),
+        GearItem("head_pitchfork", "Pitchfork", ItemType.WEAPON_HEAD, 1.1f, pierce = 16f, slash = 2f, reach = 2.1f, description = "Three rusty tines. Perfect for hay or heathen flesh.", color = Color(0xFF817A73)),
+        GearItem("head_dagger_hilt", "Pommel Strike", ItemType.WEAPON_HEAD, 0.3f, blunt = 12f, reach = 0.6f, description = "Ending them rightly with a solid iron pommel.", color = Color(0xFFC4AD6C))
     )
 
     val WEAPON_HANDLES = listOf(
@@ -172,6 +178,7 @@ data class FighterState(
     var isAttacking: Boolean = false,
     var isDying: Boolean = false,
     var isDead: Boolean = false,
+    var hasLandedStrike: Boolean = false,
     var attackCooldown: Float = 0f, // in seconds
     var lastAttackTime: Long = 0,
     var swingProgress: Float = 0f, // 0 to 1 during swing
@@ -210,6 +217,8 @@ data class FighterState(
     var poisonDuration: Float = 0f,
     var bleedDuration: Float = 0f,
     var isMounted: Boolean = false,
+    var isChariot: Boolean = false,
+    var isLord: Boolean = false,
     var trampleCooldown: Float = 0f,
     var kills: Int = 0,
     var stuckProjectiles: MutableList<StuckProj> = mutableListOf()
@@ -296,7 +305,8 @@ data class FighterState(
                 else 2.0f
             } else 1.1f
             // Weight slows you down slightly, but being little makes you attack much faster
-            val weightFactor = (1f + (totalMass * 0.03f)) * (0.4f + size * 0.6f)
+            val sizeScale = if (isRanged) (0.2f + size * 0.8f) else (0.4f + size * 0.6f)
+            val weightFactor = (1f + (totalMass * 0.03f)) * sizeScale
             // Two-handing (no shield) doubles weapon speed! Missing an arm means you can't two-hand.
             val shieldFactor = if (missingArm) 1.0f else if (shield.id == "shield_none" && !isDualWielding) 0.5f else if (isDualWielding) 0.6f else 1.0f
             // Speed penalty from handle choices

@@ -144,7 +144,7 @@ class GameViewModel : ViewModel() {
             var newState = when (item.type) {
                 ItemType.WEAPON_HEAD -> state.copy(weaponHead = item)
                 ItemType.WEAPON_HANDLE -> state.copy(weaponHandle = item)
-                ItemType.SHIELD -> state.copy(shield = item)
+                ItemType.SHIELD -> state.copy(shield = item, isDualWielding = if (item.id != "shield_none") false else state.isDualWielding)
                 ItemType.ARMOR -> state.copy(armor = item)
                 ItemType.HEADGEAR -> state.copy(headgear = item)
             }
@@ -170,33 +170,7 @@ class GameViewModel : ViewModel() {
     fun updatePhysical(size: Float, hairColor: Color, hairStyle: String) {
         if (_uiState.value.isBattleActive) return
         
-        // Generate a random Norman/Saxon name based on physical traits
         val rng = kotlin.random.Random.Default
-        
-        val firstNames = if (size > 1.1f) {
-            listOf(
-                "Guillaume", "Hugo", "Rollo", "Thorold", "Drogo", "Godfrey", "Taillefer", "Balduin", "Ranulf", "Fulk", "Goliath", "Gros-Jean",
-                "Robert", "Richard", "Odo", "William", "Geoffrey", "Eustace", "Alain", "Baldwin", "Bohemond", "Tancred", "Roger",
-                "Ansgar", "Ilbert", "Ivo", "Nigel", "Osbern", "Payn", "Wadard", "Vital", "Turold", "Urse", "Wimund", "Hubert",
-                "Gautier", "Gervase", "Giffard", "Hamelin", "Herluin", "Humphrey", "Ilger", "Jocelyn", "Miles", "Picot", "Pons",
-                "Raoul", "Ridel", "Serlo", "Urso", "Waleran", "Wimarc", "Gislebert", "Aimeri", "Baudouin", "Foucaud", "Gaudin"
-            )
-        } else if (size < 0.9f) {
-            listOf(
-                "Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred", "Wimund", "Bodo", "Osbern", "Wulfric", "Little John",
-                "Alberic", "Berengar", "Drogo", "Erfast", "Giroie", "Herve", "Ives", "Maugis", "Odard", "Pagan", "Ralf", "Seward",
-                "Turold", "Vitalis", "Wadard", "Garin", "Oger", "Ruald", "Sasgar", "Tezelin", "Venables", "Wazo", "Anquetil"
-            )
-        } else {
-            listOf(
-                "Arthur", "Lancelot", "Gawain", "Percival", "Bors", "Gareth", "Tristan", "Bedivere", "Galahad", "Kay",
-                "Odo", "William", "Robert", "Richard", "Roger", "Hugh", "Walter", "Ralph", "Geoffrey", "Gilbert", "Stephen",
-                "Henry", "Reginald", "Simon", "John", "Peter", "Thomas", "Nicholas", "Philip", "Adam", "Matthew", "David",
-                "Alexander", "Luke", "Mark", "Paul", "James", "Andrew", "Bartholomew", "Clement", "Dennis", "Elias", "Guy"
-            )
-        }
-        val firstName = firstNames.random(rng)
-        
         val lastName = if (hairStyle == "bald") {
             listOf("the Bald", "the Shorn", "the Smooth", "Bare-pate").random(rng)
         } else if (hairStyle == "long") {
@@ -209,25 +183,31 @@ class GameViewModel : ViewModel() {
                 else -> listOf("the Brown", "the Muddy", "Earth-born", "the Common").random(rng)
             }
         }
-        val newName = "$firstName $lastName"
+        val currentFirstName = _uiState.value.playerName.split(" ").firstOrNull() ?: "Syr"
+        val newName = "$currentFirstName $lastName"
 
         _uiState.update { state ->
             state.copy(
                 characterSize = size,
                 hairColor = hairColor,
                 hairStyle = hairStyle,
-                playerName = newName,
-                faceNoseShape = (0..3).random(rng),
-                faceBiteShape = (0..3).random(rng),
-                faceForehead = (0..2).random(rng),
-                faceMustache = (0..3).random(rng)
+                playerName = newName
+                // Removed face rerolls here so they stay constant during customization
             )
         }
     }
 
     fun toggleDualWield() {
         if (_uiState.value.isBattleActive) return
-        _uiState.update { it.copy(isDualWielding = !it.isDualWielding) }
+        _uiState.update { 
+            if (!it.isDualWielding) {
+                val noShield = GameData.SHIELDS.first { s -> s.id == "shield_none" }
+                it.copy(isDualWielding = true, shield = noShield)
+            } else {
+                it.copy(isDualWielding = false)
+            }
+        }
+        MedievalAudioSynth.playSound(SoundType.SWOOSH)
     }
 
     fun randomizeGear() {
@@ -350,13 +330,13 @@ class GameViewModel : ViewModel() {
         val r = rng.nextFloat()
         
         val arch = if (level <= 2) {
-            if (r < 0.7f) EnemyArchetype.FYRD_LEVY else if (r < 0.85f) EnemyArchetype.HOUSECARL else EnemyArchetype.ARCHER
+            if (r < 0.3f) EnemyArchetype.PEASANT else if (r < 0.6f) EnemyArchetype.FYRD_LEVY else if (r < 0.8f) EnemyArchetype.SLINGER else EnemyArchetype.HOUSECARL
         } else if (level <= 4) {
-            if (r < 0.4f) EnemyArchetype.FYRD_LEVY else if (r < 0.65f) EnemyArchetype.HOUSECARL else if (r < 0.8f) EnemyArchetype.ARCHER else if (r < 0.9f) EnemyArchetype.SHIELD_WALL else EnemyArchetype.BERSERKER
+            if (r < 0.2f) EnemyArchetype.PEASANT else if (r < 0.35f) EnemyArchetype.JAVELINEER else if (r < 0.5f) EnemyArchetype.MACEMAN else if (r < 0.65f) EnemyArchetype.ARCHER else if (r < 0.85f) EnemyArchetype.HOUSECARL else EnemyArchetype.SHIELD_WALL
         } else if (level <= 6) {
-            if (r < 0.2f) EnemyArchetype.FYRD_LEVY else if (r < 0.4f) EnemyArchetype.HOUSECARL else if (r < 0.55f) EnemyArchetype.ARCHER else if (r < 0.65f) EnemyArchetype.SHIELD_WALL else if (r < 0.75f) EnemyArchetype.BERSERKER else if (r < 0.9f) EnemyArchetype.CAVALRY else EnemyArchetype.CHAMPION
+            if (r < 0.15f) EnemyArchetype.MACEMAN else if (r < 0.3f) EnemyArchetype.PIKEMAN else if (r < 0.45f) EnemyArchetype.SHIELD_WALL else if (r < 0.6f) EnemyArchetype.BERSERKER else if (r < 0.7f) EnemyArchetype.KNIGHT_DISMOUNTED else if (r < 0.8f) EnemyArchetype.CHARIOT_ARCHER else if (r < 0.95f) EnemyArchetype.CAVALRY else EnemyArchetype.LORD
         } else {
-            if (r < 0.1f) EnemyArchetype.FYRD_LEVY else if (r < 0.25f) EnemyArchetype.HOUSECARL else if (r < 0.35f) EnemyArchetype.ARCHER else if (r < 0.45f) EnemyArchetype.SHIELD_WALL else if (r < 0.6f) EnemyArchetype.BERSERKER else if (r < 0.8f) EnemyArchetype.CAVALRY else EnemyArchetype.CHAMPION
+            if (r < 0.1f) EnemyArchetype.PIKEMAN else if (r < 0.2f) EnemyArchetype.SHIELD_WALL else if (r < 0.35f) EnemyArchetype.KNIGHT_DISMOUNTED else if (r < 0.5f) EnemyArchetype.BERSERKER else if (r < 0.65f) EnemyArchetype.CAVALRY else if (r < 0.75f) EnemyArchetype.CHARIOT_LANCER else if (r < 0.9f) EnemyArchetype.CHAMPION else EnemyArchetype.KING
         }
 
         fun <T> List<T>.safeRandom(fallback: T): T = if (this.isEmpty()) fallback else this.random(rng)
@@ -366,62 +346,73 @@ class GameViewModel : ViewModel() {
         fun safeArmor(id: String) = GameData.ARMOR_PIECES.firstOrNull { it.id == id } ?: GameData.ARMOR_PIECES.first()
         fun safeHelm(id: String) = GameData.HEADGEAR_PIECES.firstOrNull { it.id == id } ?: GameData.HEADGEAR_PIECES.first()
 
-        val loadout = when (arch) {
-            EnemyArchetype.FYRD_LEVY -> Pair(listOf(
-                GameData.WEAPON_HEADS.filter { it.id in listOf("head_spear", "head_dagger", "head_bare", "head_pitchfork", "head_club") }.safeRandom(safeHead("head_bare")),
-                safeHandle("handle_short"),
-                safeShield(if (rng.nextFloat() < 0.3f) "shield_buckler" else "shield_none"),
-                safeArmor("armor_padded"),
-                safeHelm("helm_none")
-            ), false)
-            EnemyArchetype.HOUSECARL -> Pair(listOf(
-                safeHead("head_axe"),
-                safeHandle("handle_medium"),
-                safeShield("shield_none"),
-                safeArmor("armor_chainmail"),
-                safeHelm("helm_conical")
-            ), false)
-            EnemyArchetype.ARCHER -> Pair(listOf(
-                safeHead("head_bow"),
-                safeHandle("handle_fists"),
-                safeShield("shield_none"),
-                safeArmor("armor_leather"),
-                safeHelm("helm_none")
-            ), false)
-            EnemyArchetype.SHIELD_WALL -> Pair(listOf(
-                safeHead("head_spear"),
-                safeHandle("handle_medium"),
-                safeShield("shield_tower"),
-                safeArmor("armor_chainmail"),
-                safeHelm("helm_conical")
-            ), false)
-            EnemyArchetype.BERSERKER -> Pair(listOf(
+        val gear = when (arch) {
+            EnemyArchetype.PEASANT -> listOf(
+                safeHead("head_pitchfork"), safeHandle("handle_long"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
+            )
+            EnemyArchetype.FYRD_LEVY -> listOf(
+                GameData.WEAPON_HEADS.filter { it.id in listOf("head_spear", "head_dagger", "head_bare", "head_club") }.safeRandom(safeHead("head_bare")),
+                safeHandle("handle_short"), safeShield(if (rng.nextFloat() < 0.3f) "shield_buckler" else "shield_none"), safeArmor("armor_padded"), safeHelm("helm_none")
+            )
+            EnemyArchetype.SLINGER -> listOf(
+                safeHead("head_slingshot"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
+            )
+            EnemyArchetype.JAVELINEER -> listOf(
+                safeHead("head_javelin"), safeHandle("handle_fists"), safeShield("shield_buckler"), safeArmor("armor_leather"), safeHelm("helm_none")
+            )
+            EnemyArchetype.MACEMAN -> listOf(
+                safeHead("head_mace"), safeHandle("handle_medium"), safeShield("shield_heater"), safeArmor("armor_leather"), safeHelm("helm_conical")
+            )
+            EnemyArchetype.HOUSECARL -> listOf(
+                safeHead("head_axe"), safeHandle("handle_medium"), safeShield("shield_none"), safeArmor("armor_chainmail"), safeHelm("helm_conical")
+            )
+            EnemyArchetype.ARCHER -> listOf(
+                safeHead("head_bow"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_leather"), safeHelm("helm_none")
+            )
+            EnemyArchetype.SHIELD_WALL -> listOf(
+                safeHead("head_spear"), safeHandle("handle_medium"), safeShield("shield_tower"), safeArmor("armor_chainmail"), safeHelm("helm_conical")
+            )
+            EnemyArchetype.PIKEMAN -> listOf(
+                safeHead("head_pike"), safeHandle("handle_long"), safeShield("shield_none"), safeArmor("armor_scale"), safeHelm("helm_conical")
+            )
+            EnemyArchetype.BERSERKER -> listOf(
                 GameData.WEAPON_HEADS.filter { it.id in listOf("head_axe", "head_sword", "head_flail", "head_mace", "head_war_flail") }.safeRandom(safeHead("head_axe")),
-                safeHandle("handle_short"),
-                safeShield("shield_none"),
-                safeArmor("armor_bare"),
-                safeHelm("helm_none")
-            ), false)
-            EnemyArchetype.CAVALRY -> Pair(listOf(
+                safeHandle("handle_short"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
+            )
+            EnemyArchetype.KNIGHT_DISMOUNTED -> listOf(
+                safeHead("head_broadsword"), safeHandle("handle_medium"), safeShield("shield_heater"), safeArmor("armor_scale"), safeHelm("helm_great")
+            )
+            EnemyArchetype.CAVALRY -> listOf(
                 GameData.WEAPON_HEADS.filter { it.id in listOf("head_pike", "head_sword", "head_javelin") }.safeRandom(safeHead("head_sword")),
-                safeHandle("handle_medium"),
-                safeShield("shield_heater"),
-                safeArmor("armor_chainmail"),
-                safeHelm("helm_conical")
-            ), true)
-            EnemyArchetype.CHAMPION -> Pair(listOf(
+                safeHandle("handle_medium"), safeShield("shield_heater"), safeArmor("armor_chainmail"), safeHelm("helm_conical")
+            )
+            EnemyArchetype.CHARIOT_ARCHER -> listOf(
+                safeHead("head_crossbow"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_chainmail"), safeHelm("helm_conical")
+            )
+            EnemyArchetype.CHARIOT_LANCER -> listOf(
+                safeHead("head_pike"), safeHandle("handle_long"), safeShield("shield_tower"), safeArmor("armor_scale"), safeHelm("helm_great")
+            )
+            EnemyArchetype.CHAMPION -> listOf(
                 GameData.WEAPON_HEADS.filter { it.id in listOf("head_claymore", "head_maul", "head_war_flail", "head_halberd") }.safeRandom(safeHead("head_maul")),
-                safeHandle("handle_iron"),
-                safeShield("shield_none"),
-                safeArmor("armor_scale"),
-                safeHelm("helm_great")
-            ), if (rng.nextFloat() < 0.5f) true else false)
+                safeHandle("handle_iron"), safeShield("shield_none"), safeArmor("armor_scale"), safeHelm("helm_great")
+            )
+            EnemyArchetype.LORD -> listOf(
+                safeHead("head_broadsword"), safeHandle("handle_medium"), safeShield("shield_heater"), safeArmor("armor_scale"), safeHelm("helm_none") // will draw crown instead
+            )
+            EnemyArchetype.KING -> listOf(
+                safeHead("head_claymore"), safeHandle("handle_iron"), safeShield("shield_none"), safeArmor("armor_scale"), safeHelm("helm_none") // will draw crown instead
+            )
         }
 
-        val sizeMultiplier = if (arch == EnemyArchetype.CHAMPION) 1.25f else if (arch == EnemyArchetype.BERSERKER) 1.1f else rng.nextFloat() * 0.4f + 0.9f
+        val isMounted = arch in listOf(EnemyArchetype.CAVALRY, EnemyArchetype.CHAMPION) || (arch == EnemyArchetype.CHAMPION && rng.nextFloat() < 0.5f) || arch in listOf(EnemyArchetype.CHARIOT_ARCHER, EnemyArchetype.CHARIOT_LANCER)
+        val isChariot = arch in listOf(EnemyArchetype.CHARIOT_ARCHER, EnemyArchetype.CHARIOT_LANCER)
+        val isLord = arch in listOf(EnemyArchetype.LORD, EnemyArchetype.KING)
+
+        val sizeMultiplier = if (arch in listOf(EnemyArchetype.CHAMPION, EnemyArchetype.LORD, EnemyArchetype.KING)) 1.25f else if (arch == EnemyArchetype.BERSERKER) 1.1f else rng.nextFloat() * 0.4f + 0.9f
         val baseHp = 50f + (level * 10f)
         var enemyHp = baseHp * sizeMultiplier
-        if (arch == EnemyArchetype.CHAMPION) enemyHp *= 1.5f
+        if (arch in listOf(EnemyArchetype.CHAMPION, EnemyArchetype.LORD)) enemyHp *= 1.5f
+        if (arch == EnemyArchetype.KING) enemyHp *= 3f
 
         val hairColors = listOf(Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF8A7156), Color(0xFF2C2219), Color(0xFFE5C09F))
         val hairStyles = listOf("short", "long", "bald")
@@ -434,11 +425,11 @@ class GameViewModel : ViewModel() {
             isPlayer = false,
             maxHp = enemyHp,
             hp = enemyHp,
-            weaponHead = loadout.first[0],
-            weaponHandle = loadout.first[1],
-            shield = loadout.first[2],
-            armor = loadout.first[3],
-            headgear = loadout.first[4],
+            weaponHead = gear[0],
+            weaponHandle = gear[1],
+            shield = gear[2],
+            armor = gear[3],
+            headgear = gear[4],
             posX = startX,
             targetX = startX,
             facingRight = false,
@@ -446,8 +437,10 @@ class GameViewModel : ViewModel() {
             hairColor = hairColors.random(rng),
             hairStyle = hairStyles.random(rng),
             level = level,
-            isMounted = loadout.second,
-            speedBoost = if (loadout.second) 0.45f else 0f
+            isMounted = isMounted,
+            isChariot = isChariot,
+            isLord = isLord,
+            speedBoost = if (isMounted && !isChariot) 0.45f else if (isChariot) 0.35f else 0f
         )
     }
 
@@ -487,8 +480,8 @@ class GameViewModel : ViewModel() {
         }
         _particlesState.value = particles.filter { it.age < it.maxAge }
 
-        if (_uiState.value.unlockedAncillaries.contains("anc_monk") && Random.nextFloat() < 0.2f) {
-            addIncenseParticles(player.posX - (40f * player.size), 190f, count = 1)
+        if (_uiState.value.unlockedAncillaries.contains("anc_monk")) {
+            addIncenseParticles(player.posX - (40f * player.size), 190f, count = 2)
         }
 
         // Decay screenshake
@@ -534,7 +527,9 @@ class GameViewModel : ViewModel() {
                 if (f1.trampleCooldown > 0f) f1.trampleCooldown -= dt
                 if (f1.trampleCooldown <= 0f) {
                     for (f2 in allFighters) {
-                        if (f1.isPlayer != f2.isPlayer && f2.size < f1.size && !f2.isDead && !f2.isDying) {
+                        // Enemies shouldn't squash player; only player squashes enemies
+                        val canSquash = (f1.isPlayer && !f2.isPlayer)
+                        if (canSquash && f2.size < f1.size && !f2.isDead && !f2.isDying) {
                             if (abs(f1.posX - f2.posX) < 30f) {
                                 applyFlatDamage(15f * f1.size, f2, f1.isPlayer)
                                 addPopup("TRAMPLE!", f2.posX, 110f, Color(0xFF6E5536))
@@ -693,12 +688,18 @@ class GameViewModel : ViewModel() {
             fighter.swingProgress += dt * (1.2f / fighter.attackSpeedDelay)
             val chainDelay = if (fighter.weaponHandle.id == "handle_chain") 0.15f else 0f
             val effectiveSwingProgress = (fighter.swingProgress - chainDelay).coerceAtLeast(0f)
-            if (effectiveSwingProgress >= 1f) {
-                // Land strike!
+            
+            // Damage connects halfway through the swing visually
+            if (effectiveSwingProgress >= 0.5f && !fighter.hasLandedStrike) {
+                fighter.hasLandedStrike = true
                 if (target != null) {
                     performStrike(fighter, target)
                 }
+            }
+            
+            if (effectiveSwingProgress >= 1f) {
                 fighter.isAttacking = false
+                fighter.hasLandedStrike = false
                 fighter.swingProgress = 0f
             }
         }
@@ -875,6 +876,13 @@ class GameViewModel : ViewModel() {
             
             if (targets.isEmpty() || abs(attacker.posX - defender.posX) > reachPixels) {
                 // Missed!
+                MedievalAudioSynth.playSound(SoundType.SWOOSH)
+                return
+            }
+            
+            // Dual Wield miss chance (20% for faster attacks)
+            if (attacker.isDualWielding && Random.nextFloat() < 0.2f) {
+                addPopup("MISS!", defender.posX, 140f, Color.Gray)
                 MedievalAudioSynth.playSound(SoundType.SWOOSH)
                 return
             }
@@ -1081,12 +1089,12 @@ class GameViewModel : ViewModel() {
         val newParticles = List(count) {
             BloodParticle(
                 x = x + Random.nextInt(-5, 5),
-                y = y,
+                y = y - Random.nextInt(0, 10),
                 vx = Random.nextFloat() * 40f - 20f, // Drift slightly left/right
-                vy = Random.nextFloat() * -40f - 20f, // Drift upwards slowly
+                vy = Random.nextFloat() * -50f - 20f, // Drift upwards faster
                 color = androidx.compose.ui.graphics.Color(0xFFE0E0E0), // Grey/White smoke
                 isSmoke = true,
-                maxAge = 2.0f + Random.nextFloat() * 2.0f
+                maxAge = 3.0f + Random.nextFloat() * 2.0f
             )
         }
         _particlesState.value = _particlesState.value + newParticles
@@ -1134,18 +1142,20 @@ class GameViewModel : ViewModel() {
                     ))
                 }
 
-                // 2. Weapon Attachment option (attach existing weapon head as dynamic angled secondary blade!)
-                val attachmentHeads = GameData.WEAPON_HEADS.filter { 
-                    it.id !in listOf("head_bare", "head_bow", "head_longbow", "head_slingshot") 
+                // 2. Weapon Attachment option (only for melee weapons)
+                if (!state.weaponHead.isRanged) {
+                    val attachmentHeads = GameData.WEAPON_HEADS.filter { 
+                        it.id !in listOf("head_bare", "head_bow", "head_longbow", "head_slingshot") 
+                    }
+                    val weaponHead = attachmentHeads.random()
+                    pendingChoices.add(LevelUpChoice(
+                        id = "attach_${weaponHead.id}",
+                        title = "Attach Head: ${weaponHead.name}",
+                        description = "${weaponHead.description} Attached dynamically to weapon, adding +50% of its base damage!",
+                        type = "attachment",
+                        itemId = weaponHead.id
+                    ))
                 }
-                val weaponHead = attachmentHeads.random()
-                pendingChoices.add(LevelUpChoice(
-                    id = "attach_${weaponHead.id}",
-                    title = "Attach Head: ${weaponHead.name}",
-                    description = "${weaponHead.description} Attached dynamically to weapon, adding +50% of its base damage!",
-                    type = "attachment",
-                    itemId = weaponHead.id
-                ))
 
                 // 3. Handle Extension or Layered Armor option
                 if (Random.nextBoolean()) {
@@ -1240,6 +1250,19 @@ class GameViewModel : ViewModel() {
                 initialGear.addAll(GameData.ARMOR_PIECES.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.HEADGEAR_PIECES.shuffled().take(2).map { it.id })
                 
+                val rng = kotlin.random.Random.Default
+                val size = state.characterSize
+                val firstNames = if (size > 1.1f) {
+                    listOf("Guillaume", "Hugo", "Rollo", "Thorold", "Drogo", "Godfrey", "Taillefer", "Balduin", "Ranulf", "Fulk", "Goliath", "Gros-Jean", "Robert", "Richard", "Odo", "William", "Geoffrey", "Eustace")
+                } else if (size < 0.9f) {
+                    listOf("Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred", "Wimund", "Bodo", "Osbern", "Wulfric", "Little John", "Alberic", "Berengar", "Drogo", "Erfast")
+                } else {
+                    listOf("Arthur", "Lancelot", "Gawain", "Percival", "Bors", "Gareth", "Tristan", "Bedivere", "Galahad", "Kay", "Odo", "William", "Robert", "Richard", "Roger", "Hugh")
+                }
+                val firstName = firstNames.random(rng)
+                val lastName = state.playerName.split(" ").drop(1).joinToString(" ").ifEmpty { "the Unknown" }
+                val newName = "$firstName $lastName"
+
                 // Completely random starter gear for the next attempt (each attempt starts fresh and unique!)
                 state.copy(
                     isBattleActive = false,
@@ -1247,6 +1270,12 @@ class GameViewModel : ViewModel() {
                     battleLost = false,
                     level = 1,
                     gameCount = state.gameCount + 1,
+                    totalKills = 0,
+                    playerName = newName,
+                    faceNoseShape = (0..3).random(rng),
+                    faceBiteShape = (0..3).random(rng),
+                    faceForehead = (0..2).random(rng),
+                    faceMustache = (0..3).random(rng),
                     unlockedGearIds = initialGear,
                     extraAttachments = emptyList(),
                     extraArmors = emptyList(),

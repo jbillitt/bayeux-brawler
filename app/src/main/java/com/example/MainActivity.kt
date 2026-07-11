@@ -1042,7 +1042,7 @@ fun GearSelectionTabs(
                     }
                 }
             } else {
-                if (selectedTab == 0 && uiState.shield.id == "shield_none") {
+                if (selectedTab == 0) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1057,7 +1057,7 @@ fun GearSelectionTabs(
                             onCheckedChange = { onToggleDualWield() },
                             modifier = Modifier.scale(0.8f)
                         )
-                        Text("Dual Wield (Copies main weapon to off-hand)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
+                        Text("Dual Wield (Disables shield, faster attacks but 20% miss chance)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
                     }
                 }
                 
@@ -1623,10 +1623,10 @@ fun BattlefieldScene(
                             size = Size(poolWidth, poolHeight)
                         )
                     } else {
-                        val baseRadius = if (part.isSmoke) 4f else 2.5f
+                        val baseRadius = if (part.isSmoke) 6f + (part.age * 5f) else 2.5f + (Math.random() * 2f).toFloat()
                         drawCircle(
                             color = part.color.copy(alpha = (1f - (part.age / part.maxAge)).coerceIn(0f, 1f)),
-                            radius = baseRadius + (Math.random() * 2f).toFloat(),
+                            radius = baseRadius,
                             center = Offset(px, py)
                         )
                     }
@@ -2035,7 +2035,14 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
             scale(3.5f, 3.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
             translate(114.3f, -50f)
         }) {
-            val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
+            val dummy = player.copy(
+                headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, 
+                posX = 0f, 
+                animFrame = 0f, 
+                isDead = false, 
+                isDying = false,
+                facingRight = true // Force face rendering to point correctly in portrait box
+            )
             com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
         }
     }

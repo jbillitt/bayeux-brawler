@@ -1555,7 +1555,7 @@ fun BattlefieldScene(
                     val px = part.x * playerScaleX
                     val py = 200f + (part.y - 200f) * scaleFactor
                     
-                    if (part.y >= 240f) {
+                    if (part.y >= 350f) {
                         val poolWidth = 5f + (part.age / part.maxAge) * 15f
                         val poolHeight = 2f + (part.age / part.maxAge) * 5f
                         drawOval(

@@ -438,7 +438,7 @@ class GameViewModel : ViewModel() {
         val particles = _particlesState.value
         particles.forEach { 
             it.age += dt 
-            if (it.y < 240f) {
+            if (it.y < 350f) {
                 it.x += it.vx * dt
                 it.y += it.vy * dt
                 it.vy += 400f * dt // gravity

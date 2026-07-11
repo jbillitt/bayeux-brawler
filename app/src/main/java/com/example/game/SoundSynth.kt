@@ -72,11 +72,18 @@ object MedievalVocalizer {
                     if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                         tts?.setLanguage(java.util.Locale.UK)
                     }
-                    tts?.voices?.firstOrNull { it.name.contains("male", ignoreCase = true) }?.let { maleVoice ->
-                        tts?.voice = maleVoice
+                    
+                    val voices = tts?.voices ?: emptySet()
+                    val oldspeakVoice = voices.firstOrNull { 
+                        (it.locale.country == "GB" || it.name.contains("gb", true)) && 
+                        (it.name.contains("male", true) || it.name.contains("rjs", true) || it.name.contains("gbd", true))
+                    } ?: voices.firstOrNull { it.name.contains("male", true) }
+                    
+                    if (oldspeakVoice != null) {
+                        tts?.voice = oldspeakVoice
                     }
-                    tts?.setPitch(0.85f)
-                    tts?.setSpeechRate(1.25f)
+                    tts?.setPitch(0.4f) // lowered pitch for a gruff, oldspeak male voice
+                    tts?.setSpeechRate(0.85f)
                 }
             }
         } catch (e: Exception) {

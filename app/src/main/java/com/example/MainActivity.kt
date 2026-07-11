@@ -99,7 +99,7 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
     // Medieval Harp Background Music State
     var musicOn by rememberSaveable { mutableStateOf(true) }
     val uiState by viewModel.uiState.collectAsState()
-    val hasTrumpeter = uiState.unlockedAncillaries.contains("anc_trumpeter")
+    val hasTrumpeter = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.TRUMPETER)
     val appliedMusicMoods = uiState.appliedMusicMoods
 
     LaunchedEffect(musicOn, uiState.level, hasTrumpeter, appliedMusicMoods, uiState.gameCount) {
@@ -126,29 +126,32 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
     fun playRandomVoiceClip() {
         if (currentVoicePlayer?.isPlaying == true) return
-        val resIds = listOf(
-            R.raw.recording_1, R.raw.recording_2, R.raw.recording_3, R.raw.recording_4,
-            R.raw.recording_5, R.raw.recording_6, R.raw.recording_7, R.raw.recording_8,
-            R.raw.recording_9, R.raw.recording_10, R.raw.recording_11, R.raw.recording_12,
-            R.raw.recording_13, R.raw.recording_14, R.raw.recording_15, R.raw.recording_16,
-            R.raw.recording_17, R.raw.recording_18, R.raw.recording_19, R.raw.recording_20,
-            R.raw.recording_21, R.raw.recording_22, R.raw.recording_23, R.raw.recording_24,
-            R.raw.recording_25, R.raw.recording_26, R.raw.recording_27, R.raw.recording_28
-        )
         try {
-            MedievalHarpPlayer.setVolume(0.2f)
-            currentVoicePlayer = android.media.MediaPlayer.create(context, resIds.random())
-            currentVoicePlayer?.setOnCompletionListener { 
-                it.release() 
-                if (currentVoicePlayer == it) {
-                    currentVoicePlayer = null
-                    MedievalHarpPlayer.setVolume(1.0f)
+            val am = context.assets
+            val files = am.list("victory")
+            if (files != null && files.isNotEmpty()) {
+                val audioFiles = files.filter { it.endsWith(".wav") || it.endsWith(".ogg") || it.endsWith(".mp3") }
+                if (audioFiles.isNotEmpty()) {
+                    MedievalHarpPlayer.setVolume(0.2f)
+                    val randomFile = audioFiles.random()
+                    val afd = am.openFd("victory/$randomFile")
+                    currentVoicePlayer = android.media.MediaPlayer()
+                    currentVoicePlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    afd.close()
+                    currentVoicePlayer?.setOnCompletionListener { 
+                        it.release() 
+                        if (currentVoicePlayer == it) {
+                            currentVoicePlayer = null
+                            MedievalHarpPlayer.setVolume(1.0f)
+                        }
+                    }
+                    currentVoicePlayer?.prepare()
+                    currentVoicePlayer?.start()
                 }
             }
-            currentVoicePlayer?.start()
         } catch (e: Exception) {
-            MedievalHarpPlayer.setVolume(1.0f)
             e.printStackTrace()
+            MedievalHarpPlayer.setVolume(1.0f)
         }
     }
 
@@ -613,7 +616,7 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                     drawCircle(sparkColor.copy(alpha = 0.9f), radius = r, center = Offset(floatX, floatY))
                     drawLine(sparkColor.copy(alpha = 0.4f), Offset(floatX, floatY + r), Offset(floatX, floatY + r + 15f), strokeWidth = 1.5f)
                 }
-                if (uiState.unlockedAncillaries.contains("anc_mount_horse")) {
+                if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE)) {
                     drawCircle(TapestryMustard.copy(alpha = 0.35f + 0.2f * pulse), radius = 150f + 8f * pulse,
                         center = Offset(centerX, centerY), style = Stroke(width = 5f))
                 }
@@ -648,7 +651,7 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                     size = uiState.characterSize,
                     hairColor = uiState.hairColor,
                     hairStyle = uiState.hairStyle,
-                    isMounted = uiState.unlockedAncillaries.contains("anc_mount_horse")
+                    isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)
                 )
 
                 // Render at massive scale (Fancam style!)
@@ -1190,7 +1193,7 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit) {
                 verticalAlignment = Alignment.Top
             ) {
                 Text(
-                    text = item.name.uppercase(),
+                    text = item.itemName.uppercase(),
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Black,
@@ -1244,7 +1247,7 @@ fun StatsAndLaunchPanel(
             headgear = uiState.headgear,
             isDualWielding = uiState.isDualWielding,
             posX = 0f, targetX = 0f,
-            isMounted = uiState.unlockedAncillaries.contains("anc_mount_horse")
+            isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)
         )
     }
 
@@ -1734,7 +1737,7 @@ fun BattlefieldScene(
                                         }) {
                                             if (player != null) {
                                                 // Draw just head without helmet
-                                                val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
+                                                val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it == com.example.game.GameData.HeadgearPiece.NONE }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
                                                 com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
                                             }
                                         }
@@ -1743,8 +1746,8 @@ fun BattlefieldScene(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text("Name: ${uiState.playerName}", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryDark)
-                                    Text("Weapon: ${player?.weaponHead?.name ?: "None"}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
-                                    val anc = uiState.unlockedAncillaries.mapNotNull { id -> com.example.game.GameData.ANCILLARIES.find { it.id == id }?.name }.joinToString(", ")
+                                    Text("Weapon: ${player?.weaponHead?.itemName ?: "None"}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                    val anc = uiState.unlockedAncillaries.joinToString(", ") { it.ancillaryName }
                                     Text("Ancillaries: ${if (anc.isEmpty()) "None" else anc}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
                                     Text("Kills: ${uiState.totalKills}", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryRed)
                                 }
@@ -2008,9 +2011,9 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
     val statusText = if(isWin) "Vanquished" else "Perished"
     androidCanvas.drawText("Status: " + statusText + " | Score: " + score + "x | Kills: " + kills, width / 2f, 150f, paint)
     
-    val wpnBase = player.weaponHead.name + " on a " + player.weaponHandle.name
+    val wpnBase = player.weaponHead.itemName + " on a " + player.weaponHandle.itemName
     val wpnName = if (player.extraAttachments.isNotEmpty()) {
-        player.extraAttachments.joinToString(", ") { it.name } + " attached to " + wpnBase
+        player.extraAttachments.joinToString(", ") { it.itemName } + " attached to " + wpnBase
     } else wpnBase
     
     // StaticLayout handles the center alignment of lines, but TextPaint itself must be LEFT aligned
@@ -2057,7 +2060,7 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
             translate(114.3f, -50f)
         }) {
             val dummy = player.copy(
-                headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, 
+                headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it == com.example.game.GameData.HeadgearPiece.NONE }, 
                 posX = 0f, 
                 animFrame = 0f, 
                 isDead = false, 
@@ -2089,7 +2092,7 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
     androidCanvas.drawText("$kills kills", width / 2f, 720f, killsPaint)
 
     // Ancillary labels
-    val ancNames = player.extraAttachments.take(4).mapIndexed { i, g -> g.name }
+    val ancNames = player.extraAttachments.take(4).mapIndexed { i, g -> g.itemName }
     if (ancNames.isNotEmpty()) {
         val ancPaint = android.graphics.Paint().apply {
             color = android.graphics.Color.parseColor("#3B291A")

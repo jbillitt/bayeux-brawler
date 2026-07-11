@@ -25,28 +25,42 @@ object MedievalAudioSynth {
         appContext = context.applicationContext
     }
 
-    fun playSound(type: SoundType) {
-        if (type == SoundType.DRUM_ROLL && appContext != null) {
-            try {
-                val am = appContext!!.assets
-                val files = am.list("drums")
-                if (files != null && files.isNotEmpty()) {
-                    val audioFiles = files.filter { it.endsWith(".wav") || it.endsWith(".ogg") || it.endsWith(".mp3") || it.endsWith(".mid") || it.endsWith(".midi") }
-                    if (audioFiles.isNotEmpty()) {
-                        val randomFile = audioFiles.random()
-                        val afd = am.openFd("drums/$randomFile")
-                        val player = android.media.MediaPlayer()
-                        player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                        afd.close()
-                        player.setOnCompletionListener { it.release() }
-                        player.prepare()
-                        player.start()
-                        return // Skip the procedural synth if we played a custom file!
-                    }
+        private fun playFromAssetFolder(folder: String): Boolean {
+        if (appContext == null) return false
+        try {
+            val am = appContext!!.assets
+            val files = am.list(folder)
+            if (files != null && files.isNotEmpty()) {
+                val audioFiles = files.filter { it.endsWith(".wav") || it.endsWith(".ogg") || it.endsWith(".mp3") || it.endsWith(".mid") || it.endsWith(".midi") }
+                if (audioFiles.isNotEmpty()) {
+                    val randomFile = audioFiles.random()
+                    val afd = am.openFd("$folder/$randomFile")
+                    val player = android.media.MediaPlayer()
+                    player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    afd.close()
+                    player.setOnCompletionListener { it.release() }
+                    player.prepare()
+                    player.start()
+                    return true
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return false
+    }
+
+    fun playSound(type: SoundType) {
+        if (type == SoundType.DRUM_ROLL) {
+            if (playFromAssetFolder("drums")) return
+        }
+        
+        if (type == SoundType.VICTORY_FANFARE) {
+            if (playFromAssetFolder("victory")) return
+        }
+        
+        if (type == SoundType.OUCH && kotlin.random.Random.nextFloat() < 0.3f) {
+            if (playFromAssetFolder("pain")) return
         }
 
         scope.launch {

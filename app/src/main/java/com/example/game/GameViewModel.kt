@@ -107,7 +107,7 @@ class GameViewModel : ViewModel() {
             
             val newAttachments = if (choice.type == "attachment") state.extraAttachments + choice.itemId else state.extraAttachments
             val newArmors = if (choice.type == "armor") state.extraArmors + choice.itemId else state.extraArmors
-            val newAncs = if (choice.type == "follower") state.unlockedAncillaries + choice.itemId else state.unlockedAncillaries
+            val newAncs = if (choice.type == "follower") state.unlockedAncillaries + GameData.ANCILLARIES.first { it.id == choice.itemId } else state.unlockedAncillaries
             val newExtensions = if (choice.type == "extension") state.handleExtensionCount + 1 else state.handleExtensionCount
             val newRangedUpgrades = if (choice.type == "ranged_upgrade") state.rangedUpgrades + choice.itemId else state.rangedUpgrades
             
@@ -142,26 +142,26 @@ class GameViewModel : ViewModel() {
 
         _uiState.update { state ->
             var newState = when (item.type) {
-                ItemType.WEAPON_HEAD -> state.copy(weaponHead = item)
-                ItemType.WEAPON_HANDLE -> state.copy(weaponHandle = item)
-                ItemType.SHIELD -> state.copy(shield = item, isDualWielding = if (item.id != "shield_none") false else state.isDualWielding)
-                ItemType.ARMOR -> state.copy(armor = item)
-                ItemType.HEADGEAR -> state.copy(headgear = item)
+                ItemType.WEAPON_HEAD -> state.copy(weaponHead = item as GameData.WeaponHead)
+                ItemType.WEAPON_HANDLE -> state.copy(weaponHandle = item as GameData.WeaponHandle)
+                ItemType.SHIELD -> state.copy(shield = item as GameData.Shield, isDualWielding = if (item.id != "shield_none") false else state.isDualWielding)
+                ItemType.ARMOR -> state.copy(armor = item as GameData.ArmorPiece)
+                ItemType.HEADGEAR -> state.copy(headgear = item as GameData.HeadgearPiece)
             }
             
             // Enforce two-handed rule
-            val isTwoHanded = newState.weaponHead.id in listOf("head_claymore", "head_longbow", "head_halberd", "head_pike", "head_scythe", "head_bow")
-            if (isTwoHanded && newState.shield.id != "shield_none") {
-                newState = newState.copy(shield = GameData.SHIELDS.first { it.id == "shield_none" })
+            val isTwoHanded = newState.weaponHead in listOf(GameData.WeaponHead.CLAYMORE, GameData.WeaponHead.LONGBOW, GameData.WeaponHead.HALBERD, GameData.WeaponHead.PIKE, GameData.WeaponHead.SCYTHE, GameData.WeaponHead.BOW)
+            if (isTwoHanded && newState.shield != GameData.Shield.NONE) {
+                newState = newState.copy(shield = GameData.SHIELDS.first { it == GameData.Shield.NONE })
             }
             
             // Enforce no dual wield for bows
-            if (newState.weaponHead.id in listOf("head_bow", "head_longbow")) {
+            if (newState.weaponHead in listOf(GameData.WeaponHead.BOW, GameData.WeaponHead.LONGBOW)) {
                 newState = newState.copy(isDualWielding = false)
             }
             
             // Enforce crossbow rule
-            if (newState.weaponHead.id == "head_crossbow" && newState.weaponHandle.id != "handle_fists") {
+            if (newState.weaponHead == GameData.WeaponHead.CROSSBOW && newState.weaponHandle != GameData.WeaponHandle.FISTS) {
                 if (item.type == ItemType.WEAPON_HEAD) {
                     newState = newState.copy(weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" })
                 } else if (item.type == ItemType.WEAPON_HANDLE) {
@@ -249,7 +249,7 @@ class GameViewModel : ViewModel() {
             )
             
             // Enforce two-handed rule
-            val isTwoHanded = newState.weaponHead.id in listOf("head_claymore", "head_longbow", "head_halberd", "head_pike", "head_scythe", "head_bow")
+            val isTwoHanded = newState.weaponHead in listOf(GameData.WeaponHead.CLAYMORE, GameData.WeaponHead.LONGBOW, GameData.WeaponHead.HALBERD, GameData.WeaponHead.PIKE, GameData.WeaponHead.SCYTHE, GameData.WeaponHead.BOW)
             if (isTwoHanded) {
                 newState = newState.copy(shield = GameData.SHIELDS.first { s -> s.id == "shield_none" })
             }
@@ -293,7 +293,8 @@ class GameViewModel : ViewModel() {
             handleExtensionCount = state.handleExtensionCount,
             speedBoost = state.totalSpeedBoost,
             rangedUpgrades = state.rangedUpgrades,
-            isMounted = state.unlockedAncillaries.contains("anc_mount_horse")
+            isMounted = state.unlockedAncillaries.contains(Ancillary.WARHORSE) || state.unlockedAncillaries.contains(Ancillary.CHARIOT) || state.unlockedAncillaries.contains(Ancillary.STILTS),
+            isChariot = state.unlockedAncillaries.contains(Ancillary.CHARIOT)
         )
 
         // Create Saxon enemies based on level
@@ -304,7 +305,7 @@ class GameViewModel : ViewModel() {
             generateRandomSaxon(index, state.level)
         }.toMutableList()
 
-        if (state.unlockedAncillaries.contains("anc_fanatic")) {
+        if (state.unlockedAncillaries.contains(Ancillary.FANATIC)) {
             enemies.add(FighterState(
                 id = "fanatic_boris",
                 name = "Mad Boris",
@@ -313,7 +314,7 @@ class GameViewModel : ViewModel() {
                 hp = 150f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_axe" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
-                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                shield = GameData.SHIELDS.first { it == GameData.Shield.NONE },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
                 posX = 80f,
@@ -456,11 +457,11 @@ class GameViewModel : ViewModel() {
             isPlayer = false,
             maxHp = enemyHp,
             hp = enemyHp,
-            weaponHead = gear[0],
-            weaponHandle = gear[1],
-            shield = gear[2],
-            armor = gear[3],
-            headgear = gear[4],
+            weaponHead = gear[0] as GameData.WeaponHead,
+            weaponHandle = gear[1] as GameData.WeaponHandle,
+            shield = gear[2] as GameData.Shield,
+            armor = gear[3] as GameData.ArmorPiece,
+            headgear = gear[4] as GameData.HeadgearPiece,
             posX = startX,
             targetX = startX,
             facingRight = false,
@@ -511,7 +512,7 @@ class GameViewModel : ViewModel() {
         }
         _particlesState.value = particles.filter { it.age < it.maxAge }
 
-        if (_uiState.value.unlockedAncillaries.contains("anc_monk")) {
+        if (_uiState.value.unlockedAncillaries.contains(Ancillary.MONK)) {
             addIncenseParticles(player.posX - (40f * player.size), 190f, count = 2)
         }
 
@@ -619,12 +620,12 @@ class GameViewModel : ViewModel() {
         
         // 5b. Archer Entourage Fire
                 // 5b. Archer & Crossbowman Entourage Fire
-        val hasArcher = _uiState.value.unlockedAncillaries.contains("anc_archer")
-        val hasCrossbow = _uiState.value.unlockedAncillaries.contains("anc_crossbowman")
+        val hasArcher = _uiState.value.unlockedAncillaries.contains(Ancillary.ARCHER)
+        val hasCrossbow = _uiState.value.unlockedAncillaries.contains(Ancillary.CROSSBOWMAN)
         if (!player.isDead && !player.isDying) {
-            val sortedAncs = _uiState.value.unlockedAncillaries.sorted()
-            val archerIdx = sortedAncs.indexOf("anc_archer")
-            val crossbowIdx = sortedAncs.indexOf("anc_crossbowman")
+            val sortedAncs = _uiState.value.unlockedAncillaries.sortedBy { it.name }
+            val archerIdx = sortedAncs.indexOf(Ancillary.ARCHER)
+            val crossbowIdx = sortedAncs.indexOf(Ancillary.CROSSBOWMAN)
             
             if (hasArcher && Random.nextFloat() < dt * 0.4f) {
                 val dir = if (player.facingRight) 1f else -1f
@@ -660,7 +661,7 @@ class GameViewModel : ViewModel() {
         remainingProjectiles.addAll(newlySpawned)
         _projectilesState.value = remainingProjectiles
 
-        val hasCupbearer = _uiState.value.unlockedAncillaries.contains("anc_cupbearer")
+        val hasCupbearer = _uiState.value.unlockedAncillaries.contains(Ancillary.CUPBEARER)
         if (hasCupbearer && Random.nextFloat() < dt * 0.5f && player.hp < player.maxHp) {
             player.hp = (player.hp + 2.5f).coerceAtMost(player.maxHp)
             // Visually, the renderer will animate him walking up
@@ -1012,7 +1013,7 @@ class GameViewModel : ViewModel() {
                     var totalDamage = ((slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt) * dmgScale
                     
                     // Cupbearer strength bonus!
-                    if (attacker.isPlayer && _uiState.value.unlockedAncillaries.contains("anc_cupbearer")) {
+                    if (attacker.isPlayer && _uiState.value.unlockedAncillaries.contains(Ancillary.CUPBEARER)) {
                         totalDamage *= 1.25f // 25% strength boost from wine!
                     }
 
@@ -1053,7 +1054,7 @@ class GameViewModel : ViewModel() {
                         if (currTarget.isDualWielding || currTarget.shield.id != "shield_none") {
                             currTarget.isDualWielding = false
                             // Find 'shield_none' safely
-                            GameData.SHIELDS.find { it.id == "shield_none" }?.let { currTarget.shield = it }
+                            GameData.SHIELDS.find { it == GameData.Shield.NONE }?.let { currTarget.shield = it }
                         }
                         applyFlatDamage(totalDamage, currTarget, attacker.isPlayer)
                         addPopup("-${totalDamage.toInt()}", currTarget.posX, 140f, androidx.compose.ui.graphics.Color.Red)
@@ -1240,7 +1241,7 @@ class GameViewModel : ViewModel() {
 
                 val triggerMusicDecision = (state.level % 5 == 0)
                 // 1. Follower option
-                val availableAncs = GameData.ANCILLARIES.filter { it.id !in state.unlockedAncillaries }
+                val availableAncs = GameData.ANCILLARIES.filter { it !in state.unlockedAncillaries }
                 if (availableAncs.isNotEmpty()) {
                     val anc = availableAncs.random()
                     pendingChoices.add(LevelUpChoice(
@@ -1269,7 +1270,7 @@ class GameViewModel : ViewModel() {
                     val weaponHead = attachmentHeads.random()
                     pendingChoices.add(LevelUpChoice(
                         id = "attach_${weaponHead.id}",
-                        title = "Attach Head: ${weaponHead.name}",
+                        title = "Attach Head: ${weaponHead.itemName}",
                         description = "${weaponHead.description} Attached dynamically to weapon, adding +50% of its base damage!",
                         type = "attachment",
                         itemId = weaponHead.id
@@ -1290,8 +1291,8 @@ class GameViewModel : ViewModel() {
                     val armorPiece = armorOptions.random()
                     pendingChoices.add(LevelUpChoice(
                         id = "armor_${armorPiece.id}",
-                        title = "Layer Armor: ${armorPiece.name}",
-                        description = "Drape ${armorPiece.name} layered directly on top of your current armor, gaining +${armorPiece.defense.toInt()} Defense!",
+                        title = "Layer Armor: ${armorPiece.itemName}",
+                        description = "Drape ${armorPiece.itemName} layered directly on top of your current armor, gaining +${armorPiece.defense.toInt()} Defense!",
                         type = "armor",
                         itemId = armorPiece.id
                     ))

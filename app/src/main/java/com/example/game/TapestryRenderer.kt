@@ -1668,20 +1668,20 @@ object TapestryRenderer {
 
     fun drawAncillaries(
         drawScope: DrawScope,
-        unlockedAncillaries: Set<String>,
+        unlockedAncillaries: Set<com.example.game.Ancillary>,
         playerFighter: FighterState,
         scale: Float = 1.0f
     ) {
-        val sortedAncs = unlockedAncillaries.toList().filter { it != "anc_mount_horse" }.sorted()
+        val sortedAncs = unlockedAncillaries.toList().filter { it != com.example.game.Ancillary.WARHORSE && it != com.example.game.Ancillary.CHARIOT && it != com.example.game.Ancillary.STILTS }.sortedBy { it.name }
         if (sortedAncs.isEmpty()) return
 
         val normScale = scale * playerFighter.size
 
-        sortedAncs.forEachIndexed { index, ancId ->
+        sortedAncs.forEachIndexed { index, anc ->
             val offsetSign = if (playerFighter.facingRight) -1f else 1f
             
             var dynamicWalkOffset = 0f
-            if (ancId == "anc_cupbearer" && playerFighter.hp < playerFighter.maxHp) {
+            if (anc == com.example.game.Ancillary.CUPBEARER && playerFighter.hp < playerFighter.maxHp) {
                 val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
                 dynamicWalkOffset = -60f * offsetSign * sin(attackAnim * Math.PI).toFloat()
             }
@@ -1764,12 +1764,12 @@ object TapestryRenderer {
                 }
 
                 // 2. Draw Tiny Torso / Tunic
-                val tunicColor = when (ancId) {
-                    "anc_squire" -> Color(0xFF539462) // Baldrick's green
-                    "anc_herald" -> Color(0xFFB03131) // Herald's red
-                    "anc_trumpeter" -> Color(0xFFD6A420) // Trumpeter's gold
-                    "anc_cupbearer" -> Color(0xFF632873) // Cupbearer's violet
-                    "anc_monk" -> Color(0xFF8B7355) // Hessian sack
+                val tunicColor = when (anc) {
+                    com.example.game.Ancillary.SQUIRE -> Color(0xFF539462) // Baldrick's green
+                    com.example.game.Ancillary.HERALD -> Color(0xFFB03131) // Herald's red
+                    com.example.game.Ancillary.TRUMPETER -> Color(0xFFD6A420) // Trumpeter's gold
+                    com.example.game.Ancillary.CUPBEARER -> Color(0xFF632873) // Cupbearer's violet
+                    com.example.game.Ancillary.MONK -> Color(0xFF8B7355) // Hessian sack
                     else -> Color(0xFF5F6E75)
                 }
 
@@ -1790,17 +1790,17 @@ object TapestryRenderer {
 
                 // 3. Draw Back Arm holding something (ancillary items!)
                 // Most ancillaries hold their item, so we draw their arm first
-                val armAngle = when (ancId) {
-                    "anc_trumpeter" -> -25f
-                    "anc_crossbowman" -> {
+                val armAngle = when (anc) {
+                    com.example.game.Ancillary.TRUMPETER -> -25f
+                    com.example.game.Ancillary.CROSSBOWMAN -> {
                         val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
                         if (attackAnim < 0.4f) -15f else if (attackAnim < 0.6f) -15f - 10f * ((attackAnim - 0.4f)/0.2f) else -25f + 10f * ((attackAnim - 0.6f)/0.4f)
                     }
-                    "anc_archer" -> {
+                    com.example.game.Ancillary.ARCHER -> {
                         val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
                         if (attackAnim < 0.4f) -30f else if (attackAnim < 0.6f) -30f - 15f * ((attackAnim - 0.4f)/0.2f) else -45f + 15f * ((attackAnim - 0.6f)/0.4f)
                     }
-                    "anc_cupbearer" -> {
+                    com.example.game.Ancillary.CUPBEARER -> {
                         val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
                         if (attackAnim > 0f && playerFighter.hp < playerFighter.maxHp) -45f * sin(attackAnim * Math.PI).toFloat() else 0f
                     }
@@ -1817,8 +1817,8 @@ object TapestryRenderer {
                     drawCircle(Color(0xFFE8C5A4), radius = 4f, center = Offset(armHx, armHy))
                     drawCircle(ThreadColor, radius = 4f, center = Offset(armHx, armHy), style = Stroke(width = 1.5f))
 
-                    when (ancId) {
-                        "anc_squire" -> {
+                    when (anc) {
+                        com.example.game.Ancillary.SQUIRE -> {
                         // Drawing spare folded tunics on his shoulder!
                         val tunicStack = Path().apply {
                             addRoundRect(androidx.compose.ui.geometry.RoundRect(
@@ -1829,7 +1829,7 @@ object TapestryRenderer {
                         drawStitchedFill(this, tunicStack, Color(0xFF1E3F4F))
                         drawPath(tunicStack, ThreadColor, style = Stroke(width = 2f))
                     }
-                    "anc_herald" -> {
+                    com.example.game.Ancillary.HERALD -> {
                         // Standing high with a custom banner of arms!
                         // Banner pole
                         drawLine(Color(0xFF8B5A2B), Offset(cx + 18f, cy + 10f), Offset(cx + 18f, cy + 110f), strokeWidth = 3f)
@@ -1847,7 +1847,7 @@ object TapestryRenderer {
                         // Red cross embroidery inside banner flag
                         drawLine(Color(0xFFB03131), Offset(cx + 18f, cy + 28f), Offset(cx + 55f, cy + 28f), strokeWidth = 2.5f)
                     }
-                        "anc_trumpeter" -> {
+                        com.example.game.Ancillary.TRUMPETER -> {
                             // Long straight heraldic trompette
                             val trumpetLen = 50f
                             val startX = cx + 5f
@@ -1884,7 +1884,7 @@ object TapestryRenderer {
                             drawLine(Color(0xFFD6A420), Offset(startX + 20f, startY + 5f), Offset(startX + 35f, startY + 2f), strokeWidth = 2f)
                             drawLine(Color(0xFFD6A420), Offset(startX + 28f, startY - 5f), Offset(startX + 26f, startY + 15f), strokeWidth = 2f)
                         }
-                        "anc_crossbowman" -> {
+                        com.example.game.Ancillary.CROSSBOWMAN -> {
                             // stock
                             drawLine(Color(0xFF5C4033), Offset(cx - 10f, cy + 40f), Offset(cx + 40f, cy + 30f), strokeWidth = 5f)
                             // bow limbs
@@ -1899,7 +1899,7 @@ object TapestryRenderer {
                             drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 10f), Offset(cx + 10f - stringPull, cy + 35f), strokeWidth = 1.5f)
                             drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 50f), Offset(cx + 10f - stringPull, cy + 35f), strokeWidth = 1.5f)
                         }
-                        "anc_archer" -> {
+                        com.example.game.Ancillary.ARCHER -> {
                             // Longbow
                             val bowPath = Path().apply {
                                 moveTo(cx + 30f, cy - 10f)
@@ -1915,7 +1915,7 @@ object TapestryRenderer {
                             }
                             drawPath(stringPath, Color(0xFFDDDDDD), style = Stroke(width = 1f))
                         }
-                        "anc_cupbearer" -> {
+                        com.example.game.Ancillary.CUPBEARER -> {
                             // Small golden pitcher or goblet
                             val gobletPath = Path().apply {
                                 moveTo(cx + 10f, cy + 30f)
@@ -1931,7 +1931,7 @@ object TapestryRenderer {
                             drawStitchedFill(this, gobletPath, Color(0xFFE5C158))
                             drawPath(gobletPath, ThreadColor, style = Stroke(width = 2f))
                         }
-                        "anc_monk" -> {
+                        com.example.game.Ancillary.MONK -> {
                             val monkArmAngle = -70f + kotlin.math.cos(playerFighter.animFrame * 1.5).toFloat() * 30f
                             withTransform({ rotate(monkArmAngle, pivot = Offset(cx, cy + 50f)) }) {
                                 // Draw glass perfume bottle
@@ -1952,6 +1952,7 @@ object TapestryRenderer {
                                 drawRect(Color(0xFF8B5A2B), Offset(cx + 17f, cy + 30f), androidx.compose.ui.geometry.Size(6f, 5f))
                             }
                         }
+                        else -> {}
                     }
                 }
 

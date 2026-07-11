@@ -998,7 +998,9 @@ object TapestryRenderer {
                 45f
             }
         } else if (fighter.isAttacking) {
-            if (isThrusting) {
+            if (fighter.weaponHandle.id == "handle_double_ended") {
+                -360f * swing
+            } else if (isThrusting) {
                 if (swing < 0.3f) {
                     thrustOffset = Offset(-25f * (swing / 0.3f), 0f)
                     -10f * (swing / 0.3f)
@@ -1037,7 +1039,12 @@ object TapestryRenderer {
         } else if (fighter.isMounted && isLanceCompatible && kotlin.math.abs(fighter.velocityX) > 30f) {
             -25f
         } else {
-            sin(fighter.animFrame * 0.5f) * 10f
+            val postureOffset = if (isBowOrSlingshot) 0f else when (Math.abs(fighter.name.hashCode()) % 3) {
+                0 -> -75f // Raised above head
+                1 -> -35f // Nobly in front of face
+                else -> 15f // Poised outwards
+            }
+            postureOffset + sin(fighter.animFrame * 0.5f) * 10f
         }
 
         if (fighter.missingArm) {
@@ -1104,7 +1111,12 @@ object TapestryRenderer {
                 } else if (fighter.isAttacking) {
                     if (swing < 0.5f) -20f + 80f * (swing / 0.5f) else 60f - 80f * ((swing - 0.5f) / 0.5f)
                 } else {
-                    -sin(fighter.animFrame * 0.5f) * 10f
+                    val posture = when (Math.abs(fighter.name.hashCode()) % 3) {
+                        0 -> -75f
+                        1 -> -35f
+                        else -> 15f
+                    }
+                    posture - sin(fighter.animFrame * 0.5f) * 10f
                 }
 
                 scope.withTransform({
@@ -1147,10 +1159,22 @@ object TapestryRenderer {
                         } else if (isHeavy) {
                             if (swing < 0.5f) -60f * (swing / 0.5f) else -60f + 130f * ((swing - 0.5f) / 0.5f)
                         } else {
-                            if (swing < 0.4f) -35f * (swing / 0.4f) else -35f + 100f * ((swing - 0.4f) / 0.6f)
+                            val isBowOrSling = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
+                            val posture = if (isBowOrSling) 0f else when (Math.abs(fighter.name.hashCode()) % 3) {
+                                0 -> -75f
+                                1 -> -35f
+                                else -> 15f
+                            }
+                            posture - sin(fighter.animFrame * 0.5f) * 10f
                         }
                     } else {
-                        -sin(fighter.animFrame * 0.5f) * 15f
+                        val isBowOrSling = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
+                        val posture = if (isBowOrSling) 0f else when (Math.abs(fighter.name.hashCode()) % 3) {
+                            0 -> -75f
+                            1 -> -35f
+                            else -> 15f
+                        }
+                        posture - sin(fighter.animFrame * 0.5f) * 10f
                     }
 
                     scope.withTransform({

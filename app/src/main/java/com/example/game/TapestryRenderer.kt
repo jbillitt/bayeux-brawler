@@ -111,7 +111,12 @@ object TapestryRenderer {
                     val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
                     horseRot = if (fighter.facingRight) -15f * progress else 15f * progress
                 }
-                withTransform({ rotate(horseRot, pivot = Offset(cx, cy + 80f)) }) {
+                withTransform({ 
+                    rotate(horseRot, pivot = Offset(cx, cy + 80f)) 
+                    val rng = kotlin.random.Random(fighter.id.hashCode())
+                    val horseScale = 0.9f + rng.nextFloat() * 0.2f
+                    scale(horseScale / fighter.size, horseScale / fighter.size, Offset(cx, cy + 80f))
+                }) {
                     if (fighter.isChariot) {
                         drawChariot(this, cx, cy, fighter)
                     } else {
@@ -450,14 +455,14 @@ object TapestryRenderer {
             var lipX = hx + 12f
             var chinX = hx + 9f
             if (fighter.faceBiteShape == 1) { // underbite
-                lipX += 2f; chinX += 6f
+                lipX += 3f; chinX += 10f
             } else if (fighter.faceBiteShape == 2) { // overbite
-                lipX -= 2f; chinX -= 4f
+                lipX -= 4f; chinX -= 8f
             } else if (fighter.faceBiteShape == 3) { // lantern jaw
-                chinX += 8f
+                chinX += 14f
             }
             lineTo(lipX, hy + 13f) // Lip crease
-            val chinY = if (fighter.faceBiteShape == 3) hy + 22f else hy + 18f
+            val chinY = if (fighter.faceBiteShape == 3) hy + 24f else hy + 18f
             lineTo(chinX, chinY) // Chin
             lineTo(hx - 12f, chinY)
             close()
@@ -465,19 +470,48 @@ object TapestryRenderer {
         drawStitchedFill(scope, headPath, skinColor)
         scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
 
+        // Face RNG for scars/eyepatches
+        val faceRng = kotlin.random.Random(fighter.id.hashCode())
+        val hasEyepatch = !fighter.isPlayer && faceRng.nextFloat() < 0.2f
+        val hasScars = fighter.level > 1 && faceRng.nextFloat() < 0.5f
+        val hasBandage = fighter.level > 3 && faceRng.nextFloat() < 0.4f
+        val hasTiredEyes = faceRng.nextFloat() < 0.2f
+        val numWarts = if (faceRng.nextFloat() < 0.2f) faceRng.nextInt(1, 4) else 0
+        val hasBeautySpot = faceRng.nextFloat() < 0.1f
+        val hasJuttingTooth = faceRng.nextFloat() < 0.15f
+        val hasLongBeard = !fighter.isPlayer && faceRng.nextFloat() < 0.15f
+
         // 3. Embroidered eye and facial features
-        // Draw white almond-shaped eye sclera
-        val eyeScleraPath = Path().apply {
-            moveTo(hx + 1f, hy + 4f)
-            quadraticTo(hx + 4.5f, hy + 1f, hx + 8f, hy + 4f)
-            quadraticTo(hx + 4.5f, hy + 7f, hx + 1f, hy + 4f)
-            close()
+        if (hasEyepatch) {
+            // Draw black eyepatch over the eye
+            scope.drawPath(Path().apply {
+                moveTo(hx - 1f, hy + 2f)
+                quadraticTo(hx + 4f, hy, hx + 10f, hy + 4f)
+                quadraticTo(hx + 8f, hy + 10f, hx, hy + 7f)
+                close()
+            }, Color(0xFF1E1A17))
+            scope.drawLine(Color(0xFF1E1A17), Offset(hx - 10f, hy - 2f), Offset(hx + 12f, hy + 8f), strokeWidth = 2.5f)
+        } else {
+            // Draw white almond-shaped eye sclera
+            val eyeScleraPath = Path().apply {
+                moveTo(hx + 1f, hy + 4f)
+                quadraticTo(hx + 4.5f, hy + 1f, hx + 8f, hy + 4f)
+                quadraticTo(hx + 4.5f, hy + 7f, hx + 1f, hy + 4f)
+                close()
+            }
+            scope.drawPath(eyeScleraPath, Color.White)
+            scope.drawPath(eyeScleraPath, ThreadColor, style = Stroke(width = 1.5f))
+            
+            // Pupil centered inside the almond
+            scope.drawCircle(ThreadColor, radius = 1.5f, center = Offset(hx + 4.5f, hy + 4f))
+
+            if (hasTiredEyes) {
+                scope.drawPath(Path().apply {
+                    moveTo(hx + 1f, hy + 7f)
+                    quadraticTo(hx + 4.5f, hy + 10f, hx + 8f, hy + 6f)
+                }, Color(0x664A3D36), style = Stroke(width = 2.5f, cap = StrokeCap.Round))
+            }
         }
-        scope.drawPath(eyeScleraPath, Color.White)
-        scope.drawPath(eyeScleraPath, ThreadColor, style = Stroke(width = 1.5f))
-        
-        // Pupil centered inside the almond
-        scope.drawCircle(ThreadColor, radius = 1.5f, center = Offset(hx + 4.5f, hy + 4f))
         
         // Blocky, heavy embroidered eyebrow
         scope.drawLine(ThreadColor, Offset(hx, hy), Offset(hx + 8f, hy + 1f), strokeWidth = 2.5f, cap = StrokeCap.Round)
@@ -485,19 +519,33 @@ object TapestryRenderer {
         // Stylized mouth crease
         scope.drawLine(ThreadColor, Offset(hx + 6f, hy + 13f), Offset(hx + 11f, hy + 13f), strokeWidth = 1.5f, cap = StrokeCap.Round)
 
-        // Battle Scars (if leveled up)
-        if (fighter.level > 1) {
+        if (hasJuttingTooth) {
+            scope.drawLine(Color(0xFFEFE6D4), Offset(hx + 8f, hy + 13f), Offset(hx + 8f, hy + 9f), strokeWidth = 2.5f)
+            scope.drawLine(ThreadColor, Offset(hx + 6.5f, hy + 13f), Offset(hx + 6.5f, hy + 9f), strokeWidth = 1f)
+        }
+
+        if (hasBeautySpot) {
+            scope.drawCircle(Color(0xFF2C1E16), radius = 1.5f, center = Offset(hx - 2f, hy + 12f))
+        }
+        for (i in 0 until numWarts) {
+            val wx = hx + faceRng.nextFloat() * 10f
+            val wy = hy + 8f + faceRng.nextFloat() * 12f
+            scope.drawCircle(Color(0xFF4A5C3D), radius = 1.5f + faceRng.nextFloat() * 1f, center = Offset(wx, wy))
+            scope.drawCircle(Color(0xFF1C2B11), radius = 0.5f, center = Offset(wx, wy)) // wart core
+        }
+
+        // Battle Scars
+        if (hasScars) {
             val numScars = (fighter.level - 1).coerceAtMost(4)
             for (i in 0 until numScars) {
-                // Draw angry red stitched scars on the cheek/forehead
                 val scarY = hy + 6f + (i * 3f)
                 scope.drawLine(Color(0xFF9E3624), Offset(hx - 8f, scarY - 2f), Offset(hx + 2f, scarY + 2f), strokeWidth = 1.5f)
-                scope.drawLine(ThreadColor, Offset(hx - 6f, scarY), Offset(hx - 4f, scarY), strokeWidth = 1f) // stitches
+                scope.drawLine(ThreadColor, Offset(hx - 6f, scarY), Offset(hx - 4f, scarY), strokeWidth = 1f)
             }
         }
 
-        // Bandage strip across forehead for high-level fighters
-        if (fighter.level > 3) {
+        // Bandage strip across forehead
+        if (hasBandage) {
             scope.withTransform({ rotate(-5f, pivot = Offset(hx, hy)) }) {
                 scope.drawRect(
                     color = Color(0xFFF5F0E8),
@@ -556,41 +604,38 @@ object TapestryRenderer {
             drawStitchedFill(scope, hairPath, fighter.hairColor)
             scope.drawPath(hairPath, ThreadColor, style = StitchedStroke)
 
-            if (fighter.isPlayer) {
-                // Player signature mustache
-                val mustache = Path().apply {
-                    if (fighter.faceMustache == 0) { // Handlebar
-                        moveTo(hx + 10f, hy + 10f)
-                        quadraticTo(hx + 16f, hy + 9f, hx + 18f, hy + 13f)
-                    } else if (fighter.faceMustache == 1) { // Drooping
-                        moveTo(hx + 10f, hy + 11f)
-                        quadraticTo(hx + 14f, hy + 14f, hx + 12f, hy + 18f)
-                    } else if (fighter.faceMustache == 2) { // Bushy
-                        moveTo(hx + 8f, hy + 11f)
-                        lineTo(hx + 18f, hy + 12f)
-                        lineTo(hx + 14f, hy + 15f)
-                        close()
-                    } else { // Classic Norman chevron
-                        moveTo(hx + 10f, hy + 10f)
-                        lineTo(hx + 16f, hy + 11f)
-                        lineTo(hx + 14f, hy + 14f)
-                        close()
-                    }
-                }
-                drawStitchedFill(scope, mustache, fighter.hairColor)
-                scope.drawPath(mustache, ThreadColor, style = Stroke(width = 1f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-            } else {
-                // Saxon - Comedic bushy mustache & full woven beard!
-                val beardPath = Path().apply {
-                    moveTo(hx + 10f, hy + 8f)
-                    lineTo(hx + 18f, hy + 14f)
-                    lineTo(hx + 12f, hy + 22f)
-                    lineTo(hx - 4f, hy + 22f)
-                    lineTo(hx - 10f, hy + 14f)
+            // Draw facial hair
+            val mustache = Path().apply {
+                if (hasLongBeard) {
+                    moveTo(hx + 4f, hy + 14f)
+                    lineTo(hx + 12f, hy + 14f)
+                    lineTo(hx + 8f, hy + 40f + faceRng.nextFloat() * 20f) // Long wizard beard!
+                    lineTo(hx - 8f, hy + 35f)
+                    lineTo(hx - 12f, hy + 18f)
+                    close()
+                } else if (fighter.faceMustache == 0) { // Handlebar
+                    moveTo(hx + 10f, hy + 10f)
+                    quadraticTo(hx + 16f, hy + 9f, hx + 18f, hy + 13f)
+                } else if (fighter.faceMustache == 1) { // Drooping
+                    moveTo(hx + 10f, hy + 11f)
+                    quadraticTo(hx + 14f, hy + 14f, hx + 12f, hy + 18f)
+                } else if (fighter.faceMustache == 2) { // Bushy
+                    moveTo(hx + 8f, hy + 11f)
+                    lineTo(hx + 18f, hy + 12f)
+                    lineTo(hx + 14f, hy + 15f)
+                    close()
+                } else { // Classic Norman chevron
+                    moveTo(hx + 10f, hy + 10f)
+                    lineTo(hx + 16f, hy + 11f)
+                    lineTo(hx + 14f, hy + 14f)
                     close()
                 }
-                drawStitchedFill(scope, beardPath, fighter.hairColor) 
-                scope.drawPath(beardPath, ThreadColor, style = StitchedStroke)
+            }
+            if (hasLongBeard || fighter.faceMustache == 2) {
+                drawStitchedFill(scope, mustache, fighter.hairColor)
+                scope.drawPath(mustache, ThreadColor, style = StitchedStroke)
+            } else {
+                scope.drawPath(mustache, fighter.hairColor, style = Stroke(width = 3.5f, cap = StrokeCap.Round))
             }
 
         // 4. Helmet Overlay
@@ -1104,38 +1149,9 @@ object TapestryRenderer {
             }
         }
 
-        // If thrusting or swinging, draw swoosh lines
-        if (fighter.isAttacking && fighter.swingProgress > 0.2f && fighter.swingProgress < 0.8f && !isBowOrSlingshot) {
-            val angle = if (fighter.swingProgress < 0.5f) -20f else 20f
-            scope.withTransform({
-                rotate(angle, pivot = headPos)
-            }) {
-                val endP = androidx.compose.ui.geometry.Offset(headPos.x + 25f, headPos.y - 15f)
-                scope.drawLine(
-                    color = androidx.compose.ui.graphics.Color(0x44FFFFFF),
-                    start = headPos,
-                    end = endP,
-                    strokeWidth = 3f
-                )
-            }
-        }
+        // Removed white swoosh line
 
-        // Rear-head swoosh arc for double-ended weapons during attack
-        if (fighter.weaponHandle.id == "handle_double_ended" && fighter.isAttacking && fighter.swingProgress > 0.2f && fighter.swingProgress < 0.8f) {
-            val backHeadPos = androidx.compose.ui.geometry.Offset(hx - handleLen * 0.8f, hy + handleLen * 0.4f)
-            val swooshPath = androidx.compose.ui.graphics.Path().apply {
-                moveTo(backHeadPos.x - 20f, backHeadPos.y + 10f)
-                quadraticTo(
-                    backHeadPos.x - 35f, backHeadPos.y - 15f,
-                    backHeadPos.x - 15f, backHeadPos.y - 30f
-                )
-            }
-            scope.drawPath(
-                swooshPath,
-                color = androidx.compose.ui.graphics.Color(0x559E3624),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f, cap = StrokeCap.Round)
-            )
-        }
+        // Removed Rear-head swoosh arc for double-ended weapons
 
         // Bloody weapon?
         if (fighter.level > 1 && !isBowOrSlingshot) {
@@ -1911,14 +1927,37 @@ object TapestryRenderer {
         val anim = fighter.animFrame
         val walking = !fighter.isDead && !fighter.isDying
         val legSwing = if (walking) sin(anim) * 18f else 0f
-        val horseColor = Color(0xFF6B4F2E)
+        
+        val rng = kotlin.random.Random(fighter.id.hashCode())
+        val horseColors = listOf(Color(0xFF6B4F2E), Color(0xFF8B7355), Color(0xFF2C2219), Color(0xFFE4D6B6), Color(0xFF4A4A4A))
+        val horseColor = horseColors[rng.nextInt(horseColors.size)]
+        val hasSpots = rng.nextFloat() > 0.7f
         val legColor   = Color(0xFF5A3F22)
 
         val bodyPath = Path().apply {
             addOval(androidx.compose.ui.geometry.Rect(cx - 55f, cy + 60f, cx + 55f, cy + 130f))
         }
         drawStitchedFill(scope, bodyPath, horseColor)
+        
+        if (hasSpots) {
+            val spotRng = kotlin.random.Random(fighter.id.hashCode() + 1)
+            for (i in 0 until 5) {
+                val sx = cx - 40f + spotRng.nextFloat() * 80f
+                val sy = cy + 70f + spotRng.nextFloat() * 40f
+                scope.drawCircle(Color(0xFFEFE6D4).copy(alpha = 0.5f), radius = 6f + spotRng.nextFloat() * 4f, center = Offset(sx, sy))
+            }
+        }
         scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+
+        // Draw tail
+        val tailPath = Path().apply {
+            moveTo(cx - 50f, cy + 75f)
+            quadraticBezierTo(cx - 70f, cy + 80f, cx - 75f, cy + 110f + legSwing)
+            quadraticBezierTo(cx - 60f, cy + 110f, cx - 55f, cy + 90f)
+            close()
+        }
+        drawStitchedFill(scope, tailPath, Color(0xFF2C2219))
+        scope.drawPath(tailPath, ThreadColor, style = StitchedStroke)
 
         val neckPath = Path().apply {
             moveTo(cx + 35f, cy + 65f)

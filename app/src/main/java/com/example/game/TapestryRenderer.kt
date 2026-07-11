@@ -1094,6 +1094,12 @@ object TapestryRenderer {
         } else if (fighter.isAttacking) {
             if (fighter.weaponHandle.id == "handle_double_ended") {
                 -360f * swing
+            } else if (isHeavy || isChainHandle) {
+                if (swing < 0.5f) {
+                    -75f * (swing / 0.5f)
+                } else {
+                    -75f + 160f * ((swing - 0.5f) / 0.5f)
+                }
             } else if (isThrusting) {
                 if (swing < 0.3f) {
                     thrustOffset = Offset(-25f * (swing / 0.3f), 0f)
@@ -1108,12 +1114,6 @@ object TapestryRenderer {
                     20f * (swing / 0.3f)
                 } else {
                     20f - 100f * ((swing - 0.3f) / 0.7f)
-                }
-            } else if (isHeavy || isChainHandle) {
-                if (swing < 0.5f) {
-                    -75f * (swing / 0.5f)
-                } else {
-                    -75f + 160f * ((swing - 0.5f) / 0.5f)
                 }
             } else if (isBowOrSlingshot) {
                 if (swing < 0.4f) {
@@ -1203,10 +1203,17 @@ object TapestryRenderer {
         if (fighter.shield.id == "shield_none") {
             if (fighter.isDualWielding) {
                 val swing = fighter.swingProgress
+                val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
+                val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe")
+                
                 val armAngle = if (fighter.isDead || fighter.isDying) {
                     if (fighter.isDying) -cos(fighter.animFrame * 1.5f) * 85f else -30f
                 } else if (fighter.isAttacking) {
-                    if (swing < 0.5f) -20f + 80f * (swing / 0.5f) else 60f - 80f * ((swing - 0.5f) / 0.5f)
+                    if (isChainHandle || isHeavy) {
+                        if (swing < 0.5f) -75f * (swing / 0.5f) else -75f + 160f * ((swing - 0.5f) / 0.5f)
+                    } else {
+                        if (swing < 0.5f) -20f + 80f * (swing / 0.5f) else 60f - 80f * ((swing - 0.5f) / 0.5f)
+                    }
                 } else {
                     val posture = when (Math.abs(fighter.name.hashCode()) % 3) {
                         0 -> -75f
@@ -1237,12 +1244,15 @@ object TapestryRenderer {
                     val isThrusting = fighter.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd", "head_dagger")
                     val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe")
                     val isScythe = fighter.weaponHead.id == "head_scythe"
+                    val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
 
                     var thrustOffset = Offset.Zero
                     val armAngle = if (fighter.isDead || fighter.isDying) {
                         if (fighter.isDying) -cos(fighter.animFrame * 1.5f) * 85f else -30f
                     } else if (fighter.isAttacking) {
-                        if (isThrusting) {
+                        if (isHeavy || isChainHandle) {
+                            if (swing < 0.5f) -60f * (swing / 0.5f) else -60f + 130f * ((swing - 0.5f) / 0.5f)
+                        } else if (isThrusting) {
                             if (swing < 0.3f) {
                                 thrustOffset = Offset(-25f * (swing / 0.3f), 0f)
                                 -5f * (swing / 0.3f)
@@ -1253,8 +1263,6 @@ object TapestryRenderer {
                             }
                         } else if (isScythe) {
                             if (swing < 0.3f) 15f * (swing / 0.3f) else 15f - 80f * ((swing - 0.3f) / 0.7f)
-                        } else if (isHeavy) {
-                            if (swing < 0.5f) -60f * (swing / 0.5f) else -60f + 130f * ((swing - 0.5f) / 0.5f)
                         } else {
                             val isBowOrSling = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
                             val posture = if (isBowOrSling) 0f else when (Math.abs(fighter.name.hashCode()) % 3) {
@@ -1715,10 +1723,14 @@ object TapestryRenderer {
                                 addOval(androidx.compose.ui.geometry.Rect(cx + 35f, cy + 55f, cx + 45f, cy + 65f))
                             }
                             drawStitchedFill(this, censer, Color(0xFFC0C0C0)) // silver censer
-                            // incense smoke (little white/grey swirls)
-                            drawCircle(Color(0x88FFFFFF), radius = 5f, center = Offset(cx + 40f, cy + 50f))
-                            drawCircle(Color(0x88DDDDDD), radius = 8f, center = Offset(cx + 45f, cy + 40f))
-                            drawCircle(Color(0x88AAAAAA), radius = 12f, center = Offset(cx + 38f, cy + 25f))
+                            // incense smoke (little white/grey swirls as particles)
+                            for (i in 0 until 8) {
+                                val t = (playerFighter.animFrame * 2f + i * 0.5f) % 4f
+                                val smokeY = cy + 50f - t * 15f
+                                val smokeX = cx + 40f + kotlin.math.sin(t * 3f + i) * 12f
+                                drawCircle(Color(0xFFE0E0E0), radius = 2f, center = Offset(smokeX, smokeY))
+                                drawCircle(ThreadColor, radius = 2f, center = Offset(smokeX, smokeY), style = Stroke(width = 1f))
+                            }
                         }
                     }
                 }

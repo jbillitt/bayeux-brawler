@@ -291,19 +291,49 @@ object TapestryRenderer {
             }
         }
 
-        // Battle Scars / Arrows on the body
-        val numArrows = fighter.stuckArrows.coerceAtMost(6)
-        for (i in 0 until numArrows) {
-            // Draw broken arrows stuck in the armor
-            val ax = cx - 15f + (i * 12f)
-            val ay = cy + 40f + (i * 18f % 40f)
-            // Arrow shaft sticking out
-            scope.drawLine(Color(0xFF8A5E38), Offset(ax - 35f, ay - 15f), Offset(ax, ay), strokeWidth = 4.5f)
-            // Fletching
-            scope.drawLine(Color.White, Offset(ax - 35f, ay - 15f), Offset(ax - 42f, ay - 22f), strokeWidth = 3f)
-            scope.drawLine(Color.White, Offset(ax - 35f, ay - 15f), Offset(ax - 42f, ay - 8f), strokeWidth = 3f)
-            // Blood stain where it entered
-            scope.drawCircle(Color(0xFF9E3624).copy(alpha = 0.6f), radius = 8f, center = Offset(ax, ay))
+        // Battle Scars / Stuck Projectiles
+        val numProjs = fighter.stuckProjectiles.size.coerceAtMost(6)
+        for (i in 0 until numProjs) {
+            val proj = fighter.stuckProjectiles[i]
+            
+            // Determine entry point (shield or body)
+            val ax: Float
+            val ay: Float
+            if (proj.inShield) {
+                // Approximate shield location (in front of character)
+                ax = if (fighter.facingRight) cx + 25f + (i * 5f) else cx - 25f - (i * 5f)
+                ay = cy + 40f + (i * 12f % 30f)
+            } else {
+                ax = cx - 15f + (i * 12f)
+                ay = cy + 40f + (i * 18f % 40f)
+            }
+
+            // Direction calculation (point opposite of velocity)
+            val dirX = if (proj.velocityX > 0) -1f else 1f
+            // Add some variance to y direction (pointing slightly upwards usually)
+            val dirY = -0.2f + ((i % 3) * 0.15f)
+
+            val length = 35f * proj.size
+            val tipX = ax + (dirX * length)
+            val tipY = ay + (dirY * length)
+
+            // Draw shaft
+            val strokeW = if (proj.type == "javelin") 6f else 4.5f
+            scope.drawLine(Color(0xFF8A5E38), Offset(tipX, tipY), Offset(ax, ay), strokeWidth = strokeW)
+
+            // Fletching (only for arrows/bolts)
+            if (proj.type == "arrow" || proj.type == "bolt") {
+                val fletchX = ax + (dirX * (length + 7f))
+                val fletchY1 = tipY - 7f
+                val fletchY2 = tipY + 7f
+                scope.drawLine(Color.White, Offset(tipX, tipY), Offset(fletchX, fletchY1), strokeWidth = 3f)
+                scope.drawLine(Color.White, Offset(tipX, tipY), Offset(fletchX, fletchY2), strokeWidth = 3f)
+            }
+
+            // Blood stain only if hit body
+            if (!proj.inShield) {
+                scope.drawCircle(Color(0xFF9E3624).copy(alpha = 0.6f), radius = 8f, center = Offset(ax, ay))
+            }
         }
 
         // Blood pool beneath heavily wounded fighter (drawn at feet level ~cy+155)

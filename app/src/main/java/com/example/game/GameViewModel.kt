@@ -285,6 +285,10 @@ class GameViewModel : ViewModel() {
             size = state.characterSize,
             hairColor = state.hairColor,
             hairStyle = state.hairStyle,
+            faceNoseShape = state.faceNoseShape,
+            faceBiteShape = state.faceBiteShape,
+            faceForehead = state.faceForehead,
+            faceMustache = state.faceMustache,
             level = state.level,
             extraAttachments = state.extraAttachments.mapNotNull { id -> GameData.WEAPON_HEADS.find { it.id == id } },
             extraArmors = state.extraArmors.mapNotNull { id -> GameData.ARMOR_PIECES.find { it.id == id } },
@@ -954,13 +958,16 @@ class GameViewModel : ViewModel() {
 
         if (isBlocked) {
             MedievalAudioSynth.playSound(SoundType.CLANG)
+            if (proj.type == "arrow" || proj.type == "bolt" || proj.type == "javelin") {
+                defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, true))
+            }
         } else {
             val armorFactor = (1f - (defender.totalArmor / 100f)).coerceIn(0.15f, 1f)
             val totalDamage = (proj.damage * armorFactor) + (proj.blunt * 0.6f)
             applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
 
-            if (proj.type == "arrow" || proj.type == "bolt") {
-                defender.stuckArrows += 1
+            if (proj.type == "arrow" || proj.type == "bolt" || proj.type == "javelin") {
+                defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, false))
             }
             // Apply Poison Upgrade
             if (proj.isPoisonous) {

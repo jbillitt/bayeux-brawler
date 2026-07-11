@@ -189,6 +189,7 @@ data class FighterState(
     val faceNoseShape: Int = (0..3).random(), // 0: normal, 1: hook, 2: bulbous, 3: pointy
     val faceBiteShape: Int = (0..3).random(), // 0: normal, 1: underbite, 2: overbite, 3: lantern jaw
     val faceForehead: Int = (0..2).random(), // 0: normal, 1: big, 2: sloped
+    val faceMustache: Int = (0..3).random(),
     val level: Int = 1,
     
     // Death tracking
@@ -211,7 +212,7 @@ data class FighterState(
     var isMounted: Boolean = false,
     var trampleCooldown: Float = 0f,
     var kills: Int = 0,
-    var stuckArrows: Int = 0
+    var stuckProjectiles: MutableList<StuckProj> = mutableListOf()
 ) {
     // Simulated Base Stats
     val totalMass: Float
@@ -341,6 +342,14 @@ data class CombatPopup(
     val y: Float,
     var age: Float = 0f, // lifetime in seconds
     val color: Color = Color.Red
+)
+
+data class StuckProj(
+    val type: String, // "arrow", "bolt", "stone"
+    val size: Float,
+    val velocityX: Float,
+    val velocityY: Float,
+    val inShield: Boolean
 )
 
 class BloodParticle(

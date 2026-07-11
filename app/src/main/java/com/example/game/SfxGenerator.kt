@@ -117,12 +117,14 @@ object SfxGenerator {
             val f = if (hitIndex % 2 == 0) fLow else fHigh
             
             val env = if (hitT < 0.05) hitT / 0.05 else Math.exp(-3.0 * (hitT - 0.05))
-            val currentF = f * (1.0 + 0.02 * Math.exp(-15.0 * hitT))
-            val wave = Math.sin(2 * Math.PI * currentF * t) + 0.3 * Math.sin(4 * Math.PI * currentF * t) * Math.exp(-8.0 * hitT)
-            val noise = (rng.nextDouble() * 2 - 1) * Math.exp(-25.0 * hitT) * 0.1
+            val currentF = f * (1.0 + 0.05 * Math.exp(-15.0 * hitT))
+            val wave = Math.sin(2 * Math.PI * currentF * hitT) + 
+                       0.5 * Math.sin(4 * Math.PI * currentF * hitT) * Math.exp(-6.0 * hitT) + 
+                       0.25 * Math.sin(6 * Math.PI * currentF * hitT) * Math.exp(-12.0 * hitT)
+            val noise = (rng.nextDouble() * 2 - 1) * Math.exp(-30.0 * hitT) * 0.15
             
-            // Lower volume for noble orchestral sound
-            out[i] = ((wave + noise) * env * 12000).toInt().coerceIn(-32768, 32767).toShort()
+            // Beefy war drum / noble timpani
+            out[i] = ((wave + noise) * env * 20000).toInt().coerceIn(-32768, 32767).toShort()
         }
         return out
     }

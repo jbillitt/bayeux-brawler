@@ -475,6 +475,7 @@ class GameViewModel : ViewModel() {
                     it.vx += (Random.nextFloat() * 10f - 5f) * dt // drifting wind
                 }
             }
+        }
         _particlesState.value = particles.filter { it.age < it.maxAge }
 
         if (_gameState.value.unlockedAncillaries.contains("anc_monk") && Random.nextFloat() < 0.2f) {

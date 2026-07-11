@@ -593,6 +593,9 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                     id = "preview",
                     name = uiState.playerName,
                     isPlayer = true,
+                    faceNoseShape = uiState.faceNoseShape,
+                    faceBiteShape = uiState.faceBiteShape,
+                    faceForehead = uiState.faceForehead,
                     maxHp = 100f,
                     hp = 100f,
                     weaponHead = uiState.weaponHead,
@@ -1187,9 +1190,12 @@ fun StatsAndLaunchPanel(
     // We compute live stats by spinning up a dummy player FighterState
     val dummyFighter = remember(uiState) {
         FighterState(
-            id = "dummy",
-            name = "Player",
+            id = "stat_dummy",
+            name = uiState.playerName,
             isPlayer = true,
+            faceNoseShape = uiState.faceNoseShape,
+            faceBiteShape = uiState.faceBiteShape,
+            faceForehead = uiState.faceForehead,
             maxHp = 100f,
             hp = 100f,
             weaponHead = uiState.weaponHead,

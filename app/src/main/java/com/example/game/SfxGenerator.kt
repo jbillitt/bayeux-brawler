@@ -7,7 +7,7 @@ enum class SoundType {
     THWACK,  // Soft tissue hit / blunt force
     SWOOSH,  // Weapon swing or flying projectile
     OUCH,    // Comedic pain screech
-    HUZZAH,  // Victory trumpet fanfare
+    DRUM_ROLL,  // War drum roll
     CRUNCH,  // Bone breaking / heavy smash
     VICTORY_FANFARE // 1.5s victory sting
 }
@@ -22,7 +22,7 @@ object SfxGenerator {
             SoundType.CRUNCH -> crunch(sampleRate, rng, pitchMul, decayMul)
             SoundType.SWOOSH -> swoosh(sampleRate, rng, decayMul)
             SoundType.OUCH -> ouch(sampleRate, rng, pitchMul)
-            SoundType.HUZZAH -> huzzah(sampleRate, rng)
+            SoundType.DRUM_ROLL -> drumRoll(sampleRate, rng)
             SoundType.VICTORY_FANFARE -> victory(sampleRate, rng)
         }
     }
@@ -104,19 +104,23 @@ object SfxGenerator {
         return out
     }
 
-    private fun huzzah(sr: Int, rng: Random): ShortArray {
-        val dur = 1.0f; val n = (sr * dur).toInt(); val out = ShortArray(n)
-        val root = ProceduralMedievalComposer.currentRootMidi + 12f + (rng.nextInt(3) - 1)
-        val third = ProceduralMedievalComposer.currentThirdOffset
+    private fun drumRoll(sr: Int, rng: Random): ShortArray {
+        val dur = 1.5f; val n = (sr * dur).toInt(); val out = ShortArray(n)
+        val f = ProceduralMedievalComposer.midiToFreq(ProceduralMedievalComposer.currentRootMidi - 12f).toDouble() // Low timpani root
+        val hitsPerSec = 14.0
         for (i in 0 until n) {
             val t = i.toDouble() / sr
-            val noteDur = dur / 3.2
-            val noteIdx = (t / noteDur).toInt().coerceIn(0, 2)
-            val f = ProceduralMedievalComposer.midiToFreq(root + floatArrayOf(0f, third, 7f)[noteIdx]).toDouble()
-            val localT = t % noteDur
-            val env = Math.sin(Math.PI * (localT / noteDur))
-            val wave = Math.sin(2 * Math.PI * f * t) + 0.6 * Math.sin(4 * Math.PI * f * t) + 0.3 * Math.sin(6 * Math.PI * f * t)
-            out[i] = (wave / 1.8 * env * 22000).toInt().coerceIn(-32768, 32767).toShort()
+            val hitT = (t * hitsPerSec) % 1.0 // 0 to 1 per hit
+            
+            val env = if (hitT < 0.05) hitT / 0.05 else Math.exp(-4.0 * (hitT - 0.05))
+            val currentF = f * (1.0 + 0.05 * Math.exp(-20.0 * hitT))
+            val wave = Math.sin(2 * Math.PI * currentF * t) + 0.5 * Math.sin(4 * Math.PI * currentF * t) * Math.exp(-10.0 * hitT)
+            val noise = (rng.nextDouble() * 2 - 1) * Math.exp(-30.0 * hitT) * 0.2
+            
+            // Swelling crescendo and decrescendo
+            val globalEnv = Math.sin(Math.PI * (t / dur))
+            
+            out[i] = ((wave + noise) * env * globalEnv * 28000).toInt().coerceIn(-32768, 32767).toShort()
         }
         return out
     }

@@ -309,8 +309,8 @@ class GameViewModel : ViewModel() {
             )
         }
 
-        // Play battle cry
-        MedievalAudioSynth.playSound(SoundType.HUZZAH)
+        // Play battle start timpani roll
+        MedievalAudioSynth.playSound(SoundType.DRUM_ROLL)
 
         // Launch game loop
         startGameLoop()
@@ -1166,7 +1166,7 @@ class GameViewModel : ViewModel() {
         }
 
         if (won) {
-            MedievalAudioSynth.playSound(SoundType.HUZZAH)
+            MedievalAudioSynth.playSound(SoundType.DRUM_ROLL)
         } else {
             // reset score on defeat so they start over
             _uiState.update { it.copy(score = 0) }

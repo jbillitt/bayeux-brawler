@@ -368,6 +368,9 @@ data class BattleSimState(
     val characterSize: Float = 1.0f,
     val hairColor: Color = Color(0xFF5A442E),
     val hairStyle: String = "short", // short, long, bald
+    val faceNoseShape: Int = (0..3).random(),
+    val faceBiteShape: Int = (0..3).random(),
+    val faceForehead: Int = (0..2).random(),
     val playerName: String = "Syr William",
     val unlockedGearIds: Set<String> = emptySet(),
     val unlockedAncillaries: Set<String> = emptySet(),
@@ -437,7 +440,7 @@ object LatinShouts {
                 }
             }
             SoundType.OUCH -> DAMAGE_SHOUTS.random()
-            SoundType.HUZZAH -> VICTORY_SHOUTS.random()
+            SoundType.DRUM_ROLL -> "*RUMBLING DRUMS*"
             SoundType.SWOOSH -> "SWOOSHUS!"
             else -> ""
         }

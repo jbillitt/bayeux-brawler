@@ -492,10 +492,26 @@ object TapestryRenderer {
             if (fighter.isPlayer) {
                 // Player signature mustache
                 val mustache = Path().apply {
-                    moveTo(hx + 10f, hy + 10f)
-                    quadraticTo(hx + 18f, hy + 12f, hx + 16f, hy + 18f)
+                    if (fighter.faceMustache == 0) { // Handlebar
+                        moveTo(hx + 10f, hy + 10f)
+                        quadraticTo(hx + 16f, hy + 9f, hx + 18f, hy + 13f)
+                    } else if (fighter.faceMustache == 1) { // Drooping
+                        moveTo(hx + 10f, hy + 11f)
+                        quadraticTo(hx + 14f, hy + 14f, hx + 12f, hy + 18f)
+                    } else if (fighter.faceMustache == 2) { // Bushy
+                        moveTo(hx + 8f, hy + 11f)
+                        lineTo(hx + 18f, hy + 12f)
+                        lineTo(hx + 14f, hy + 15f)
+                        close()
+                    } else { // Classic Norman chevron
+                        moveTo(hx + 10f, hy + 10f)
+                        lineTo(hx + 16f, hy + 11f)
+                        lineTo(hx + 14f, hy + 14f)
+                        close()
+                    }
                 }
-                scope.drawPath(mustache, ThreadColor, style = Stroke(width = 3f, cap = StrokeCap.Round))
+                drawStitchedFill(scope, mustache, fighter.hairColor)
+                scope.drawPath(mustache, ThreadColor, style = Stroke(width = 1f, cap = StrokeCap.Round, join = StrokeJoin.Round))
             } else {
                 // Saxon - Comedic bushy mustache & full woven beard!
                 val beardPath = Path().apply {

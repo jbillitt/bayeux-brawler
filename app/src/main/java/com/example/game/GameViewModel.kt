@@ -85,6 +85,11 @@ class GameViewModel : ViewModel() {
             unlockedGearIds = initialGear
         ) }
         randomizeGear()
+        
+        val sizes = listOf(0.85f, 1.0f, 1.15f)
+        val hairColors = listOf(Color(0xFFE5C09F), Color(0xFFC08030), Color(0xFF2C2219), Color(0xFF5A442E))
+        val styles = listOf("short", "long", "bald")
+        updatePhysical(sizes.random(), hairColors.random(), styles.random())
     }
 
     fun selectLevelUpChoice(choiceId: String) {
@@ -202,7 +207,11 @@ class GameViewModel : ViewModel() {
                 characterSize = size,
                 hairColor = hairColor,
                 hairStyle = hairStyle,
-                playerName = newName
+                playerName = newName,
+                faceNoseShape = (0..3).random(rng),
+                faceBiteShape = (0..3).random(rng),
+                faceForehead = (0..2).random(rng),
+                faceMustache = (0..3).random(rng)
             )
         }
     }

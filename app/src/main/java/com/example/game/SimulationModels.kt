@@ -375,6 +375,7 @@ data class BattleSimState(
     val faceNoseShape: Int = (0..3).random(),
     val faceBiteShape: Int = (0..3).random(),
     val faceForehead: Int = (0..2).random(),
+    val faceMustache: Int = (0..3).random(),
     val playerName: String = "Syr William",
     val unlockedGearIds: Set<String> = emptySet(),
     val unlockedAncillaries: Set<String> = emptySet(),

@@ -430,7 +430,7 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
                     )
                 }
                 Text(
-                    text = "v0.1.6 Mercia",
+                    text = "v${com.example.BuildConfig.VERSION_NAME}",
                     fontSize = 8.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
@@ -1274,7 +1274,7 @@ fun StatsAndLaunchPanel(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "v0.1.5 Mercia",
+                    text = "v${com.example.BuildConfig.VERSION_NAME}",
                     fontSize = 7.sp,
                     fontFamily = FontFamily.Serif,
                     color = TapestryDark.copy(alpha = 0.4f)

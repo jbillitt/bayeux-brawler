@@ -300,9 +300,15 @@ class GameViewModel : ViewModel() {
         // Create Saxon enemies based on level
         // Difficulty scales with performance (kill speed + hp remaining)
         val perfBonus = ((state.performanceScore - 0.5f) * 2f).coerceIn(-0.3f, 0.5f)
-        val enemiesCount = (1 + (state.level / 2) + Random.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(1)
+        val rawEnemiesCount = (1 + (state.level / 2) + Random.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(1)
+        val enemiesCount = rawEnemiesCount.coerceAtMost(10)
+        val lateGameMult = if (rawEnemiesCount > 10) 1f + (rawEnemiesCount - 10) * 0.1f else 1f
         val enemies = List(enemiesCount) { index ->
-            generateRandomSaxon(index, state.level)
+            val saxon = generateRandomSaxon(index, state.level)
+            saxon.lateGameMultiplier = lateGameMult
+            saxon.maxHp *= lateGameMult
+            saxon.hp = saxon.maxHp
+            saxon
         }.toMutableList()
 
         if (state.unlockedAncillaries.contains(Ancillary.FANATIC)) {
@@ -472,7 +478,7 @@ class GameViewModel : ViewModel() {
             isMounted = isMounted,
             isChariot = isChariot,
             isLord = isLord,
-            speedBoost = if (isMounted && !isChariot) 0.45f else if (isChariot) 0.35f else 0f
+            speedBoost = if (isMounted && !isChariot) 0.5f else if (isChariot) 0.5f else 0f
         )
     }
 
@@ -793,7 +799,12 @@ class GameViewModel : ViewModel() {
     private fun triggerAttack(fighter: FighterState) {
         fighter.isAttacking = true
         fighter.swingProgress = 0f
-        fighter.attackCooldown = fighter.attackSpeedDelay
+        
+        var cooldown = fighter.attackSpeedDelay
+        if (!fighter.isPlayer && fighter.isRanged && fighter.level > 15) {
+            cooldown *= 0.7f // Ranged Escalation: Faster attack speed
+        }
+        fighter.attackCooldown = cooldown
 
         // Play melee/ranged swing swoosh sound at start of attack animation
         MedievalAudioSynth.playSound(SoundType.SWOOSH)
@@ -802,7 +813,11 @@ class GameViewModel : ViewModel() {
     private fun performStrike(attacker: FighterState, defender: FighterState) {
         if (attacker.isRanged) {
             val isDualWielding = attacker.isDualWielding && attacker.shield.id == "shield_none"
-            val hitCount = if (isDualWielding) 2 else 1
+            var hitCount = if (isDualWielding) 2 else 1
+            
+            if (!attacker.isPlayer && attacker.level > 20) {
+                hitCount += 1 // Ranged Escalation: Multishot
+            }
             
             viewModelScope.launch {
                 for (hitIdx in 0 until hitCount) {
@@ -836,6 +851,11 @@ class GameViewModel : ViewModel() {
             var velY = -55f // slightly arched trajectory
             var velX = dir * 350f
             var gravMult = 1f
+            
+            if (!attacker.isPlayer && attacker.level > 25) {
+                velX *= 1.5f // Ranged Escalation: Projectile speed
+                velY *= 1.2f
+            }
 
             if (isSlingshot) {
                 if (attacker.rangedUpgrades.contains("slingshot_bigger")) {

@@ -239,7 +239,7 @@ data class FighterState(
     val id: String,
     val name: String,
     val isPlayer: Boolean,
-    val maxHp: Float,
+    var maxHp: Float,
     var hp: Float,
     var ghostHp: Float = hp,
     
@@ -301,7 +301,8 @@ data class FighterState(
     var isLord: Boolean = false,
     var trampleCooldown: Float = 0f,
     var kills: Int = 0,
-    var stuckProjectiles: MutableList<StuckProj> = mutableListOf()
+    var stuckProjectiles: MutableList<StuckProj> = mutableListOf(),
+    var lateGameMultiplier: Float = 1f
 ) {
     // Simulated Base Stats
     val totalMass: Float
@@ -356,7 +357,7 @@ data class FighterState(
             val base = weaponHead.pierce * size * size
             val att = extraAttachments.sumOf { it.pierce.toDouble() * 0.5 }.toFloat()
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
-            return (base + att) * scaleLvl
+            return (base + att) * scaleLvl * lateGameMultiplier
         }
 
     val damageSlash: Float 
@@ -365,7 +366,7 @@ data class FighterState(
             val base = weaponHead.slash * size * size
             val att = extraAttachments.sumOf { it.slash.toDouble() * 0.5 }.toFloat()
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
-            return (base + att) * scaleLvl
+            return (base + att) * scaleLvl * lateGameMultiplier
         }
 
     val damageBlunt: Float 
@@ -373,7 +374,7 @@ data class FighterState(
             val base = weaponHead.blunt * size * size
             val att = extraAttachments.sumOf { it.blunt.toDouble() * 0.5 }.toFloat()
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
-            return (base + att) * scaleLvl
+            return (base + att) * scaleLvl * lateGameMultiplier
         }
 
     // Attack delay influenced by total mass & handle speed penalty
@@ -408,7 +409,7 @@ data class FighterState(
             val sizeSpeed = baseSpeed / size
             val crumplePenalty = if (isCrumpled) 0.5f else 1.0f
             val penaltyFactor = 1f - (totalMass * 0.025f).coerceIn(0f, 0.6f)
-            return (sizeSpeed * penaltyFactor) * (1f + speedBoost) * crumplePenalty
+            return (sizeSpeed * penaltyFactor) * (1f + speedBoost) * crumplePenalty * lateGameMultiplier
         }
 
     // Multiplier for points: naked = high risk = huge bonus points!

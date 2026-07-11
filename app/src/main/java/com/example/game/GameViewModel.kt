@@ -1000,7 +1000,7 @@ class GameViewModel : ViewModel() {
         
         // Trigger screenshake on hit! (Reduced unless absolute unit)
         val player = _playerState.value
-        val shakeMultiplier = if (player.size > 1.2f) 1.5f else 0.4f
+        val shakeMultiplier = if ((player?.size ?: 1.0f) > 1.2f) 1.5f else 0.4f
         _screenshake.value = (finalDmgInt * shakeMultiplier).coerceIn(4f, 35f)
         
         // Spawn blood particles based on damage

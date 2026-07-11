@@ -293,6 +293,28 @@ class GameViewModel : ViewModel() {
         val enemiesCount = (1 + (state.level / 2) + Random.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(1)
         val enemies = List(enemiesCount) { index ->
             generateRandomSaxon(index, state.level)
+        }.toMutableList()
+
+        if (state.unlockedAncillaries.contains("anc_fanatic")) {
+            enemies.add(FighterState(
+                id = "fanatic_boris",
+                name = "Mad Boris",
+                isPlayer = true,
+                maxHp = 150f,
+                hp = 150f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_axe" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 80f,
+                targetX = 80f,
+                facingRight = true,
+                size = 1.05f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFFC02020),
+                hairStyle = "long",
+                isDualWielding = true
+            ))
         }
 
         _playerState.value = player
@@ -510,9 +532,14 @@ class GameViewModel : ViewModel() {
             if (player.ghostHp < player.hp) player.ghostHp = player.hp
         }
 
-        // 4. Update Enemy Fighter States
+        // 4. Update Enemy Fighter States (and allied NPCs like Fanatic!)
         enemies.forEach { enemy ->
-            val pTarget = if (!player.isDead && !player.isDying) player else null
+            val pTarget = if (enemy.isPlayer) {
+                enemies.filter { !it.isDead && !it.isDying && !it.isPlayer }.minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
+            } else {
+                (enemies.filter { !it.isDead && !it.isDying && it.isPlayer } + listOfNotNull(if (!player.isDead && !player.isDying) player else null))
+                    .minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
+            }
             updateFighter(enemy, pTarget, dt)
             if (enemy.ghostHp > enemy.hp) {
                 enemy.ghostHp -= 20f * dt
@@ -624,6 +651,12 @@ class GameViewModel : ViewModel() {
         remainingProjectiles.addAll(newlySpawned)
         _projectilesState.value = remainingProjectiles
 
+        val hasCupbearer = _uiState.value.unlockedAncillaries.contains("anc_cupbearer")
+        if (hasCupbearer && Random.nextFloat() < dt * 0.5f && player.hp < player.maxHp) {
+            player.hp = (player.hp + 2.5f).coerceAtMost(player.maxHp)
+            // Visually, the renderer will animate him walking up
+        }
+
         // Sync player HP to UI State for HUD bar
         _uiState.update { it.copy(playerHp = player.hp, playerMaxHp = player.maxHp) }
         
@@ -689,8 +722,11 @@ class GameViewModel : ViewModel() {
             val chainDelay = if (fighter.weaponHandle.id == "handle_chain") 0.15f else 0f
             val effectiveSwingProgress = (fighter.swingProgress - chainDelay).coerceAtLeast(0f)
             
-            // Damage connects halfway through the swing visually
-            if (effectiveSwingProgress >= 0.5f && !fighter.hasLandedStrike) {
+            // Damage connects halfway through the swing visually, or near the end for heavy/chain windups
+            val isHeavyOrChain = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe") || fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
+            val strikeThreshold = if (isHeavyOrChain) 0.85f else 0.5f
+
+            if (effectiveSwingProgress >= strikeThreshold && !fighter.hasLandedStrike) {
                 fighter.hasLandedStrike = true
                 if (target != null) {
                     performStrike(fighter, target)
@@ -935,14 +971,40 @@ class GameViewModel : ViewModel() {
                     // Armor reduces slash and pierce, but blunt damage partially ignores armor
                     val armorFactor = (1f - (currTarget.totalArmor / 100f)).coerceIn(0.1f, 1f)
                     
-                    val totalDamage = (slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt
+                    var totalDamage = (slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt
                     
+                    // Cupbearer strength bonus!
+                    if (attacker.isPlayer && _uiState.value.unlockedAncillaries.contains("anc_cupbearer")) {
+                        totalDamage *= 1.25f // 25% strength boost from wine!
+                    }
+
                     applyFlatDamage(totalDamage, currTarget, attacker.isPlayer)
+
+                    // Knock off helmet randomly!
+                    if (kotlin.random.Random.nextFloat() < 0.10f && currTarget.headgear.id != "helm_none") {
+                        currTarget.headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }
+                        MedievalAudioSynth.playSound(SoundType.CLANG)
+                        addPopup("HELM LOST!", currTarget.posX, 120f, androidx.compose.ui.graphics.Color.LightGray)
+                        
+                        // Spawn a particle for the helmet flying off
+                        val px = currTarget.posX
+                        val py = 80f
+                        _particlesState.value = _particlesState.value + BloodParticle(x = px, y = py, vx = (kotlin.random.Random.nextFloat() * 100f - 50f), vy = -200f - kotlin.random.Random.nextFloat() * 100f, color = androidx.compose.ui.graphics.Color.Gray, isSmoke = false)
+                    }
 
                     // Play hit sounds & comedically yell in latin!
                     if (totalDamage > 0f) {
                         val isCrunch = blunt > 15f && kotlin.random.Random.nextFloat() < 0.4f
-                        MedievalAudioSynth.playSound(if (isCrunch) SoundType.CRUNCH else SoundType.THWACK)
+                        if (isCrunch) {
+                            MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                        } else {
+                            MedievalAudioSynth.playSound(SoundType.THWACK)
+                        }
+                        
+                        // Random blood particles
+                        val px = currTarget.posX + (Random.nextFloat() * 20f - 10f)
+                        val py = 120f + (Random.nextFloat() * 60f - 30f)
+                        _particlesState.value = _particlesState.value + BloodParticle(x = px, y = py, vx = (Random.nextFloat() * 200f - 100f), vy = -150f - Random.nextFloat() * 150f, color = Color(0xFF8B0000))
                     }
 
                     // Limb loss mechanic! (heavy slash)
@@ -955,8 +1017,15 @@ class GameViewModel : ViewModel() {
                             // Find 'shield_none' safely
                             GameData.SHIELDS.find { it.id == "shield_none" }?.let { currTarget.shield = it }
                         }
+                        applyFlatDamage(totalDamage, currTarget, attacker.isPlayer)
+                        addPopup("-${totalDamage.toInt()}", currTarget.posX, 140f, androidx.compose.ui.graphics.Color.Red)
+                        
                         MedievalAudioSynth.playSound(SoundType.THWACK)
                         addPopup("ARM SEVERED!", currTarget.posX, 160f, androidx.compose.ui.graphics.Color.Red)
+                        
+                        val px = currTarget.posX
+                        val py = 140f
+                        _particlesState.value = _particlesState.value + BloodParticle(x = px, y = py, vx = (Random.nextFloat() * 100f - 50f), vy = -200f - Random.nextFloat() * 100f, color = Color(0xFF8B0000), isSmoke = false)
                     }
                     
                     // Crumple mechanic! (heavy blunt)

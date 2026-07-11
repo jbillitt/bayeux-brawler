@@ -1629,8 +1629,15 @@ object TapestryRenderer {
 
         sortedAncs.forEachIndexed { index, ancId ->
             val offsetSign = if (playerFighter.facingRight) -1f else 1f
+            
+            var dynamicWalkOffset = 0f
+            if (ancId == "anc_cupbearer" && playerFighter.hp < playerFighter.maxHp) {
+                val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
+                dynamicWalkOffset = -60f * offsetSign * sin(attackAnim * Math.PI).toFloat()
+            }
+            
             // Each follower stands behind the player
-            val baseOffsetX = (index + 1) * 110f * offsetSign
+            val baseOffsetX = (index + 1) * 110f * offsetSign + dynamicWalkOffset
             val cx = playerFighter.posX + baseOffsetX
             val cy = 200f
 
@@ -1732,9 +1739,36 @@ object TapestryRenderer {
                 drawLine(stripeColor, Offset(cx - 18f, cy + 70f), Offset(cx + 18f, cy + 70f), strokeWidth = 2f)
 
                 // 3. Draw Back Arm holding something (ancillary items!)
-                // (Depends on what ancillary they are)
-                when (ancId) {
-                    "anc_squire" -> {
+                // Most ancillaries hold their item, so we draw their arm first
+                val armAngle = when (ancId) {
+                    "anc_trumpeter" -> -25f
+                    "anc_crossbowman" -> {
+                        val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
+                        if (attackAnim < 0.4f) -15f else if (attackAnim < 0.6f) -15f - 10f * ((attackAnim - 0.4f)/0.2f) else -25f + 10f * ((attackAnim - 0.6f)/0.4f)
+                    }
+                    "anc_archer" -> {
+                        val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
+                        if (attackAnim < 0.4f) -30f else if (attackAnim < 0.6f) -30f - 15f * ((attackAnim - 0.4f)/0.2f) else -45f + 15f * ((attackAnim - 0.6f)/0.4f)
+                    }
+                    "anc_cupbearer" -> {
+                        val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
+                        if (attackAnim > 0f && playerFighter.hp < playerFighter.maxHp) -45f * sin(attackAnim * Math.PI).toFloat() else 0f
+                    }
+                    else -> 0f
+                }
+                
+                withTransform({
+                    rotate(armAngle, pivot = Offset(cx, cy + 50f))
+                }) {
+                    // Draw the arm!
+                    val armHx = cx + 15f
+                    val armHy = cy + 40f
+                    drawStitchedStrap(this, Offset(cx - 5f, cy + 55f), Offset(armHx, armHy), tunicColor)
+                    drawCircle(Color(0xFFE8C5A4), radius = 4f, center = Offset(armHx, armHy))
+                    drawCircle(ThreadColor, radius = 4f, center = Offset(armHx, armHy), style = Stroke(width = 1.5f))
+
+                    when (ancId) {
+                        "anc_squire" -> {
                         // Drawing spare folded tunics on his shoulder!
                         val tunicStack = Path().apply {
                             addRoundRect(androidx.compose.ui.geometry.RoundRect(
@@ -1763,12 +1797,7 @@ object TapestryRenderer {
                         // Red cross embroidery inside banner flag
                         drawLine(Color(0xFFB03131), Offset(cx + 18f, cy + 28f), Offset(cx + 55f, cy + 28f), strokeWidth = 2.5f)
                     }
-                    "anc_trumpeter" -> {
-                        // Trumpet raised to mouth!
-                        val armAngle = -25f
-                        withTransform({
-                            rotate(armAngle, pivot = Offset(cx, cy + 50f))
-                        }) {
+                        "anc_trumpeter" -> {
                             // Gold trumpet tube and bell
                             val trumpetPath = Path().apply {
                                 moveTo(cx + 5f, cy + 30f)
@@ -1784,36 +1813,29 @@ object TapestryRenderer {
                             drawStitchedFill(this, trumpetPath, Color(0xFFE5C158))
                             drawPath(trumpetPath, ThreadColor, style = Stroke(width = 2f))
                         }
-                    }
-                    "anc_crossbowman" -> {
-                        // Crossbow
-                        val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
-                        val armAngle = if (attackAnim < 0.4f) -15f else if (attackAnim < 0.6f) -15f - 10f * ((attackAnim - 0.4f)/0.2f) else -25f + 10f * ((attackAnim - 0.6f)/0.4f)
-                        withTransform({ rotate(armAngle, pivot = Offset(cx, cy + 50f)) }) {
+                        "anc_crossbowman" -> {
                             // stock
                             drawLine(Color(0xFF5C4033), Offset(cx - 10f, cy + 40f), Offset(cx + 40f, cy + 30f), strokeWidth = 5f)
                             // bow limbs
                             val bowPath = Path().apply {
                                 moveTo(cx + 35f, cy + 10f)
-                                quadraticBezierTo(cx + 45f, cy + 30f, cx + 35f, cy + 50f)
+                                quadraticTo(cx + 45f, cy + 30f, cx + 35f, cy + 50f)
                             }
                             drawPath(bowPath, Color(0xFF2E2E2E), style = Stroke(width = 4f))
                             // string
+                            val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
                             val stringPull = if (attackAnim > 0.1f && attackAnim < 0.8f) 20f else 0f
                             drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 10f), Offset(cx + 10f - stringPull, cy + 35f), strokeWidth = 1.5f)
                             drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 50f), Offset(cx + 10f - stringPull, cy + 35f), strokeWidth = 1.5f)
                         }
-                    }
-                    "anc_archer" -> {
-                        // Longbow
-                        val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
-                        val armAngle = if (attackAnim < 0.4f) -30f else if (attackAnim < 0.6f) -30f - 15f * ((attackAnim - 0.4f)/0.2f) else -45f + 15f * ((attackAnim - 0.6f)/0.4f)
-                        withTransform({ rotate(armAngle, pivot = Offset(cx, cy + 50f)) }) {
+                        "anc_archer" -> {
+                            // Longbow
                             val bowPath = Path().apply {
                                 moveTo(cx + 30f, cy - 10f)
-                                quadraticBezierTo(cx + 45f, cy + 40f, cx + 30f, cy + 90f)
+                                quadraticTo(cx + 45f, cy + 40f, cx + 30f, cy + 90f)
                             }
                             drawPath(bowPath, Color(0xFF6E5536), style = Stroke(width = 4.5f))
+                            val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
                             val stringPull = if (attackAnim > 0.1f && attackAnim < 0.8f) 25f else 0f
                             val stringPath = Path().apply {
                                 moveTo(cx + 30f, cy - 10f)
@@ -1822,46 +1844,42 @@ object TapestryRenderer {
                             }
                             drawPath(stringPath, Color(0xFFDDDDDD), style = Stroke(width = 1f))
                         }
-                    }
-                    "anc_cupbearer" -> {
-                        // Small golden pitcher or goblet
-                        val gobletPath = Path().apply {
-                            moveTo(cx + 10f, cy + 30f)
-                            lineTo(cx + 25f, cy + 30f)
-                            lineTo(cx + 22f, cy + 45f)
-                            lineTo(cx + 18f, cy + 55f)
-                            lineTo(cx + 23f, cy + 60f)
-                            lineTo(cx + 12f, cy + 60f)
-                            lineTo(cx + 17f, cy + 55f)
-                            lineTo(cx + 13f, cy + 45f)
-                            close()
-                        }
-                        drawStitchedFill(this, gobletPath, Color(0xFFE5C158))
-                        drawPath(gobletPath, ThreadColor, style = Stroke(width = 2f))
-                        // Wine droplets (Bayeux red stitches)
-                        drawCircle(Color(0xFF9E3624), radius = 2f, center = Offset(cx + 28f, cy + 25f))
-                        drawCircle(Color(0xFF9E3624), radius = 1.5f, center = Offset(cx + 33f, cy + 32f))
-                    }
-                    "anc_monk" -> {
-                        // Perfume bottle sprinkled high to chest
-                        val armAngle = -70f + kotlin.math.cos(playerFighter.animFrame * 1.5).toFloat() * 30f
-                        withTransform({ rotate(armAngle, pivot = Offset(cx, cy + 50f)) }) {
-                            // Draw glass perfume bottle
-                            val bottle = Path().apply {
-                                moveTo(cx + 15f, cy + 40f) // neck
-                                lineTo(cx + 15f, cy + 35f)
-                                lineTo(cx + 25f, cy + 35f)
-                                lineTo(cx + 25f, cy + 40f)
-                                // bulbous body
-                                quadraticBezierTo(cx + 35f, cy + 45f, cx + 30f, cy + 55f)
-                                lineTo(cx + 10f, cy + 55f)
-                                quadraticBezierTo(cx + 5f, cy + 45f, cx + 15f, cy + 40f)
+                        "anc_cupbearer" -> {
+                            // Small golden pitcher or goblet
+                            val gobletPath = Path().apply {
+                                moveTo(cx + 10f, cy + 30f)
+                                lineTo(cx + 25f, cy + 30f)
+                                lineTo(cx + 22f, cy + 45f)
+                                lineTo(cx + 18f, cy + 55f)
+                                lineTo(cx + 23f, cy + 60f)
+                                lineTo(cx + 12f, cy + 60f)
+                                lineTo(cx + 17f, cy + 55f)
+                                lineTo(cx + 13f, cy + 45f)
                                 close()
                             }
-                            drawStitchedFill(this, bottle, Color(0xFF8CD3C7)) // Glass bottle
-                            drawPath(bottle, ThreadColor, style = Stroke(width = 1.5f))
-                            // cork
-                            drawRect(Color(0xFF8B5A2B), Offset(cx + 17f, cy + 30f), Size(6f, 5f))
+                            drawStitchedFill(this, gobletPath, Color(0xFFE5C158))
+                            drawPath(gobletPath, ThreadColor, style = Stroke(width = 2f))
+                        }
+                        "anc_monk" -> {
+                            val monkArmAngle = -70f + kotlin.math.cos(playerFighter.animFrame * 1.5).toFloat() * 30f
+                            withTransform({ rotate(monkArmAngle, pivot = Offset(cx, cy + 50f)) }) {
+                                // Draw glass perfume bottle
+                                val bottle = Path().apply {
+                                    moveTo(cx + 15f, cy + 40f) // neck
+                                    lineTo(cx + 15f, cy + 35f)
+                                    lineTo(cx + 25f, cy + 35f)
+                                    lineTo(cx + 25f, cy + 40f)
+                                    // bulbous body
+                                    quadraticTo(cx + 35f, cy + 45f, cx + 30f, cy + 55f)
+                                    lineTo(cx + 10f, cy + 55f)
+                                    quadraticTo(cx + 5f, cy + 45f, cx + 15f, cy + 40f)
+                                    close()
+                                }
+                                drawStitchedFill(this, bottle, Color(0xFF8CD3C7)) // Glass bottle
+                                drawPath(bottle, ThreadColor, style = Stroke(width = 1.5f))
+                                // cork
+                                drawRect(Color(0xFF8B5A2B), Offset(cx + 17f, cy + 30f), androidx.compose.ui.geometry.Size(6f, 5f))
+                            }
                         }
                     }
                 }

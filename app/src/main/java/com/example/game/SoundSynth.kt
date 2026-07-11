@@ -31,7 +31,7 @@ object MedievalAudioSynth {
                 val am = appContext!!.assets
                 val files = am.list("drums")
                 if (files != null && files.isNotEmpty()) {
-                    val audioFiles = files.filter { it.endsWith(".wav") || it.endsWith(".ogg") || it.endsWith(".mp3") }
+                    val audioFiles = files.filter { it.endsWith(".wav") || it.endsWith(".ogg") || it.endsWith(".mp3") || it.endsWith(".mid") || it.endsWith(".midi") }
                     if (audioFiles.isNotEmpty()) {
                         val randomFile = audioFiles.random()
                         val afd = am.openFd("drums/$randomFile")

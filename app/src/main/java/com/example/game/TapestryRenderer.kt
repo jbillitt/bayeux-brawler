@@ -1207,7 +1207,7 @@ object TapestryRenderer {
     private fun drawFrontArmAndWeapon(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         // Swing progress: rotate the arm from high to low
         val swing = fighter.swingProgress
-        val isThrusting = fighter.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd", "head_dagger")
+        val isThrusting = fighter.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd", "head_dagger", "head_pitchfork")
         val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe")
         val isScythe = fighter.weaponHead.id == "head_scythe"
         val isBowOrSlingshot = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
@@ -1275,10 +1275,10 @@ object TapestryRenderer {
 
         if (fighter.missingArm) {
             scope.withTransform({
-                rotate(armAngle, pivot = Offset(cx - 15f, cy + 25f))
+                rotate(armAngle, pivot = Offset(cx - 23f, cy + 25f))
             }) {
                 val sleeveColor = if (fighter.isPlayer) Color(0xFF265063) else Color(0xFF9E3624)
-                drawStitchedStrap(this, Offset(cx - 15f, cy + 25f), Offset(cx + 4f, cy + 28f), sleeveColor)
+                drawStitchedStrap(this, Offset(cx - 23f, cy + 25f), Offset(cx + 4f, cy + 28f), sleeveColor)
                 scope.drawCircle(Color(0xFF9E3624), radius = 8f, center = Offset(cx + 4f, cy + 28f))
                 scope.drawCircle(Color(0xFFBF2A2A), radius = 4f, center = Offset(cx + 4f, cy + 28f))
             }
@@ -1287,12 +1287,12 @@ object TapestryRenderer {
 
         // Draw weapon and arm together
         scope.withTransform({
-            rotate(armAngle, pivot = Offset(cx - 15f, cy + 25f))
+            rotate(armAngle, pivot = Offset(cx - 23f, cy + 25f))
             translate(thrustOffset.x, thrustOffset.y)
         }) {
             // Sleeve/Arm
             val sleeveColor = if (fighter.isPlayer) Color(0xFF265063) else Color(0xFF9E3624)
-            drawStitchedStrap(this, Offset(cx - 15f, cy + 25f), Offset(cx + 25f, cy + 30f), sleeveColor)
+            drawStitchedStrap(this, Offset(cx - 23f, cy + 25f), Offset(cx + 25f, cy + 30f), sleeveColor)
             
             // Hand
             scope.drawCircle(Color(0xFFE8C5A4), radius = 6f, center = Offset(cx + 25f, cy + 30f))
@@ -1316,9 +1316,9 @@ object TapestryRenderer {
         }
         
         if (fighter.missingArm) {
-            scope.withTransform({ rotate(shieldArmAngle, pivot = Offset(cx + 15f, cy + 25f)) }) {
+            scope.withTransform({ rotate(shieldArmAngle, pivot = Offset(cx + 23f, cy + 25f)) }) {
                 val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
-                drawStitchedStrap(this, Offset(cx + 15f, cy + 25f), Offset(cx + 20f, cy + 35f), sleeveColor)
+                drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(cx + 20f, cy + 35f), sleeveColor)
                 scope.drawCircle(Color(0xFF9E3624), radius = 7f, center = Offset(cx + 20f, cy + 35f))
                 scope.drawCircle(Color(0xFFBF2A2A), radius = 3.5f, center = Offset(cx + 20f, cy + 35f))
             }
@@ -1353,12 +1353,12 @@ object TapestryRenderer {
                 }
 
                 scope.withTransform({
-                    rotate(armAngle, pivot = Offset(cx + 15f, cy + 30f))
+                    rotate(armAngle, pivot = Offset(cx + 23f, cy + 30f))
                 }) {
                     val hx = cx + 35f
                     val hy = cy + 40f
                     val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
-                    drawStitchedStrap(this, Offset(cx + 15f, cy + 25f), Offset(hx, hy), sleeveColor)
+                    drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor)
                     scope.drawCircle(Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
                     
@@ -1368,7 +1368,7 @@ object TapestryRenderer {
                 }
             } else {
                 val swing = fighter.swingProgress
-                val isThrusting = fighter.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd", "head_dagger")
+                val isThrusting = fighter.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd", "head_dagger", "head_pitchfork")
                 val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe")
                 val isScythe = fighter.weaponHead.id == "head_scythe"
                 val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
@@ -1411,7 +1411,7 @@ object TapestryRenderer {
 
                 scope.withTransform({
                     translate(thrustOffset.x, thrustOffset.y)
-                    rotate(armAngle, pivot = Offset(cx + 5f, cy + 30f)) // Moved offhand from cx - 5f to cx + 5f for two-handed
+                    rotate(armAngle, pivot = Offset(cx + 23f, cy + 30f)) // Moved offhand to edge of body
                 }) {
                     val handleLen = when (fighter.weaponHandle.id) {
                         "handle_long"   -> 110f
@@ -1425,7 +1425,7 @@ object TapestryRenderer {
                     val hy = frontHandY - handleLen * 0.4f * gripFraction
                     
                     val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
-                    drawStitchedStrap(this, Offset(cx + 5f, cy + 25f), Offset(hx, hy), sleeveColor)
+                    drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor)
                     scope.drawCircle(Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
                 }

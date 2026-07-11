@@ -1012,7 +1012,7 @@ fun GearSelectionTabs(
                         Text("HAIR COLOR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val colors = listOf(Color(0xFFE5C09F), Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF2C2219))
+                            val colors = listOf(Color(0xFF888888), Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF2C2219))
                             colors.forEach { colorVal ->
                                 val isSelected = uiState.hairColor == colorVal
                                 Box(
@@ -1049,7 +1049,8 @@ fun GearSelectionTabs(
                     }
                 }
             } else {
-                if (selectedTab == 0) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (selectedTab == 0) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1105,6 +1106,7 @@ fun GearSelectionTabs(
                         )
                     }
                 }
+                } // End Column
             }
         }
 

@@ -177,7 +177,7 @@ class GameViewModel : ViewModel() {
             listOf("the Wild", "the Mane", "Long-Locks", "the Hairy", "the Untamed").random(rng)
         } else {
             when (hairColor) {
-                Color(0xFFE5C09F) -> listOf("the Fair", "the Pale", "Sun-kissed", "the Blond").random(rng)
+                Color(0xFF888888) -> listOf("the Grey", "the Hoary", "Silver-hair", "the Elder").random(rng)
                 Color(0xFFC08030) -> listOf("the Red", "Fire-top", "the Bloody", "Rufus").random(rng)
                 Color(0xFF2C2219) -> listOf("the Dark", "the Black", "Night-haired", "the Grim").random(rng)
                 else -> listOf("the Brown", "the Muddy", "Earth-born", "the Common").random(rng)
@@ -414,7 +414,7 @@ class GameViewModel : ViewModel() {
         if (arch in listOf(EnemyArchetype.CHAMPION, EnemyArchetype.LORD)) enemyHp *= 1.5f
         if (arch == EnemyArchetype.KING) enemyHp *= 3f
 
-        val hairColors = listOf(Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF8A7156), Color(0xFF2C2219), Color(0xFFE5C09F))
+        val hairColors = listOf(Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF8A7156), Color(0xFF2C2219), Color(0xFF888888))
         val hairStyles = listOf("short", "long", "bald")
 
         val startX = 850f + (index * 130f)
@@ -870,11 +870,21 @@ class GameViewModel : ViewModel() {
                     !it.isDead && !it.isDying && abs(attacker.posX - it.posX) <= reachPixels && 
                     ((dir > 0 && it.posX >= attacker.posX) || (dir < 0 && it.posX <= attacker.posX))
                 }.sortedBy { abs(attacker.posX - it.posX) }
+            } else if (attacker.isPlayer && attacker.weaponHandle.id == "handle_double_ended") {
+                _enemiesState.value.filter { 
+                    !it.isDead && !it.isDying && abs(attacker.posX - it.posX) <= reachPixels 
+                }.sortedBy { abs(attacker.posX - it.posX) }
+            } else if (attacker.isPlayer) {
+                val dir = if (attacker.facingRight) 1f else -1f
+                _enemiesState.value.filter { 
+                    !it.isDead && !it.isDying && abs(attacker.posX - it.posX) <= reachPixels && 
+                    ((dir > 0 && it.posX >= attacker.posX) || (dir < 0 && it.posX <= attacker.posX))
+                }.sortedBy { abs(attacker.posX - it.posX) }
             } else {
                 listOf(defender)
             }
             
-            if (targets.isEmpty() || abs(attacker.posX - defender.posX) > reachPixels) {
+            if (targets.isEmpty() || (!targets.contains(defender) && abs(attacker.posX - defender.posX) > reachPixels)) {
                 // Missed!
                 MedievalAudioSynth.playSound(SoundType.SWOOSH)
                 return
@@ -1242,10 +1252,10 @@ class GameViewModel : ViewModel() {
                 initialGear.add("head_bare")
                 initialGear.add("handle_fists")
                 initialGear.add("shield_none")
-                initialGear.add("armor_none")
-                initialGear.add("head_none")
+                initialGear.add("armor_bare")
+                initialGear.add("helm_none")
                 initialGear.addAll(GameData.WEAPON_HEADS.shuffled().take(2).map { it.id })
-                initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(3).map { it.id })
                 initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.ARMOR_PIECES.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.HEADGEAR_PIECES.shuffled().take(2).map { it.id })
@@ -1283,7 +1293,7 @@ class GameViewModel : ViewModel() {
                     rangedUpgrades = emptyList(),
                     unlockedAncillaries = emptySet(),
                     weaponHead = GameData.WEAPON_HEADS.filter { it.id in initialGear }.random(),
-                    weaponHandle = GameData.WEAPON_HANDLES.filter { it.id in initialGear }.random(),
+                    weaponHandle = GameData.WEAPON_HANDLES.filter { it.id in initialGear && it.id != "handle_fists" }.randomOrNull() ?: GameData.WEAPON_HANDLES[1],
                     shield = GameData.SHIELDS.filter { it.id in initialGear }.random(),
                     armor = GameData.ARMOR_PIECES.filter { it.id in initialGear }.random(),
                     headgear = GameData.HEADGEAR_PIECES.filter { it.id in initialGear }.random()

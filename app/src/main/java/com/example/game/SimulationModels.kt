@@ -117,6 +117,7 @@ object GameData {
         GearItem("helm_none", "Bare Dome", ItemType.HEADGEAR, 0.0f, defense = 0f, description = "No helmet. Exposes your magnificent Norman tonsure.", color = Color(0xFFE5C09F)),
         GearItem("helm_coif", "Linen Mail Coif", ItemType.HEADGEAR, 2.0f, defense = 18f, speedPenalty = 0.02f, description = "A close-fitting hood made of woven chainmail rings.", color = Color(0xFF868C91)),
         GearItem("helm_cervelliere", "Iron Skull Cap", ItemType.HEADGEAR, 2.5f, defense = 25f, speedPenalty = 0.03f, description = "A simple iron bowl for your brain. Better than nothing.", color = Color(0xFF9EA3A8)),
+        GearItem("helm_none", "Bare Head", ItemType.HEADGEAR, 0.0f, defense = 0f, speedPenalty = -0.05f, description = "Feel the wind in your hair. And arrows in your skull. Higher score multiplier!", color = Color.Transparent),
         GearItem("helm_conical", "Nasal Conical Helm", ItemType.HEADGEAR, 3.5f, defense = 40f, speedPenalty = 0.05f, description = "The authentic iron conical helmet with a bold nose-guard. Legendary silhouette.", color = Color(0xFF96A0A8)),
         GearItem("helm_spangen", "Spangenhelm", ItemType.HEADGEAR, 4.0f, defense = 45f, speedPenalty = 0.06f, description = "Metal strips riveting plates together. A classic medieval bruiser helm.", color = Color(0xFF7A8389)),
         GearItem("helm_kettle", "Kettle Hat", ItemType.HEADGEAR, 4.5f, defense = 50f, speedPenalty = 0.08f, description = "Wide brimmed hat of steel. Protects against arrows from above.", color = Color(0xFF8B9298)),
@@ -388,8 +389,8 @@ data class BattleSimState(
     val gameCount: Int = 0,
     
     // Selected gear (persistent between levels until customized)
-    val weaponHead: GearItem = GameData.WEAPON_HEADS.random(),
-    val weaponHandle: GearItem = GameData.WEAPON_HANDLES.random(),
+    val weaponHead: GearItem = GameData.WEAPON_HEADS.first { it.id == "head_broadsword" },
+    val weaponHandle: GearItem = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
     val shield: GearItem = GameData.SHIELDS.random(),
     val armor: GearItem = GameData.ARMOR_PIECES.random(),
     val headgear: GearItem = GameData.HEADGEAR_PIECES.random(),

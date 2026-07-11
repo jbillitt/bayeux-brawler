@@ -9,12 +9,14 @@ import kotlin.random.Random
  */
 object ProceduralMedievalComposer {
     var currentRootMidi: Float = 48f
+    var currentThirdOffset: Float = 3f // minor third by default
 
     fun midiToFreq(midi: Float): Float = (440.0 * Math.pow(2.0, (midi - 69.0) / 12.0)).toFloat()
 
     fun compose(seed: Long, level: Int, hasTrumpeter: Boolean, sampleRate: Int, moods: List<String> = emptyList()): ShortArray {
         val spec = resolveSongSpec(seed, moods)
         currentRootMidi = spec.finalMidi.toFloat()
+        currentThirdOffset = spec.mode.steps[2].toFloat()
         val song = generateSong(spec, melodyRng(seed))
         val plan = planOrchestration(spec, hasTrumpeter, orchRng(seed))
         val active = activeAssignments(plan, level)

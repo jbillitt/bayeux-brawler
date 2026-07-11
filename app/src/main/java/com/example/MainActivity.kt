@@ -1360,12 +1360,22 @@ fun BattlefieldScene(
             var yOffset = 0f
             while (yOffset < size.height) {
                 drawLine(
-                    color = Color(0x0C382F22),
+                    color = Color(0x15382F22),
                     start = Offset(0f, yOffset),
                     end = Offset(size.width, yOffset),
                     strokeWidth = 2f
                 )
                 yOffset += 4f
+            }
+            var xOffset = 0f
+            while (xOffset < size.width) {
+                drawLine(
+                    color = Color(0x10382F22),
+                    start = Offset(xOffset, 0f),
+                    end = Offset(xOffset, size.height),
+                    strokeWidth = 2f
+                )
+                xOffset += 4f
             }
 
             // 1. Draw TOP Embroidered Border (characteristic of Bayeux)

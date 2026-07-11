@@ -107,11 +107,12 @@ object SfxGenerator {
     private fun huzzah(sr: Int, rng: Random): ShortArray {
         val dur = 1.0f; val n = (sr * dur).toInt(); val out = ShortArray(n)
         val root = ProceduralMedievalComposer.currentRootMidi + 12f + (rng.nextInt(3) - 1)
+        val third = ProceduralMedievalComposer.currentThirdOffset
         for (i in 0 until n) {
             val t = i.toDouble() / sr
             val noteDur = dur / 3.2
             val noteIdx = (t / noteDur).toInt().coerceIn(0, 2)
-            val f = ProceduralMedievalComposer.midiToFreq(root + floatArrayOf(0f, 3f, 7f)[noteIdx]).toDouble()
+            val f = ProceduralMedievalComposer.midiToFreq(root + floatArrayOf(0f, third, 7f)[noteIdx]).toDouble()
             val localT = t % noteDur
             val env = Math.sin(Math.PI * (localT / noteDur))
             val wave = Math.sin(2 * Math.PI * f * t) + 0.6 * Math.sin(4 * Math.PI * f * t) + 0.3 * Math.sin(6 * Math.PI * f * t)
@@ -123,7 +124,8 @@ object SfxGenerator {
     private fun victory(sr: Int, rng: Random): ShortArray {
         val dur = 1.5f; val n = (sr * dur).toInt(); val out = ShortArray(n)
         val root = ProceduralMedievalComposer.currentRootMidi + 12f
-        val notes = floatArrayOf(0f, 3f, 7f, 12f).map { ProceduralMedievalComposer.midiToFreq(root + it).toDouble() }
+        val third = ProceduralMedievalComposer.currentThirdOffset
+        val notes = floatArrayOf(0f, third, 7f, 12f).map { ProceduralMedievalComposer.midiToFreq(root + it).toDouble() }
         for (i in 0 until n) {
             val t = i.toDouble() / sr
             val noteDur = dur / 4.0

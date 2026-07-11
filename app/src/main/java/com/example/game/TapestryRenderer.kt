@@ -353,17 +353,44 @@ object TapestryRenderer {
         scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
 
         // 2. Head Profile
+        val fhX = if (fighter.faceForehead == 1) 14f else if (fighter.faceForehead == 2) 4f else 8f
+        val fhY = if (fighter.faceForehead == 1) -6f else -2f
         val headPath = Path().apply {
             moveTo(hx - 12f, hy)
-            // Sloped forehead leading to the brow
-            lineTo(hx + 8f, hy - 2f)
-            lineTo(hx + 9f, hy + 2f) // Brow indentation
-            // Distinctive prominent, long pointy nose on the profile
-            lineTo(hx + 23f, hy + 6f) // Nose tip
-            lineTo(hx + 10f, hy + 9f) // Nostril and upper lip fold
-            lineTo(hx + 12f, hy + 13f) // Lip crease
-            lineTo(hx + 9f, hy + 18f) // Chin
-            lineTo(hx - 12f, hy + 18f)
+            // Forehead
+            lineTo(hx + fhX, hy + fhY)
+            lineTo(hx + fhX + 1f, hy + 2f) // Brow indentation
+            
+            // Nose tip and nostril
+            var noseTipX = hx + 23f
+            var noseTipY = hy + 6f
+            var nostrilX = hx + 10f
+            if (fighter.faceNoseShape == 1) { // hook
+                noseTipY += 4f; noseTipX -= 2f
+            } else if (fighter.faceNoseShape == 2) { // bulbous
+                noseTipX = hx + 16f; nostrilX = hx + 12f
+            } else if (fighter.faceNoseShape == 3) { // pointy
+                noseTipX = hx + 25f
+            } else { // normal
+                noseTipX = hx + 18f
+            }
+            lineTo(noseTipX, noseTipY) // Nose tip
+            lineTo(nostrilX, hy + 9f) // Nostril/lip fold
+            
+            // Jaw / Bite
+            var lipX = hx + 12f
+            var chinX = hx + 9f
+            if (fighter.faceBiteShape == 1) { // underbite
+                lipX += 2f; chinX += 6f
+            } else if (fighter.faceBiteShape == 2) { // overbite
+                lipX -= 2f; chinX -= 4f
+            } else if (fighter.faceBiteShape == 3) { // lantern jaw
+                chinX += 8f
+            }
+            lineTo(lipX, hy + 13f) // Lip crease
+            val chinY = if (fighter.faceBiteShape == 3) hy + 22f else hy + 18f
+            lineTo(chinX, chinY) // Chin
+            lineTo(hx - 12f, chinY)
             close()
         }
         drawStitchedFill(scope, headPath, skinColor)
@@ -482,11 +509,9 @@ object TapestryRenderer {
             }
 
         // 4. Helmet Overlay
-        val hasHelm = fighter.headgear.id == "helm_conical"
-        val hasCoif = fighter.headgear.id == "helm_coif"
-        val hasGreatHelm = fighter.headgear.id == "helm_great"
+        val helmId = fighter.headgear.id
 
-        if (hasCoif) {
+        if (helmId == "helm_coif") {
             val coifPath = Path().apply {
                 moveTo(hx - 14f, hy + 10f)
                 lineTo(hx - 14f, hy - 4f)
@@ -500,7 +525,7 @@ object TapestryRenderer {
             drawStitchedFill(scope, coifPath, Color(0xFF868C91))
             scope.drawPath(coifPath, ThreadColor, style = StitchedStroke)
             drawChainmailTexture(scope, hx - 12f, hy - 4f, 24f, 18f)
-        } else if (hasHelm) {
+        } else if (helmId == "helm_conical") {
             // Authentic conical metal helmet
             val helmPath = Path().apply {
                 moveTo(hx - 15f, hy)
@@ -521,7 +546,63 @@ object TapestryRenderer {
             }
             drawStitchedFill(scope, nasalPath, Color(0xFF727A80))
             scope.drawPath(nasalPath, ThreadColor, style = StitchedStroke)
-        } else if (hasGreatHelm) {
+        } else if (helmId == "helm_cervelliere") {
+            val skullCap = Path().apply {
+                moveTo(hx - 14f, hy)
+                quadraticTo(hx, hy - 20f, hx + 14f, hy)
+                close()
+            }
+            drawStitchedFill(scope, skullCap, Color(0xFF9EA3A8))
+            scope.drawPath(skullCap, ThreadColor, style = StitchedStroke)
+        } else if (helmId == "helm_spangen") {
+            val spangen = Path().apply {
+                moveTo(hx - 16f, hy + 2f)
+                lineTo(hx - 16f, hy - 4f)
+                quadraticTo(hx, hy - 24f, hx + 16f, hy - 4f)
+                lineTo(hx + 16f, hy + 2f)
+                close()
+            }
+            drawStitchedFill(scope, spangen, Color(0xFF7A8389))
+            scope.drawPath(spangen, ThreadColor, style = StitchedStroke)
+            // Rivet bands
+            scope.drawLine(Color(0xFFB08221), Offset(hx - 16f, hy), Offset(hx + 16f, hy), strokeWidth = 3f)
+            scope.drawLine(Color(0xFFB08221), Offset(hx, hy), Offset(hx, hy - 20f), strokeWidth = 3f)
+        } else if (helmId == "helm_kettle") {
+            val kettle = Path().apply {
+                moveTo(hx - 12f, hy - 4f)
+                quadraticTo(hx, hy - 22f, hx + 12f, hy - 4f)
+                close()
+            }
+            drawStitchedFill(scope, kettle, Color(0xFF8B9298))
+            scope.drawPath(kettle, ThreadColor, style = StitchedStroke)
+            // Wide brim
+            val brim = Path().apply {
+                moveTo(hx - 22f, hy)
+                quadraticTo(hx, hy - 6f, hx + 22f, hy)
+                lineTo(hx + 20f, hy + 4f)
+                quadraticTo(hx, hy - 2f, hx - 20f, hy + 4f)
+                close()
+            }
+            drawStitchedFill(scope, brim, Color(0xFF8B9298))
+            scope.drawPath(brim, ThreadColor, style = StitchedStroke)
+        } else if (helmId == "helm_mask") {
+            val mask = Path().apply {
+                moveTo(hx - 16f, hy - 20f)
+                quadraticTo(hx, hy - 26f, hx + 16f, hy - 20f)
+                lineTo(hx + 18f, hy + 18f)
+                quadraticTo(hx, hy + 22f, hx - 16f, hy + 18f)
+                close()
+            }
+            drawStitchedFill(scope, mask, Color(0xFF7B858B))
+            scope.drawPath(mask, ThreadColor, style = StitchedStroke)
+            // Eye slits
+            scope.drawLine(Color(0xFF222222), Offset(hx + 2f, hy - 2f), Offset(hx + 14f, hy + 2f), strokeWidth = 2.5f)
+            scope.drawLine(Color(0xFF222222), Offset(hx - 12f, hy + 2f), Offset(hx - 2f, hy - 2f), strokeWidth = 2.5f)
+            // Breathing holes
+            scope.drawCircle(Color(0xFF222222), radius = 1.5f, center = Offset(hx + 10f, hy + 10f))
+            scope.drawCircle(Color(0xFF222222), radius = 1.5f, center = Offset(hx + 6f, hy + 12f))
+            scope.drawCircle(Color(0xFF222222), radius = 1.5f, center = Offset(hx + 14f, hy + 12f))
+        } else if (helmId == "helm_great") {
             // A flat topped cylindrical great helm (bucket helm)
             val bucketPath = Path().apply {
                 moveTo(hx - 16f, hy - 20f)

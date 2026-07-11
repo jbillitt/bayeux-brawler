@@ -110,7 +110,11 @@ object GameData {
     val HEADGEAR_PIECES = listOf(
         GearItem("helm_none", "Bare Dome", ItemType.HEADGEAR, 0.0f, defense = 0f, description = "No helmet. Exposes your magnificent Norman tonsure.", color = Color(0xFFE5C09F)),
         GearItem("helm_coif", "Linen Mail Coif", ItemType.HEADGEAR, 2.0f, defense = 18f, speedPenalty = 0.02f, description = "A close-fitting hood made of woven chainmail rings.", color = Color(0xFF868C91)),
+        GearItem("helm_cervelliere", "Iron Skull Cap", ItemType.HEADGEAR, 2.5f, defense = 25f, speedPenalty = 0.03f, description = "A simple iron bowl for your brain. Better than nothing.", color = Color(0xFF9EA3A8)),
         GearItem("helm_conical", "Nasal Conical Helm", ItemType.HEADGEAR, 3.5f, defense = 40f, speedPenalty = 0.05f, description = "The authentic iron conical helmet with a bold nose-guard. Legendary silhouette.", color = Color(0xFF96A0A8)),
+        GearItem("helm_spangen", "Spangenhelm", ItemType.HEADGEAR, 4.0f, defense = 45f, speedPenalty = 0.06f, description = "Metal strips riveting plates together. A classic medieval bruiser helm.", color = Color(0xFF7A8389)),
+        GearItem("helm_kettle", "Kettle Hat", ItemType.HEADGEAR, 4.5f, defense = 50f, speedPenalty = 0.08f, description = "Wide brimmed hat of steel. Protects against arrows from above.", color = Color(0xFF8B9298)),
+        GearItem("helm_mask", "Masked Helm", ItemType.HEADGEAR, 5.0f, defense = 58f, speedPenalty = 0.10f, description = "An enclosed helm with a menacing iron faceplate.", color = Color(0xFF7B858B)),
         GearItem("helm_great", "Great Helm", ItemType.HEADGEAR, 6.0f, defense = 65f, speedPenalty = 0.15f, description = "A massive flat-topped steel bucket. Perfect protection, terrible visibility.", color = Color(0xFF6B747A))
     )
     
@@ -181,6 +185,9 @@ data class FighterState(
     val size: Float = 1.0f,
     val hairColor: Color = Color(0xFF5A442E),
     val hairStyle: String = "short",
+    val faceNoseShape: Int = (0..3).random(), // 0: normal, 1: hook, 2: bulbous, 3: pointy
+    val faceBiteShape: Int = (0..3).random(), // 0: normal, 1: underbite, 2: overbite, 3: lantern jaw
+    val faceForehead: Int = (0..2).random(), // 0: normal, 1: big, 2: sloped
     val level: Int = 1,
     
     // Death tracking

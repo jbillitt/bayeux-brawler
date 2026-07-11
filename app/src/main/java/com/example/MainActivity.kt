@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         // Initialize the free, offline, local vocalization engine
-        com.example.game.MedievalVocalizer.init(applicationContext)
+        // com.example.game.MedievalVocalizer.init(applicationContext)
         com.example.game.MedievalHarpPlayer.init(applicationContext)
 
         // Let's set the activity orientation request to user's sensor to encourage landscape,
@@ -83,7 +83,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        com.example.game.MedievalVocalizer.shutdown()
         super.onDestroy()
     }
 }
@@ -121,16 +120,7 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(uiState.battleWon) {
-        if (uiState.battleWon) MedievalVocalizer.speak(FlavourText.bark(BarkKind.VICTORY, MedievalHarpPlayer.gameSeed, uiState.level))
-    }
-    LaunchedEffect(uiState.battleLost) {
-        if (uiState.battleLost) MedievalVocalizer.speak(FlavourText.bark(BarkKind.DEFEAT, MedievalHarpPlayer.gameSeed, uiState.level))
-    }
-    LaunchedEffect(uiState.showLevelUpScreen) {
-        if (uiState.showLevelUpScreen) MedievalVocalizer.speak(FlavourText.bark(BarkKind.LEVEL_UP, MedievalHarpPlayer.gameSeed, uiState.level))
-    }
-
+    // TTS disabled for future voice clips
     DisposableEffect(Unit) {
         onDispose {
             MedievalHarpPlayer.stopMusic()
@@ -1642,54 +1632,60 @@ fun BattlefieldScene(
 
                     
                     val player = viewModel.playerState.collectAsState().value
-                    if (isWin) {
-                        val perf = player?.let {
-                            val frac = it.hp / it.maxHp
-                            when { frac >= 0.95f -> Perf.FLAWLESS; frac <= 0.25f -> Perf.PYRRHIC; else -> Perf.STANDARD }
-                        } ?: Perf.STANDARD
-                        Text(
-                            text = FlavourText.victoryQuote(MedievalHarpPlayer.gameSeed, uiState.level, perf),
-                            fontSize = 11.sp, fontFamily = FontFamily.Serif, color = TapestryDark, textAlign = TextAlign.Center
-                        )
-                    } else {
-                        val quote = remember { FlavourText.defeatQuote() }
+                    
+                    Column(
+                        modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (isWin) {
+                            val perf = player?.let {
+                                val frac = it.hp / it.maxHp
+                                when { frac >= 0.95f -> Perf.FLAWLESS; frac <= 0.25f -> Perf.PYRRHIC; else -> Perf.STANDARD }
+                            } ?: Perf.STANDARD
+                            Text(
+                                text = FlavourText.victoryQuote(MedievalHarpPlayer.gameSeed, uiState.level, perf),
+                                fontSize = 11.sp, fontFamily = FontFamily.Serif, color = TapestryDark, textAlign = TextAlign.Center
+                            )
+                        } else {
+                            val quote = remember { FlavourText.defeatQuote() }
 
-                        Text(
-                            text = quote,
-                            fontSize = 12.sp,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                            fontFamily = FontFamily.Serif,
-                            color = Color(0xFF6B4423),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                        
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                        ) {
-                            Box(modifier = Modifier.size(70.dp).background(Color(0xFFE5D3B3), RoundedCornerShape(4.dp)).border(2.dp, TapestryDark, RoundedCornerShape(4.dp)).clipToBounds()) {
-                                Canvas(modifier = Modifier.fillMaxSize()) {
-                                    val sc = size.width / 80f
-                                    withTransform({
-                                        scale(sc, sc, pivot = Offset.Zero)
-                                        translate(40f, -140f) // shift up to where cy=200 is
-                                    }) {
-                                        if (player != null) {
-                                            // Draw just head without helmet
-                                            val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
-                                            com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
+                            Text(
+                                text = quote,
+                                fontSize = 12.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                fontFamily = FontFamily.Serif,
+                                color = Color(0xFF6B4423),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                            
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                            ) {
+                                Box(modifier = Modifier.size(70.dp).background(Color(0xFFE5D3B3), RoundedCornerShape(4.dp)).border(2.dp, TapestryDark, RoundedCornerShape(4.dp)).clipToBounds()) {
+                                    Canvas(modifier = Modifier.fillMaxSize()) {
+                                        val sc = size.width / 80f
+                                        withTransform({
+                                            scale(sc, sc, pivot = Offset.Zero)
+                                            translate(40f, -140f) // shift up to where cy=200 is
+                                        }) {
+                                            if (player != null) {
+                                                // Draw just head without helmet
+                                                val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
+                                                com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Name: ${uiState.playerName}", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryDark)
-                                Text("Weapon: ${player?.weaponHead?.name ?: "None"}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
-                                val anc = uiState.unlockedAncillaries.mapNotNull { id -> com.example.game.GameData.ANCILLARIES.find { it.id == id }?.name }.joinToString(", ")
-                                Text("Ancillaries: ${if (anc.isEmpty()) "None" else anc}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
-                                Text("Kills: ${uiState.totalKills}", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryRed)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Name: ${uiState.playerName}", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                    Text("Weapon: ${player?.weaponHead?.name ?: "None"}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                    val anc = uiState.unlockedAncillaries.mapNotNull { id -> com.example.game.GameData.ANCILLARIES.find { it.id == id }?.name }.joinToString(", ")
+                                    Text("Ancillaries: ${if (anc.isEmpty()) "None" else anc}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                    Text("Kills: ${uiState.totalKills}", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryRed)
+                                }
                             }
                         }
                     }

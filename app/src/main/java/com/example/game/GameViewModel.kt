@@ -1011,8 +1011,7 @@ class GameViewModel : ViewModel() {
     }
 
     private fun addPopup(text: String, x: Float, y: Float, color: Color) {
-        val popup = CombatPopup(text, x, y + Random.nextInt(-15, 15), 0f, color)
-        _popupsState.value = _popupsState.value + popup
+        // Disabled per user request to eliminate visual clutter
     }
 
     private fun addBloodParticles(x: Float, y: Float, count: Int = 10) {

@@ -19,8 +19,36 @@ import kotlinx.coroutines.launch
 object MedievalAudioSynth {
     private const val SAMPLE_RATE = 22050
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var appContext: android.content.Context? = null
+
+    fun init(context: android.content.Context) {
+        appContext = context.applicationContext
+    }
 
     fun playSound(type: SoundType) {
+        if (type == SoundType.DRUM_ROLL && appContext != null) {
+            try {
+                val am = appContext!!.assets
+                val files = am.list("drums")
+                if (files != null && files.isNotEmpty()) {
+                    val audioFiles = files.filter { it.endsWith(".wav") || it.endsWith(".ogg") || it.endsWith(".mp3") }
+                    if (audioFiles.isNotEmpty()) {
+                        val randomFile = audioFiles.random()
+                        val afd = am.openFd("drums/$randomFile")
+                        val player = android.media.MediaPlayer()
+                        player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                        afd.close()
+                        player.setOnCompletionListener { it.release() }
+                        player.prepare()
+                        player.start()
+                        return // Skip the procedural synth if we played a custom file!
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
         scope.launch {
             try {
                 val buffer = generateBuffer(type)

@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.game.MedievalAudioSynth.init(applicationContext)
         
         // Initialize the free, offline, local vocalization engine
         // com.example.game.MedievalVocalizer.init(applicationContext)

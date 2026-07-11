@@ -1952,12 +1952,21 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
         composeCanvas,
         size
     ) {
+        // Create a boxed frame for the portrait
+        val portraitRect = androidx.compose.ui.geometry.Rect(
+            left = width / 2f - 200f,
+            top = 260f,
+            right = width / 2f + 200f,
+            bottom = 600f
+        )
+        
+        // Draw the box background and border
+        drawRect(androidx.compose.ui.graphics.Color(0xFFF5F5F5), topLeft = portraitRect.topLeft, size = portraitRect.size)
+        drawRect(androidx.compose.ui.graphics.Color(0xFF3B291A), topLeft = portraitRect.topLeft, size = portraitRect.size, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f))
+
         withTransform({
+            clipRect(portraitRect.left, portraitRect.top, portraitRect.right, portraitRect.bottom)
             scale(3.5f, 3.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
-            // Head and shoulders shot: Zoomed in to 3.5x scale.
-            // Screen center is 400x400. Face local is (0, 175).
-            // tx = 114.28f -> 400 / 3.5
-            // ty = -50f -> (175 - 50) * 3.5 = 125 * 3.5 = 437.5f (puts face nicely centered vertically)
             translate(114.3f, -50f)
         }) {
             val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)

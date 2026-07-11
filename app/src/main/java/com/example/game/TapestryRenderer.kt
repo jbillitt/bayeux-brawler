@@ -939,12 +939,23 @@ object TapestryRenderer {
                 // idx 2 -> mid-handle (0.6f of handle)
                 // idx 3 -> lower-handle (0.4f of handle)
                 // idx 4+ -> staggered on the head
-                val attachPos = when (idx) {
-                    0 -> Offset(hx + handleLen * 0.85f * 0.8f, hy - handleLen * 0.85f * 0.4f)
-                    1 -> headPos
-                    2 -> Offset(hx + handleLen * 0.6f * 0.8f, hy - handleLen * 0.6f * 0.4f)
-                    3 -> Offset(hx + handleLen * 0.4f * 0.8f, hy - handleLen * 0.4f * 0.4f)
-                    else -> Offset(headPos.x + (idx - 3) * 8f, headPos.y + (idx - 3) * 4f)
+                val attachPos = if (isChainHandle && !isBowOrSlingshot) {
+                    val gripEnd = Offset(hx - 10f, hy + 5f)
+                    when (idx) {
+                        0 -> Offset(gripEnd.x + (headPos.x - gripEnd.x) * 0.85f, gripEnd.y + (headPos.y - gripEnd.y) * 0.85f)
+                        1 -> headPos
+                        2 -> Offset(gripEnd.x + (headPos.x - gripEnd.x) * 0.6f, gripEnd.y + (headPos.y - gripEnd.y) * 0.6f)
+                        3 -> Offset(gripEnd.x + (headPos.x - gripEnd.x) * 0.4f, gripEnd.y + (headPos.y - gripEnd.y) * 0.4f)
+                        else -> Offset(headPos.x + (idx - 3) * 8f, headPos.y + (idx - 3) * 4f)
+                    }
+                } else {
+                    when (idx) {
+                        0 -> Offset(hx + handleLen * 0.85f * 0.8f, hy - handleLen * 0.85f * 0.4f)
+                        1 -> headPos
+                        2 -> Offset(hx + handleLen * 0.6f * 0.8f, hy - handleLen * 0.6f * 0.4f)
+                        3 -> Offset(hx + handleLen * 0.4f * 0.8f, hy - handleLen * 0.4f * 0.4f)
+                        else -> Offset(headPos.x + (idx - 3) * 8f, headPos.y + (idx - 3) * 4f)
+                    }
                 }
 
                 // Vary the angles widely

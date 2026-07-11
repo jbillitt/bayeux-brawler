@@ -107,7 +107,7 @@ object SfxGenerator {
     private fun drumRoll(sr: Int, rng: Random): ShortArray {
         val dur = 1.5f; val n = (sr * dur).toInt(); val out = ShortArray(n)
         val f = ProceduralMedievalComposer.midiToFreq(ProceduralMedievalComposer.currentRootMidi - 12f).toDouble() // Low timpani root
-        val hitsPerSec = 14.0
+        val hitsPerSec = 5.0 // Slower war drum cadence
         for (i in 0 until n) {
             val t = i.toDouble() / sr
             val hitT = (t * hitsPerSec) % 1.0 // 0 to 1 per hit

@@ -156,9 +156,8 @@ class GameViewModel : ViewModel() {
     fun updatePhysical(size: Float, hairColor: Color, hairStyle: String) {
         if (_uiState.value.isBattleActive) return
         
-        // Generate a deterministic Norman/Saxon name based on physical traits
-        val seed = size.toBits() xor hairColor.value.toLong().toInt() xor hairStyle.hashCode()
-        val rng = kotlin.random.Random(seed)
+        // Generate a random Norman/Saxon name based on physical traits
+        val rng = kotlin.random.Random.Default
         
         val firstNames = if (size > 1.1f) {
             listOf(
@@ -298,6 +297,7 @@ class GameViewModel : ViewModel() {
         _enemiesState.value = enemies
         _projectilesState.value = emptyList()
         _popupsState.value = emptyList()
+        _particlesState.value = emptyList() // clear blood from previous battle
 
         _uiState.update {
             it.copy(

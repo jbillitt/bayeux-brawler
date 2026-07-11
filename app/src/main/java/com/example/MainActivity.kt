@@ -144,10 +144,10 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
         if (uiState.battleWon) playRandomVoiceClip()
     }
     LaunchedEffect(uiState.battleLost) {
-        if (uiState.battleLost) playRandomVoiceClip()
+        // Voice clips are victory-only
     }
     LaunchedEffect(uiState.showLevelUpScreen) {
-        if (uiState.showLevelUpScreen) playRandomVoiceClip()
+        // Voice clips are victory-only
     }
     DisposableEffect(Unit) {
         onDispose {

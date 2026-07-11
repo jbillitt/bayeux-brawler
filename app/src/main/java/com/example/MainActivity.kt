@@ -426,6 +426,13 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
                         color = if (uiState.showLevelUpScreen || uiState.pendingLevelUpChoices.isNotEmpty()) TapestryRed else TapestryDark
                     )
                 }
+                Text(
+                    text = "v0.1 Mercia",
+                    fontSize = 8.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = TapestryDark.copy(alpha = 0.5f)
+                )
             }
             Text(
                 text = FlavourText.battleName(MedievalHarpPlayer.gameSeed, uiState.level),

@@ -290,7 +290,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                     // Left: Character Preview
                     Box(
                         modifier = Modifier
-                            .weight(0.24f)
+                            .weight(0.19f)
                             .fillMaxHeight()
                     ) {
                         CharacterPreviewCard(uiState = uiState)
@@ -299,7 +299,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                     // Middle: Tabbed Component Lists or Level Up Screen
                     Box(
                         modifier = Modifier
-                            .weight(0.53f)
+                            .weight(0.58f)
                             .fillMaxHeight()
                     ) {
                         if (uiState.showMusicDecision) {
@@ -732,7 +732,7 @@ fun LevelUpScreen(
                         }
                         Card(
                             modifier = Modifier
-                                .width(260.dp)
+                                .width(285.dp)
                                 .fillMaxHeight()
                                 .clickable { onSelectChoice(choice.id) },
                             colors = CardDefaults.cardColors(containerColor = bannerColor),
@@ -748,7 +748,7 @@ fun LevelUpScreen(
                             ) {
                                 Text(
                                     tagLabel,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = titleColor,
                                     modifier = Modifier
@@ -759,18 +759,18 @@ fun LevelUpScreen(
                                 Text(
                                     choice.title,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
+                                    fontSize = 15.sp,
                                     color = TapestryDark,
                                     fontFamily = FontFamily.Serif,
                                     textAlign = TextAlign.Center
                                 )
                                 Text(
                                     choice.description,
-                                    fontSize = 13.sp,
-                                    lineHeight = 17.sp,
+                                    fontSize = 12.sp,
+                                    lineHeight = 14.sp,
                                     color = TapestryDark.copy(alpha = 0.85f),
                                     textAlign = TextAlign.Center,
-                                    overflow = TextOverflow.Visible
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Box(
                                     modifier = Modifier

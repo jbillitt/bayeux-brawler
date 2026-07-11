@@ -358,7 +358,9 @@ class BloodParticle(
     var vx: Float,
     var vy: Float,
     var age: Float = 0f,
-    val maxAge: Float = 4.0f + Random.nextFloat() * 4.0f // linger longer on the ground!
+    val maxAge: Float = 4.0f + Random.nextFloat() * 4.0f, // linger longer on the ground!
+    val color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color(0xFF9E3624),
+    val isSmoke: Boolean = false
 )
 
 // Main Game State

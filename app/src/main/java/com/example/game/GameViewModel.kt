@@ -466,13 +466,20 @@ class GameViewModel : ViewModel() {
         val particles = _particlesState.value
         particles.forEach { 
             it.age += dt 
-            if (it.y < 350f) {
+            if (it.y < 350f || it.isSmoke) {
                 it.x += it.vx * dt
                 it.y += it.vy * dt
-                it.vy += 400f * dt // gravity
+                if (!it.isSmoke) {
+                    it.vy += 400f * dt // gravity for blood
+                } else {
+                    it.vx += (Random.nextFloat() * 10f - 5f) * dt // drifting wind
+                }
             }
-        }
         _particlesState.value = particles.filter { it.age < it.maxAge }
+
+        if (_gameState.value.unlockedAncillaries.contains("anc_monk") && Random.nextFloat() < 0.2f) {
+            addIncenseParticles(player.posX - (40f * player.size), 190f, count = 1)
+        }
 
         // Decay screenshake
         if (_screenshake.value > 0f) {
@@ -1055,6 +1062,21 @@ class GameViewModel : ViewModel() {
                 y = y + Random.nextInt(-20, 10),
                 vx = Random.nextFloat() * 240f - 120f,
                 vy = Random.nextFloat() * -220f - 80f
+            )
+        }
+        _particlesState.value = _particlesState.value + newParticles
+    }
+
+    private fun addIncenseParticles(x: Float, y: Float, count: Int = 2) {
+        val newParticles = List(count) {
+            BloodParticle(
+                x = x + Random.nextInt(-5, 5),
+                y = y,
+                vx = Random.nextFloat() * 40f - 20f, // Drift slightly left/right
+                vy = Random.nextFloat() * -40f - 20f, // Drift upwards slowly
+                color = androidx.compose.ui.graphics.Color(0xFFE0E0E0), // Grey/White smoke
+                isSmoke = true,
+                maxAge = 2.0f + Random.nextFloat() * 2.0f
             )
         }
         _particlesState.value = _particlesState.value + newParticles

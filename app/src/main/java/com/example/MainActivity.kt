@@ -1604,23 +1604,24 @@ fun BattlefieldScene(
                     }
                 }
 
-                // 5. Draw Blood Particles
+                // 5. Draw Game Particles (Blood, Smoke)
                 viewModel.particlesState.value.forEach { part ->
                     val px = part.x * playerScaleX
                     val py = 200f + (part.y - 200f) * scaleFactor
                     
-                    if (part.y >= 350f) {
+                    if (part.y >= 350f && !part.isSmoke) {
                         val poolWidth = 5f + (part.age / part.maxAge) * 15f
                         val poolHeight = 2f + (part.age / part.maxAge) * 5f
                         drawOval(
-                            color = Color(0xFF9E3624).copy(alpha = (1f - (part.age / part.maxAge) * 0.5f).coerceIn(0f, 1f)),
+                            color = part.color.copy(alpha = (1f - (part.age / part.maxAge) * 0.5f).coerceIn(0f, 1f)),
                             topLeft = Offset(px - poolWidth / 2, py - poolHeight / 2),
                             size = Size(poolWidth, poolHeight)
                         )
                     } else {
+                        val baseRadius = if (part.isSmoke) 4f else 2.5f
                         drawCircle(
-                            color = Color(0xFF9E3624).copy(alpha = (1f - (part.age / part.maxAge)).coerceIn(0f, 1f)),
-                            radius = 2.5f + (Math.random() * 2f).toFloat(),
+                            color = part.color.copy(alpha = (1f - (part.age / part.maxAge)).coerceIn(0f, 1f)),
+                            radius = baseRadius + (Math.random() * 2f).toFloat(),
                             center = Offset(px, py)
                         )
                     }

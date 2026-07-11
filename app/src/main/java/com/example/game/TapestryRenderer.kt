@@ -1769,14 +1769,7 @@ object TapestryRenderer {
                                 addOval(androidx.compose.ui.geometry.Rect(cx + 35f, cy + 55f, cx + 45f, cy + 65f))
                             }
                             drawStitchedFill(this, censer, Color(0xFFC0C0C0)) // silver censer
-                            // incense smoke (little white/grey swirls as particles)
-                            for (i in 0 until 8) {
-                                val t = (playerFighter.animFrame * 2f + i * 0.5f) % 4f
-                                val smokeY = cy + 50f - t * 15f
-                                val smokeX = cx + 40f + kotlin.math.sin(t * 3f + i) * 12f
-                                drawCircle(Color(0xFFE0E0E0), radius = 2f, center = Offset(smokeX, smokeY))
-                                drawCircle(ThreadColor, radius = 2f, center = Offset(smokeX, smokeY), style = Stroke(width = 1f))
-                            }
+                            // incense smoke is now handled by GameViewModel's particle system
                         }
                     }
                 }

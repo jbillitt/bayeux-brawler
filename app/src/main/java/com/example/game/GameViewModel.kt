@@ -1147,7 +1147,10 @@ class GameViewModel : ViewModel() {
                 showLevelUpScreen = showLevelUp,
                 performanceScore = newPerf,
                 showMusicDecision = if (won && (state.level % 5 == 0)) true else state.showMusicDecision,
-                pendingMusicOptions = if (won && (state.level % 5 == 0)) listOf("More Tempo", "Merrier", "More Solemn", "Wilder", "Nobler") else state.pendingMusicOptions
+                pendingMusicOptions = if (won && (state.level % 5 == 0)) {
+                    val allMusic = listOf("More Tempo", "Merrier", "More Solemn", "Wilder", "Nobler")
+                    allMusic.shuffled().take(2) + "No Change"
+                } else state.pendingMusicOptions
             )
         }
 

@@ -31,6 +31,7 @@ object MedievalHarpPlayer {
     private var track: AudioTrack? = null
     private var feeder: Thread? = null
     @Volatile private var generation = 0
+    @Volatile private var compositionGeneration = 0
     @Volatile private var current: ShortArray? = null
     @Volatile private var pending: ShortArray? = null
     @Volatile private var fadeStartFrame = 0L
@@ -62,14 +63,14 @@ object MedievalHarpPlayer {
     fun startMusic(level: Int = 1, hasTrumpeter: Boolean = false, moods: List<String> = emptyList()) {
         if (isPlaying && currentLevel == level && currentTrumpeter == hasTrumpeter && currentMoods == moods) return
         currentLevel = level; currentTrumpeter = hasTrumpeter; currentMoods = moods
-        val myGen = ++generation
+        val myGen = ++compositionGeneration
         val wasPlaying = isPlaying
         isPlaying = true
         scope.launch {
             try {
                 val buf = ProceduralMedievalComposer.compose(gameSeed, level, hasTrumpeter, SAMPLE_RATE, moods)
                 synchronized(this@MedievalHarpPlayer) {
-                    if (generation != myGen) return@launch
+                    if (compositionGeneration != myGen) return@launch
                     if (wasPlaying && current != null && feeder?.isAlive == true) {
                         pending = buf                       // in-phase crossfade in the feeder
                         fadeStartFrame = playheadFrames

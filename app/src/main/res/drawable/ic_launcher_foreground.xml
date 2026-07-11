@@ -4,7 +4,7 @@
     android:height="108dp"
     android:viewportWidth="100"
     android:viewportHeight="100">
-    <group android:translateX="50" android:translateY="48" android:scaleX="1.6" android:scaleY="1.6">
+    <group android:translateX="50" android:translateY="48" android:scaleX="1.15" android:scaleY="1.15">
         <path android:fillColor="#DDA74F" android:strokeColor="#382B21" android:strokeWidth="2" android:strokeLineJoin="round" android:pathData="M -20 -20 L 20 -20 L 20 5 Q 0 35 -20 5 Z"/>
         <path android:fillColor="#9A3324" android:pathData="M -10 -20 L 10 -20 L 10 12 L 0 22 L -10 12 Z"/>
         <!-- Shield Rivets -->
@@ -12,7 +12,7 @@
         <path android:fillColor="#382B21" android:pathData="M 14,-15 a 1,1 0 1,0 2,0 a 1,1 0 1,0 -2,0"/>
     </group>
 
-    <group android:translateX="52" android:translateY="60" android:scaleX="2.0" android:scaleY="2.0">
+    <group android:translateX="52" android:translateY="60" android:scaleX="1.5" android:scaleY="1.5">
         <!-- Spangenhelm Face -->
         <path android:fillColor="#E8C5A4" android:strokeColor="#382B21" android:strokeWidth="1.2" android:strokeLineJoin="round" android:pathData="M -12,0 L 14,-6 L 15,2 L 21,10 L 10,9 L 12,13 L 9,18 L -12,18 Z"/>
         <path android:fillColor="#FAF6EB" android:strokeColor="#382B21" android:strokeWidth="0.75" android:pathData="M 1,4 Q 4.5,1 8,4 Q 4.5,7 1,4 Z"/>

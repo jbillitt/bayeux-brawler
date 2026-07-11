@@ -295,8 +295,8 @@ data class FighterState(
                 else if (weaponHead.id == "head_longbow") 2.5f
                 else 2.0f
             } else 1.1f
-            // Weight slows you down slightly
-            val weightFactor = 1f + (totalMass * 0.035f) + (size - 1f) * 0.5f
+            // Weight slows you down slightly, but being little makes you attack much faster
+            val weightFactor = (1f + (totalMass * 0.03f)) * (0.4f + size * 0.6f)
             // Two-handing (no shield) doubles weapon speed! Missing an arm means you can't two-hand.
             val shieldFactor = if (missingArm) 1.0f else if (shield.id == "shield_none" && !isDualWielding) 0.5f else if (isDualWielding) 0.6f else 1.0f
             // Speed penalty from handle choices

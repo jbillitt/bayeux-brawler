@@ -125,7 +125,8 @@ object GameData {
         Ancillary("anc_crossbowman", "Gaston", "Crossbowman", "Slow but devastating ranged cover fire. Pierces mail.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF3B2F2F)),
         Ancillary("anc_mount_horse", "Warhorse", "Destrier", "A towering Norman warhorse. Grants massive speed and HP.", hpBoost = 80f, speedBoost = 0.5f, color = Color(0xFF452E1B)),
         Ancillary("anc_cupbearer", "Geoffrey", "Cupbearer", "Refills your goblet with fine wine mid-swing.", hpBoost = 40f, speedBoost = -0.1f, color = Color(0xFF632873)),
-        Ancillary("anc_archer", "Robin", "Longbowman", "Fires covering arrows into the fray. Just mind your back.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFF4C613D))
+        Ancillary("anc_archer", "Robin", "Longbowman", "Fires covering arrows into the fray. Just mind your back.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFF4C613D)),
+        Ancillary("anc_monk", "Brother Tuck", "Monk", "Blesses you with holy incense. Smells heavenly.", hpBoost = 30f, speedBoost = 0f, color = Color(0xFF5E4B3C))
     )
 }
 
@@ -237,6 +238,7 @@ data class FighterState(
 
     val reach: Float
         get() {
+            if (missingArm) return 0.2f * size + if (isMounted) 1.5f else 0f
             val baseReach = (weaponHead.reach + weaponHandle.reach) * size
             val extensionReach = handleExtensionCount * 0.35f
             val mountReach = if (isMounted) 1.5f else 0f
@@ -250,7 +252,7 @@ data class FighterState(
             // Player gets 12% extra base damage per level survived to scale up against high level mobs
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
             val doubleEndedMultiplier = if (isPlayer && weaponHandle.id == "handle_double_ended") 1.5f else 1.0f
-            if (missingArm && isPlayer) {
+            if (missingArm) {
                 // Reduced to fist-fighting
                 val fist = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
                 return fist.blunt * size * size * scaleLvl
@@ -260,6 +262,7 @@ data class FighterState(
 
     val damagePierce: Float 
         get() {
+            if (missingArm) return 0f
             val base = weaponHead.pierce * size * size
             val att = extraAttachments.sumOf { it.pierce.toDouble() * 0.5 }.toFloat()
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
@@ -268,6 +271,7 @@ data class FighterState(
 
     val damageSlash: Float 
         get() {
+            if (missingArm) return 0f
             val base = weaponHead.slash * size * size
             val att = extraAttachments.sumOf { it.slash.toDouble() * 0.5 }.toFloat()
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f

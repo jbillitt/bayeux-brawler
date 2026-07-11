@@ -147,10 +147,12 @@ object TapestryRenderer {
             }
 
             // Persistent blood pool for dying/dead fighters (all death types except deathType 5 which has its own)
-            if ((fighter.isDead || fighter.isDying) && fighter.deathType != 5) {
-                val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
-                if (progress > 0.3f) {
-                    val poolProgress = ((progress - 0.3f) / 0.7f).coerceIn(0f, 1f)
+            if (fighter.isDead && fighter.deathType != 5) {
+                // Time since death drives pool expansion
+                val timeSinceDeath = (System.currentTimeMillis() - fighter.deathTime) / 1000f
+                val progress = (timeSinceDeath * 0.5f).coerceIn(0f, 1f)
+                if (progress > 0f) {
+                    val poolProgress = progress
                     val groundY = cy + 155f
                     val fallOffset = if (fighter.facingRight) -50f else 50f
                     val poolW = 55f * poolProgress * fighter.size
@@ -865,7 +867,7 @@ object TapestryRenderer {
                 fighter.isAttacking && swing < 0.3f -> 90f - 45f + swing * 100f   // lag behind on windup
                 fighter.isAttacking && swing < 0.7f -> 90f + 30f + (swing - 0.3f) * 120f // whip forward
                 fighter.isAttacking                 -> 90f + 78f - (swing - 0.7f) * 80f  // snap back
-                else -> 90f + sin(fighter.animFrame * 3f) * 25f  // idle natural dangle down
+                else -> 90f - (fighter.velocityX * 0.1f).coerceIn(-20f, 20f)  // idle natural dangle down
             }
             val chainLen = 45f
             val angleRad = Math.toRadians(pendulumAngle.toDouble())
@@ -941,7 +943,7 @@ object TapestryRenderer {
                 fighter.isAttacking && swing < 0.3f -> 90f - 45f + swing * 100f
                 fighter.isAttacking && swing < 0.7f -> 90f + 30f + (swing - 0.3f) * 120f
                 fighter.isAttacking                 -> 90f + 78f - (swing - 0.7f) * 80f
-                else -> 90f + sin(fighter.animFrame * 3f) * 25f
+                else -> 90f - (fighter.velocityX * 0.1f).coerceIn(-20f, 20f)
             }
         } else 0f
         val isPick = fighter.weaponHandle.id == "handle_pick"
@@ -1107,7 +1109,7 @@ object TapestryRenderer {
                 } else {
                     20f - 100f * ((swing - 0.3f) / 0.7f)
                 }
-            } else if (isHeavy) {
+            } else if (isHeavy || isChainHandle) {
                 if (swing < 0.5f) {
                     -75f * (swing / 0.5f)
                 } else {
@@ -1569,6 +1571,7 @@ object TapestryRenderer {
                     "anc_herald" -> Color(0xFFB03131) // Herald's red
                     "anc_trumpeter" -> Color(0xFFD6A420) // Trumpeter's gold
                     "anc_cupbearer" -> Color(0xFF632873) // Cupbearer's violet
+                    "anc_monk" -> Color(0xFF8B7355) // Hessian sack
                     else -> Color(0xFF5F6E75)
                 }
 
@@ -1643,7 +1646,8 @@ object TapestryRenderer {
                     }
                     "anc_crossbowman" -> {
                         // Crossbow
-                        val armAngle = -15f
+                        val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
+                        val armAngle = if (attackAnim < 0.4f) -15f else if (attackAnim < 0.6f) -15f - 10f * ((attackAnim - 0.4f)/0.2f) else -25f + 10f * ((attackAnim - 0.6f)/0.4f)
                         withTransform({ rotate(armAngle, pivot = Offset(cx, cy + 50f)) }) {
                             // stock
                             drawLine(Color(0xFF5C4033), Offset(cx - 10f, cy + 40f), Offset(cx + 40f, cy + 30f), strokeWidth = 5f)
@@ -1654,20 +1658,28 @@ object TapestryRenderer {
                             }
                             drawPath(bowPath, Color(0xFF2E2E2E), style = Stroke(width = 4f))
                             // string
-                            drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 10f), Offset(cx + 10f, cy + 35f), strokeWidth = 1.5f)
-                            drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 50f), Offset(cx + 10f, cy + 35f), strokeWidth = 1.5f)
+                            val stringPull = if (attackAnim > 0.1f && attackAnim < 0.8f) 20f else 0f
+                            drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 10f), Offset(cx + 10f - stringPull, cy + 35f), strokeWidth = 1.5f)
+                            drawLine(Color(0xFFDDDDDD), Offset(cx + 35f, cy + 50f), Offset(cx + 10f - stringPull, cy + 35f), strokeWidth = 1.5f)
                         }
                     }
                     "anc_archer" -> {
                         // Longbow
-                        val armAngle = -30f
+                        val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
+                        val armAngle = if (attackAnim < 0.4f) -30f else if (attackAnim < 0.6f) -30f - 15f * ((attackAnim - 0.4f)/0.2f) else -45f + 15f * ((attackAnim - 0.6f)/0.4f)
                         withTransform({ rotate(armAngle, pivot = Offset(cx, cy + 50f)) }) {
                             val bowPath = Path().apply {
                                 moveTo(cx + 30f, cy - 10f)
                                 quadraticBezierTo(cx + 45f, cy + 40f, cx + 30f, cy + 90f)
                             }
                             drawPath(bowPath, Color(0xFF6E5536), style = Stroke(width = 4.5f))
-                            drawLine(Color(0xFFDDDDDD), Offset(cx + 30f, cy - 10f), Offset(cx + 30f, cy + 90f), strokeWidth = 1f)
+                            val stringPull = if (attackAnim > 0.1f && attackAnim < 0.8f) 25f else 0f
+                            val stringPath = Path().apply {
+                                moveTo(cx + 30f, cy - 10f)
+                                lineTo(cx + 30f - stringPull, cy + 40f)
+                                lineTo(cx + 30f, cy + 90f)
+                            }
+                            drawPath(stringPath, Color(0xFFDDDDDD), style = Stroke(width = 1f))
                         }
                     }
                     "anc_cupbearer" -> {
@@ -1688,6 +1700,23 @@ object TapestryRenderer {
                         // Wine droplets (Bayeux red stitches)
                         drawCircle(Color(0xFF9E3624), radius = 2f, center = Offset(cx + 28f, cy + 25f))
                         drawCircle(Color(0xFF9E3624), radius = 1.5f, center = Offset(cx + 33f, cy + 32f))
+                    }
+                    "anc_monk" -> {
+                        // Swing a censer of incense
+                        val armAngle = -10f + sin(playerFighter.animFrame * 2f) * 45f
+                        withTransform({ rotate(armAngle, pivot = Offset(cx, cy + 50f)) }) {
+                            // chain
+                            drawLine(Color.DarkGray, Offset(cx + 10f, cy + 50f), Offset(cx + 40f, cy + 60f), strokeWidth = 2f)
+                            // censer ball
+                            val censer = Path().apply {
+                                addOval(androidx.compose.ui.geometry.Rect(cx + 35f, cy + 55f, cx + 45f, cy + 65f))
+                            }
+                            drawStitchedFill(this, censer, Color(0xFFC0C0C0)) // silver censer
+                            // incense smoke (little white/grey swirls)
+                            drawCircle(Color(0x88FFFFFF), radius = 5f, center = Offset(cx + 40f, cy + 50f))
+                            drawCircle(Color(0x88DDDDDD), radius = 8f, center = Offset(cx + 45f, cy + 40f))
+                            drawCircle(Color(0x88AAAAAA), radius = 12f, center = Offset(cx + 38f, cy + 25f))
+                        }
                     }
                 }
 

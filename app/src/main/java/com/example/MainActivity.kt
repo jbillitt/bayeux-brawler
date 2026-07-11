@@ -87,6 +87,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private var currentVoicePlayer: android.media.MediaPlayer? = null
+
 @Composable
 fun BayeuxAppContent(viewModel: GameViewModel) {
     val configuration = LocalConfiguration.current
@@ -122,6 +124,7 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
 
     val context = androidx.compose.ui.platform.LocalContext.current
     fun playRandomVoiceClip() {
+        if (currentVoicePlayer?.isPlaying == true) return
         val resIds = listOf(
             R.raw.recording_1, R.raw.recording_2, R.raw.recording_3, R.raw.recording_4,
             R.raw.recording_5, R.raw.recording_6, R.raw.recording_7, R.raw.recording_8,
@@ -132,9 +135,12 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
             R.raw.recording_25, R.raw.recording_26, R.raw.recording_27, R.raw.recording_28
         )
         try {
-            val player = android.media.MediaPlayer.create(context, resIds.random())
-            player?.setOnCompletionListener { it.release() }
-            player?.start()
+            currentVoicePlayer = android.media.MediaPlayer.create(context, resIds.random())
+            currentVoicePlayer?.setOnCompletionListener { 
+                it.release() 
+                if (currentVoicePlayer == it) currentVoicePlayer = null
+            }
+            currentVoicePlayer?.start()
         } catch (e: Exception) {
             e.printStackTrace()
         }

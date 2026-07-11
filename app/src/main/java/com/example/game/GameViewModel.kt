@@ -478,7 +478,7 @@ class GameViewModel : ViewModel() {
         }
         _particlesState.value = particles.filter { it.age < it.maxAge }
 
-        if (_gameState.value.unlockedAncillaries.contains("anc_monk") && Random.nextFloat() < 0.2f) {
+        if (_uiState.value.unlockedAncillaries.contains("anc_monk") && Random.nextFloat() < 0.2f) {
             addIncenseParticles(player.posX - (40f * player.size), 190f, count = 1)
         }
 

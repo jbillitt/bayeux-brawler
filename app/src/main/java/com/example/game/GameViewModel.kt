@@ -1280,6 +1280,7 @@ class GameViewModel : ViewModel() {
                     extraAttachments = emptyList(),
                     extraArmors = emptyList(),
                     handleExtensionCount = 0,
+                    rangedUpgrades = emptyList(),
                     unlockedAncillaries = emptySet(),
                     weaponHead = GameData.WEAPON_HEADS.filter { it.id in initialGear }.random(),
                     weaponHandle = GameData.WEAPON_HANDLES.filter { it.id in initialGear }.random(),

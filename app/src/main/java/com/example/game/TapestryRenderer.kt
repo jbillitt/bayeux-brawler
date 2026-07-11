@@ -308,7 +308,8 @@ object TapestryRenderer {
                 ax = if (fighter.facingRight) cx + 25f + (i * 5f) else cx - 25f - (i * 5f)
                 ay = cy + 40f + (i * 12f % 30f)
             } else {
-                ax = cx - 15f + (i * 12f)
+                val offset = 15f + (i * 5f)
+                ax = if (fighter.facingRight) cx + offset else cx - offset
                 ay = cy + 40f + (i * 18f % 40f)
             }
 
@@ -902,12 +903,12 @@ object TapestryRenderer {
                     val swing = swingProgress
                     val phaseOffset = if (b == 1) Math.PI.toFloat() * 0.4f else 0f
                     val chainAngle: Float = when {
-                        isAttacking && swing < 0.4f ->
-                            (Math.PI * 0.3 + swing * Math.PI * 0.5).toFloat() + phaseOffset
+                        isAttacking && swing < 0.2f ->
+                            (Math.PI * 0.3 - swing * Math.PI).toFloat() + phaseOffset // windup goes up (counter-clockwise)
                         isAttacking ->
-                            (Math.PI * 0.8 - (swing - 0.4f) / 0.6f * Math.PI).toFloat() + phaseOffset
+                            (Math.PI * 0.1 + ((swing - 0.2f) / 0.8f) * Math.PI * 2.2).toFloat() + phaseOffset // huge clockwise smash
                         else ->
-                            (Math.PI * 0.25 + sin(animFrame * 0.8f + phaseOffset) * 0.15f).toFloat()
+                            (Math.PI * 0.25 + kotlin.math.sin(animFrame * 0.8f + phaseOffset) * 0.15f).toFloat()
                     }
                     val chainLength = if (b == 1) 28f else 38f
                     val ballPos = Offset(

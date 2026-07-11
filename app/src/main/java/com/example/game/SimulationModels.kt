@@ -303,17 +303,19 @@ data class FighterState(
                 if (weaponHead.id == "head_slingshot") 1.8f // Slower slingshot
                 else if (weaponHead.id == "head_longbow") 2.5f
                 else 2.0f
+            } else if (weaponHead.id == "head_flail" || weaponHead.id == "head_war_flail" || weaponHandle.id == "handle_flail_chain") {
+                0.75f // Flails are fast and unpredictable
             } else 1.1f
             // Weight slows you down slightly, but being little makes you attack much faster
             val sizeScale = if (isRanged) (0.2f + size * 0.8f) else (0.4f + size * 0.6f)
-            val weightFactor = (1f + (totalMass * 0.03f)) * sizeScale
+            val weightFactor = (1f + (totalMass * 0.02f)) * sizeScale // reduced mass penalty slightly to match enemies better
             // Two-handing (no shield) doubles weapon speed! Missing an arm means you can't two-hand.
             val shieldFactor = if (missingArm) 1.0f else if (shield.id == "shield_none" && !isDualWielding) 0.5f else if (isDualWielding) 0.6f else 1.0f
             // Speed penalty from handle choices
             val handleSpeedPenalty = weaponHandle.speedPenalty + (if (weaponHandle.id == "handle_double_ended") 0.15f else 0f)
             val crumpleFactor = if (isCrumpled) 1.5f else 1.0f
             val finalDelay = baseDelay * weightFactor * shieldFactor * (1f + handleSpeedPenalty) * crumpleFactor
-            return max(0.4f, finalDelay)
+            return max(0.3f, finalDelay) // lower cap
         }
 
     // Move speed multiplier based on mass and speed penalties

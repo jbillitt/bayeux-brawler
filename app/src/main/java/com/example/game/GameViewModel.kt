@@ -126,8 +126,7 @@ class GameViewModel : ViewModel() {
 
     fun selectMusicMood(mood: String) {
         _uiState.update { state ->
-            // ponytail: only apply mood 70% of the time to preserve variance
-            val applied = if (mood != "No Change" && kotlin.random.Random.nextFloat() < 0.7f) state.appliedMusicMoods + mood else state.appliedMusicMoods
+            val applied = if (mood != "No Change") state.appliedMusicMoods + mood else state.appliedMusicMoods
             state.copy(
                 showMusicDecision = false,
                 pendingMusicOptions = emptyList(),

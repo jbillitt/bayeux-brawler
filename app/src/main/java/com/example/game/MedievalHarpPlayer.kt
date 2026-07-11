@@ -35,6 +35,7 @@ object MedievalHarpPlayer {
     @Volatile private var current: ShortArray? = null
     @Volatile private var pending: ShortArray? = null
     @Volatile private var fadeStartFrame = 0L
+    @Volatile private var pendStartFrame = 0L
     @Volatile private var paused = false
     private var playheadFrames = 0L
     private var currentLevel = -1
@@ -74,6 +75,10 @@ object MedievalHarpPlayer {
                     if (wasPlaying && current != null && feeder?.isAlive == true) {
                         pending = buf                       // in-phase crossfade in the feeder
                         fadeStartFrame = playheadFrames
+                        val curFrames = current!!.size / 2
+                        val pendFrames = buf.size / 2
+                        val phase = (fadeStartFrame % curFrames).toDouble() / curFrames
+                        pendStartFrame = (phase * pendFrames).toLong()
                     } else {
                         current = buf; pending = null; playheadFrames = 0L
                         begin()
@@ -125,7 +130,8 @@ object MedievalHarpPlayer {
                 val idx = (abs % loopFrames).toInt() * 2
                 var l = cur[idx].toFloat(); var r = cur[idx + 1].toFloat()
                 if (pend != null && pendFrames > 0) {
-                    val p = (abs % pendFrames).toInt() * 2
+                    val pAbs = pendStartFrame + (abs - fadeStartFrame)
+                    val p = (pAbs % pendFrames).toInt() * 2
                     val prog = ((abs - fadeStartFrame).toFloat() / FADE_FRAMES).coerceIn(0f, 1f)
                     l = l * (1f - prog) + pend[p] * prog
                     r = r * (1f - prog) + pend[p + 1] * prog
@@ -135,6 +141,7 @@ object MedievalHarpPlayer {
             }
             if (pend != null && playheadFrames + CHUNK_FRAMES - fadeStartFrame >= FADE_FRAMES) {
                 current = pend; pending = null
+                playheadFrames = pendStartFrame + (playheadFrames - fadeStartFrame)
             }
             t.write(out, 0, out.size)   // blocking write paces the loop
             playheadFrames += CHUNK_FRAMES

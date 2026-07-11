@@ -161,11 +161,26 @@ class GameViewModel : ViewModel() {
         val rng = kotlin.random.Random(seed)
         
         val firstNames = if (size > 1.1f) {
-            listOf("Guillaume", "Hugo", "Rollo", "Thorold", "Drogo", "Godfrey", "Taillefer", "Balduin", "Ranulf", "Fulk", "Goliath", "Gros-Jean")
+            listOf(
+                "Guillaume", "Hugo", "Rollo", "Thorold", "Drogo", "Godfrey", "Taillefer", "Balduin", "Ranulf", "Fulk", "Goliath", "Gros-Jean",
+                "Robert", "Richard", "Odo", "William", "Geoffrey", "Eustace", "Alain", "Baldwin", "Bohemond", "Tancred", "Roger",
+                "Ansgar", "Ilbert", "Ivo", "Nigel", "Osbern", "Payn", "Wadard", "Vital", "Turold", "Urse", "Wimund", "Hubert",
+                "Gautier", "Gervase", "Giffard", "Hamelin", "Herluin", "Humphrey", "Ilger", "Jocelyn", "Miles", "Picot", "Pons",
+                "Raoul", "Ridel", "Serlo", "Urso", "Waleran", "Wimarc", "Gislebert", "Aimeri", "Baudouin", "Foucaud", "Gaudin"
+            )
         } else if (size < 0.9f) {
-            listOf("Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred", "Wimund", "Bodo", "Osbern", "Wulfric", "Little John")
+            listOf(
+                "Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred", "Wimund", "Bodo", "Osbern", "Wulfric", "Little John",
+                "Alberic", "Berengar", "Drogo", "Erfast", "Giroie", "Herve", "Ives", "Maugis", "Odard", "Pagan", "Ralf", "Seward",
+                "Turold", "Vitalis", "Wadard", "Garin", "Oger", "Ruald", "Sasgar", "Tezelin", "Venables", "Wazo", "Anquetil"
+            )
         } else {
-            listOf("William", "Robert", "Richard", "Odo", "Harold", "Edward", "Tostig", "Gyrth", "Leofwine", "Gamel", "Aldred")
+            listOf(
+                "Arthur", "Lancelot", "Gawain", "Percival", "Bors", "Gareth", "Tristan", "Bedivere", "Galahad", "Kay",
+                "Odo", "William", "Robert", "Richard", "Roger", "Hugh", "Walter", "Ralph", "Geoffrey", "Gilbert", "Stephen",
+                "Henry", "Reginald", "Simon", "John", "Peter", "Thomas", "Nicholas", "Philip", "Adam", "Matthew", "David",
+                "Alexander", "Luke", "Mark", "Paul", "James", "Andrew", "Bartholomew", "Clement", "Dennis", "Elias", "Guy"
+            )
         }
         val firstName = firstNames.random(rng)
         
@@ -984,7 +999,8 @@ class GameViewModel : ViewModel() {
         defender.damageIndicatorTimer = 0.5f
         
         // Trigger screenshake on hit! (Reduced unless absolute unit)
-        val shakeMultiplier = if (attacker.size > 1.2f) 1.5f else 0.4f
+        val player = _playerState.value
+        val shakeMultiplier = if (player.size > 1.2f) 1.5f else 0.4f
         _screenshake.value = (finalDmgInt * shakeMultiplier).coerceIn(4f, 35f)
         
         // Spawn blood particles based on damage

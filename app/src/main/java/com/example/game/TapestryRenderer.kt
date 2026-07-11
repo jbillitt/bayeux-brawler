@@ -781,10 +781,10 @@ object TapestryRenderer {
             val gripEnd = Offset(hx - 10f, hy + 5f)
             // Physics pendulum: chain head lags on windup, whips forward on release, dangles idle
             val pendulumAngle = when {
-                fighter.isAttacking && swing < 0.3f -> -45f + swing * 100f   // lag behind on windup
-                fighter.isAttacking && swing < 0.7f -> 30f + (swing - 0.3f) * 120f // whip forward
-                fighter.isAttacking                 -> 78f - (swing - 0.7f) * 80f  // snap back
-                else -> sin(fighter.animFrame * 3f) * 25f + 15f  // idle natural dangle
+                fighter.isAttacking && swing < 0.3f -> 90f - 45f + swing * 100f   // lag behind on windup
+                fighter.isAttacking && swing < 0.7f -> 90f + 30f + (swing - 0.3f) * 120f // whip forward
+                fighter.isAttacking                 -> 90f + 78f - (swing - 0.7f) * 80f  // snap back
+                else -> 90f + sin(fighter.animFrame * 3f) * 25f  // idle natural dangle down
             }
             val chainLen = 45f
             val angleRad = Math.toRadians(pendulumAngle.toDouble())
@@ -857,10 +857,10 @@ object TapestryRenderer {
         val dangleAngle = if (isChain) {
             val swing = fighter.swingProgress
             when {
-                fighter.isAttacking && swing < 0.3f -> -45f + swing * 100f
-                fighter.isAttacking && swing < 0.7f -> 30f + (swing - 0.3f) * 120f
-                fighter.isAttacking                 -> 78f - (swing - 0.7f) * 80f
-                else -> sin(fighter.animFrame * 3f) * 25f + 15f
+                fighter.isAttacking && swing < 0.3f -> 90f - 45f + swing * 100f
+                fighter.isAttacking && swing < 0.7f -> 90f + 30f + (swing - 0.3f) * 120f
+                fighter.isAttacking                 -> 90f + 78f - (swing - 0.7f) * 80f
+                else -> 90f + sin(fighter.animFrame * 3f) * 25f
             }
         } else 0f
         val isPick = fighter.weaponHandle.id == "handle_pick"

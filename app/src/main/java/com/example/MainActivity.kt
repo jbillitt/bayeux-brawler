@@ -703,7 +703,7 @@ fun LevelUpScreen(
                         }
                         Card(
                             modifier = Modifier
-                                .width(220.dp)
+                                .width(260.dp)
                                 .fillMaxHeight()
                                 .clickable { onSelectChoice(choice.id) },
                             colors = CardDefaults.cardColors(containerColor = bannerColor),
@@ -713,7 +713,6 @@ fun LevelUpScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .verticalScroll(rememberScrollState())
                                     .padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -759,7 +758,7 @@ fun LevelUpScreen(
                     // No-Reward card
                     Card(
                         modifier = Modifier
-                            .width(180.dp)
+                            .width(260.dp)
                             .fillMaxHeight()
                             .clickable { onSkipReward() },
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
@@ -1046,8 +1045,8 @@ fun GearSelectionTabs(
             }
         }
 
-        // Handle attachment selection (Only visible on Weapon Tab)
-        if (selectedTab == 0 && uiState.weaponHead.id != "head_bare") {
+        // Handle attachment selection (Only visible on Weapon Tab, not for ranged)
+        if (selectedTab == 0 && uiState.weaponHead.id != "head_bare" && uiState.weaponHead.id !in listOf("head_bow", "head_longbow", "head_slingshot")) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "WEAPON HAFT / HANDLE ATTACHMENT",
@@ -1379,7 +1378,7 @@ fun BattlefieldScene(
             }
 
             // 1. Draw TOP Embroidered Border (characteristic of Bayeux)
-            drawTapestryBorder(this, isTop = true, textHeadline = latinHeadline, motifSeed = borderSeed)
+            drawTapestryBorder(this, isTop = true, textHeadline = "", motifSeed = borderSeed)
 
             // 2. Draw BOTTOM Embroidered Border (With decorative stags and some funny bones of fallen foes!)
             drawTapestryBorder(this, isTop = false, textHeadline = "", motifSeed = borderSeed + 1)

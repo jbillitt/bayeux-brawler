@@ -120,7 +120,35 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // TTS disabled for future voice clips
+    val context = androidx.compose.ui.platform.LocalContext.current
+    fun playRandomVoiceClip() {
+        val resIds = listOf(
+            R.raw.recording_1, R.raw.recording_2, R.raw.recording_3, R.raw.recording_4,
+            R.raw.recording_5, R.raw.recording_6, R.raw.recording_7, R.raw.recording_8,
+            R.raw.recording_9, R.raw.recording_10, R.raw.recording_11, R.raw.recording_12,
+            R.raw.recording_13, R.raw.recording_14, R.raw.recording_15, R.raw.recording_16,
+            R.raw.recording_17, R.raw.recording_18, R.raw.recording_19, R.raw.recording_20,
+            R.raw.recording_21, R.raw.recording_22, R.raw.recording_23, R.raw.recording_24,
+            R.raw.recording_25, R.raw.recording_26, R.raw.recording_27, R.raw.recording_28
+        )
+        try {
+            val player = android.media.MediaPlayer.create(context, resIds.random())
+            player?.setOnCompletionListener { it.release() }
+            player?.start()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    LaunchedEffect(uiState.battleWon) {
+        if (uiState.battleWon) playRandomVoiceClip()
+    }
+    LaunchedEffect(uiState.battleLost) {
+        if (uiState.battleLost) playRandomVoiceClip()
+    }
+    LaunchedEffect(uiState.showLevelUpScreen) {
+        if (uiState.showLevelUpScreen) playRandomVoiceClip()
+    }
     DisposableEffect(Unit) {
         onDispose {
             MedievalHarpPlayer.stopMusic()

@@ -683,12 +683,14 @@ fun LevelUpScreen(
                 Text("Proceed to Next Battle", color = Color.White, fontWeight = FontWeight.Bold)
             }
                 } else {
+            val scrollState = rememberScrollState()
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight()
-                        .horizontalScroll(rememberScrollState()),
+                        .padding(bottom = 16.dp)
+                        .horizontalScroll(scrollState),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -807,6 +809,27 @@ fun LevelUpScreen(
                                 Text("✗", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
+                }
+
+                // Visual Scrollbar overlay
+                if (scrollState.maxValue > 0) {
+                    val scrollPercent = scrollState.value.toFloat() / scrollState.maxValue
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 4.dp)
+                            .width(200.dp)
+                            .height(6.dp)
+                            .background(Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(80.dp)
+                                .offset(x = (120.dp * scrollPercent))
+                                .background(TapestryDark, RoundedCornerShape(3.dp))
+                        )
                     }
                 }
 

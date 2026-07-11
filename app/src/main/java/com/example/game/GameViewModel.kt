@@ -983,8 +983,9 @@ class GameViewModel : ViewModel() {
         defender.damageIndicator = "-${finalDmgInt.toInt()}"
         defender.damageIndicatorTimer = 0.5f
         
-        // Trigger screenshake on hit!
-        _screenshake.value = (finalDmgInt * 1.5f).coerceIn(10f, 35f)
+        // Trigger screenshake on hit! (Reduced unless absolute unit)
+        val shakeMultiplier = if (attacker.size > 1.2f) 1.5f else 0.4f
+        _screenshake.value = (finalDmgInt * shakeMultiplier).coerceIn(4f, 35f)
         
         // Spawn blood particles based on damage
         addBloodParticles(defender.posX, 160f * defender.size, count = (finalDmgInt / 2).toInt().coerceIn(5, 20))

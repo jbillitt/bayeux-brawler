@@ -151,6 +151,15 @@ object MedievalHarpPlayer {
         try { track?.play() } catch (e: Exception) { e.printStackTrace() }
     }
 
+    fun setVolume(volume: Float) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            track?.setVolume(volume)
+        } else {
+            @Suppress("DEPRECATION")
+            track?.setStereoVolume(volume, volume)
+        }
+    }
+
     fun stopMusic() {
         if (!isPlaying) return
         isPlaying = false

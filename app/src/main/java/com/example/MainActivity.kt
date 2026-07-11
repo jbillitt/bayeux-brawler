@@ -136,13 +136,18 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
             R.raw.recording_25, R.raw.recording_26, R.raw.recording_27, R.raw.recording_28
         )
         try {
+            MedievalHarpPlayer.setVolume(0.2f)
             currentVoicePlayer = android.media.MediaPlayer.create(context, resIds.random())
             currentVoicePlayer?.setOnCompletionListener { 
                 it.release() 
-                if (currentVoicePlayer == it) currentVoicePlayer = null
+                if (currentVoicePlayer == it) {
+                    currentVoicePlayer = null
+                    MedievalHarpPlayer.setVolume(1.0f)
+                }
             }
             currentVoicePlayer?.start()
         } catch (e: Exception) {
+            MedievalHarpPlayer.setVolume(1.0f)
             e.printStackTrace()
         }
     }

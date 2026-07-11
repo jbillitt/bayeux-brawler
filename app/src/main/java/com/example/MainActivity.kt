@@ -427,7 +427,7 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
                     )
                 }
                 Text(
-                    text = "v0.1 Mercia",
+                    text = "v0.1.6 Mercia",
                     fontSize = 8.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
@@ -1261,13 +1261,22 @@ fun StatsAndLaunchPanel(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                text = "KNIGHT BASE STATS",
-                fontSize = 9.sp,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                color = TapestryDark.copy(alpha = 0.6f)
-            )
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(
+                    text = "KNIGHT BASE STATS",
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    color = TapestryDark.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "v0.1.5 Mercia",
+                    fontSize = 7.sp,
+                    fontFamily = FontFamily.Serif,
+                    color = TapestryDark.copy(alpha = 0.4f)
+                )
+            }
 
             // Weight Meter
             StatProgressBar(
@@ -1475,7 +1484,8 @@ fun BattlefieldScene(
 
                 // Draw health bar for Player
                 val px = scaledPlayer.posX
-                val py = 60f
+                val headDist = if (scaledPlayer.isMounted && !scaledPlayer.isChariot) 70f else if (scaledPlayer.isChariot) 50f else 40f
+                val py = 200f - (headDist + 35f) * scaledPlayer.size * scaleFactor
                 drawHealthBar(this, px, py, playerFighter.hp, playerFighter.ghostHp, playerFighter.maxHp)
                 drawStatusEffects(this, px, py - 10f, playerFighter)
 
@@ -1488,8 +1498,10 @@ fun BattlefieldScene(
                     
                     // Draw health bar for enemy
                     if (!enemy.isDead) {
-                        drawHealthBar(this, scaledEnemy.posX, py, enemy.hp, enemy.ghostHp, enemy.maxHp)
-                        drawStatusEffects(this, scaledEnemy.posX, py - 10f, enemy)
+                        val enemyHeadDist = if (scaledEnemy.isMounted && !scaledEnemy.isChariot) 70f else if (scaledEnemy.isChariot) 50f else 40f
+                        val epy = 200f - (enemyHeadDist + 35f) * scaledEnemy.size * scaleFactor
+                        drawHealthBar(this, scaledEnemy.posX, epy, enemy.hp, enemy.ghostHp, enemy.maxHp)
+                        drawStatusEffects(this, scaledEnemy.posX, epy - 12f, enemy)
                     }
                 }
 
@@ -1567,8 +1579,8 @@ fun BattlefieldScene(
                     } else if (proj.type == "arrow") {
                         // Draw flying arrow line with feathers
                         val shaftColor = if (proj.isBallista) Color(0xFF8A7156) else TapestryDark
-                        val strokeW = if (proj.isBallista) 10f else 7f
-                        val length = if (proj.isBallista) 45f else 65f
+                        val strokeW = if (proj.isBallista) 10f else 7f * proj.sizeMultiplier
+                        val length = 50f * proj.sizeMultiplier
                         
                         // Arrow Shaft
                         drawLine(
@@ -1813,8 +1825,8 @@ private fun drawStatusEffects(scope: androidx.compose.ui.graphics.drawscope.Draw
 }
 
 private fun drawHealthBar(scope: androidx.compose.ui.graphics.drawscope.DrawScope, x: Float, y: Float, hp: Float, ghostHp: Float, maxHp: Float) {
-    val barWidth = 65f
-    val barHeight = 8f
+    val barWidth = 100f
+    val barHeight = 12f
     val startX = x - (barWidth / 2)
 
     // Red stitch background

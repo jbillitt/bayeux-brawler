@@ -81,7 +81,9 @@ object GameData {
         GearItem("head_war_flail", "Twin War Flail", ItemType.WEAPON_HEAD, 3.5f, blunt = 22f, pierce = 8f, reach = 1.8f, description = "Two spiked balls on branching chains. Absolute chaos.", color = Color(0xFF535C61)),
         GearItem("head_broadsword", "Broadsword Blade", ItemType.WEAPON_HEAD, 1.4f, slash = 18f, pierce = 8f, reach = 1.5f, description = "A wide, brutal iron blade. Chips bones through mail.", color = Color(0xFF949B9E)),
         GearItem("head_pitchfork", "Pitchfork", ItemType.WEAPON_HEAD, 1.1f, pierce = 16f, slash = 2f, reach = 2.1f, description = "Three rusty tines. Perfect for hay or heathen flesh.", color = Color(0xFF817A73)),
-        GearItem("head_dagger_hilt", "Pommel Strike", ItemType.WEAPON_HEAD, 0.3f, blunt = 12f, reach = 0.6f, description = "Ending them rightly with a solid iron pommel.", color = Color(0xFFC4AD6C))
+        GearItem("head_dagger_hilt", "Pommel Strike", ItemType.WEAPON_HEAD, 0.3f, blunt = 12f, reach = 0.6f, description = "Ending them rightly with a solid iron pommel.", color = Color(0xFFC4AD6C)),
+        GearItem("head_lucerne", "Lucerne Hammer", ItemType.WEAPON_HEAD, 3.0f, blunt = 22f, pierce = 18f, reach = 2.3f, description = "A horrific combination of beak and hammer. Punctures anything.", color = Color(0xFF7D838A)),
+        GearItem("head_saber", "Huge Saber", ItemType.WEAPON_HEAD, 1.8f, slash = 28f, pierce = 5f, reach = 1.8f, description = "A massive curved blade sweeping across the battlefield.", color = Color(0xFF909BA0))
     )
 
     val WEAPON_HANDLES = listOf(
@@ -114,7 +116,6 @@ object GameData {
     )
 
     val HEADGEAR_PIECES = listOf(
-        GearItem("helm_none", "Bare Dome", ItemType.HEADGEAR, 0.0f, defense = 0f, description = "No helmet. Exposes your magnificent Norman tonsure.", color = Color(0xFFE5C09F)),
         GearItem("helm_coif", "Linen Mail Coif", ItemType.HEADGEAR, 2.0f, defense = 18f, speedPenalty = 0.02f, description = "A close-fitting hood made of woven chainmail rings.", color = Color(0xFF868C91)),
         GearItem("helm_cervelliere", "Iron Skull Cap", ItemType.HEADGEAR, 2.5f, defense = 25f, speedPenalty = 0.03f, description = "A simple iron bowl for your brain. Better than nothing.", color = Color(0xFF9EA3A8)),
         GearItem("helm_none", "Bare Head", ItemType.HEADGEAR, 0.0f, defense = 0f, speedPenalty = -0.05f, description = "Feel the wind in your hair. And arrows in your skull. Higher score multiplier!", color = Color.Transparent),
@@ -302,7 +303,9 @@ data class FighterState(
     val attackSpeedDelay: Float
         get() {
             val baseDelay = if (isRanged) {
-                if (weaponHead.id == "head_slingshot") 1.8f // Slower slingshot
+                if (weaponHead.id == "head_slingshot") {
+                    if (isDualWielding) 0.9f else 1.8f
+                }
                 else if (weaponHead.id == "head_longbow") 2.5f
                 else 2.0f
             } else if (weaponHead.id == "head_flail" || weaponHead.id == "head_war_flail" || weaponHandle.id == "handle_flail_chain") {

@@ -46,7 +46,7 @@ object FlavourText {
         return pool[rng(seed, level * 17 + 3).nextInt(pool.size)]
     }
 
-    private val DEFEAT = listOf(
+private val DEFEAT = listOf(
         "\"Time and tide wait for no man.\"\n- Geoffrey Chaucer",
         "\"All good things must come to an end.\"\n- Geoffrey Chaucer",
         "\"Patience is a conquering virtue.\"\n- Geoffrey Chaucer",
@@ -54,7 +54,39 @@ object FlavourText {
         "\"He who falls in the mud may yet rise smelling of glory. Eventually.\"\n- A Passing Monk",
         "\"The arrow finds the knight who forgets to duck.\"\n- Wace, probably",
         "\"It is no shame to fall. It is shame only to lie there complaining.\"\n- The Venerable Bede (apocryphal)",
-        "\"Get up. The tapestry looks better with thee in it.\"\n- Ye Olde Proverbe"
+        "\"Get up. The tapestry looks better with thee in it.\"\n- Ye Olde Proverbe",
+        "\"The life so short, the craft so long to learn.\"\n- Geoffrey Chaucer",
+        "\"I am shaved as close as any friar.\"\n- Geoffrey Chaucer",
+        "\"Lost money is not lost beyond recall, but loss of time brings on the loss of all.\"\n- Geoffrey Chaucer",
+        "\"Since I from Love escaped am so fat, I never think to be in his prison lean.\"\n- Geoffrey Chaucer",
+        "\"Thank God, it will soon be dark.\"\n- Anonymous Scribe (Marginalia, 9th Century)",
+        "\"This parchment is hairy.\"\n- Anonymous Monk (Marginalia)",
+        "\"I wrote this sitting like a vulture.\"\n- Anonymous Scribe (Marginalia)",
+        "\"Cursed be the pesty cat that urinated over this book during the night.\"\n- Anonymous Monk (Marginalia, 15th Century)",
+        "\"When I drink beer, my knee stands askew.\"\n- Anonymous Scribe (Marginalia)",
+        "\"Let me now be blamed for the script, for the ink is bad, and the vellum defective, and the day is dark.\"\n- Anonymous Irish Monk (Marginalia)",
+        "\"The whole ends. Pour, and give me drink. Hallelujah.\"\n- Anonymous Scribe (Marginalia)",
+        "\"A marsh of stinking and stagnant mud.\" [on the fens]\n- William of Malmesbury",
+        "\"If gold rusts, what then can iron do?\"\n- Geoffrey Chaucer",
+        "\"No empty handed man can lure a bird.\"\n- Geoffrey Chaucer",
+        "\"Woe to the cook whose sauce has no sting.\"\n- Geoffrey Chaucer",
+        "\"People are so impressionable, they can die of imagination.\"\n- Geoffrey Chaucer",
+        "\"St. Patrick of Armagh, deliver me from writing.\"\n- Anonymous Scribe (Marginalia)",
+        "\"Writing is excessive drudgery. It crooks your back, it dims your sight, it twists your stomach and your sides.\"\n- Anonymous Scribe (Marginalia)",
+        "\"As the harbor is welcome to the sailor, so is the last line to the scribe.\"\n- Anonymous Monk (Marginalia)",
+        "\"Oh, my hand.\"\n- Anonymous Scribe (Marginalia)",
+        "\"While I wrote I froze, and what I could not write by the beams of the sun I finished by candlelight.\"\n- Anonymous Scribe (Marginalia)",
+        "\"Now I've written the whole thing give me a drink!\"\n- Anonymous Monk (Marginalia)",
+        "\"The dread of enemies, a woman of enlarged soul.\"\n- William of Malmesbury",
+        "\"Thou art come! A matter of lamentation to many a mother art thou come!\" [yelling at a comet]\n- Eilmer of Malmesbury (via William of Malmesbury)",
+        "\"Whatever evil or malicious thing that can be found in any part of the world, you will find in that one city.\" [on London]\n- Richard of Devizes",
+        "\"There is a lake in that region which makes anyone who bathes in it completely bald.\"\n- Gerald of Wales",
+        "\"A pig of enormous size, which they say had thirty teeth.\"\n- Matthew Paris",
+        "\"I am entirely consumed by the fleas.\"\n- Anonymous Monk (Marginalia)",
+        "\"To the devil with this pen!\"\n- Anonymous Scribe (Marginalia)",
+        "\"I am very cold.\"\n- Anonymous Scribe (Marginalia)",
+        "\"A great and terrible thunder was heard, so that men thought the end of the world was come.\"\n- Orderic Vitalis",
+        "\"The water of this spring has a strange property... whoever washes in it, his hair turns instantly white.\"\n- Gerald of Wales"
     )
     fun defeatQuote(): String = DEFEAT[Random.nextInt(DEFEAT.size)]
 

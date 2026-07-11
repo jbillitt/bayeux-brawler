@@ -155,6 +155,11 @@ class GameViewModel : ViewModel() {
                 newState = newState.copy(shield = GameData.SHIELDS.first { it.id == "shield_none" })
             }
             
+            // Enforce no dual wield for bows
+            if (newState.weaponHead.id in listOf("head_bow", "head_longbow")) {
+                newState = newState.copy(isDualWielding = false)
+            }
+            
             // Enforce crossbow rule
             if (newState.weaponHead.id == "head_crossbow" && newState.weaponHandle.id != "handle_fists") {
                 if (item.type == ItemType.WEAPON_HEAD) {
@@ -199,6 +204,10 @@ class GameViewModel : ViewModel() {
 
     fun toggleDualWield() {
         if (_uiState.value.isBattleActive) return
+        val currentHead = _uiState.value.weaponHead.id
+        if (!_uiState.value.isDualWielding && (currentHead == "head_bow" || currentHead == "head_longbow")) {
+            return // Cannot dual wield bows!
+        }
         _uiState.update { 
             if (!it.isDualWielding) {
                 val noShield = GameData.SHIELDS.first { s -> s.id == "shield_none" }
@@ -687,11 +696,10 @@ class GameViewModel : ViewModel() {
         // Poison tick over time
         if (fighter.poisonDuration > 0f) {
             fighter.poisonDuration -= dt
-            val poisonDmg = 8f * dt // deals 8 damage per second
+            val poisonDmg = 4f * dt // deals 4 damage per second (halved)
             if (fighter.hp > 0f) {
                 if (Random.nextFloat() < dt * 1.5f) { // occasionally show green "+POISON+" popup
                     addPopup("POISON!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFF2E7D32))
-                    addBloodParticles(fighter.posX, 100f, count = 2) // tiny droplets
                 }
                 applyFlatDamage(poisonDmg, fighter, isPlayerSource = !fighter.isPlayer)
             }
@@ -700,7 +708,7 @@ class GameViewModel : ViewModel() {
         // Bleed tick over time
         if (fighter.bleedDuration > 0f) {
             fighter.bleedDuration -= dt
-            val bleedDmg = 12f * dt // deals 12 damage per second
+            val bleedDmg = 6f * dt // deals 6 damage per second (halved)
             if (fighter.hp > 0f) {
                 if (Random.nextFloat() < dt * 1.5f) {
                     addPopup("BLEED!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFFA62B2B))
@@ -723,8 +731,9 @@ class GameViewModel : ViewModel() {
             val effectiveSwingProgress = (fighter.swingProgress - chainDelay).coerceAtLeast(0f)
             
             // Damage connects halfway through the swing visually, or near the end for heavy/chain windups
-            val isHeavyOrChain = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe") || fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
-            val strikeThreshold = if (isHeavyOrChain) 0.85f else 0.5f
+            val isChain = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain") || fighter.weaponHead.id in listOf("head_flail", "head_war_flail")
+            val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe", "head_lucerne", "head_saber")
+            val strikeThreshold = if (isChain) 0.65f else if (isHeavy) 0.85f else 0.5f
 
             if (effectiveSwingProgress >= strikeThreshold && !fighter.hasLandedStrike) {
                 fighter.hasLandedStrike = true
@@ -791,11 +800,23 @@ class GameViewModel : ViewModel() {
 
     private fun performStrike(attacker: FighterState, defender: FighterState) {
         if (attacker.isRanged) {
-            // Spawn arrow or stone projectile
-            val isPlayer = attacker.isPlayer
-            val dir = if (attacker.facingRight) 1f else -1f
-            val startX = attacker.posX + (dir * 25f)
-            val startY = 230f
+            val isDualWielding = attacker.isDualWielding && attacker.shield.id == "shield_none"
+            val hitCount = if (isDualWielding) 2 else 1
+            
+            viewModelScope.launch {
+                for (hitIdx in 0 until hitCount) {
+                    if (hitIdx > 0) kotlinx.coroutines.delay(160)
+                    if (attacker.isDead) return@launch
+
+                    val isPlayer = attacker.isPlayer
+                    val dir = if (attacker.facingRight) 1f else -1f
+                    var startX = attacker.posX + (dir * 25f)
+                    var startY = 230f
+                    
+                    if (hitIdx == 1) {
+                        startX -= (dir * 15f)
+                        startY -= 25f
+                    }
             
             // Stats based on weapon head
             val isSlingshot = attacker.weaponHead.id == "head_slingshot"
@@ -894,6 +915,8 @@ class GameViewModel : ViewModel() {
                 isBallista = ballista
             )
             _projectilesState.value = _projectilesState.value + proj
+                }
+            }
         } else {
             // Melee hit
             val reachPixels = attacker.reach * 40f + 40f // generous hitbox
@@ -926,16 +949,31 @@ class GameViewModel : ViewModel() {
                 return
             }
             
-            // Dual Wield miss chance (20% for faster attacks)
-            if (attacker.isDualWielding && Random.nextFloat() < 0.2f) {
+            // Dual Wield miss chance (higher for dual wield in general)
+            if (attacker.isDualWielding && Random.nextFloat() < 0.35f) {
                 addPopup("MISS!", defender.posX, 140f, Color.Gray)
                 MedievalAudioSynth.playSound(SoundType.SWOOSH)
                 return
             }
             
-            var damageFalloff = 1f
+            val hitCount = if (attacker.weaponHandle.id == "handle_double_ended") {
+                if (attacker.isDualWielding) 4 else 2
+            } else {
+                1
+            }
+            val dmgScale = if (hitCount == 4) 0.3f else if (hitCount == 2) 0.6f else 1.0f
 
-            for (currTarget in targets) {
+            viewModelScope.launch {
+                for (hitIdx in 0 until hitCount) {
+                    if (hitIdx > 0) {
+                        kotlinx.coroutines.delay(160)
+                    }
+
+                    if (attacker.isDead) return@launch // Don't hit if we died during the windup!
+                    var damageFalloff = 1f
+
+                    for (currTarget in targets) {
+                        if (currTarget.isDead || currTarget.isDying) continue
                 var blockChance = currTarget.shield.defense / 100f
                 if (!currTarget.isPlayer && currTarget.shield.id == "shield_tower") blockChance = 0.8f
                 
@@ -971,7 +1009,7 @@ class GameViewModel : ViewModel() {
                     // Armor reduces slash and pierce, but blunt damage partially ignores armor
                     val armorFactor = (1f - (currTarget.totalArmor / 100f)).coerceIn(0.1f, 1f)
                     
-                    var totalDamage = (slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt
+                    var totalDamage = ((slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt) * dmgScale
                     
                     // Cupbearer strength bonus!
                     if (attacker.isPlayer && _uiState.value.unlockedAncillaries.contains("anc_cupbearer")) {
@@ -1049,11 +1087,13 @@ class GameViewModel : ViewModel() {
                     }
                 }
                 
-                if (isPiercingWeapon) {
-                    damageFalloff *= 0.5f // Halve damage for each enemy it passes through
+                    if (isPiercingWeapon) {
+                        damageFalloff *= 0.5f // Halve damage for each enemy it passes through
+                    }
                 }
             }
         }
+    }
     }
 
     private fun applyProjectileDamage(proj: Projectile, defender: FighterState) {

@@ -1167,7 +1167,7 @@ class GameViewModel : ViewModel() {
         }
 
         if (won) {
-            MedievalAudioSynth.playSound(SoundType.DRUM_ROLL)
+            // Victory voice clip will play via MainActivity
         } else {
             // reset score on defeat so they start over
             _uiState.update { it.copy(score = 0) }

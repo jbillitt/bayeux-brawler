@@ -1082,7 +1082,7 @@ object TapestryRenderer {
         val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe")
         val isScythe = fighter.weaponHead.id == "head_scythe"
         val isBowOrSlingshot = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
-        
+        val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
         var thrustOffset = Offset.Zero
         val isLanceCompatible = fighter.weaponHead.id in listOf("head_pike", "head_spear", "head_halberd")
         val armAngle = if (fighter.isDead || fighter.isDying) {
@@ -1133,10 +1133,13 @@ object TapestryRenderer {
         } else if (fighter.isMounted && isLanceCompatible && kotlin.math.abs(fighter.velocityX) > 30f) {
             -25f
         } else {
-            val postureOffset = if (isBowOrSlingshot) 0f else when (Math.abs(fighter.name.hashCode()) % 3) {
+            val postureOffset = if (isBowOrSlingshot) 0f else when (Math.abs(fighter.name.hashCode()) % 6) {
                 0 -> -75f // Raised above head
                 1 -> -35f // Nobly in front of face
-                else -> 15f // Poised outwards
+                2 -> 15f  // Poised outwards
+                3 -> 45f  // Resting down
+                4 -> -15f // Held casually forward
+                else -> 80f // Trailing behind downwards
             }
             postureOffset + sin(fighter.animFrame * 0.5f) * 10f
         }
@@ -1481,7 +1484,7 @@ object TapestryRenderer {
         playerFighter: FighterState,
         scale: Float = 1.0f
     ) {
-        val sortedAncs = unlockedAncillaries.toList().sorted()
+        val sortedAncs = unlockedAncillaries.toList().filter { it != "anc_mount_horse" }.sorted()
         if (sortedAncs.isEmpty()) return
 
         val normScale = scale * playerFighter.size

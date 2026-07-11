@@ -105,22 +105,24 @@ object SfxGenerator {
     }
 
     private fun drumRoll(sr: Int, rng: Random): ShortArray {
-        val dur = 1.5f; val n = (sr * dur).toInt(); val out = ShortArray(n)
-        val f = ProceduralMedievalComposer.midiToFreq(ProceduralMedievalComposer.currentRootMidi - 12f).toDouble() // Low timpani root
-        val hitsPerSec = 5.0 // Slower war drum cadence
+        val dur = 2.0f; val n = (sr * dur).toInt(); val out = ShortArray(n)
+        val root = ProceduralMedievalComposer.currentRootMidi - 12f // Low timpani root
+        val fLow = ProceduralMedievalComposer.midiToFreq(root).toDouble()
+        val fHigh = ProceduralMedievalComposer.midiToFreq(root + 7f).toDouble() // Perfect fifth!
+        val hitsPerSec = 2.0 // Slow boom bam boom
         for (i in 0 until n) {
             val t = i.toDouble() / sr
-            val hitT = (t * hitsPerSec) % 1.0 // 0 to 1 per hit
+            val hitIndex = (t * hitsPerSec).toInt()
+            val hitT = (t * hitsPerSec) % 1.0
+            val f = if (hitIndex % 2 == 0) fLow else fHigh
             
-            val env = if (hitT < 0.05) hitT / 0.05 else Math.exp(-4.0 * (hitT - 0.05))
-            val currentF = f * (1.0 + 0.05 * Math.exp(-20.0 * hitT))
-            val wave = Math.sin(2 * Math.PI * currentF * t) + 0.5 * Math.sin(4 * Math.PI * currentF * t) * Math.exp(-10.0 * hitT)
-            val noise = (rng.nextDouble() * 2 - 1) * Math.exp(-30.0 * hitT) * 0.2
+            val env = if (hitT < 0.05) hitT / 0.05 else Math.exp(-3.0 * (hitT - 0.05))
+            val currentF = f * (1.0 + 0.02 * Math.exp(-15.0 * hitT))
+            val wave = Math.sin(2 * Math.PI * currentF * t) + 0.3 * Math.sin(4 * Math.PI * currentF * t) * Math.exp(-8.0 * hitT)
+            val noise = (rng.nextDouble() * 2 - 1) * Math.exp(-25.0 * hitT) * 0.1
             
-            // Swelling crescendo and decrescendo
-            val globalEnv = Math.sin(Math.PI * (t / dur))
-            
-            out[i] = ((wave + noise) * env * globalEnv * 28000).toInt().coerceIn(-32768, 32767).toShort()
+            // Lower volume for noble orchestral sound
+            out[i] = ((wave + noise) * env * 12000).toInt().coerceIn(-32768, 32767).toShort()
         }
         return out
     }

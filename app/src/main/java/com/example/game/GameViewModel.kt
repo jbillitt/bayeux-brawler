@@ -950,8 +950,9 @@ class GameViewModel : ViewModel() {
             val totalDamage = (proj.damage * armorFactor) + (proj.blunt * 0.6f)
             applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
 
-            // (Removed hit popups to reduce visual clutter)
-
+            if (proj.type == "arrow" || proj.type == "bolt") {
+                defender.stuckArrows += 1
+            }
             // Apply Poison Upgrade
             if (proj.isPoisonous) {
                 defender.poisonDuration = 5.0f

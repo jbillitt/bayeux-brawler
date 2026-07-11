@@ -8,7 +8,7 @@ internal fun renderBowBrass(voice: Voice, midi: Int, durSec: Float, velocity: Fl
     Voice.FIDDLE2 -> bowed(midi, durSec, sr, rng, bodyHz = floatArrayOf(320f, 740f, 1550f), vibHz = 5.6f, detuneCents = 4f, attack = 0.08f)
     Voice.SHAWM   -> shawm(midi, durSec, sr, rng)
     Voice.SACKBUT -> brass(midi, durSec, sr, rng, brightness = 1.2f, attack = 0.07f)
-    Voice.HORN    -> brass(midi, durSec, sr, rng, brightness = 1.0f, attack = 0.05f)
+    Voice.HORN    -> trompette(midi, durSec, sr, rng)
     Voice.GURDY   -> if (durSec < 0.15f) trompette(midi, durSec, sr, rng) else wheelDrone(midi, durSec, sr, rng)
     Voice.ORGAN   -> organ(midi, durSec, sr, rng)
     else -> FloatArray((sr * durSec).toInt())

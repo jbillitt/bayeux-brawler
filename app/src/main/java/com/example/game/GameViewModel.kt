@@ -831,7 +831,6 @@ class GameViewModel : ViewModel() {
             if (targets.isEmpty() || abs(attacker.posX - defender.posX) > reachPixels) {
                 // Missed!
                 MedievalAudioSynth.playSound(SoundType.SWOOSH)
-                addPopup("SWISH!", attacker.posX + if(attacker.facingRight) 40f else -40f, 120f, Color.Gray)
                 return
             }
             
@@ -849,8 +848,6 @@ class GameViewModel : ViewModel() {
                 if (isBlocked) {
                     // Blocked by shield!
                     MedievalAudioSynth.playSound(SoundType.CLANG)
-                    val shout = LatinShouts.getRandomShout(SoundType.CLANG)
-                    addPopup(shout, currTarget.posX, 120f, Color(0xFFB08221))
                     
                     // Still take minimal blunt impact damage
                     val blockDamage = (attacker.damageBlunt * 0.15f * damageFalloff).coerceAtLeast(1f)
@@ -933,8 +930,6 @@ class GameViewModel : ViewModel() {
 
         if (isBlocked) {
             MedievalAudioSynth.playSound(SoundType.CLANG)
-            val shout = LatinShouts.getRandomShout(SoundType.CLANG)
-            addPopup(shout, defender.posX, 120f, Color(0xFFB08221))
         } else {
             val armorFactor = (1f - (defender.totalArmor / 100f)).coerceIn(0.15f, 1f)
             val totalDamage = (proj.damage * armorFactor) + (proj.blunt * 0.6f)

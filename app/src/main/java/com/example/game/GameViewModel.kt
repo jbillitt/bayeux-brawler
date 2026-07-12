@@ -891,6 +891,23 @@ class GameViewModel : ViewModel() {
             val isChokeSlam = fighter.weaponHandle.id == "handle_fists" && fighter.isDualWielding
             val strikeThreshold = if (isChokeSlam) 0.7f else if (isChain) 0.65f else if (isHeavy) 0.85f else 0.5f
 
+            if (fighter.weaponHandle.id == "handle_fists" && target != null && !target.isDead) {
+                // Apply visual lift for wrestling moves
+                val distToTarget = kotlin.math.abs(fighter.posX - target.posX)
+                if (distToTarget < fighter.reach * 40f + 60f) {
+                    val p = effectiveSwingProgress.coerceIn(0f, 1f)
+                    val isSuplex = !fighter.isDualWielding && fighter.brawlerUpgrades.contains("champion_belt")
+                    val liftMax = if (isChokeSlam) -140f else if (isSuplex) -90f else 0f
+                    if (liftMax != 0f) {
+                        target.visualOffsetY = if (p < strikeThreshold) {
+                            liftMax * (p / strikeThreshold)
+                        } else {
+                            liftMax * (1f - (p - strikeThreshold) / (1f - strikeThreshold))
+                        }
+                    }
+                }
+            }
+
             if (effectiveSwingProgress >= strikeThreshold && !fighter.hasLandedStrike) {
                 fighter.hasLandedStrike = true
                 if (target != null) {
@@ -954,13 +971,13 @@ class GameViewModel : ViewModel() {
                 fighter.posX += direction * retreatSpeed * dt
                 fighter.animFrame = (fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))) % 4f 
                 
-                if (fighter.attackCooldown <= 0 && !fighter.isAttacking) {
+                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) {
                     triggerAttack(fighter)
                 }
             } else {
                 // Wield weapon/Attack!
                 fighter.animFrame = 0f // stand
-                if (fighter.attackCooldown <= 0 && !fighter.isAttacking) {
+                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) {
                     triggerAttack(fighter)
                 }
             }
@@ -1606,8 +1623,20 @@ class GameViewModel : ViewModel() {
                     ))
                 }
 
-                // 2. Weapon Attachment option (only for melee weapons)
-                if (!state.weaponHead.isRanged) {
+                val isUnarmed = state.weaponHead.id == "head_bare" && state.weaponHandle.id == "handle_fists"
+
+                // 2. Weapon Attachment or Brawler option
+                if (isUnarmed) {
+                    val possibleBrawler = listOf(
+                        LevelUpChoice("brawler_brass_knuckles", "Brawler: Brass Knuckles", "Reinforce your fists with heavy brass! Massive blunt damage.", "brawler_upgrade", "brass_knuckles"),
+                        LevelUpChoice("brawler_spiked_wraps", "Brawler: Spiked Wraps", "Wrap your hands in leather and rusty nails. Causes bleeding!", "brawler_upgrade", "spiked_wraps"),
+                        LevelUpChoice("brawler_wrestling_belt", "Brawler: Champion Belt", "Increases grapple strength. Wrestle foes to the ground!", "brawler_upgrade", "champion_belt")
+                    )
+                    val availableBrawler = possibleBrawler.filter { it.itemId !in state.brawlerUpgrades }
+                    if (availableBrawler.isNotEmpty()) {
+                        pendingChoices.add(availableBrawler.random())
+                    }
+                } else if (!state.weaponHead.isRanged) {
                     val attachmentHeads = GameData.WEAPON_HEADS.filter { 
                         it.id !in listOf("head_bare", "head_bow", "head_longbow", "head_slingshot") 
                     }
@@ -1623,7 +1652,7 @@ class GameViewModel : ViewModel() {
 
                 // 3. Handle Extension or Layered Armor or Shield Upgrade option
                 val rndVal = Random.nextFloat()
-                if (rndVal < 0.33f) {
+                if (rndVal < 0.33f && !isUnarmed) {
                     pendingChoices.add(LevelUpChoice(
                         id = "extension",
                         title = "Haft Upgrade: Handle Extension",
@@ -1690,18 +1719,7 @@ class GameViewModel : ViewModel() {
                     }
                 }
                 
-                // 5. Brawler Upgrades (only if unarmed)
-                if (state.weaponHead.id == "head_bare" && state.weaponHandle.id == "handle_fists") {
-                    val possibleBrawler = listOf(
-                        LevelUpChoice("brawler_brass_knuckles", "Brawler: Brass Knuckles", "Reinforce your fists with heavy brass! Massive blunt damage.", "brawler_upgrade", "brass_knuckles"),
-                        LevelUpChoice("brawler_spiked_wraps", "Brawler: Spiked Wraps", "Wrap your hands in leather and rusty nails. Causes bleeding!", "brawler_upgrade", "spiked_wraps"),
-                        LevelUpChoice("brawler_wrestling_belt", "Brawler: Champion Belt", "Increases grapple strength. Wrestle foes to the ground!", "brawler_upgrade", "champion_belt")
-                    )
-                    val availableBrawler = possibleBrawler.filter { it.itemId !in state.brawlerUpgrades }
-                    if (availableBrawler.isNotEmpty()) {
-                        pendingChoices.add(availableBrawler.random())
-                    }
-                }
+                // 5. Brawler Upgrades (removed from here, moved to slot 2)
                 
                 showLevelUp = true
             }

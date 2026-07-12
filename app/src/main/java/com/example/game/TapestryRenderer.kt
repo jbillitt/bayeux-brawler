@@ -33,7 +33,8 @@ object TapestryRenderer {
     fun drawCharacter(
         drawScope: DrawScope,
         fighter: FighterState,
-        scale: Float = 1.0f
+        scale: Float = 1.0f,
+        isBattleActive: Boolean = true
     ) {
         drawScope.withTransform({
             // Apply scale (e.g. for flip/facing and overall sizing)
@@ -59,7 +60,7 @@ object TapestryRenderer {
             // Handle dying fall down rotation
             var rotationAngle = 0f
             var offsetX = 0f
-            var offsetY = 0f
+            var offsetY = fighter.visualOffsetY
             var scaleY = 1f
             if (fighter.isCrumpled && !fighter.isDead && !fighter.isDying) {
                 // Smashed down into a squashed pancake, but still alive? Or normally it happens on death?
@@ -120,7 +121,7 @@ object TapestryRenderer {
                     if (fighter.isChariot) {
                         drawChariot(this, cx, cy, fighter)
                     } else if (fighter.isLord) {
-                        drawThrone(this, cx, cy, fighter)
+                        drawThrone(this, cx, cy, fighter, isBattleActive)
                     } else if (fighter.mountHp == 40f) {
                         drawStilts(this, cx, cy, fighter)
                     } else {
@@ -2428,10 +2429,24 @@ object TapestryRenderer {
         return (rad * 180f / Math.PI).toFloat()
     }
 
-    private fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+    private fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState, isBattleActive: Boolean) {
         val wColor = Color(0xFF5C4033) // Dark wood
         
-        // We no longer draw fake peasants here, as the actual ancillaries will carry the throne.
+        // If not in battle (e.g. preview pane), we need to draw fake pallbearers
+        if (!isBattleActive) {
+            val pColor = Color(0xFF4A4A4A)
+            val pallbearers = listOf(
+                Pair(cx - 45f, cy + 90f),
+                Pair(cx + 45f, cy + 90f)
+            )
+            pallbearers.forEach { (px, py) ->
+                // Basic peasant shape for preview
+                scope.drawLine(pColor, Offset(px, py), Offset(px, py + 40f), strokeWidth = 12f, cap = StrokeCap.Round) // body
+                scope.drawCircle(pColor, radius = 10f, center = Offset(px, py - 10f)) // head
+                scope.drawLine(pColor, Offset(px, py + 40f), Offset(px - 10f, py + 80f), strokeWidth = 6f) // leg
+                scope.drawLine(pColor, Offset(px, py + 40f), Offset(px + 10f, py + 80f), strokeWidth = 6f) // leg
+            }
+        }
 
         // Draw a basic wooden throne
         val tPath = Path().apply {

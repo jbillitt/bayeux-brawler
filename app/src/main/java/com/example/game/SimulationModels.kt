@@ -328,6 +328,8 @@ data class FighterState(
     var mountHp: Float = 0f,
     var isChariot: Boolean = false,
     var isLord: Boolean = false,
+    var grapplerId: String? = null,
+    var visualOffsetY: Float = 0f,
     var pallbearerIndex: Int = -1,
     var trampleCooldown: Float = 0f,
     var kills: Int = 0,

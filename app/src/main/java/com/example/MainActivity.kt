@@ -413,6 +413,14 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Version Number
+            Text(
+                text = com.example.BuildConfig.VERSION_NAME,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                color = TapestryDark.copy(alpha = 0.6f)
+            )
             // Stats popup button
             Box(
                 modifier = Modifier
@@ -630,7 +638,7 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                 // Render at massive scale (Fancam style!)
                 // Center it slightly lower so the head doesn't clip
                 translate(top = -40f) {
-                    TapestryRenderer.drawCharacter(this, dummyFighter, scale = 1.35f)
+                    TapestryRenderer.drawCharacter(this, dummyFighter, scale = 1.35f, isBattleActive = false)
                 }
             }
         }
@@ -1235,11 +1243,11 @@ fun StatsAndLaunchPanel(
             faceForehead = uiState.faceForehead,
             maxHp = 100f,
             hp = 100f,
-            weaponHead = uiState.weaponHead,
-            weaponHandle = uiState.weaponHandle,
-            shield = uiState.shield,
+            weaponHead = if (uiState.isThroneMode) com.example.game.GameData.WEAPON_HEADS.first { it.id == "head_bare" } else uiState.weaponHead,
+            weaponHandle = if (uiState.isThroneMode) com.example.game.GameData.WEAPON_HANDLES.first { it.id == "handle_fists" } else uiState.weaponHandle,
+            shield = if (uiState.isThroneMode) com.example.game.GameData.SHIELDS.first { it.id == "shield_none" } else uiState.shield,
             armor = uiState.armor,
-            headgear = uiState.headgear,
+            headgear = if (uiState.isThroneMode) com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_crown" } else uiState.headgear,
             isDualWielding = uiState.isDualWielding,
             posX = 0f, targetX = 0f,
             isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS) || uiState.isThroneMode,
@@ -1736,7 +1744,7 @@ fun BattlefieldScene(
                                             if (player != null) {
                                                 // Draw just head without helmet
                                                 val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it == com.example.game.GameData.HeadgearPiece.NONE }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
-                                                com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
+                                                com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f, isBattleActive = false)
                                             }
                                         }
                                     }
@@ -1744,7 +1752,7 @@ fun BattlefieldScene(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text("Name: ${uiState.playerName}", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryDark)
-                                    Text("Weapon: ${player?.weaponHead?.itemName ?: "None"}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                    Text("Weapon: ${uiState.weaponHead.itemName}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
                                     val anc = uiState.unlockedAncillaries.joinToString(", ") { it.ancillaryName }
                                     Text("Ancillaries: ${if (anc.isEmpty()) "None" else anc}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
                                     Text("Kills: ${uiState.totalKills}", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryRed)
@@ -2065,7 +2073,7 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
                 isDying = false,
                 facingRight = true // Force face rendering to point correctly in portrait box
             )
-            com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f)
+            com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f, isBattleActive = false)
         }
     }
     

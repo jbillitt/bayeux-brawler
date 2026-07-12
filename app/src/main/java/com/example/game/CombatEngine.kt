@@ -694,6 +694,7 @@ class CombatEngine(private val ctx: BattleContext) {
             ctx.sound(SoundType.CLANG)
             if (proj.type.isArrowLike) {
                 defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, true, proj.isBallista))
+                if (defender.stuckProjectiles.size > 12) defender.stuckProjectiles.removeAt(0)
             }
 
             if (defender.shieldHp > 0f) {
@@ -717,6 +718,7 @@ class CombatEngine(private val ctx: BattleContext) {
 
             if (proj.type.isArrowLike) {
                 defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, false, proj.isBallista))
+                if (defender.stuckProjectiles.size > 12) defender.stuckProjectiles.removeAt(0)
             }
             // Apply Poison Upgrade
             if (proj.isPoisonous) {
@@ -793,6 +795,7 @@ class CombatEngine(private val ctx: BattleContext) {
             val rx = Random.nextFloat() * 14f - 7f
             val ry = Random.nextFloat() * 20f - 10f
             defender.bloodDecals.add(Triple(rx, ry, Random.nextInt(6)))
+            if (defender.bloodDecals.size > 30) defender.bloodDecals.removeAt(0) // cap: decals stack forever otherwise
         }
 
         defender.damageIndicator = "-${finalDmgInt.toInt()}"

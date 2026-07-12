@@ -65,6 +65,11 @@ class GameViewModel : ViewModel() {
     private var gameLoopJob: Job? = null
     private var pendingReinforcements = 0
 
+    // New particles collect here and flush to the StateFlow once per tick —
+    // per-hit list copies were the biggest allocation churn in the loop
+    private val particleBuffer = mutableListOf<BloodParticle>()
+    private companion object { const val MAX_PARTICLES = 250 }
+
     // Combat rules live in CombatEngine; this context is its window into the battle state
     private val engine = CombatEngine(object : BattleContext {
         override val player get() = _playerState.value
@@ -75,7 +80,7 @@ class GameViewModel : ViewModel() {
         override fun sound(type: SoundType) = MedievalAudioSynth.playSound(type)
         override fun popup(text: String, x: Float, y: Float, color: Color) = addPopup(text, x, y, color)
         override fun bloodParticles(x: Float, y: Float, count: Int) = addBloodParticles(x, y, count)
-        override fun particle(p: BloodParticle) { _particlesState.value = _particlesState.value + p }
+        override fun particle(p: BloodParticle) { particleBuffer.add(p) }
         override fun screenshake(amount: Float) { _screenshake.value = amount }
         override fun enemyKilled() { _uiState.value = _uiState.value.copy(totalKills = _uiState.value.totalKills + 1) }
     })
@@ -547,7 +552,10 @@ class GameViewModel : ViewModel() {
                 }
             }
         }
-        _particlesState.value = particles.filter { it.age < it.maxAge }
+        // Age-filter survivors, merge this tick's new particles, cap total (drop oldest)
+        val liveParticles = particles.filter { it.age < it.maxAge } + particleBuffer
+        particleBuffer.clear()
+        _particlesState.value = if (liveParticles.size > MAX_PARTICLES) liveParticles.takeLast(MAX_PARTICLES) else liveParticles
 
         if (_uiState.value.unlockedAncillaries.contains(Ancillary.MONK)) {
             addIncenseParticles(player.posX - (40f * player.size), 190f, count = 2)
@@ -820,7 +828,8 @@ class GameViewModel : ViewModel() {
     }
 
     private fun addPopup(text: String, x: Float, y: Float, color: Color) {
-        // Only allow damage numbers or specific numeric text, no words!
+        // Deliberate filter: word popups ("SUPLEX!", "POISON!") are authored throughout combat
+        // but muted here — only numeric damage text renders. Delete this guard to enable them all.
         if (text.any { it.isLetter() }) return
         _popupsState.value = _popupsState.value + CombatPopup(text, x, y, 0f, color)
     }
@@ -834,7 +843,7 @@ class GameViewModel : ViewModel() {
                 vy = Random.nextFloat() * -220f - 80f
             )
         }
-        _particlesState.value = _particlesState.value + newParticles
+        particleBuffer.addAll(newParticles)
     }
 
     private fun addIncenseParticles(x: Float, y: Float, count: Int = 2) {
@@ -849,7 +858,7 @@ class GameViewModel : ViewModel() {
                 maxAge = 3.0f + Random.nextFloat() * 2.0f
             )
         }
-        _particlesState.value = _particlesState.value + newParticles
+        particleBuffer.addAll(newParticles)
     }
 
     private fun endBattle(won: Boolean) {

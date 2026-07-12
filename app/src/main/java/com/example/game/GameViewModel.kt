@@ -420,23 +420,11 @@ class GameViewModel : ViewModel() {
         }
         
         if (state.isThroneMode) {
-            val pallbearerHp = 60f
-            val p0Weapon = state.weaponHead
-            val p0Handle = state.weaponHandle
-            val p0Shield = GameData.SHIELDS.first { it.id == "shield_none" }
-
-            val p1Weapon = if (state.isDualWielding) state.weaponHead else GameData.WEAPON_HEADS.first { it.id == "head_bare" }
-            val p1Handle = if (state.isDualWielding) state.weaponHandle else GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }
-            val p1Shield = if (state.isDualWielding) GameData.SHIELDS.first { it.id == "shield_none" } else state.shield
-
-            // Front Right (Equips Primary Weapon)
-            enemies.add(FighterState(id = "pallbearer_0", name = "Pallbearer 1", isPlayer = true, maxHp = pallbearerHp, hp = pallbearerHp, weaponHead = p0Weapon, weaponHandle = p0Handle, shield = p0Shield, armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" }, headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = player.posX + 45f, targetX = player.posX + 45f, facingRight = true, size = 0.95f, hairColor = Color(0xFF2C2219), hairStyle = "short", isDualWielding = false))
-            // Front Left (Equips Shield or Secondary Weapon)
-            enemies.add(FighterState(id = "pallbearer_1", name = "Pallbearer 2", isPlayer = true, maxHp = pallbearerHp, hp = pallbearerHp, weaponHead = p1Weapon, weaponHandle = p1Handle, shield = p1Shield, armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" }, headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = player.posX + 35f, targetX = player.posX + 35f, facingRight = true, size = 0.95f, hairColor = Color(0xFF2C2219), hairStyle = "short", isDualWielding = false))
-            // Back Right
-            enemies.add(FighterState(id = "pallbearer_2", name = "Pallbearer 3", isPlayer = true, maxHp = pallbearerHp, hp = pallbearerHp, weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }, weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }, shield = GameData.SHIELDS.first { it.id == "shield_none" }, armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" }, headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = player.posX - 35f, targetX = player.posX - 35f, facingRight = true, size = 0.95f, hairColor = Color(0xFF2C2219), hairStyle = "short", isDualWielding = false))
-            // Back Left
-            enemies.add(FighterState(id = "pallbearer_3", name = "Pallbearer 4", isPlayer = true, maxHp = pallbearerHp, hp = pallbearerHp, weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }, weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }, shield = GameData.SHIELDS.first { it.id == "shield_none" }, armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" }, headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = player.posX - 45f, targetX = player.posX - 45f, facingRight = true, size = 0.95f, hairColor = Color(0xFF2C2219), hairStyle = "short", isDualWielding = false))
+            val nonHumanIds = listOf("raven", "wardog", "trojan_horse", "mount_horse")
+            val humanAncillaries = enemies.filter { !nonHumanIds.contains(it.id) }.take(4)
+            for ((index, ancillary) in humanAncillaries.withIndex()) {
+                ancillary.pallbearerIndex = index
+            }
         }
 
         _playerState.value = player
@@ -914,6 +902,32 @@ class GameViewModel : ViewModel() {
                 fighter.isAttacking = false
                 fighter.hasLandedStrike = false
                 fighter.swingProgress = 0f
+            }
+        }
+        // Pallbearer lock
+        if (fighter.pallbearerIndex >= 0) {
+            val player = _playerState.value
+            if (player != null) {
+                fighter.facingRight = player.facingRight
+                val offset = when(fighter.pallbearerIndex) {
+                    0 -> 45f
+                    1 -> 35f
+                    2 -> -35f
+                    3 -> -45f
+                    else -> 0f
+                }
+                fighter.posX = player.posX + offset
+                fighter.animFrame = player.animFrame * 1.5f // Walk in sync with the throne
+                
+                // Allow them to attack if targets are near, but skip their own movement logic
+                if (target != null && !target.isDead) {
+                    val dist = kotlin.math.abs(fighter.posX - target.posX)
+                    val reachPixels = fighter.reach * 40f + 40f
+                    if (dist <= reachPixels && fighter.attackCooldown <= 0 && !fighter.isAttacking) {
+                        triggerAttack(fighter)
+                    }
+                }
+                return
             }
         }
 

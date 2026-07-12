@@ -328,6 +328,7 @@ data class FighterState(
     var mountHp: Float = 0f,
     var isChariot: Boolean = false,
     var isLord: Boolean = false,
+    var pallbearerIndex: Int = -1,
     var trampleCooldown: Float = 0f,
     var kills: Int = 0,
     var stuckProjectiles: MutableList<StuckProj> = mutableListOf(),

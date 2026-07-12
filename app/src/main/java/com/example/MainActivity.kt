@@ -1242,7 +1242,10 @@ fun StatsAndLaunchPanel(
             headgear = uiState.headgear,
             isDualWielding = uiState.isDualWielding,
             posX = 0f, targetX = 0f,
-            isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)
+            isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS) || uiState.isThroneMode,
+            mountHp = if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE)) 80f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT)) 120f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)) 40f else 0f,
+            isChariot = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT),
+            isLord = uiState.isThroneMode
         )
     }
 

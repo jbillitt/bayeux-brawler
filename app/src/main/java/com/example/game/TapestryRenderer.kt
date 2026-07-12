@@ -214,8 +214,8 @@ object TapestryRenderer {
         val legColorL = if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D)
         val legColorR = if (fighter.isPlayer) Color(0xFFB08221) else Color(0xFF265063)
 
-        // Left Leg (Back leg) - don't draw if mounted (hidden behind horse)
-        if (!fighter.isMounted) {
+        // Left Leg (Back leg) - don't draw if mounted (hidden behind horse) unless on stilts
+        if (!fighter.isMounted || fighter.mountHp == 40f) {
             scope.withTransform({
                 rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f))
             }) {
@@ -2431,53 +2431,7 @@ object TapestryRenderer {
     private fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val wColor = Color(0xFF5C4033) // Dark wood
         
-        // Anim state for walking pallbearers
-        val walkAnim = if (fighter.isDead || fighter.isDying) 0f else fighter.animFrame * 1.5f
-        val angleL = if (fighter.isDead || fighter.isDying) 0f else kotlin.math.sin(walkAnim) * 0.45f
-        val angleR = if (fighter.isDead || fighter.isDying) 0f else -kotlin.math.sin(walkAnim) * 0.45f
-        
-        // Draw 2 visible side Pallbearers (representing 4 holding the poles)
-        listOf(-45f, 45f).forEach { bx ->
-            val px = cx + bx
-            val py = cy + 120f // shoulders at pole height
-            
-            // Draw Legs
-            scope.withTransform({ rotate(radToDeg(angleL), pivot = Offset(px, py + 30f)) }) {
-                drawStitchedStrap(this, Offset(px - 5f, py + 30f), Offset(px - 10f, py + 80f), Color(0xFF382F22))
-            }
-            scope.withTransform({ rotate(radToDeg(angleR), pivot = Offset(px, py + 30f)) }) {
-                drawStitchedStrap(this, Offset(px + 5f, py + 30f), Offset(px + 10f, py + 80f), Color(0xFF382F22))
-            }
-            
-            // Torso (Peasant Tunic)
-            val torso = Path().apply {
-                moveTo(px - 12f, py - 5f)
-                lineTo(px + 12f, py - 5f)
-                lineTo(px + 15f, py + 40f)
-                lineTo(px - 15f, py + 40f)
-                close()
-            }
-            drawStitchedFill(scope, torso, Color(0xFFFAF6EB))
-            scope.drawPath(torso, ThreadColor, style = StitchedStroke)
-            
-            // Head
-            scope.drawCircle(Color(0xFFE8C5A4), radius = 12f, center = Offset(px, py - 18f))
-            scope.drawCircle(ThreadColor, radius = 12f, center = Offset(px, py - 18f), style = Stroke(width = 1.5f))
-            // Coif
-            val coif = Path().apply {
-                moveTo(px - 14f, py - 18f)
-                arcTo(androidx.compose.ui.geometry.Rect(px - 14f, py - 32f, px + 14f, py - 4f), 180f, 180f, false)
-                lineTo(px + 16f, py - 5f)
-                lineTo(px - 16f, py - 5f)
-                close()
-            }
-            drawStitchedFill(scope, coif, Color(0xFF868C91))
-            
-            // Arm holding the pole
-            scope.withTransform({ rotate(45f, pivot = Offset(px, py + 5f)) }) {
-                drawStitchedStrap(this, Offset(px, py + 5f), Offset(px, py + 25f), Color(0xFFFAF6EB))
-            }
-        }
+        // We no longer draw fake peasants here, as the actual ancillaries will carry the throne.
 
         // Draw a basic wooden throne
         val tPath = Path().apply {
@@ -2507,18 +2461,21 @@ object TapestryRenderer {
 
     private fun drawStilts(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val wColor = Color(0xFF8B7355) // Wood
+        // Match the leg anim exactly (animFrame * 0.45f)
         val angleL = if (fighter.isDead || fighter.isDying) 0f else kotlin.math.sin(fighter.animFrame) * 0.45f
         val angleR = if (fighter.isDead || fighter.isDying) 0f else -kotlin.math.sin(fighter.animFrame) * 0.45f
 
-        // Draw left stilt
+        // Draw left stilt (attaches to left foot at cx - 18)
         scope.withTransform({ rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f)) }) {
-            drawLine(wColor, Offset(cx - 10f, cy + 140f), Offset(cx - 10f, cy + 200f), strokeWidth = 8f)
-            drawLine(Color(0xFF4A4A4A), Offset(cx - 20f, cy + 150f), Offset(cx, cy + 150f), strokeWidth = 4f)
+            drawLine(wColor, Offset(cx - 18f, cy + 150f), Offset(cx - 18f, cy + 220f), strokeWidth = 8f)
+            // Footrest
+            drawLine(Color(0xFF4A4A4A), Offset(cx - 25f, cy + 155f), Offset(cx - 5f, cy + 155f), strokeWidth = 4f)
         }
-        // Draw right stilt
+        // Draw right stilt (attaches to right foot at cx + 18)
         scope.withTransform({ rotate(radToDeg(angleR), pivot = Offset(cx + 10f, cy + 90f)) }) {
-            drawLine(wColor, Offset(cx + 10f, cy + 140f), Offset(cx + 10f, cy + 200f), strokeWidth = 8f)
-            drawLine(Color(0xFF4A4A4A), Offset(cx, cy + 150f), Offset(cx + 20f, cy + 150f), strokeWidth = 4f)
+            drawLine(wColor, Offset(cx + 18f, cy + 150f), Offset(cx + 18f, cy + 220f), strokeWidth = 8f)
+            // Footrest
+            drawLine(Color(0xFF4A4A4A), Offset(cx + 10f, cy + 155f), Offset(cx + 35f, cy + 155f), strokeWidth = 4f)
         }
     }
 

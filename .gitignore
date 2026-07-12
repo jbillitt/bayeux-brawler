@@ -16,3 +16,7 @@
 local.properties
 .env
 debug.keystore
+my-upload-key.jks
+logcat*.txt
+build_output.txt
+scripts/vector_builder/node_modules/

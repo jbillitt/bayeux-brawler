@@ -18,7 +18,7 @@ class MainActivityTest {
     @Test
     fun `generateShareImage returns null when player is null`() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val result: Uri? = generateShareImage(context, null, 1.0f, 0, true)
+        val result: Uri? = generateShareImage(context, null, com.example.game.BattleSimState(), true)
         assertNull(result)
     }
 
@@ -43,7 +43,7 @@ class MainActivityTest {
         )
         
         try {
-            val result: Uri? = generateShareImage(context, player, 1.5f, 10, false)
+            val result: Uri? = generateShareImage(context, player, com.example.game.BattleSimState(score = 10), false)
             // It might return null in a plain test environment if FileProvider paths aren't fully configured
             // but the important part is that the drawing code (StaticLayout, Canvas, etc) executes without throwing.
         } catch (e: Exception) {

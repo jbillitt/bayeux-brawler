@@ -412,108 +412,76 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                // Stats popup button (replaced level text)
-                Box(
-                    modifier = Modifier
-                        .background(TapestryDark.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                        .border(1.dp, TapestryDark.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                        .clickable { showStatsPopup = true }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "⚔ STATS",
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = if (uiState.showLevelUpScreen || uiState.pendingLevelUpChoices.isNotEmpty()) TapestryRed else TapestryDark
-                    )
-                }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Stats popup button
+            Box(
+                modifier = Modifier
+                    .background(TapestryDark.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                    .border(1.dp, TapestryDark.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                    .clickable { showStatsPopup = true }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
-                    text = "v${com.example.BuildConfig.VERSION_NAME}",
-                    fontSize = 8.sp,
+                    text = "⚔ STATS",
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
-                    color = TapestryDark.copy(alpha = 0.5f)
+                    fontSize = 10.sp,
+                    color = if (uiState.showLevelUpScreen || uiState.pendingLevelUpChoices.isNotEmpty()) TapestryRed else TapestryDark
                 )
             }
-            Text(
-                text = FlavourText.battleName(MedievalHarpPlayer.gameSeed, uiState.level),
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                color = TapestryDark.copy(alpha = 0.7f),
-                modifier = Modifier.padding(top = 4.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .background(TapestryRed, RoundedCornerShape(2.dp))
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "LVL %02d".format(uiState.level),
+                    color = TapestryLight,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
+        
+        // Center: Battle Name
+        Text(
+            text = FlavourText.battleName(MedievalHarpPlayer.gameSeed, uiState.level),
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Bold,
+            color = TapestryDark,
+            modifier = Modifier.weight(1f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "SCORE",
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TapestryDark.copy(alpha = 0.6f)
-                )
-                Text(
-                    text = "${uiState.score}",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 16.sp,
-                    color = TapestryRed
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("SCORE:", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = TapestryDark.copy(alpha = 0.6f))
+                Text("${uiState.score}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 12.sp, color = TapestryRed)
             }
-
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "HIGHSCORE",
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TapestryDark.copy(alpha = 0.6f)
-                )
-                Text(
-                    text = "${uiState.highscore}",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = TapestryDark
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("HIGH:", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = TapestryDark.copy(alpha = 0.6f))
+                Text("${uiState.highscore}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TapestryDark)
             }
-
+            
             // Medieval Harp Music Toggle
             Box(
                 modifier = Modifier
                     .background(if (musicOn) TapestryGreen else TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
                     .border(1.dp, TapestryDark, RoundedCornerShape(2.dp))
                     .clickable { onToggleMusic() }
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
                     .testTag("toggle_harp_music_btn")
             ) {
                 Text(
-                    text = if (musicOn) "🔊 MUSIC" else "🔇 MUTE",
+                    text = if (musicOn) "🔊" else "🔇",
                     color = TapestryLight,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .background(TapestryRed, RoundedCornerShape(2.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = "LVL %02d".format(uiState.level),
-                    color = TapestryLight,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontSize = 10.sp
                 )
             }
         }

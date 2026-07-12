@@ -27,17 +27,24 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     val a = mutableListOf<VoiceAssignment>()
     val used = mutableSetOf<Voice>()
     val moods = spec.moods
-    val merrier = "Merrier" in moods; val solemn = "More Solemn" in moods
-    val wilder = "Wilder" in moods; val nobler = "Nobler" in moods
+    val merrierCount = moods.count { it == "Merrier" }
+    val solemnCount = moods.count { it == "More Solemn" }
+    val wildCount = moods.count { it == "Wilder" }
+    val noblerCount = moods.count { it == "Nobler" }
+
+    val wilder = wildCount > 0
+    val merrier = merrierCount > 0
+    val nobler = noblerCount > 0
+    val solemn = solemnCount > 0
 
     // Role gains (fixed budget - the mix bus is never normalised)
     val gMel = 0.50f; val gAcc = 0.20f; val gSecond = 0.28f; val gBass = 0.34f
-    val gPerc1 = if (solemn) 0.21f else 0.30f
-    var gDrone = 0.16f * (if (wilder) 1.6f else 1f)
-    val gThird = 0.22f; var gPads = 0.14f * (if (nobler) 1.5f else 1f) * (if (solemn) 1.5f else 1f)
-    val gPerc2 = if (solemn) 0.13f else 0.18f
+    val gPerc1 = 0.30f * (1f - solemnCount * 0.15f).coerceAtLeast(0.1f)
+    var gDrone = 0.16f * (1f + wildCount * 1.5f)
+    val gThird = 0.22f; var gPads = 0.14f * (1f + noblerCount * 0.5f) * (1f + solemnCount * 0.5f)
+    val gPerc2 = 0.18f * (1f - solemnCount * 0.15f).coerceAtLeast(0.1f)
     val gWaits = 0.26f; val gSparkle = 0.16f
-    var gBells = 0.22f * (if (solemn) 1.5f else 1f)
+    var gBells = 0.22f * (1f + solemnCount * 0.5f)
     val gTimp = 0.30f
 
     // L1 soloist: family-biased {harp, lute}; self-accompanies until the bass arrives at L3
@@ -146,9 +153,9 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
             Voice.BODHRAN, Voice.TABOR -> {
                 out += NoteEvent(base, 0.4f, 57, 1f)
                 when (spec.beatsPerBar) {
-                    6 -> { out += NoteEvent(base + 3f, 0.4f, 57, 0.7f); if (wilder) out += NoteEvent(base + 5f, 0.3f, 57, 0.5f) }
-                    4 -> { out += NoteEvent(base + 2f, 0.4f, 57, 0.7f); if (wilder) out += NoteEvent(base + 3.5f, 0.3f, 57, 0.5f) }
-                    else -> if (wilder) out += NoteEvent(base + 2f, 0.3f, 57, 0.5f)
+                    6 -> { out += NoteEvent(base + 3f, 0.4f, 57, 0.7f); if (wilder) { out += NoteEvent(base + 4.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 5.5f, 0.3f, 57, 0.5f) } }
+                    4 -> { out += NoteEvent(base + 2f, 0.4f, 57, 0.7f); if (wilder) { out += NoteEvent(base + 2.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 3.5f, 0.3f, 57, 0.5f) } }
+                    else -> if (wilder) { out += NoteEvent(base + 1.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 2.5f, 0.3f, 57, 0.5f) }
                 }
             }
             Voice.TAMBOURINE -> {

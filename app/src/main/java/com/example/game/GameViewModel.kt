@@ -25,7 +25,7 @@ data class Projectile(
     val damage: Float,
     val pierce: Float,
     val blunt: Float,
-    val type: String, // "arrow" or "stone"
+    val type: ProjectileType,
     val sizeMultiplier: Float = 1f,
     val hasSpikes: Boolean = false,
     val launchedWeaponId: String? = null,
@@ -814,7 +814,7 @@ class GameViewModel : ViewModel() {
             if (bgHit != null && proj.posY < 350f) {
                 hit = true
                 bgHit.hp -= proj.damage
-                if (proj.type == "arrow" || proj.type == "bolt" || proj.type == "javelin") {
+                if (proj.type.isArrowLike) {
                     if (proj.velocityX > 0) bgHit.stuckArrowsFromLeft++ else bgHit.stuckArrowsFromRight++
                 }
                 if (bgHit.hp <= 0) bgHit.isDestroyed = true
@@ -844,12 +844,7 @@ class GameViewModel : ViewModel() {
             if (!hit && proj.posX in -500f..(_uiState.value.levelWidth + 500f) && proj.posY < 350f) {
                 remainingProjectiles.add(proj)
             } else if (hit) {
-                // Play sound
-                if (proj.type == "arrow") {
-                    MedievalAudioSynth.playSound(SoundType.THWACK)
-                } else {
-                    MedievalAudioSynth.playSound(SoundType.THWACK)
-                }
+                MedievalAudioSynth.playSound(SoundType.THWACK)
             }
         }
         
@@ -870,7 +865,7 @@ class GameViewModel : ViewModel() {
                     id = "arch__",
                     isPlayerOwned = true, posX = spawnX, posY = 240f,
                     velocityX = dir * (400f + Random.nextFloat() * 80f), velocityY = -30f + (Random.nextFloat() * 10f),
-                    damage = 12f, pierce = 8f, blunt = 2f, type = "arrow",
+                    damage = 12f, pierce = 8f, blunt = 2f, type = ProjectileType.ARROW,
                     sizeMultiplier = 1f, hasSpikes = false, launchedWeaponId = null,
                     isSplash = false, isPoisonous = false, isBallista = false
                 ))
@@ -884,7 +879,7 @@ class GameViewModel : ViewModel() {
                     id = "xbow__",
                     isPlayerOwned = true, posX = spawnX, posY = 230f,
                     velocityX = dir * (600f + Random.nextFloat() * 50f), velocityY = -5f,
-                    damage = 25f, pierce = 20f, blunt = 10f, type = "arrow",
+                    damage = 25f, pierce = 20f, blunt = 10f, type = ProjectileType.ARROW,
                     sizeMultiplier = 1f, hasSpikes = false, launchedWeaponId = null,
                     isSplash = false, isPoisonous = false, isBallista = true
                 ))
@@ -924,7 +919,7 @@ class GameViewModel : ViewModel() {
                 id = "lilguy_${System.currentTimeMillis()}_${Random.nextInt(100)}",
                 isPlayerOwned = true, posX = spawnX, posY = 150f,
                 velocityX = dir * (300f + Random.nextFloat() * 80f), velocityY = -25f,
-                damage = 4f, pierce = 2f, blunt = 1f, type = "rock",
+                damage = 4f, pierce = 2f, blunt = 1f, type = ProjectileType.ROCK,
                 sizeMultiplier = 0.5f, hasSpikes = false, launchedWeaponId = null,
                 isSplash = false, isPoisonous = false, isBallista = false
             ))
@@ -964,7 +959,7 @@ class GameViewModel : ViewModel() {
                 // Behind every foe on the field — the belly bursts open
                 fighter.isDying = true
                 fighter.animFrame = 0f
-                fighter.deathType = 0
+                fighter.deathType = DeathType.FALL_BACK
                 fighter.deathTime = System.currentTimeMillis()
             }
             return
@@ -1036,16 +1031,16 @@ class GameViewModel : ViewModel() {
             // Damage connects halfway through the swing visually, or near the end for heavy/chain windups
             val isChain = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain") || fighter.weaponHead.id in listOf("head_flail", "head_war_flail")
             val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe", "head_lucerne", "head_saber")
-            val isChokeSlam = fighter.activeWrestlingMove == "choke_slam"
-            val isSuplex = fighter.activeWrestlingMove == "suplex"
+            val isChokeSlam = fighter.activeWrestlingMove == WrestlingMove.CHOKE_SLAM
+            val isSuplex = fighter.activeWrestlingMove == WrestlingMove.SUPLEX
             val strikeThreshold = if (isChokeSlam) 0.7f else if (isChain) 0.65f else if (isHeavy) 0.85f else 0.5f
 
-            if (fighter.weaponHandle.id == "handle_fists" && fighter.weaponHead.id == "head_bare" && target != null && !target.isDead) {
+            if (fighter.isBrawler && target != null && !target.isDead) {
                 // Apply visual lift for wrestling moves
                 val distToTarget = kotlin.math.abs(fighter.posX - target.posX)
                 if (distToTarget < fighter.reach * 40f + 60f) {
                     val p = effectiveSwingProgress.coerceIn(0f, 1f)
-                    val liftMax = if (isChokeSlam) -140f else if (isSuplex) -90f else if (fighter.activeWrestlingMove == "body_throw") -70f else 0f
+                    val liftMax = if (isChokeSlam) -140f else if (isSuplex) -90f else if (fighter.activeWrestlingMove == WrestlingMove.BODY_THROW) -70f else 0f
                     if (liftMax != 0f) {
                         target.visualOffsetY = if (p < strikeThreshold) {
                             liftMax * (p / strikeThreshold)
@@ -1150,19 +1145,19 @@ class GameViewModel : ViewModel() {
         fighter.isAttacking = true
         fighter.swingProgress = 0f
         
-        if (fighter.weaponHandle.id == "handle_fists" && fighter.weaponHead.id == "head_bare") {
+        if (fighter.isBrawler) {
             if (fighter.missingArm) {
                 fighter.activeWrestlingMove = null
             } else {
                 val rand = kotlin.random.Random.nextFloat()
                 // Default is always the plain punch; wrestling moves are the occasional special.
                 fighter.activeWrestlingMove = when {
-                    fighter.isDualWielding && rand < 0.25f -> "choke_slam"
-                    fighter.isDualWielding && rand < 0.4f -> "body_throw"
-                    !fighter.isDualWielding && fighter.brawlerUpgrades.contains("champion_belt") && rand < 0.35f -> "suplex"
+                    fighter.isDualWielding && rand < 0.25f -> WrestlingMove.CHOKE_SLAM
+                    fighter.isDualWielding && rand < 0.4f -> WrestlingMove.BODY_THROW
+                    !fighter.isDualWielding && fighter.brawlerUpgrades.contains("champion_belt") && rand < 0.35f -> WrestlingMove.SUPLEX
                     // One free hand is enough to grab a throat — shield-and-fist builds slam too, just rarer
-                    !fighter.isDualWielding && rand < 0.12f -> "choke_slam"
-                    !fighter.isDualWielding && rand < 0.2f -> "body_throw"
+                    !fighter.isDualWielding && rand < 0.12f -> WrestlingMove.CHOKE_SLAM
+                    !fighter.isDualWielding && rand < 0.2f -> WrestlingMove.BODY_THROW
                     else -> null
                 }
             }
@@ -1205,7 +1200,7 @@ class GameViewModel : ViewModel() {
             // Stats based on weapon head
             val isSlingshot = attacker.weaponHead.id == "head_slingshot"
             val isJavelin = attacker.weaponHead.id == "head_javelin"
-            var projType = if (isSlingshot) "stone" else if (isJavelin) "javelin" else "arrow"
+            var projType = if (isSlingshot) ProjectileType.STONE else if (isJavelin) ProjectileType.JAVELIN else ProjectileType.ARROW
             
             var sizeMult = 1f
             var spikes = false
@@ -1290,7 +1285,7 @@ class GameViewModel : ViewModel() {
                 projId = "hag_mud_${System.currentTimeMillis()}_${Random.nextInt(100)}"
                 finalDmg = 5f
                 splash = true
-                projType = "rock"
+                projType = ProjectileType.ROCK
             }
 
             val proj = Projectile(
@@ -1361,8 +1356,7 @@ class GameViewModel : ViewModel() {
             val dmgScale = if (hitCount == 4) 0.3f else if (hitCount == 2) 0.6f else 1.0f
             
             // Brawler abilities
-            val isBrawler = attacker.weaponHead.id == "head_bare" && attacker.weaponHandle.id == "handle_fists"
-            if (isBrawler && targets.isNotEmpty()) {
+            if (attacker.isBrawler && targets.isNotEmpty()) {
                 val target = targets.first()
                 
                 if (target.weaponHead.id != "head_bare" && kotlin.random.Random.nextFloat() < 0.05f) {
@@ -1377,7 +1371,7 @@ class GameViewModel : ViewModel() {
                     addPopup("STOLEN!", target.posX, 130f, Color.Yellow)
                     MedievalAudioSynth.playSound(SoundType.CLANG)
                     // We continue into the regular attack loop below to hit them with their own weapon!
-                } else if (attacker.activeWrestlingMove == "suplex") {
+                } else if (attacker.activeWrestlingMove == WrestlingMove.SUPLEX) {
                     val secondTarget = targets.drop(1).firstOrNull() ?: target
                     applyFlatDamage(60f, target, attacker.isPlayer)
                     applyFlatDamage(60f, secondTarget, attacker.isPlayer)
@@ -1386,7 +1380,7 @@ class GameViewModel : ViewModel() {
                     addPopup("SUPLEX!", target.posX, 120f, Color.Red)
                     MedievalAudioSynth.playSound(SoundType.CRUNCH)
                     return
-                } else if (attacker.activeWrestlingMove == "body_throw") {
+                } else if (attacker.activeWrestlingMove == WrestlingMove.BODY_THROW) {
                     // Hurl the grabbed enemy down the line — if he lands on a mate, both go down
                     val dir = if (attacker.facingRight) 1f else -1f
                     applyFlatDamage(45f, target, attacker.isPlayer)
@@ -1404,7 +1398,7 @@ class GameViewModel : ViewModel() {
                     addPopup("HURLED!", target.posX, 120f, Color.Red)
                     MedievalAudioSynth.playSound(SoundType.CRUNCH)
                     return
-                } else if (attacker.activeWrestlingMove == "choke_slam") {
+                } else if (attacker.activeWrestlingMove == WrestlingMove.CHOKE_SLAM) {
                     applyFlatDamage(attacker.baseDamage * 3.5f, target, attacker.isPlayer)
                     if (!target.isPlayer) target.crumpleDuration = 2.5f
                     addPopup("-CHOKE SLAM-", target.posX, 120f, Color.Red) // Using hyphens so it passes word filter
@@ -1621,7 +1615,7 @@ class GameViewModel : ViewModel() {
 
         if (isBlocked) {
             MedievalAudioSynth.playSound(SoundType.CLANG)
-            if (proj.type == "arrow" || proj.type == "bolt" || proj.type == "javelin") {
+            if (proj.type.isArrowLike) {
                 defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, true, proj.isBallista))
             }
             
@@ -1644,7 +1638,7 @@ class GameViewModel : ViewModel() {
             val totalDamage = (proj.damage * armorFactor) + (proj.blunt * 0.6f)
             applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
 
-            if (proj.type == "arrow" || proj.type == "bolt" || proj.type == "javelin") {
+            if (proj.type.isArrowLike) {
                 defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, false, proj.isBallista))
             }
             // Apply Poison Upgrade
@@ -1711,7 +1705,7 @@ class GameViewModel : ViewModel() {
                         bearer.pallbearerIndex = -1
                         bearer.isDying = true
                         bearer.animFrame = 0f
-                        bearer.deathType = kotlin.random.Random.nextInt(0, 5)
+                        bearer.deathType = DeathType.randomTame()
                         bearer.deathTime = System.currentTimeMillis()
                     }
                     addPopup("THE THRONE FALLS!", defender.posX, 110f, Color.Red)
@@ -1745,9 +1739,8 @@ class GameViewModel : ViewModel() {
             }
             defender.isDying = true
             defender.animFrame = 0f
-            // Killed while already crumpled on the ground → die where they lie (type 99),
-            // no standing back up. Otherwise 0..7 ragdolls (5 = decapitation).
-            defender.deathType = if (defender.crumpleDuration > 0f) 99 else kotlin.random.Random.nextInt(0, 8)
+            // Killed while already crumpled on the ground → die where they lie, no standing back up
+            defender.deathType = if (defender.crumpleDuration > 0f) DeathType.CRUMPLED_IN_PLACE else DeathType.randomAny()
             defender.deathTime = System.currentTimeMillis()
             MedievalAudioSynth.playSound(SoundType.OUCH)
             val deathShout = if (defender.isPlayer) "VÆ MIHI MORTIS!" else "AARRGGHH!"

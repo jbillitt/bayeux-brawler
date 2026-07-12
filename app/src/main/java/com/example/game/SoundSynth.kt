@@ -50,7 +50,17 @@ object MedievalAudioSynth {
         return false
     }
 
+    @Volatile
+    var sfxEnabled = true
+
+    /** Occasional wardog bark from the assets/dog folder. */
+    fun playDogBark() {
+        if (!sfxEnabled) return
+        playFromAssetFolder("dog")
+    }
+
     fun playSound(type: SoundType) {
+        if (!sfxEnabled) return
         if (type == SoundType.DRUM_ROLL) {
             if (playFromAssetFolder("drums")) return
         }
@@ -59,7 +69,7 @@ object MedievalAudioSynth {
             if (playFromAssetFolder("victory")) return
         }
         
-        if (type == SoundType.OUCH && kotlin.random.Random.nextFloat() < 0.3f) {
+        if (type == SoundType.OUCH) {
             if (playFromAssetFolder("pain")) return
         }
 

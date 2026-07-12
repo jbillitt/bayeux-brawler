@@ -125,7 +125,8 @@ private fun toNotes(spec: SongSpec, raw: List<Pair<Float, Pair<Float, Int>>>, st
 /** Divisions + graces for the repeat statement. */
 private fun ornament(spec: SongSpec, notes: List<NoteEvent>, rng: Random): List<NoteEvent> {
     val out = mutableListOf<NoteEvent>()
-    val density = spec.ornamentDensity * (if ("Wilder" in spec.moods) 1.5f else 1f)
+    val wildCount = spec.moods.count { it == "Wilder" }
+    val density = spec.ornamentDensity * (1f + wildCount * 1.5f)
     for ((i, n) in notes.withIndex()) {
         val next = notes.getOrNull(i + 1)
         val divide = n.durBeats >= 2f && next != null && rng.nextFloat() < density

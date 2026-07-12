@@ -326,7 +326,7 @@ data class FighterState(
     val level: Int = 1,
     
     // Death tracking
-    var deathType: Int = 0,
+    var deathType: DeathType = DeathType.FALL_BACK,
     var deathTime: Long = 0L,
     
     // Status effects
@@ -352,7 +352,7 @@ data class FighterState(
     var isStilts: Boolean = false,
     var isLord: Boolean = false,
     var grapplerId: String? = null,
-    var activeWrestlingMove: String? = null,
+    var activeWrestlingMove: WrestlingMove? = null,
     var crumpleDuration: Float = 0f,
     var visualOffsetY: Float = 0f,
     var pallbearerIndex: Int = -1,
@@ -389,6 +389,10 @@ data class FighterState(
     // Compute weapon properties
     val isRanged: Boolean
         get() = weaponHead.isRanged
+
+    // True bare-knuckle build: the only fighters allowed to wrestle
+    val isBrawler: Boolean
+        get() = weaponHead == GameData.WeaponHead.BARE && weaponHandle == GameData.WeaponHandle.FISTS
 
     val reach: Float
         get() {
@@ -499,6 +503,26 @@ data class FighterState(
         }
 }
 
+// Grapples a bare-fisted brawler can roll on attack
+enum class WrestlingMove { CHOKE_SLAM, BODY_THROW, SUPLEX }
+
+// What a flying missile is — drives art, stuck-shaft rendering and hit sounds
+enum class ProjectileType {
+    ARROW, BOLT, STONE, JAVELIN, ROCK;
+    val isArrowLike: Boolean get() = this == ARROW || this == BOLT || this == JAVELIN
+}
+
+// Ragdoll variants. Order matters: the first five are the "tame" deaths used for
+// pallbearers; DECAPITATED triggers the blood fountain; CRUMPLED_IN_PLACE is for
+// fighters killed while already lying down.
+enum class DeathType {
+    FALL_BACK, FACEPLANT, CARTWHEEL, PANCAKE, KNOCKED_FLYING, DECAPITATED, KNEEL_KEEL, SKY_LAUNCH, CRUMPLED_IN_PLACE;
+    companion object {
+        fun randomTame() = entries.take(5).random()
+        fun randomAny() = entries.take(8).random()
+    }
+}
+
 // Simple combat popups
 data class CombatPopup(
     val text: String,
@@ -509,7 +533,7 @@ data class CombatPopup(
 )
 
 data class StuckProj(
-    val type: String, // "arrow", "bolt", "stone"
+    val type: ProjectileType,
     val size: Float,
     val velocityX: Float,
     val velocityY: Float,

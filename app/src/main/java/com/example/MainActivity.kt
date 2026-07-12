@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // it's an idle auto-battler, screen shouldn't sleep mid-fight
         com.example.game.MedievalAudioSynth.init(applicationContext)
         
         // Initialize the free, offline, local vocalization engine
@@ -77,7 +78,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    BayeuxAppContent(viewModel)
+                    Box(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
+                        BayeuxAppContent(viewModel)
+                    }
                 }
             }
         }
@@ -413,14 +416,6 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            // Version Number
-            Text(
-                text = com.example.BuildConfig.VERSION_NAME,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Bold,
-                color = TapestryDark.copy(alpha = 0.6f)
-            )
             // Stats popup button
             Box(
                 modifier = Modifier
@@ -451,6 +446,14 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
                     fontFamily = FontFamily.Monospace
                 )
             }
+            // Version Number
+            Text(
+                text = com.example.BuildConfig.VERSION_NAME,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                color = TapestryDark.copy(alpha = 0.6f)
+            )
         }
         
         // Center: Battle Name
@@ -487,7 +490,26 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
                     .testTag("toggle_harp_music_btn")
             ) {
                 Text(
-                    text = if (musicOn) "🔊" else "🔇",
+                    text = if (musicOn) "🎵" else "🎵✕",
+                    color = TapestryLight,
+                    fontSize = 10.sp
+                )
+            }
+            // SFX Toggle
+            var sfxOn by remember { mutableStateOf(com.example.game.MedievalAudioSynth.sfxEnabled) }
+            Box(
+                modifier = Modifier
+                    .background(if (sfxOn) TapestryGreen else TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+                    .border(1.dp, TapestryDark, RoundedCornerShape(2.dp))
+                    .clickable {
+                        sfxOn = !sfxOn
+                        com.example.game.MedievalAudioSynth.sfxEnabled = sfxOn
+                    }
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .testTag("toggle_sfx_btn")
+            ) {
+                Text(
+                    text = if (sfxOn) "🔊" else "🔇",
                     color = TapestryLight,
                     fontSize = 10.sp
                 )
@@ -599,46 +621,76 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                         center = Offset(centerX, centerY), style = Stroke(width = 5f))
                 }
 
-                // Draw decorative grass tuft under knight
-                val gp = Path().apply {
-                    moveTo(centerX - 60f, centerY + 110f)
-                    quadraticTo(centerX, centerY + 100f, centerX + 60f, centerY + 110f)
-                }
-                drawPath(gp, TapestryGreen, style = Stroke(width = 4f))
-
-                // Create dummy FighterState mirroring chosen gear
-                val dummyFighter = FighterState(
-                    id = "preview",
-                    name = uiState.playerName,
-                    isPlayer = true,
-                    faceNoseShape = uiState.faceNoseShape,
-                    faceBiteShape = uiState.faceBiteShape,
-                    faceForehead = uiState.faceForehead,
-                    maxHp = 100f,
-                    hp = 100f,
-                    weaponHead = uiState.weaponHead,
-                    weaponHandle = uiState.weaponHandle,
-                    shield = uiState.shield,
-                    armor = uiState.armor,
-                    headgear = uiState.headgear,
-                    isDualWielding = uiState.isDualWielding,
-                    posX = centerX,
-                    targetX = centerX,
-                    animFrame = animFrame,
-                    facingRight = true,
-                    size = uiState.characterSize,
-                    hairColor = uiState.hairColor,
-                    hairStyle = uiState.hairStyle,
-                    isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS) || uiState.isThroneMode,
-                    isChariot = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT),
-                    isLord = uiState.isThroneMode,
-                    mountHp = if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE)) 80f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT)) 120f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)) 40f else 0f
-                )
-
-                // Render at massive scale (Fancam style!)
-                // Center it slightly lower so the head doesn't clip
-                translate(top = -40f) {
-                    TapestryRenderer.drawCharacter(this, dummyFighter, scale = 1.35f, isBattleActive = false)
+                // Character body spans ~y146..413 after the 1.35 scale (pivot 200), centre ≈280.
+                // Anchor that to the panel midpoint so the knight is centered, not floating.
+                translate(top = centerY - 280f) {
+                    if (uiState.isThroneMode) {
+                        val front = com.example.game.FighterState(
+                            id = "front", name = "Front", isPlayer = true,
+                            maxHp = 100f, hp = 100f, posX = centerX + 45f, targetX = centerX + 45f,
+                            animFrame = animFrame, facingRight = true,
+                            size = uiState.characterSize,
+                            weaponHead = uiState.weaponHead,
+                            weaponHandle = uiState.weaponHandle,
+                            shield = uiState.shield,
+                            armor = uiState.armor,
+                            headgear = uiState.headgear,
+                            isDualWielding = uiState.isDualWielding,
+                            hairColor = uiState.hairColor, hairStyle = uiState.hairStyle,
+                            faceNoseShape = uiState.faceNoseShape, faceBiteShape = uiState.faceBiteShape, faceForehead = uiState.faceForehead
+                        )
+                        val back = front.copy(id = "back", name = "Back", posX = centerX - 45f, targetX = centerX - 45f)
+                        val king = com.example.game.FighterState(
+                            id = "king", name = uiState.playerName, isPlayer = true, isLord = true, isMounted = true,
+                            maxHp = 100f, hp = 100f, posX = centerX, targetX = centerX,
+                            animFrame = animFrame, facingRight = true,
+                            size = uiState.characterSize,
+                            weaponHead = com.example.game.GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+                            weaponHandle = com.example.game.GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                            shield = com.example.game.GameData.SHIELDS.first { it.id == "shield_none" },
+                            armor = uiState.armor,
+                            headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_crown" },
+                            isDualWielding = false,
+                            hairColor = uiState.hairColor, hairStyle = uiState.hairStyle,
+                            faceNoseShape = uiState.faceNoseShape, faceBiteShape = uiState.faceBiteShape, faceForehead = uiState.faceForehead
+                        )
+                        TapestryRenderer.drawAncillaries(this, uiState.unlockedAncillaries, king, scale = 1.35f)
+                        TapestryRenderer.drawCharacter(this, back, scale = 1.35f, isBattleActive = true)
+                        TapestryRenderer.drawCharacter(this, king, scale = 1.35f, isBattleActive = true)
+                        TapestryRenderer.drawCharacter(this, front, scale = 1.35f, isBattleActive = true)
+                    } else {
+                        // Create dummy FighterState mirroring chosen gear
+                        val dummyFighter = com.example.game.FighterState(
+                            id = "preview",
+                            name = uiState.playerName,
+                            isPlayer = true,
+                            faceNoseShape = uiState.faceNoseShape,
+                            faceBiteShape = uiState.faceBiteShape,
+                            faceForehead = uiState.faceForehead,
+                            maxHp = 100f,
+                            hp = 100f,
+                            weaponHead = uiState.weaponHead,
+                            weaponHandle = uiState.weaponHandle,
+                            shield = uiState.shield,
+                            armor = uiState.armor,
+                            headgear = uiState.headgear,
+                            isDualWielding = uiState.isDualWielding,
+                            posX = centerX,
+                            targetX = centerX,
+                            animFrame = animFrame,
+                            facingRight = true,
+                            size = uiState.characterSize,
+                            hairColor = uiState.hairColor,
+                            hairStyle = uiState.hairStyle,
+                            isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS),
+                            isChariot = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT),
+                            isStilts = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS),
+                            isLord = false,
+                            mountHp = if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE)) 80f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT)) 120f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)) 40f else 0f
+                        )
+                        TapestryRenderer.drawAncillaries(this, uiState.unlockedAncillaries, dummyFighter, scale = 1.35f)
+                        TapestryRenderer.drawCharacter(this, dummyFighter, scale = 1.35f, isBattleActive = false)
+                    }
                 }
             }
         }
@@ -725,6 +777,7 @@ fun LevelUpScreen(
                             "attachment" -> Triple(Color(0xFFFFEBEE), TapestryRed, "Weapon Head")
                             "extension" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "Haft Upgrade")
                             "armor" -> Triple(Color(0xFFFFF8E1), Color(0xFF8D6E63), "Layered Armor")
+                            "comedy" -> Triple(Color(0xFFFFE0E0), Color(0xFFC62828), "Comedy Gear")
                             else -> Triple(Color(0xFFF5F5F5), TapestryDark, "Upgrade")
                         }
                         Card(
@@ -1079,6 +1132,9 @@ fun GearSelectionTabs(
                     1 -> GameData.SHIELDS.filter { it.id in uiState.unlockedGearIds }
                     2 -> GameData.ARMOR_PIECES.filter { it.id in uiState.unlockedGearIds }
                     else -> GameData.HEADGEAR_PIECES.filter { it.id in uiState.unlockedGearIds }
+                }.sortedBy { item ->
+                    // "None/bare" options lead (top-left) so they read as the baseline, not an upgrade
+                    if (item.id.endsWith("_none") || item.id == "head_bare" || item.id == "handle_fists") 0 else 1
                 }
 
                 LazyVerticalGrid(
@@ -1470,31 +1526,45 @@ fun BattlefieldScene(
             drawTapestryBorder(this, isTop = false, textHeadline = "", motifSeed = borderSeed + 1)
 
             val shakeAmt = shake
-            val offsetX = if (shakeAmt > 0f) (kotlin.random.Random.nextFloat() * shakeAmt * 2f - shakeAmt) else 0f
+            val playerScaleX = size.width / 1000f
+            val scaleFactor = size.height / 350f
+            
+            val scaledCameraX = uiState.cameraX * playerScaleX
+            val offsetX = (if (shakeAmt > 0f) (kotlin.random.Random.nextFloat() * shakeAmt * 2f - shakeAmt) else 0f) - scaledCameraX
             val offsetY = if (shakeAmt > 0f) (kotlin.random.Random.nextFloat() * shakeAmt * 2f - shakeAmt) else 0f
 
+            // Anchor the ground to the bottom border: fighter feet (200 + 158*scale in this
+            // block's coordinates) land 45px above the border — room for bodies/blood pools,
+            // no dead space.
+            val groundOffsetY = (size.height - 40f - 45f) - (200f + 158f * scaleFactor)
             withTransform({
-                translate(left = offsetX, top = offsetY)
+                // Keep the game world inside the embroidered borders (40px bands)
+                clipRect(top = 40f, bottom = size.height - 40f)
+                translate(left = offsetX, top = offsetY + groundOffsetY)
             }) {
+                // 2.5 Draw Background Environment Objects
+                uiState.backgroundObjects.forEach { bg ->
+                    val scaledBgX = bg.posX * playerScaleX
+                    TapestryRenderer.drawBackgroundObject(this, bg, scaledBgX, scaleFactor)
+                }
+            
                 // 3. Draw Players and Enemies
                 if (playerFighter != null) {
-                // Adjust position scaling to match standard physical resolution of drawing Canvas
-                val playerScaleX = size.width / 1000f
-                val scaleFactor = size.height / 350f
 
                 // Draw Knight
                 val scaledPlayer = playerFighter.copy(
                     posX = playerFighter.posX * playerScaleX
                 )
-                TapestryRenderer.drawCharacter(this, scaledPlayer, scale = scaleFactor)
-
-                // Draw ridiculous unlocked Squires, Trumpeters, Heralds, Cupbearers
+                // Ancillaries draw behind the player (matches customization/throne previews) so
+                // Lil Guy's backpack reads as attached to the knight's back, not floating in front of him
                 TapestryRenderer.drawAncillaries(this, uiState.unlockedAncillaries, scaledPlayer, scale = scaleFactor)
+                TapestryRenderer.drawCharacter(this, scaledPlayer, scale = scaleFactor)
 
                 // Draw health bar for Player
                 val px = scaledPlayer.posX
                 val headDist = if (scaledPlayer.isMounted && !scaledPlayer.isChariot) 70f else if (scaledPlayer.isChariot) 50f else 40f
-                val py = 200f - (headDist + 35f) * scaledPlayer.size * scaleFactor
+                // Clamp so the bar never rises above the top border clip (tall fighters/mounts)
+                val py = (200f - (headDist + 35f) * scaledPlayer.size * scaleFactor).coerceAtLeast(55f - groundOffsetY)
                 drawHealthBar(this, px, py, playerFighter.hp, playerFighter.ghostHp, playerFighter.maxHp)
                 drawStatusEffects(this, px, py - 10f, playerFighter)
 
@@ -1508,7 +1578,7 @@ fun BattlefieldScene(
                     // Draw health bar for enemy
                     if (!enemy.isDead) {
                         val enemyHeadDist = if (scaledEnemy.isMounted && !scaledEnemy.isChariot) 70f else if (scaledEnemy.isChariot) 50f else 40f
-                        val epy = 200f - (enemyHeadDist + 35f) * scaledEnemy.size * scaleFactor
+                        val epy = (200f - (enemyHeadDist + 35f) * scaledEnemy.size * scaleFactor).coerceAtLeast(55f - groundOffsetY)
                         drawHealthBar(this, scaledEnemy.posX, epy, enemy.hp, enemy.ghostHp, enemy.maxHp)
                         drawStatusEffects(this, scaledEnemy.posX, epy - 12f, enemy)
                     }
@@ -1557,7 +1627,7 @@ fun BattlefieldScene(
                             drawPath(hPath, Color(0xFF8C969E))
                             drawPath(hPath, TapestryDark, style = Stroke(width = 1.5f))
                         }
-                    } else if (proj.type == "javelin") {
+                    } else if (proj.type == com.example.game.ProjectileType.JAVELIN) {
                         // Draw huge spear
                         val shaftColor = Color(0xFF6E5536) // Darker wood
                         val strokeW = 9f
@@ -1585,11 +1655,12 @@ fun BattlefieldScene(
                         // Some leather bindings
                         drawLine(TapestryDark, Offset(sx - (4f * arrowDir), sy - 3f), Offset(sx - (4f * arrowDir), sy + 3f), strokeWidth = 3f)
                         drawLine(TapestryDark, Offset(sx - (8f * arrowDir), sy - 3f), Offset(sx - (8f * arrowDir), sy + 3f), strokeWidth = 3f)
-                    } else if (proj.type == "arrow") {
+                    } else if (proj.type == com.example.game.ProjectileType.ARROW) {
                         // Draw flying arrow line with feathers
                         val shaftColor = if (proj.isBallista) Color(0xFF8A7156) else TapestryDark
-                        val strokeW = if (proj.isBallista) 10f else 7f * proj.sizeMultiplier
-                        val length = 50f * proj.sizeMultiplier
+                        // Match embedded arrows, which inherit the fighter transform's scaleFactor
+                        val strokeW = (if (proj.isBallista) 10f else 5f * proj.sizeMultiplier) * scaleFactor
+                        val length = 55f * proj.sizeMultiplier * scaleFactor
                         
                         // Arrow Shaft
                         drawLine(
@@ -1742,8 +1813,9 @@ fun BattlefieldScene(
                                             translate(40f, -140f) // shift up to where cy=200 is
                                         }) {
                                             if (player != null) {
-                                                // Draw just head without helmet
-                                                val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it == com.example.game.GameData.HeadgearPiece.NONE }, posX = 0f, animFrame = 0f, isDead = false, isDying = false)
+                                                // Draw just head without helmet; neutralize size and mounts,
+                                                // which shift the head out of this fixed-position crop
+                                                val dummy = player.copy(headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it == com.example.game.GameData.HeadgearPiece.NONE }, posX = 0f, animFrame = 0f, isDead = false, isDying = false, size = 1f, isMounted = false, isChariot = false, isStilts = false, isLord = false)
                                                 com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f, isBattleActive = false)
                                             }
                                         }
@@ -1752,7 +1824,8 @@ fun BattlefieldScene(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text("Name: ${uiState.playerName}", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryDark)
-                                    Text("Weapon: ${uiState.weaponHead.itemName}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
+                                    val wpnName = if (uiState.weaponHead.id == "head_bare" && uiState.weaponHandle.id == "handle_fists") "Bare Hands (Brawler)" else uiState.weaponHead.itemName
+                                    Text("Weapon: $wpnName", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
                                     val anc = uiState.unlockedAncillaries.joinToString(", ") { it.ancillaryName }
                                     Text("Ancillaries: ${if (anc.isEmpty()) "None" else anc}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
                                     Text("Kills: ${uiState.totalKills}", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryRed)
@@ -1787,7 +1860,7 @@ fun BattlefieldScene(
                             Button(
                                 onClick = {
                                     shareScope.launch(Dispatchers.IO) {
-                                        val uri = generateShareImage(context, player, uiState.score, uiState.totalKills, isWin)
+                                        val uri = generateShareImage(context, player, uiState, isWin)
                                         if (uri != null) withContext(Dispatchers.Main) {
                                             val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                                 type = "image/png"
@@ -1991,10 +2064,11 @@ private fun drawTapestryBorder(
     }
 }
 
-fun generateShareImage(context: android.content.Context, player: com.example.game.FighterState?, score: Int, kills: Int, isWin: Boolean): android.net.Uri? {
+fun generateShareImage(context: android.content.Context, player: com.example.game.FighterState?, uiState: com.example.game.BattleSimState, isWin: Boolean): android.net.Uri? {
     if (player == null) return null
-    val width = 800
-    val height = 800
+    val width = 1080
+    val height = 1080
+
     val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
     val androidCanvas = android.graphics.Canvas(bitmap)
     val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
@@ -2015,9 +2089,9 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
     paint.textSize = 35f
     paint.typeface = android.graphics.Typeface.SERIF
     val statusText = if(isWin) "Vanquished" else "Perished"
-    androidCanvas.drawText("Status: " + statusText + " | Score: " + score + " | Kills: " + kills, width / 2f, 150f, paint)
+    androidCanvas.drawText("Status: " + statusText + " | Score: " + uiState.score + " | Kills: " + uiState.totalKills, width / 2f, 150f, paint)
     
-    val wpnBase = player.weaponHead.itemName + " on a " + player.weaponHandle.itemName
+    val wpnBase = uiState.weaponHead.itemName + " on a " + uiState.weaponHandle.itemName
     val wpnName = if (player.extraAttachments.isNotEmpty()) {
         player.extraAttachments.joinToString(", ") { it.itemName } + " attached to " + wpnBase
     } else wpnBase
@@ -2027,7 +2101,11 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
         textSize = 24f 
         textAlign = android.graphics.Paint.Align.LEFT
     }
-    val wpnText = "Wielding: $wpnName"
+    val wpnText = if (uiState.weaponHead.id == "head_bare" && uiState.weaponHandle.id == "handle_fists") {
+        "Wielding: Bare Hands (Brawler)"
+    } else {
+        "Wielding: $wpnName"
+    }
     val staticLayout = android.text.StaticLayout.Builder.obtain(wpnText, 0, wpnText.length, textPaint, width - 40)
         .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
         .build()
@@ -2066,12 +2144,14 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
             translate(114.3f, -50f)
         }) {
             val dummy = player.copy(
-                headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it == com.example.game.GameData.HeadgearPiece.NONE }, 
-                posX = 0f, 
-                animFrame = 0f, 
-                isDead = false, 
+                headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it == com.example.game.GameData.HeadgearPiece.NONE },
+                posX = 0f,
+                animFrame = 0f,
+                isDead = false,
                 isDying = false,
-                facingRight = true // Force face rendering to point correctly in portrait box
+                facingRight = true, // Force face rendering to point correctly in portrait box
+                size = 1f, // portrait zoom targets a fixed head position; a runt/giant body would slide the face out of the crop
+                isMounted = false, isChariot = false, isStilts = false, isLord = false // mounts shift the rider up and out of the crop
             )
             com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f, isBattleActive = false)
         }
@@ -2095,7 +2175,7 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
         textAlign = android.graphics.Paint.Align.CENTER
     }
-    androidCanvas.drawText("$kills kills", width / 2f, 720f, killsPaint)
+    androidCanvas.drawText("${uiState.totalKills} kills", width / 2f, 720f, killsPaint)
 
     // Ancillary labels
     val ancNames = player.extraAttachments.take(4).mapIndexed { i, g -> g.itemName }

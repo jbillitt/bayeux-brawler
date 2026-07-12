@@ -87,47 +87,47 @@ object TapestryRenderer {
                     offsetY = 30f * progress
                     offsetX = if (fighter.facingRight) -30f * progress else 30f * progress
                 } else when (fighter.deathType) {
-                    0 -> { // Fall backwards
+                    DeathType.FALL_BACK -> { // Fall backwards
                         rotationAngle = if (fighter.facingRight) -90f * progress else 90f * progress
                         offsetY = 65f * progress
                     }
-                    1 -> { // Faceplant forward
+                    DeathType.FACEPLANT -> { // Faceplant forward
                         rotationAngle = if (fighter.facingRight) 90f * progress else -90f * progress
                         offsetY = 65f * progress
                     }
-                    2 -> { // Cartwheel of death
+                    DeathType.CARTWHEEL -> { // Cartwheel of death
                         rotationAngle = if (fighter.facingRight) 630f * progress else -630f * progress
                         offsetY = 65f * progress
                     }
-                    3 -> { // Squashed pancake falling over
+                    DeathType.PANCAKE -> { // Squashed pancake falling over
                         rotationAngle = if (fighter.facingRight) -85f * progress else 85f * progress
                         scaleY = (if (fighter.crumpleDuration > 0f) 0.6f else 1f) - 0.7f * progress
                         offsetY = 65f * progress
                     }
-                    4 -> { // Knocked flying backwards landing flat
+                    DeathType.KNOCKED_FLYING -> { // Knocked flying backwards landing flat
                         val flyDir = if (fighter.facingRight) -1f else 1f
                         rotationAngle = flyDir * 270f * progress
                         offsetX = flyDir * 150f * progress
                         offsetY = 65f * progress - 100f * sin(progress * Math.PI).toFloat()
                     }
-                    6 -> { // Sink to the knees, then keel over sideways
+                    DeathType.KNEEL_KEEL -> { // Sink to the knees, then keel over sideways
                         val kneel = (progress * 2f).coerceAtMost(1f)
                         val keel = ((progress - 0.5f) * 2f).coerceIn(0f, 1f)
                         offsetY = 35f * kneel + 30f * keel
                         rotationAngle = if (fighter.facingRight) -90f * keel else 90f * keel
                     }
-                    7 -> { // Launched skyward spinning, crashes down flat
+                    DeathType.SKY_LAUNCH -> { // Launched skyward spinning, crashes down flat
                         val flyDir = if (fighter.facingRight) -1f else 1f
                         rotationAngle = flyDir * 540f * progress
                         offsetX = flyDir * 80f * progress
                         offsetY = 65f * progress - 160f * sin(progress * Math.PI).toFloat()
                     }
-                    99 -> { // Was already crumpled on the ground — dies where they lie
+                    DeathType.CRUMPLED_IN_PLACE -> { // Was already crumpled on the ground — dies where they lie
                         rotationAngle = if (fighter.facingRight) -90f else 90f
                         offsetX = if (fighter.facingRight) -30f else 30f
                         offsetY = 65f
                     }
-                    else -> { // Fall flat
+                    DeathType.DECAPITATED -> { // Fall flat (the blood fountain is drawn separately)
                         rotationAngle = if (fighter.facingRight) -90f * progress else 90f * progress
                         offsetY = 65f * progress
                     }
@@ -159,7 +159,7 @@ object TapestryRenderer {
             }
 
             // Draw blood pool and stream BEFORE the ragdoll transform so it stays flat on the floor AND underneath the body!
-            if ((fighter.isDead || fighter.isDying) && fighter.deathType == 5) {
+            if ((fighter.isDead || fighter.isDying) && fighter.deathType == DeathType.DECAPITATED) {
                 val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
                 val fountainProgress = progress.coerceIn(0f, 1f)
                 if (fountainProgress > 0.05f) {
@@ -189,7 +189,7 @@ object TapestryRenderer {
             }
 
             // Persistent blood pool for dying/dead fighters (all death types except deathType 5 which has its own)
-            if (fighter.isDead && fighter.deathType != 5) {
+            if (fighter.isDead && fighter.deathType != DeathType.DECAPITATED) {
                 // Time since death drives pool expansion
                 val timeSinceDeath = (System.currentTimeMillis() - fighter.deathTime) / 1000f
                 val progress = (timeSinceDeath * 0.5f).coerceIn(0f, 1f)
@@ -425,11 +425,11 @@ object TapestryRenderer {
             val headY = ay - (dirY * penetration)
 
             // Draw shaft
-            val strokeW = (if (proj.type == "javelin") 6f else if (proj.isBallista) 8f else 3f) * effSize.coerceAtLeast(0.6f)
+            val strokeW = (if (proj.type == ProjectileType.JAVELIN) 6f else if (proj.isBallista) 8f else 3f) * effSize.coerceAtLeast(0.6f)
             scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(headX, headY), strokeWidth = strokeW)
 
             // Fletching (only for arrows/bolts)
-            if (proj.type == "arrow" || proj.type == "bolt") {
+            if (proj.type == ProjectileType.ARROW || proj.type == ProjectileType.BOLT) {
                 val fletchW = 7f
                 val perpX = -dirY
                 val perpY = dirX
@@ -438,8 +438,8 @@ object TapestryRenderer {
             }
             
             // Projectile head sticking out the other side
-            if (proj.type != "stone") {
-                val headSize = if (proj.type == "javelin") 8f else 5f
+            if (proj.type != ProjectileType.STONE) {
+                val headSize = if (proj.type == ProjectileType.JAVELIN) 8f else 5f
                 val perpX = -dirY
                 val perpY = dirX
                 val pt1 = Offset(headX + dirX * headSize + perpX * headSize, headY + dirY * headSize + perpY * headSize)
@@ -480,7 +480,7 @@ object TapestryRenderer {
         var headOffsetY = 0f
         var headRot = 0f
 
-        if ((fighter.isDead || fighter.isDying) && fighter.deathType == 5) {
+        if ((fighter.isDead || fighter.isDying) && fighter.deathType == DeathType.DECAPITATED) {
             val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
             // Head flies up and back — trajectory varies per victim for ragdoll variety:
             // some heads pop straight up, some sail far, spin count differs

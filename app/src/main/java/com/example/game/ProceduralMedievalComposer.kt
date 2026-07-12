@@ -14,11 +14,14 @@ object ProceduralMedievalComposer {
     fun midiToFreq(midi: Float): Float = (440.0 * Math.pow(2.0, (midi - 69.0) / 12.0)).toFloat()
 
     fun compose(seed: Long, level: Int, hasTrumpeter: Boolean, sampleRate: Int, moods: List<String> = emptyList()): ShortArray {
-        val spec = resolveSongSpec(seed, moods)
+        // Fold chosen moods into the seed: a mood pick yields an audibly new piece,
+        // not just a tempo/mode tweak of the same melody.
+        val moodSeed = seed + moods.hashCode() * 1000003L
+        val spec = resolveSongSpec(moodSeed, moods)
         currentRootMidi = spec.finalMidi.toFloat()
         currentThirdOffset = spec.mode.steps[2].toFloat()
-        val song = generateSong(spec, melodyRng(seed))
-        val plan = planOrchestration(spec, hasTrumpeter, orchRng(seed))
+        val song = generateSong(spec, melodyRng(moodSeed))
+        val plan = planOrchestration(spec, hasTrumpeter, orchRng(moodSeed))
         val active = activeAssignments(plan, level)
         val duck = duckFactor(active.size)
         val totalSamples = (spec.totalBars * spec.beatsPerBar * spec.secondsPerBeat * sampleRate).toInt()

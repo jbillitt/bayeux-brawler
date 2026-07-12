@@ -83,14 +83,14 @@ class RangedWeaponsTest {
             damage = 15f,
             pierce = 5f,
             blunt = 15f,
-            type = "stone",
+            type = com.example.game.ProjectileType.STONE,
             sizeMultiplier = sizeMult,
             hasSpikes = spikes,
             isSplash = splash,
             isPoisonous = poison
         )
 
-        assertEquals("stone", testProj.type)
+        assertEquals(com.example.game.ProjectileType.STONE, testProj.type)
         assertEquals(2.2f, testProj.sizeMultiplier)
         assertTrue(testProj.hasSpikes)
         assertTrue(testProj.isSplash)

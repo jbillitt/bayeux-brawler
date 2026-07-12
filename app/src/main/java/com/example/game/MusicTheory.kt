@@ -74,18 +74,18 @@ fun resolveSongSpec(seed: Long, moods: List<String>): SongSpec {
             groundDegrees = TINTAGEL_GROUNDS[rng.nextInt(TINTAGEL_GROUNDS.size)]
         }
     }
-    val finalMidi = 45 + rng.nextInt(8)          // A2-G#3
+    var finalMidi = 45 + rng.nextInt(8)          // A2-G#3
     var ornament = when (family) {
         Family.MINUET -> 0.6f; Family.GREENSLEEVES -> 0.4f; Family.TINTAGEL -> 0.25f
     }
 
-    // Mood deltas (later-wins on conflicts, applied in list order)
+    // Mood deltas (applied in list order, stackable)
     for (m in moods) when (m) {
-        "More Tempo"  -> bpm += 12
-        "Merrier"     -> { mode = brighten(mode); ornament = (ornament + 0.25f).coerceAtMost(1f) }
-        "More Solemn" -> { mode = Mode.AEOLIAN; bpm -= 8; ornament = (ornament - 0.1f).coerceAtLeast(0.1f) }
-        "Nobler"      -> bpm -= 4
-        // "Wilder" affects orchestration + division density (Orchestrator/MelodyGenerator)
+        "More Tempo"  -> bpm = (bpm * 1.25).toInt()
+        "Merrier"     -> { mode = brighten(mode); ornament = (ornament + 0.35f).coerceAtMost(1.5f) }
+        "More Solemn" -> { mode = darken(mode); bpm = (bpm * 0.85).toInt(); ornament = (ornament - 0.2f).coerceAtLeast(0.05f) }
+        "Nobler"      -> { bpm = (bpm * 0.90).toInt(); finalMidi -= 3 }
+        "Wilder"      -> { bpm = (bpm * 1.10).toInt(); ornament = (ornament + 0.4f).coerceAtMost(2.0f) } 
     }
 
     val spb = if (beatsPerBar == 6) 60f / bpm / 3f else 60f / bpm
@@ -100,5 +100,11 @@ fun resolveSongSpec(seed: Long, moods: List<String>): SongSpec {
 private fun brighten(m: Mode): Mode = when (m) {
     Mode.AEOLIAN -> Mode.DORIAN
     Mode.DORIAN -> Mode.MIXOLYDIAN
-    else -> m
+    else -> Mode.IONIAN
+}
+
+private fun darken(m: Mode): Mode = when (m) {
+    Mode.IONIAN -> Mode.MIXOLYDIAN
+    Mode.MIXOLYDIAN -> Mode.DORIAN
+    else -> Mode.AEOLIAN
 }

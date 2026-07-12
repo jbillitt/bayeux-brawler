@@ -1076,6 +1076,7 @@ object TapestryRenderer {
                 "handle_medium" -> 55f
                 "handle_chain", "handle_flail_chain" -> 60f
                 "handle_double_ended" -> 80f
+                "handle_blessed_branch" -> 70f
                 else -> 30f // short, iron, wheel, pick, fists
             }
             baseLen + fighter.handleExtensionCount * 25f
@@ -1130,6 +1131,51 @@ object TapestryRenderer {
                     val p1 = androidx.compose.ui.geometry.Offset(wheelCenter.x + kotlin.math.cos(angle)*18f, wheelCenter.y + kotlin.math.sin(angle)*18f)
                     val p2 = androidx.compose.ui.geometry.Offset(wheelCenter.x - kotlin.math.cos(angle)*18f, wheelCenter.y - kotlin.math.sin(angle)*18f)
                     scope.drawLine(fighter.weaponHandle.color, p1, p2, strokeWidth = 3f)
+                }
+            } else if (fighter.weaponHandle.id == "handle_blessed_branch") {
+                scope.withTransform({ translate(hx, hy) }) {
+                    val path_0 = Path().apply {
+                        moveTo(-10f, 20f)
+                        lineTo(30f, -40f)
+                        lineTo(30f, -40f)
+                        lineTo(60f, -60f)
+                        lineTo(40f, -40f)
+                        lineTo(50f, -60f)
+                        lineTo(40f, -40f)
+                        lineTo(30f, -40f)
+                        lineTo(30f, -70f)
+                        lineTo(30f, -40f)
+                        lineTo(60f, -80f)
+                        close()
+                    }
+                    drawStitchedFill(this, path_0, Color(0xFF8A5E38))
+                    drawPath(path_0, ThreadColor, style = StitchedStroke)
+                    val path_1 = Path().apply {
+                        moveTo(-10f, 20f)
+                        lineTo(-10f, 10f)
+                        lineTo(20f, -40f)
+                        lineTo(30f, -50f)
+                        lineTo(30f, -40f)
+                        lineTo(30f, -70f)
+                        lineTo(40f, -50f)
+                        lineTo(60f, -80f)
+                        lineTo(60f, -80f)
+                        lineTo(50f, -70f)
+                        lineTo(50f, -70f)
+                        close()
+                    }
+                    drawStitchedFill(this, path_1, Color(0xFF8A5E38))
+                    drawPath(path_1, ThreadColor, style = StitchedStroke)
+                    val path_2 = Path().apply {
+                        moveTo(40f, -40f)
+                        lineTo(40f, -50f)
+                        lineTo(30f, -50f)
+                        lineTo(30f, -40f)
+                        lineTo(40f, -40f)
+                        close()
+                    }
+                    drawStitchedFill(this, path_2, Color(0xFF8A5E38))
+                    drawPath(path_2, ThreadColor, style = StitchedStroke)
                 }
             } else if (fighter.weaponHandle.id == "handle_fists") {
                 // Do nothing for fists handle

@@ -393,6 +393,32 @@ class GameViewModel : ViewModel() {
             ))
         }
         
+        if (state.unlockedAncillaries.contains(Ancillary.WARDOG)) {
+            enemies.add(FighterState(
+                id = "wardog", name = "Buster", isPlayer = true, maxHp = 40f, hp = 40f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 70f, targetX = 70f, facingRight = true, size = 0.5f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = true,
+                speedBoost = 1.0f
+            ))
+        }
+
+        if (state.unlockedAncillaries.contains(Ancillary.RAVEN)) {
+            enemies.add(FighterState(
+                id = "raven", name = "Munin", isPlayer = true, maxHp = 20f, hp = 20f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 50f, targetX = 50f, facingRight = true, size = 0.35f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = true,
+                speedBoost = 1.2f
+            ))
+        }
+        
         if (state.isThroneMode) {
             val pallbearerHp = 60f
             val p0Weapon = state.weaponHead
@@ -1304,6 +1330,12 @@ class GameViewModel : ViewModel() {
                         currTarget.isCrumpled = true
                         MedievalAudioSynth.playSound(SoundType.CRUNCH)
                         addPopup("CRUMPLED!", currTarget.posX, 160f, androidx.compose.ui.graphics.Color.DarkGray)
+                    }
+
+                    // Wardog trip mechanic!
+                    if (attacker.id == "wardog" && kotlin.random.Random.nextFloat() < 0.25f && !currTarget.isCrumpled) {
+                        currTarget.isCrumpled = true
+                        MedievalAudioSynth.playSound(SoundType.CRUNCH)
                     }
 
                     // Splash damage for big heavy weapons!

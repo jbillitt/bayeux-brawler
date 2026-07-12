@@ -14,7 +14,7 @@ The core loop:
 3. **Level Up** — Choose roguelike upgrades: extra blades, armor layers, followers, mounts
 4. **Die or Conquer** — Push for high scores with risk-reward gear choices (naked = 10x multiplier)
 
-**Development Rule:** Always increment the bugs fix version number on every change (e.g. v0.1.2 Mercia, v0.1.3 Mercia).
+**Development Rule:** Always increment the bugs fix version number on every change (e.g. v0.2.1 Wessex, v0.2.2 Wessex).
 
 ## Genre & Influences
 
@@ -70,6 +70,8 @@ Unlockable NPC followers that provide passive bonuses:
 | `anc_mount_horse` | Warhorse | Destrier | +80 HP, +0.5 speed, visual mount |
 | `anc_cupbearer` | Geoffrey | Cupbearer | +40 HP, -0.1 speed |
 | `anc_archer` | Robin | Longbowman | +5 HP, covering arrows |
+| `anc_raven` | Munin | Raven | Flies in to peck enemies |
+| `anc_wardog` | Buster | Wardog | Charges fast, bites, trips enemies |
 
 ## Level-Up System
 

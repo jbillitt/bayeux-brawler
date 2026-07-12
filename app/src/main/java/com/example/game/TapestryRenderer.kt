@@ -185,13 +185,19 @@ object TapestryRenderer {
             }) {
                 val mountOffsetY = if (fighter.isChariot) -15f else if (fighter.isMounted && fighter.isLord) -20f else if (fighter.isMounted && fighter.mountHp == 40f) -45f else if (fighter.isMounted) -35f else 0f
                 withTransform({ translate(0f, mountOffsetY) }) {
-                    if (!fighter.isChariot) {
-                        drawLegs(this, cx, cy, fighter)
+                    if (fighter.id == "wardog") {
+                        drawWardog(this, cx, cy, fighter)
+                    } else if (fighter.id == "raven") {
+                        drawRaven(this, cx, cy, fighter)
+                    } else {
+                        if (!fighter.isChariot) {
+                            drawLegs(this, cx, cy, fighter)
+                        }
+                        drawTorso(this, cx, cy, fighter)
+                        drawHead(this, cx, cy, fighter)
+                        drawBackArmAndShield(this, cx, cy, fighter)
+                        drawFrontArmAndWeapon(this, cx, cy, fighter)
                     }
-                    drawTorso(this, cx, cy, fighter)
-                    drawHead(this, cx, cy, fighter)
-                    drawBackArmAndShield(this, cx, cy, fighter)
-                    drawFrontArmAndWeapon(this, cx, cy, fighter)
                 }
             }
         }
@@ -2355,6 +2361,22 @@ object TapestryRenderer {
         }
         drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
         scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
+
+        // Draw Stirrups (leather strap + iron loop)
+        val strapColor = Color(0xFF382F22) // dark leather
+        val ironColor = Color(0xFF5D666B)
+        val stirrupY = cy + 130f
+        val stirrupX = cx + 5f
+        scope.drawLine(strapColor, Offset(cx + 5f, cy + 92f), Offset(stirrupX, stirrupY), strokeWidth = 3f)
+        scope.drawLine(ironColor, Offset(stirrupX - 5f, stirrupY), Offset(stirrupX + 5f, stirrupY), strokeWidth = 4f)
+        scope.drawCircle(ironColor, radius = 5f, center = Offset(stirrupX, stirrupY + 3f), style = Stroke(width = 3f))
+
+        // Draw Reigns (leather strap from snout to saddle/rider hands)
+        val reignPath = Path().apply {
+            moveTo(cx + 75f, cy + 38f) // near mouth/snout
+            quadraticTo(cx + 50f, cy + 70f, cx + 5f, cy + 75f) // curves down to rider's lap
+        }
+        scope.drawPath(reignPath, strapColor, style = Stroke(width = 3f))
     }
 
     private fun drawChariot(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
@@ -2485,6 +2507,60 @@ object TapestryRenderer {
         scope.withTransform({ rotate(radToDeg(angleR), pivot = Offset(cx + 10f, cy + 90f)) }) {
             drawLine(wColor, Offset(cx + 10f, cy + 140f), Offset(cx + 10f, cy + 200f), strokeWidth = 8f)
             drawLine(Color(0xFF4A4A4A), Offset(cx, cy + 150f), Offset(cx + 20f, cy + 150f), strokeWidth = 4f)
+        }
+    }
+
+    private fun drawWardog(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val anim = fighter.animFrame
+        val angleF = if (fighter.isDead || fighter.isDying) 0f else Math.sin(anim.toDouble()).toFloat() * 15f
+        val angleB = if (fighter.isDead || fighter.isDying) 0f else -Math.sin(anim.toDouble()).toFloat() * 15f
+
+        val dogColor = androidx.compose.ui.graphics.Color(0xFF452E1B)
+        
+        scope.withTransform({
+            translate(0f, 130f)
+        }) {
+            // Legs
+            scope.withTransform({ rotate(angleB, pivot = androidx.compose.ui.geometry.Offset(cx - 20f, cy)) }) {
+                scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx - 20f, cy), androidx.compose.ui.geometry.Offset(cx - 25f, cy + 25f), strokeWidth = 8f, cap = StrokeCap.Round)
+            }
+            scope.withTransform({ rotate(angleF, pivot = androidx.compose.ui.geometry.Offset(cx + 20f, cy)) }) {
+                scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx + 20f, cy), androidx.compose.ui.geometry.Offset(cx + 25f, cy + 25f), strokeWidth = 8f, cap = StrokeCap.Round)
+            }
+            // Body
+            scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx - 25f, cy - 5f), androidx.compose.ui.geometry.Offset(cx + 25f, cy - 5f), strokeWidth = 24f, cap = StrokeCap.Round)
+            // Head
+            scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx + 20f, cy - 10f), androidx.compose.ui.geometry.Offset(cx + 35f, cy - 15f), strokeWidth = 18f, cap = StrokeCap.Round)
+            // Snout
+            scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx + 30f, cy - 15f), androidx.compose.ui.geometry.Offset(cx + 45f, cy - 10f), strokeWidth = 10f, cap = StrokeCap.Round)
+            // Ear
+            scope.drawLine(androidx.compose.ui.graphics.Color.Black, androidx.compose.ui.geometry.Offset(cx + 25f, cy - 15f), androidx.compose.ui.geometry.Offset(cx + 20f, cy - 25f), strokeWidth = 6f, cap = StrokeCap.Round)
+            // Tail
+            scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx - 25f, cy - 5f), androidx.compose.ui.geometry.Offset(cx - 40f, cy - 15f), strokeWidth = 6f, cap = StrokeCap.Round)
+        }
+    }
+
+    private fun drawRaven(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val anim = fighter.animFrame
+        val wingY = if (fighter.isDead || fighter.isDying) 0f else Math.sin(anim.toDouble() * 2.0).toFloat() * 15f
+
+        val ravenColor = androidx.compose.ui.graphics.Color(0xFF111111)
+        
+        scope.withTransform({
+            translate(0f, 60f)
+        }) {
+            // Body
+            scope.drawLine(ravenColor, androidx.compose.ui.geometry.Offset(cx - 10f, cy), androidx.compose.ui.geometry.Offset(cx + 15f, cy), strokeWidth = 14f, cap = StrokeCap.Round)
+            // Wing back
+            scope.drawLine(ravenColor, androidx.compose.ui.geometry.Offset(cx, cy), androidx.compose.ui.geometry.Offset(cx - 15f, cy - wingY), strokeWidth = 8f, cap = StrokeCap.Round)
+            // Wing front
+            scope.drawLine(ravenColor, androidx.compose.ui.geometry.Offset(cx, cy), androidx.compose.ui.geometry.Offset(cx - 10f, cy + wingY), strokeWidth = 8f, cap = StrokeCap.Round)
+            // Head
+            scope.drawCircle(ravenColor, radius = 8f, center = androidx.compose.ui.geometry.Offset(cx + 15f, cy - 4f))
+            // Beak
+            scope.drawLine(androidx.compose.ui.graphics.Color.Yellow, androidx.compose.ui.geometry.Offset(cx + 18f, cy - 4f), androidx.compose.ui.geometry.Offset(cx + 30f, cy), strokeWidth = 4f, cap = StrokeCap.Round)
+            // Eye
+            scope.drawCircle(androidx.compose.ui.graphics.Color.Red, radius = 2f, center = androidx.compose.ui.geometry.Offset(cx + 15f, cy - 5f))
         }
     }
 }

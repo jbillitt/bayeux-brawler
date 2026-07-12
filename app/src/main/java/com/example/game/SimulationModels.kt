@@ -55,7 +55,9 @@ enum class Ancillary(
     HAG("anc_hag", "Local Hag", "Hag", "Spawns in your backline, lobs mud, applies slow and minor poison.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF384033)),
     TROJAN_HORSE("anc_trojan_horse", "Trojan Horse", "Decoy", "Rolls forward, absorbs hits, spawns 3 knights on death.", hpBoost = 200f, speedBoost = 0f, color = Color(0xFF8B5A2B)),
     LIL_GUY("anc_lil_guy", "Lil Guy", "Backpack Slinger", "Renders on your back, passively shoots projectiles.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFFC78440)),
-    SURGEON("anc_surgeon", "Battle Surgeon", "Surgeon", "Spawns behind you, applies passive slow HP regen.", hpBoost = 10f, speedBoost = 0f, color = Color(0xFF801A1A))
+    SURGEON("anc_surgeon", "Battle Surgeon", "Surgeon", "Spawns behind you, applies passive slow HP regen.", hpBoost = 10f, speedBoost = 0f, color = Color(0xFF801A1A)),
+    RAVEN("anc_raven", "Munin", "Raven", "Rests on your off-hand, flies out to peck enemy eyes, blinding them.", hpBoost = 0f, speedBoost = 0f, color = Color.Black),
+    WARDOG("anc_wardog", "Buster", "Wardog", "Charges fast, bites enemies, hard to hit, sometimes trips them.", hpBoost = 25f, speedBoost = 0.2f, color = Color(0xFF452E1B))
 }
 
 interface GearItem {

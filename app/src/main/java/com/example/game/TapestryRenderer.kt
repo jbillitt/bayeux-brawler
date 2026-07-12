@@ -1431,6 +1431,7 @@ object TapestryRenderer {
         var thrustOffset = Offset.Zero
         val isLanceCompatible = fighter.weaponHead.id in listOf("head_pike", "head_spear", "head_halberd")
         val isSaw = fighter.weaponHead.id in listOf("head_saw_1", "head_saw_2")
+        val isChokeSlam = fighter.weaponHandle.id == "handle_fists" && fighter.isDualWielding
         val armAngle = if (fighter.isDead || fighter.isDying) {
             if (fighter.isDying) {
                 sin(fighter.animFrame * 1.5f) * 85f
@@ -1444,6 +1445,14 @@ object TapestryRenderer {
                 val sawExt = kotlin.math.sin(swing * Math.PI * 5).toFloat()
                 thrustOffset = Offset(30f * sawExt, 5f * sawExt)
                 -10f + 15f * sawExt
+            } else if (isChokeSlam) {
+                if (swing < 0.4f) {
+                    -90f * (swing / 0.4f)
+                } else if (swing < 0.7f) {
+                    -90f
+                } else {
+                    -90f + 180f * ((swing - 0.7f) / 0.3f)
+                }
             } else if (isHeavy || isChainHandle) {
                 if (swing < 0.5f) {
                     -75f * (swing / 0.5f)
@@ -1483,7 +1492,7 @@ object TapestryRenderer {
         } else if (fighter.isMounted && isLanceCompatible && kotlin.math.abs(fighter.velocityX) > 30f) {
             -25f
         } else {
-            val postureOffset = if (isBowOrSlingshot) -15f else when (Math.abs(fighter.name.hashCode()) % 6) {
+            val postureOffset = if (isChokeSlam) -30f else if (isBowOrSlingshot) -15f else when (Math.abs(fighter.name.hashCode()) % 6) {
                 0 -> -75f // Raised above head
                 1 -> -35f // Nobly in front of face
                 2 -> 15f  // Poised outwards
@@ -1561,17 +1570,20 @@ object TapestryRenderer {
                 val swing = fighter.swingProgress
                 val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
                 val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe", "head_lucerne", "head_saber")
+                val isChokeSlam = fighter.weaponHandle.id == "handle_fists" && fighter.isDualWielding
                 
                 val armAngle = if (fighter.isDead || fighter.isDying) {
                     if (fighter.isDying) -cos(fighter.animFrame * 1.5f) * 85f else -30f
                 } else if (fighter.isAttacking) {
-                    if (isChainHandle || isHeavy) {
+                    if (isChokeSlam) {
+                        if (swing < 0.4f) -90f * (swing / 0.4f) else if (swing < 0.7f) -90f else -90f + 180f * ((swing - 0.7f) / 0.3f)
+                    } else if (isChainHandle || isHeavy) {
                         if (swing < 0.5f) -75f * (swing / 0.5f) else -75f + 160f * ((swing - 0.5f) / 0.5f)
                     } else {
                         if (swing < 0.5f) -20f + 80f * (swing / 0.5f) else 60f - 80f * ((swing - 0.5f) / 0.5f)
                     }
                 } else {
-                    val posture = if (fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot", "head_crossbow")) -15f else when (Math.abs(fighter.name.hashCode()) % 3) {
+                    val posture = if (isChokeSlam) -30f else if (fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot", "head_crossbow")) -15f else when (Math.abs(fighter.name.hashCode()) % 3) {
                         0 -> -75f
                         1 -> -35f
                         else -> 15f

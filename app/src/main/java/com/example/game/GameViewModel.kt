@@ -900,7 +900,8 @@ class GameViewModel : ViewModel() {
             // Damage connects halfway through the swing visually, or near the end for heavy/chain windups
             val isChain = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain") || fighter.weaponHead.id in listOf("head_flail", "head_war_flail")
             val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe", "head_lucerne", "head_saber")
-            val strikeThreshold = if (isChain) 0.65f else if (isHeavy) 0.85f else 0.5f
+            val isChokeSlam = fighter.weaponHandle.id == "handle_fists" && fighter.isDualWielding
+            val strikeThreshold = if (isChokeSlam) 0.7f else if (isChain) 0.65f else if (isHeavy) 0.85f else 0.5f
 
             if (effectiveSwingProgress >= strikeThreshold && !fighter.hasLandedStrike) {
                 fighter.hasLandedStrike = true
@@ -1154,15 +1155,20 @@ class GameViewModel : ViewModel() {
             
             // Brawler abilities
             val isBrawler = attacker.weaponHead.id == "head_bare" && attacker.weaponHandle.id == "handle_fists"
-            if (isBrawler && attacker.brawlerUpgrades.isNotEmpty() && targets.isNotEmpty()) {
+            if (isBrawler && targets.isNotEmpty()) {
                 val target = targets.first()
-                if (attacker.brawlerUpgrades.contains("champion_belt") && Random.nextFloat() < 0.4f) {
+                if (attacker.brawlerUpgrades.isNotEmpty() && attacker.brawlerUpgrades.contains("champion_belt") && Random.nextFloat() < 0.4f) {
                     val secondTarget = targets.drop(1).firstOrNull() ?: target
                     applyFlatDamage(40f, target, attacker.isPlayer)
                     applyFlatDamage(40f, secondTarget, attacker.isPlayer)
                     target.isCrumpled = true
                     secondTarget.isCrumpled = true
                     addPopup("SUPLEX!", target.posX, 120f, Color.Red)
+                    MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                    return
+                } else if (attacker.isDualWielding && Random.nextFloat() < 0.45f) {
+                    applyFlatDamage(attacker.baseDamage * 2.5f, target, attacker.isPlayer)
+                    target.isCrumpled = true
                     MedievalAudioSynth.playSound(SoundType.CRUNCH)
                     return
                 }

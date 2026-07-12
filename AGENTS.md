@@ -14,7 +14,7 @@ The core loop:
 3. **Level Up** — Choose roguelike upgrades: extra blades, armor layers, followers, mounts
 4. **Die or Conquer** — Push for high scores with risk-reward gear choices (naked = 10x multiplier)
 
-**Development Rule:** Always increment the bugs fix version number on every change (e.g. v0.2.5 Wessex, v0.2.6 Wessex).
+**Development Rule:** Always increment the bugs fix version number on every change (e.g. v0.2.6 Wessex, v0.2.7 Wessex).
 
 ## Genre & Influences
 

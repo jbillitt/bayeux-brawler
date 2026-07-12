@@ -1171,7 +1171,20 @@ class GameViewModel : ViewModel() {
             val isBrawler = attacker.weaponHead.id == "head_bare" && attacker.weaponHandle.id == "handle_fists"
             if (isBrawler && targets.isNotEmpty()) {
                 val target = targets.first()
-                if (attacker.brawlerUpgrades.isNotEmpty() && attacker.brawlerUpgrades.contains("champion_belt") && Random.nextFloat() < 0.4f) {
+                
+                if (target.weaponHead.id != "head_bare" && kotlin.random.Random.nextFloat() < 0.05f) {
+                    // Steal their weapon!
+                    attacker.weaponHead = target.weaponHead
+                    attacker.weaponHandle = target.weaponHandle
+                    attacker.isDualWielding = false
+                    
+                    target.weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
+                    target.weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }
+                    
+                    addPopup("STOLEN!", target.posX, 130f, Color.Yellow)
+                    MedievalAudioSynth.playSound(SoundType.CLANG)
+                    // We continue into the regular attack loop below to hit them with their own weapon!
+                } else if (attacker.brawlerUpgrades.isNotEmpty() && attacker.brawlerUpgrades.contains("champion_belt") && kotlin.random.Random.nextFloat() < 0.4f) {
                     val secondTarget = targets.drop(1).firstOrNull() ?: target
                     applyFlatDamage(40f, target, attacker.isPlayer)
                     applyFlatDamage(40f, secondTarget, attacker.isPlayer)
@@ -1180,7 +1193,7 @@ class GameViewModel : ViewModel() {
                     addPopup("SUPLEX!", target.posX, 120f, Color.Red)
                     MedievalAudioSynth.playSound(SoundType.CRUNCH)
                     return
-                } else if (attacker.isDualWielding && Random.nextFloat() < 0.45f) {
+                } else if (attacker.isDualWielding && kotlin.random.Random.nextFloat() < 0.45f) {
                     applyFlatDamage(attacker.baseDamage * 2.5f, target, attacker.isPlayer)
                     target.isCrumpled = true
                     MedievalAudioSynth.playSound(SoundType.CRUNCH)

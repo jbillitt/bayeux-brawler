@@ -6,10 +6,11 @@ This specification details the "Arsenal & Armoury Expansion" sub-project (Group 
 ## 1. Expanded Weaponry & Absurd Shafts
 - **New Weapon Heads:** 
   - *Urumi:* A flexible whip-sword that utilizes the existing chain physics for its rendering.
-  - *Big Rock Throwing Weapon:* A slingshot/catapult hybrid.
-  - *Others:* Club, Spike Mace, Proper Axe Heads, Saws.
+  - *Big Rock Throwing Weapon:* Literally just hurling a massive rock.
+  - *Others:* Club, Spike Mace, Proper Axe Heads, two Saws.
 - **New Weapon Shafts:**
-  - *Ram, Plough, Tree Stump:* These handles are visually massive. They provide immense Kg mass (resulting in huge quadratic damage scaling) but severely penalize both attack speed delay and movement speed.
+  - *Ram, Plough, Tree Stump:* These handles are visually massive. They provide immense Kg mass (resulting in huge quadratic damage scaling) but severely penalize both attack speed delay and movement speed. The plough is dragged behind the player and has multi branches. same for tree stump. The ram is pointed infront
+  - Ranged upgrades on reward screen needn't specify BOW etc. That is all context sensitive. Rock gets its own upgrade (Hot rocks, poison slim, thicker rocks, bigger rocks - all of these upgrades affect our rock visually and it has a new sprite for it embedding in enemies).
 
 ## 2. Organic Weapon Growth (Attachments)
 **Problem:** Currently, when the player selects an `attachment` roguelike upgrade, they render somewhat uniformly, making ultra-upgraded weapons look too clean.

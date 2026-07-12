@@ -46,7 +46,7 @@ This is the execution plan for all 6 groups of changes, organized by your reques
 3. **Brawler Overhaul:** If unarmed, unlock wrestling moves (Throw, Weapon Steal) and Brawler gear (knuckles, stat boosts). Randomize attack selection.
 
 ## Phase 5: Arsenal & Armoury (Group 4)
-1. **New Gear Arrays:** Add Urumi, slingshot, ram/plough shafts.
+1. **New Gear Arrays:** Add Urumi weapon type, winged axe head, spiked mace, basic club, two saw weapon types with their own attack anim. Then add tree stump, ram, and plough weapon handle shafts.
 2. **Organic Attachments:** Refactor `TapestryRenderer` attachment drawing to use randomized angles, branching, and direct-welding without handles.
 3. **New Armor Slots:** Add Gauntlets, Boots, and Coifs. Gate their appearance behind higher levels.
 4. **Comedy Outfits:** Add Jester Hat/Cape/Pantaloons for massive score multi (20x) but 0 armor. Fix score display on the share screen.

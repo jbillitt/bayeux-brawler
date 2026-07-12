@@ -119,6 +119,10 @@ object TapestryRenderer {
                 }) {
                     if (fighter.isChariot) {
                         drawChariot(this, cx, cy, fighter)
+                    } else if (fighter.isLord) {
+                        drawThrone(this, cx, cy, fighter)
+                    } else if (fighter.mountHp == 40f) {
+                        drawStilts(this, cx, cy, fighter)
                     } else {
                         drawHorse(this, cx, cy, fighter)
                     }
@@ -179,7 +183,7 @@ object TapestryRenderer {
                 rotate(rotationAngle, pivot = Offset(cx, cy + 80f))
                 scale(1f, scaleY, pivot = Offset(cx, cy + 80f))
             }) {
-                val mountOffsetY = if (fighter.isMounted && !fighter.isChariot) -35f else if (fighter.isChariot) -15f else 0f
+                val mountOffsetY = if (fighter.isChariot) -15f else if (fighter.isMounted && fighter.isLord) -20f else if (fighter.isMounted && fighter.mountHp == 40f) -45f else if (fighter.isMounted) -35f else 0f
                 withTransform({ translate(0f, mountOffsetY) }) {
                     if (!fighter.isChariot) {
                         drawLegs(this, cx, cy, fighter)
@@ -2107,38 +2111,83 @@ object TapestryRenderer {
 
     private fun drawChariot(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         // Draw horse further ahead
-        val horseOffsetX = 100f
+        val horseOffsetX = 120f
         scope.withTransform({ translate(horseOffsetX, 0f) }) {
             drawHorse(this, cx, cy, fighter)
         }
         
         // Draw wooden traces connecting horse to chariot
-        scope.drawLine(Color(0xFF5C4033), Offset(cx - 20f, cy + 90f), Offset(cx + horseOffsetX + 20f, cy + 90f), strokeWidth = 5f)
-        
+        scope.drawLine(Color(0xFF5C4033), Offset(cx - 30f, cy + 90f), Offset(cx + horseOffsetX + 20f, cy + 90f), strokeWidth = 8f)
+
         // Draw chariot cart box (around the fighter's legs)
-        val cartW = 75f
-        val cartH = 65f
-        val cartTopY = cy + 50f
+        val cartW = 110f
+        val cartH = 90f
+        val cartTopY = cy + 35f
         scope.drawRect(Color(0xFF8B5A2B), topLeft = Offset(cx - cartW/2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH))
         scope.drawRect(ThreadColor, topLeft = Offset(cx - cartW/2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH), style = StitchedStroke)
         
         // Horizontal wooden slats on chariot
-        scope.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 20f), Offset(cx + cartW/2, cartTopY + 20f), strokeWidth = 2f)
-        scope.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 40f), Offset(cx + cartW/2, cartTopY + 40f), strokeWidth = 2f)
+        scope.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 30f), Offset(cx + cartW/2, cartTopY + 30f), strokeWidth = 3f)
+        scope.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 60f), Offset(cx + cartW/2, cartTopY + 60f), strokeWidth = 3f)
         
         // Draw wheel
-        val wheelRadius = 30f
-        val wheelCenter = Offset(cx, cy + 105f)
+        val wheelRadius = 45f
+        val wheelCenter = Offset(cx, cy + 130f) // bottom is cy + 175f
         val wheelRot = fighter.posX * 2f // spin based on position
         scope.withTransform({ rotate(wheelRot, wheelCenter) }) {
             scope.drawCircle(Color(0xFF5C4033), radius = wheelRadius, center = wheelCenter)
-            scope.drawCircle(ThreadColor, radius = wheelRadius, center = wheelCenter, style = Stroke(width = 3f))
-            scope.drawLine(ThreadColor, Offset(wheelCenter.x - wheelRadius, wheelCenter.y), Offset(wheelCenter.x + wheelRadius, wheelCenter.y), strokeWidth = 3f)
-            scope.drawLine(ThreadColor, Offset(wheelCenter.x, wheelCenter.y - wheelRadius), Offset(wheelCenter.x, wheelCenter.y + wheelRadius), strokeWidth = 3f)
+            scope.drawCircle(ThreadColor, radius = wheelRadius, center = wheelCenter, style = Stroke(width = 4f))
+            scope.drawLine(ThreadColor, Offset(wheelCenter.x - wheelRadius, wheelCenter.y), Offset(wheelCenter.x + wheelRadius, wheelCenter.y), strokeWidth = 4f)
+            scope.drawLine(ThreadColor, Offset(wheelCenter.x, wheelCenter.y - wheelRadius), Offset(wheelCenter.x, wheelCenter.y + wheelRadius), strokeWidth = 4f)
         }
     }
 
     private fun radToDeg(rad: Float): Float {
         return (rad * 180f / Math.PI).toFloat()
+    }
+
+    private fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val wColor = Color(0xFF5C4033) // Dark wood
+        // Draw a basic wooden throne
+        val tPath = Path().apply {
+            moveTo(cx - 30f, cy + 150f)
+            lineTo(cx - 30f, cy + 30f)
+            lineTo(cx + 30f, cy + 30f)
+            lineTo(cx + 30f, cy + 150f)
+            moveTo(cx - 30f, cy + 90f)
+            lineTo(cx + 30f, cy + 90f)
+        }
+        scope.drawPath(tPath, wColor, style = Stroke(width = 12f))
+        
+        // Add horizontal pole for pallbearers
+        val polePath = Path().apply {
+            moveTo(cx - 50f, cy + 120f) // Reaches the back pallbearers
+            lineTo(cx + 50f, cy + 120f) // Reaches the front pallbearers
+        }
+        scope.drawPath(polePath, wColor, style = Stroke(width = 10f))
+
+        // Add gold trim
+        val trimPath = Path().apply {
+            moveTo(cx - 30f, cy + 30f)
+            lineTo(cx + 30f, cy + 30f)
+        }
+        scope.drawPath(trimPath, Color(0xFFB08221), style = Stroke(width = 6f))
+    }
+
+    private fun drawStilts(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val wColor = Color(0xFF8B7355) // Wood
+        val angleL = if (fighter.isDead || fighter.isDying) 0f else kotlin.math.sin(fighter.animFrame) * 0.45f
+        val angleR = if (fighter.isDead || fighter.isDying) 0f else -kotlin.math.sin(fighter.animFrame) * 0.45f
+
+        // Draw left stilt
+        scope.withTransform({ rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f)) }) {
+            drawLine(wColor, Offset(cx - 10f, cy + 140f), Offset(cx - 10f, cy + 200f), strokeWidth = 8f)
+            drawLine(Color(0xFF4A4A4A), Offset(cx - 20f, cy + 150f), Offset(cx, cy + 150f), strokeWidth = 4f)
+        }
+        // Draw right stilt
+        scope.withTransform({ rotate(radToDeg(angleR), pivot = Offset(cx + 10f, cy + 90f)) }) {
+            drawLine(wColor, Offset(cx + 10f, cy + 140f), Offset(cx + 10f, cy + 200f), strokeWidth = 8f)
+            drawLine(Color(0xFF4A4A4A), Offset(cx, cy + 150f), Offset(cx + 20f, cy + 150f), strokeWidth = 4f)
+        }
     }
 }

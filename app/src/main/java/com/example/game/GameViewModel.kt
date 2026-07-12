@@ -82,7 +82,8 @@ class GameViewModel : ViewModel() {
 
         _uiState.update { it.copy(
             highscore = 0,
-            unlockedGearIds = initialGear
+            unlockedGearIds = initialGear,
+            hasThroneOption = kotlin.random.Random.nextFloat() < 0.2f
         ) }
         randomizeGear()
         
@@ -110,6 +111,8 @@ class GameViewModel : ViewModel() {
             val newAncs = if (choice.type == "follower") state.unlockedAncillaries + GameData.ANCILLARIES.first { it.id == choice.itemId } else state.unlockedAncillaries
             val newExtensions = if (choice.type == "extension") state.handleExtensionCount + 1 else state.handleExtensionCount
             val newRangedUpgrades = if (choice.type == "ranged_upgrade") state.rangedUpgrades + choice.itemId else state.rangedUpgrades
+            val newShieldUpgrades = if (choice.type == "shield_upgrade") state.shieldUpgrades + choice.itemId else state.shieldUpgrades
+            val newBrawlerUpgrades = if (choice.type == "brawler_upgrade") state.brawlerUpgrades + choice.itemId else state.brawlerUpgrades
             
             // Gain dynamic buffs based on items or ancillaries selected
             state.copy(
@@ -118,6 +121,8 @@ class GameViewModel : ViewModel() {
                 unlockedAncillaries = newAncs,
                 handleExtensionCount = newExtensions,
                 rangedUpgrades = newRangedUpgrades,
+                shieldUpgrades = newShieldUpgrades,
+                brawlerUpgrades = newBrawlerUpgrades,
                 showLevelUpScreen = false,
                 pendingLevelUpChoices = emptyList()
             )
@@ -159,11 +164,14 @@ class GameViewModel : ViewModel() {
                 newState = newState.copy(isDualWielding = false)
             }
             
-            // Enforce crossbow rule
-            if (newState.weaponHead == GameData.WeaponHead.CROSSBOW && newState.weaponHandle != GameData.WeaponHandle.FISTS) {
+            // Enforce handle removal for ranged (except javelin) and fists
+            val isRangedNoJavelin = newState.weaponHead.isRanged && newState.weaponHead != GameData.WeaponHead.JAVELIN
+            val isBareFists = newState.weaponHead == GameData.WeaponHead.BARE
+            if ((isRangedNoJavelin || isBareFists) && newState.weaponHandle != GameData.WeaponHandle.FISTS) {
                 if (item.type == ItemType.WEAPON_HEAD) {
                     newState = newState.copy(weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" })
                 } else if (item.type == ItemType.WEAPON_HANDLE) {
+                    // if they are trying to select a handle while holding a bow, remove the bow
                     newState = newState.copy(weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" })
                 }
             }
@@ -292,9 +300,19 @@ class GameViewModel : ViewModel() {
             handleExtensionCount = state.handleExtensionCount,
             speedBoost = state.totalSpeedBoost,
             rangedUpgrades = state.rangedUpgrades,
-            isMounted = state.unlockedAncillaries.contains(Ancillary.WARHORSE) || state.unlockedAncillaries.contains(Ancillary.CHARIOT) || state.unlockedAncillaries.contains(Ancillary.STILTS),
+            shieldUpgrades = state.shieldUpgrades,
+            brawlerUpgrades = state.brawlerUpgrades,
+            shieldHp = state.shield.defense * 2f + if (state.shieldUpgrades.contains("oak_reinforcing")) 50f else 0f + if (state.shieldUpgrades.contains("iron_plating")) 100f else 0f + if (state.shieldUpgrades.contains("shield_helmet")) 40f else 0f,
+            isMounted = state.unlockedAncillaries.contains(Ancillary.WARHORSE) || state.unlockedAncillaries.contains(Ancillary.CHARIOT) || state.unlockedAncillaries.contains(Ancillary.STILTS) || state.isThroneMode,
+            mountHp = if (state.isThroneMode) 100f else if (state.unlockedAncillaries.contains(Ancillary.STILTS)) 40f else if (state.unlockedAncillaries.contains(Ancillary.CHARIOT)) 100f else if (state.unlockedAncillaries.contains(Ancillary.WARHORSE)) 80f else 0f,
             isChariot = state.unlockedAncillaries.contains(Ancillary.CHARIOT)
         )
+        
+        if (state.isThroneMode) {
+            player.weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
+            player.weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }
+            player.shield = GameData.SHIELDS.first { it.id == "shield_none" }
+        }
 
         // Create Saxon enemies based on level
         // Difficulty scales with performance (kill speed + hp remaining)
@@ -330,6 +348,26 @@ class GameViewModel : ViewModel() {
                 hairStyle = "long",
                 isDualWielding = true
             ))
+        }
+        
+        if (state.isThroneMode) {
+            val pallbearerHp = 60f
+            val p0Weapon = state.weaponHead
+            val p0Handle = state.weaponHandle
+            val p0Shield = GameData.SHIELDS.first { it.id == "shield_none" }
+
+            val p1Weapon = if (state.isDualWielding) state.weaponHead else GameData.WEAPON_HEADS.first { it.id == "head_bare" }
+            val p1Handle = if (state.isDualWielding) state.weaponHandle else GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }
+            val p1Shield = if (state.isDualWielding) GameData.SHIELDS.first { it.id == "shield_none" } else state.shield
+
+            // Front Right (Equips Primary Weapon)
+            enemies.add(FighterState(id = "pallbearer_0", name = "Pallbearer 1", isPlayer = true, maxHp = pallbearerHp, hp = pallbearerHp, weaponHead = p0Weapon, weaponHandle = p0Handle, shield = p0Shield, armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" }, headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = player.posX + 45f, targetX = player.posX + 45f, facingRight = true, size = 0.95f, hairColor = Color(0xFF2C2219), hairStyle = "short", isDualWielding = false))
+            // Front Left (Equips Shield or Secondary Weapon)
+            enemies.add(FighterState(id = "pallbearer_1", name = "Pallbearer 2", isPlayer = true, maxHp = pallbearerHp, hp = pallbearerHp, weaponHead = p1Weapon, weaponHandle = p1Handle, shield = p1Shield, armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" }, headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = player.posX + 35f, targetX = player.posX + 35f, facingRight = true, size = 0.95f, hairColor = Color(0xFF2C2219), hairStyle = "short", isDualWielding = false))
+            // Back Right
+            enemies.add(FighterState(id = "pallbearer_2", name = "Pallbearer 3", isPlayer = true, maxHp = pallbearerHp, hp = pallbearerHp, weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }, weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }, shield = GameData.SHIELDS.first { it.id == "shield_none" }, armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" }, headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = player.posX - 35f, targetX = player.posX - 35f, facingRight = true, size = 0.95f, hairColor = Color(0xFF2C2219), hairStyle = "short", isDualWielding = false))
+            // Back Left
+            enemies.add(FighterState(id = "pallbearer_3", name = "Pallbearer 4", isPlayer = true, maxHp = pallbearerHp, hp = pallbearerHp, weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }, weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }, shield = GameData.SHIELDS.first { it.id == "shield_none" }, armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" }, headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" }, posX = player.posX - 45f, targetX = player.posX - 45f, facingRight = true, size = 0.95f, hairColor = Color(0xFF2C2219), hairStyle = "short", isDualWielding = false))
         }
 
         _playerState.value = player
@@ -477,7 +515,8 @@ class GameViewModel : ViewModel() {
             isMounted = isMounted,
             isChariot = isChariot,
             isLord = isLord,
-            speedBoost = if (isMounted && !isChariot) 0.5f else if (isChariot) 0.5f else 0f
+            speedBoost = if (isMounted && !isChariot) 0.5f else if (isChariot) 0.5f else 0f,
+            shieldHp = (gear[2] as GameData.Shield).defense * 2f
         )
     }
 
@@ -946,17 +985,17 @@ class GameViewModel : ViewModel() {
             val targets = if (attacker.isPlayer && isPiercingWeapon) {
                 val dir = if (attacker.facingRight) 1f else -1f
                 _enemiesState.value.filter { 
-                    !it.isDead && !it.isDying && abs(attacker.posX - it.posX) <= reachPixels && 
+                    !it.isDead && !it.isDying && it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels && 
                     ((dir > 0 && it.posX >= attacker.posX) || (dir < 0 && it.posX <= attacker.posX))
                 }.sortedBy { abs(attacker.posX - it.posX) }
             } else if (attacker.isPlayer && attacker.weaponHandle.id == "handle_double_ended") {
                 _enemiesState.value.filter { 
-                    !it.isDead && !it.isDying && abs(attacker.posX - it.posX) <= reachPixels 
+                    !it.isDead && !it.isDying && it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels 
                 }.sortedBy { abs(attacker.posX - it.posX) }
             } else if (attacker.isPlayer) {
                 val dir = if (attacker.facingRight) 1f else -1f
                 _enemiesState.value.filter { 
-                    !it.isDead && !it.isDying && abs(attacker.posX - it.posX) <= reachPixels && 
+                    !it.isDead && !it.isDying && it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels && 
                     ((dir > 0 && it.posX >= attacker.posX) || (dir < 0 && it.posX <= attacker.posX))
                 }.sortedBy { abs(attacker.posX - it.posX) }
             } else {
@@ -982,6 +1021,22 @@ class GameViewModel : ViewModel() {
                 1
             }
             val dmgScale = if (hitCount == 4) 0.3f else if (hitCount == 2) 0.6f else 1.0f
+            
+            // Brawler abilities
+            val isBrawler = attacker.weaponHead.id == "head_bare" && attacker.weaponHandle.id == "handle_fists"
+            if (isBrawler && attacker.brawlerUpgrades.isNotEmpty() && targets.isNotEmpty()) {
+                val target = targets.first()
+                if (attacker.brawlerUpgrades.contains("champion_belt") && Random.nextFloat() < 0.4f) {
+                    val secondTarget = targets.drop(1).firstOrNull() ?: target
+                    applyFlatDamage(40f, target, attacker.isPlayer)
+                    applyFlatDamage(40f, secondTarget, attacker.isPlayer)
+                    target.isCrumpled = true
+                    secondTarget.isCrumpled = true
+                    addPopup("SUPLEX!", target.posX, 120f, Color.Red)
+                    MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                    return
+                }
+            }
 
             viewModelScope.launch {
                 for (hitIdx in 0 until hitCount) {
@@ -994,6 +1049,22 @@ class GameViewModel : ViewModel() {
 
                     for (currTarget in targets) {
                         if (currTarget.isDead || currTarget.isDying) continue
+
+                // Speed Advantage: Capped melee dodge chance
+                val meleeDodgeChance = (currTarget.moveSpeed * 0.0015f).coerceIn(0f, 0.25f)
+                if (kotlin.random.Random.nextFloat() < meleeDodgeChance) {
+                    addPopup("DODGE!", currTarget.posX, 140f, Color.Gray)
+                    MedievalAudioSynth.playSound(SoundType.SWOOSH)
+                    continue
+                }
+                
+                // Speed Advantage: Interrupt slow enemy attack progress
+                if (currTarget.isAttacking && attacker.moveSpeed > currTarget.moveSpeed * 1.3f && !currTarget.isPlayer) {
+                    currTarget.isAttacking = false
+                    currTarget.swingProgress = 0f
+                    addPopup("INTERRUPT!", currTarget.posX, 150f, Color.Gray)
+                }
+
                 var blockChance = currTarget.shield.defense / 100f
                 if (!currTarget.isPlayer && currTarget.shield.id == "shield_tower") blockChance = 0.8f
                 
@@ -1006,10 +1077,42 @@ class GameViewModel : ViewModel() {
                     // Blocked by shield!
                     MedievalAudioSynth.playSound(SoundType.CLANG)
                     
+                    // Breakable Shields logic
+                    val armorFactor = (1f - (currTarget.totalArmor / 100f)).coerceIn(0.1f, 1f)
+                    val distToTarget = abs(attacker.posX - currTarget.posX)
+                    val attachmentDmgMultiplier = if (attacker.isRanged && distToTarget > 80f) 0f else 1f
+                    val attachSlash = attacker.extraAttachments.sumOf { it.slash.toDouble() * 0.5 }.toFloat()
+                    val attachPierce = attacker.extraAttachments.sumOf { it.pierce.toDouble() * 0.5 }.toFloat()
+                    val attachBlunt = attacker.extraAttachments.sumOf { it.blunt.toDouble() * 0.5 }.toFloat()
+                    val scaleLvl = if (attacker.isPlayer) 1.0f + (attacker.level - 1) * 0.12f else 1.0f
+                    val effectiveSlash = ((attacker.damageSlash - attachSlash * scaleLvl) + attachSlash * scaleLvl * attachmentDmgMultiplier) * damageFalloff
+                    val effectivePierce = ((attacker.damagePierce - attachPierce * scaleLvl) + attachPierce * scaleLvl * attachmentDmgMultiplier) * damageFalloff
+                    val effectiveBlunt = ((attacker.damageBlunt - attachBlunt * scaleLvl) + attachBlunt * scaleLvl * attachmentDmgMultiplier) * damageFalloff
+                    val slash = effectiveSlash
+                    val pierce = effectivePierce
+                    val blunt = effectiveBlunt
+                    val blockDamage = ((slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt) * dmgScale
+                    
+                    if (currTarget.shieldHp > 0f) {
+                        currTarget.shieldHp -= blockDamage * 0.5f // Shield takes half damage
+                        if (currTarget.shieldHp <= 0f) {
+                            currTarget.shieldHp = 0f
+                            currTarget.shield = GameData.SHIELDS.first { it.id == "shield_none" }
+                            MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                            addPopup("SHIELD BROKEN!", currTarget.posX, 160f, Color.LightGray)
+                            // Add shattering particles
+                            val px = currTarget.posX
+                            val py = 140f
+                            _particlesState.value = _particlesState.value + List(5) {
+                                BloodParticle(x = px + Random.nextInt(-10, 10), y = py + Random.nextInt(-10, 10), vx = (Random.nextFloat() * 100f - 50f), vy = -100f - Random.nextFloat() * 50f, color = Color(0xFF6E5536), isSmoke = false)
+                            }
+                        }
+                    }
+
                     // Still take minimal blunt impact damage
-                    val blockDamage = (attacker.damageBlunt * 0.15f * damageFalloff).coerceAtLeast(1f)
-                    if (blockDamage > 5f && kotlin.random.Random.nextBoolean()) MedievalAudioSynth.playSound(SoundType.CRUNCH)
-                    applyFlatDamage(blockDamage, currTarget, attacker.isPlayer)
+                    val bluntDamage = (attacker.damageBlunt * 0.15f * damageFalloff).coerceAtLeast(1f)
+                    if (bluntDamage > 5f && kotlin.random.Random.nextBoolean()) MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                    applyFlatDamage(bluntDamage, currTarget, attacker.isPlayer)
                 } else {
                     // Full hit!
                     val distToTarget = abs(attacker.posX - currTarget.posX)
@@ -1064,6 +1167,12 @@ class GameViewModel : ViewModel() {
                         val py = 120f + (Random.nextFloat() * 60f - 30f)
                         _particlesState.value = _particlesState.value + BloodParticle(x = px, y = py, vx = (Random.nextFloat() * 200f - 100f), vy = -150f - Random.nextFloat() * 150f, color = Color(0xFF8B0000))
                     }
+                    
+                    // Brawler Bleeding (Spiked Wraps)
+                    if (attacker.brawlerUpgrades.contains("spiked_wraps") && totalDamage > 0f && kotlin.random.Random.nextFloat() < 0.5f) {
+                        currTarget.bleedDuration = 4.0f
+                        addPopup("+BLEEDING+", currTarget.posX, 120f, Color(0xFFA62B2B))
+                    }
 
                     // Limb loss mechanic! (heavy slash)
                     val canLoseArm = !currTarget.isPlayer || (currTarget.hp / currTarget.maxHp < 0.10f)
@@ -1117,6 +1226,14 @@ class GameViewModel : ViewModel() {
     }
 
     private fun applyProjectileDamage(proj: Projectile, defender: FighterState) {
+        // Speed Advantage: Ranged deflection based on speed
+        val deflectionChance = (defender.moveSpeed * 0.002f).coerceIn(0f, 0.35f)
+        if (kotlin.random.Random.nextFloat() < deflectionChance) {
+            MedievalAudioSynth.playSound(SoundType.SWOOSH)
+            addPopup("DEFLECT!", defender.posX, 120f, Color.Gray)
+            return
+        }
+        
         // Ranged hit calculation
         val isBlocked = defender.shield.id != "shield_none" && Random.nextFloat() < (defender.shield.defense / 110f)
 
@@ -1124,6 +1241,21 @@ class GameViewModel : ViewModel() {
             MedievalAudioSynth.playSound(SoundType.CLANG)
             if (proj.type == "arrow" || proj.type == "bolt" || proj.type == "javelin") {
                 defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, true))
+            }
+            
+            if (defender.shieldHp > 0f) {
+                defender.shieldHp -= proj.damage * 0.3f
+                if (defender.shieldHp <= 0f) {
+                    defender.shieldHp = 0f
+                    defender.shield = GameData.SHIELDS.first { it.id == "shield_none" }
+                    MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                    addPopup("SHIELD BROKEN!", defender.posX, 160f, Color.LightGray)
+                    val px = defender.posX
+                    val py = 140f
+                    _particlesState.value = _particlesState.value + List(5) {
+                        BloodParticle(x = px + Random.nextInt(-10, 10), y = py + Random.nextInt(-10, 10), vx = (Random.nextFloat() * 100f - 50f), vy = -100f - Random.nextFloat() * 50f, color = Color(0xFF6E5536), isSmoke = false)
+                    }
+                }
             }
         } else {
             val armorFactor = (1f - (defender.totalArmor / 100f)).coerceIn(0.15f, 1f)
@@ -1175,7 +1307,19 @@ class GameViewModel : ViewModel() {
             finalDmg *= 1.5f
         }
         val finalDmgInt = finalDmg.coerceAtLeast(1f).toInt().toFloat()
-        defender.hp = (defender.hp - finalDmgInt).coerceAtLeast(0f)
+        
+        if (defender.isMounted && defender.mountHp > 0f) {
+            defender.mountHp -= finalDmgInt
+            if (defender.mountHp <= 0f) {
+                defender.mountHp = 0f
+                defender.isMounted = false
+                addPopup("MOUNT SHATTERED!", defender.posX, 130f, Color.Gray)
+                MedievalAudioSynth.playSound(SoundType.CRUNCH)
+            }
+        } else {
+            defender.hp = (defender.hp - finalDmgInt).coerceAtLeast(0f)
+        }
+        
         defender.damageIndicator = "-${finalDmgInt.toInt()}"
         defender.damageIndicatorTimer = 0.5f
         
@@ -1265,7 +1409,7 @@ class GameViewModel : ViewModel() {
                     val anc = availableAncs.random()
                     pendingChoices.add(LevelUpChoice(
                         id = "follower_${anc.id}",
-                        title = "Rally: ${anc.name} the ${anc.role}",
+                        title = "Rally: ${anc.ancillaryName} the ${anc.role}",
                         description = "${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)",
                         type = "follower",
                         itemId = anc.id
@@ -1296,8 +1440,9 @@ class GameViewModel : ViewModel() {
                     ))
                 }
 
-                // 3. Handle Extension or Layered Armor option
-                if (Random.nextBoolean()) {
+                // 3. Handle Extension or Layered Armor or Shield Upgrade option
+                val rndVal = Random.nextFloat()
+                if (rndVal < 0.33f) {
                     pendingChoices.add(LevelUpChoice(
                         id = "extension",
                         title = "Haft Upgrade: Handle Extension",
@@ -1305,6 +1450,20 @@ class GameViewModel : ViewModel() {
                         type = "extension",
                         itemId = ""
                     ))
+                } else if (rndVal < 0.66f && state.shield.id != "shield_none") {
+                    val shieldChoices = listOf(
+                        LevelUpChoice("shield_oak", "Shield: Oak Reinforcing", "Bolt heavy oak planks onto your shield. Massively boosts shield durability!", "shield_upgrade", "oak_reinforcing"),
+                        LevelUpChoice("shield_iron", "Shield: Iron Plating", "Rivet iron sheets across your shield. Indestructible but very heavy.", "shield_upgrade", "iron_plating"),
+                        LevelUpChoice("shield_helmet", "Shield: Shield Helmet", "Why wear a helmet on your head when you can strap it to your shield? Excellent durability boost.", "shield_upgrade", "shield_helmet")
+                    )
+                    val availableShieldUpgrades = shieldChoices.filter { it.itemId !in state.shieldUpgrades }
+                    if (availableShieldUpgrades.isNotEmpty()) {
+                        pendingChoices.add(availableShieldUpgrades.random())
+                    } else {
+                        val armorOptions = GameData.ARMOR_PIECES.filter { it.id != "armor_bare" }
+                        val armorPiece = armorOptions.random()
+                        pendingChoices.add(LevelUpChoice("armor_${armorPiece.id}", "Layer Armor: ${armorPiece.itemName}", "Drape ${armorPiece.itemName} layered directly on top of your current armor, gaining +${armorPiece.defense.toInt()} Defense!", "armor", armorPiece.id))
+                    }
                 } else {
                     val armorOptions = GameData.ARMOR_PIECES.filter { it.id != "armor_bare" }
                     val armorPiece = armorOptions.random()
@@ -1339,6 +1498,19 @@ class GameViewModel : ViewModel() {
                     val availableRanged = possibleUpgrades.filter { it.itemId !in state.rangedUpgrades }
                     if (availableRanged.isNotEmpty()) {
                         pendingChoices.add(availableRanged.random())
+                    }
+                }
+                
+                // 5. Brawler Upgrades (only if unarmed)
+                if (state.weaponHead.id == "head_bare" && state.weaponHandle.id == "handle_fists") {
+                    val possibleBrawler = listOf(
+                        LevelUpChoice("brawler_brass_knuckles", "Brawler: Brass Knuckles", "Reinforce your fists with heavy brass! Massive blunt damage.", "brawler_upgrade", "brass_knuckles"),
+                        LevelUpChoice("brawler_spiked_wraps", "Brawler: Spiked Wraps", "Wrap your hands in leather and rusty nails. Causes bleeding!", "brawler_upgrade", "spiked_wraps"),
+                        LevelUpChoice("brawler_wrestling_belt", "Brawler: Champion Belt", "Increases grapple strength. Wrestle foes to the ground!", "brawler_upgrade", "champion_belt")
+                    )
+                    val availableBrawler = possibleBrawler.filter { it.itemId !in state.brawlerUpgrades }
+                    if (availableBrawler.isNotEmpty()) {
+                        pendingChoices.add(availableBrawler.random())
                     }
                 }
                 
@@ -1420,6 +1592,10 @@ class GameViewModel : ViewModel() {
                     extraArmors = emptyList(),
                     handleExtensionCount = 0,
                     rangedUpgrades = emptyList(),
+                    shieldUpgrades = emptyList(),
+                    brawlerUpgrades = emptyList(),
+                    hasThroneOption = kotlin.random.Random.nextFloat() < 0.2f,
+                    isThroneMode = false,
                     unlockedAncillaries = emptySet(),
                     weaponHead = GameData.WEAPON_HEADS.filter { it.id in initialGear }.random(),
                     weaponHandle = GameData.WEAPON_HANDLES.filter { it.id in initialGear && it.id != "handle_fists" }.randomOrNull() ?: GameData.WEAPON_HANDLES[1],
@@ -1437,6 +1613,12 @@ class GameViewModel : ViewModel() {
         }
     }
 
+
+
+
+    fun toggleThroneMode() {
+        _uiState.update { it.copy(isThroneMode = !it.isThroneMode) }
+    }
 
     fun clearSkipBonus() {
         _uiState.update { it.copy(pendingSkipBonus = 0) }

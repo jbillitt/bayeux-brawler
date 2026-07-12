@@ -294,9 +294,13 @@ data class FighterState(
     val extraArmors: List<GearItem> = emptyList(),
     val handleExtensionCount: Int = 0,
     val rangedUpgrades: List<String> = emptyList(),
+    val shieldUpgrades: List<String> = emptyList(),
+    val brawlerUpgrades: List<String> = emptyList(),
+    var shieldHp: Float = 0f,
     var poisonDuration: Float = 0f,
     var bleedDuration: Float = 0f,
     var isMounted: Boolean = false,
+    var mountHp: Float = 0f,
     var isChariot: Boolean = false,
     var isLord: Boolean = false,
     var trampleCooldown: Float = 0f,
@@ -311,7 +315,11 @@ data class FighterState(
             val attachmentsMass = extraAttachments.sumOf { it.mass.toDouble() }.toFloat()
             val armorsMass = extraArmors.sumOf { it.mass.toDouble() }.toFloat()
             val extensionMass = handleExtensionCount * 0.5f
-            return base + attachmentsMass + armorsMass + extensionMass
+            var shieldUpgradesMass = 0f
+            if (shieldUpgrades.contains("oak_reinforcing")) shieldUpgradesMass += 2.5f
+            if (shieldUpgrades.contains("iron_plating")) shieldUpgradesMass += 5.0f
+            if (shieldUpgrades.contains("shield_helmet")) shieldUpgradesMass += 3.0f
+            return base + attachmentsMass + armorsMass + extensionMass + shieldUpgradesMass
         }
 
     val totalArmor: Float
@@ -356,8 +364,9 @@ data class FighterState(
             if (missingArm) return 0f
             val base = weaponHead.pierce * size * size
             val att = extraAttachments.sumOf { it.pierce.toDouble() * 0.5 }.toFloat()
+            val brawlerBonus = if (weaponHead.id == "head_bare" && weaponHandle.id == "handle_fists" && brawlerUpgrades.contains("spiked_wraps")) 8f else 0f
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
-            return (base + att) * scaleLvl * lateGameMultiplier
+            return (base + att + brawlerBonus) * scaleLvl * lateGameMultiplier
         }
 
     val damageSlash: Float 
@@ -373,8 +382,9 @@ data class FighterState(
         get() {
             val base = weaponHead.blunt * size * size
             val att = extraAttachments.sumOf { it.blunt.toDouble() * 0.5 }.toFloat()
+            val brawlerBonus = if (weaponHead.id == "head_bare" && weaponHandle.id == "handle_fists" && brawlerUpgrades.contains("brass_knuckles")) 15f else 0f
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
-            return (base + att) * scaleLvl * lateGameMultiplier
+            return (base + att + brawlerBonus) * scaleLvl * lateGameMultiplier
         }
 
     // Attack delay influenced by total mass & handle speed penalty
@@ -493,6 +503,10 @@ data class BattleSimState(
     val extraArmors: List<String> = emptyList(),       // stores GearItem IDs of extra layers of armor
     val handleExtensionCount: Int = 0,
     val rangedUpgrades: List<String> = emptyList(),
+    val shieldUpgrades: List<String> = emptyList(),
+    val brawlerUpgrades: List<String> = emptyList(),
+    val hasThroneOption: Boolean = false,
+    val isThroneMode: Boolean = false,
     
     // Level Up Choice State
     val pendingLevelUpChoices: List<LevelUpChoice> = emptyList(),
@@ -526,7 +540,9 @@ data class BattleSimState(
                 extraAttachments = extraAttachments.mapNotNull { id -> GameData.WEAPON_HEADS.find { it.id == id } },
                 extraArmors = extraArmors.mapNotNull { id -> GameData.ARMOR_PIECES.find { it.id == id } },
                 handleExtensionCount = handleExtensionCount,
-                rangedUpgrades = rangedUpgrades
+                rangedUpgrades = rangedUpgrades,
+                shieldUpgrades = shieldUpgrades,
+                brawlerUpgrades = brawlerUpgrades
             )
             return dummyPlayer.scoreMultiplier
         }

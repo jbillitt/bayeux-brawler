@@ -3,94 +3,332 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kotlin Path Vector Builder</title>
+    <title>Bayeux Vector Builder & Configurator</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #2c2c2c; color: white; }
-        canvas { background: #fff; border: 1px solid #000; cursor: crosshair; }
-        .controls { margin-top: 10px; display: flex; gap: 10px; }
-        textarea { width: 600px; height: 150px; margin-top: 10px; font-family: monospace; }
-        button { padding: 8px 16px; cursor: pointer; }
+        :root {
+            --bg-color: #f4eadd;
+            --panel-bg: #e6d8c3;
+            --text-color: #2c2219;
+            --border-color: #2c2219;
+            --accent-color: #9e3624;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        h1, h2, h3 { margin-top: 0; color: var(--accent-color); }
+        .sidebar {
+            width: 320px;
+            background-color: var(--panel-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+        }
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        .canvas-container {
+            position: relative;
+        }
+        canvas {
+            background-color: #fffaf0;
+            border: 2px solid var(--border-color);
+            border-radius: 4px;
+            cursor: crosshair;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label { font-weight: bold; font-size: 14px; }
+        input[type="text"], select, button {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: white;
+            font-family: inherit;
+        }
+        button {
+            background-color: var(--border-color);
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            border: none;
+        }
+        button:hover { background-color: #4a3a2a; }
+        button.action-btn { background-color: var(--accent-color); }
+        button.action-btn:hover { background-color: #7a2614; }
+        
+        .color-palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .color-swatch {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #000;
+            border-radius: 50%;
+            cursor: pointer;
+            position: relative;
+        }
+        .color-swatch.selected::after {
+            content: '';
+            position: absolute;
+            top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border: 2px solid var(--accent-color);
+            border-radius: 50%;
+        }
+        
+        textarea {
+            width: 100%;
+            flex-grow: 1;
+            font-family: 'Courier New', Courier, monospace;
+            resize: none;
+            padding: 10px;
+            border: 2px solid var(--border-color);
+            border-radius: 4px;
+            background-color: #fff;
+            font-size: 12px;
+            box-sizing: border-box;
+            white-space: pre;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: normal;
+            cursor: pointer;
+        }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .layer-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.5);
+            padding: 4px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
-    <h1>Bayeux Vector Builder</h1>
-    <canvas id="canvas" width="600" height="600"></canvas>
-    <div class="controls">
-        <button id="clearBtn">Clear</button>
-        <button id="undoBtn">Undo</button>
-        <label>Snap to Grid: <input type="checkbox" id="snapCheck" checked></label>
+    <div class="sidebar">
+        <h2>Gear Configurator</h2>
+        
+        <div class="control-group">
+            <label>Item Type</label>
+            <select id="itemType">
+                <option value="WeaponHead">Weapon Head</option>
+                <option value="WeaponHandle">Weapon Handle</option>
+                <option value="RangedGear">Ranged Gear</option>
+                <option value="Shield">Shield</option>
+                <option value="Armor">Armor</option>
+                <option value="Headgear">Headgear</option>
+                <option value="Attachment">Attachment</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label>Item Name (ID)</label>
+            <input type="text" id="itemName" value="my_epic_sword" placeholder="e.g. spartan_shield">
+        </div>
+
+        <div class="control-group" id="shaftGroup">
+            <label>Preview Shaft / Handle</label>
+            <select id="handleType">
+                <option value="short">Short / Iron / Pick / Fists (30px)</option>
+                <option value="medium">Medium (55px)</option>
+                <option value="chain">Chain / Flail (60px)</option>
+                <option value="double">Double-Ended (80px)</option>
+                <option value="long">Long (110px)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Draw Mode</label>
+            <select id="drawMode">
+                <option value="path">Draw Path (Click points)</option>
+            </select>
+            <label class="checkbox-label">
+                <input type="checkbox" id="fillShape" checked> Fill Shape?
+            </label>
+        </div>
+
+        <div class="control-group">
+            <label>Current Color</label>
+            <div class="color-palette" id="colorPalette">
+                <!-- Swatches injected by JS -->
+            </div>
+            <div style="font-size: 11px; margin-top: 4px;" id="colorLabel">Thread (Dark) - 0xFF2C2219</div>
+        </div>
+
+        <hr style="width: 100%; border-color: var(--border-color); opacity: 0.2;">
+
+        <div class="control-group">
+            <label>Visualizer Options</label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="mannequinCheck" checked> Show Player Dummy (Profile)
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="animCheck"> Simulate Swing (Weapon/Shield)
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="gridCheck" checked> Show Center Grid
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="snapCheck" checked> Snap to Grid (10px)
+            </label>
+        </div>
+
+        <hr style="width: 100%; border-color: var(--border-color); opacity: 0.2;">
+        
+        <div class="control-group">
+            <label>Layers (Paths)</label>
+            <div id="layerList" style="display:flex; flex-direction:column; gap:5px; max-height: 150px; overflow-y: auto;">
+                <!-- Layers go here -->
+            </div>
+        </div>
     </div>
-    <textarea id="output" readonly></textarea>
+
+    <div class="main-content">
+        <div class="toolbar">
+            <button id="newPathBtn">New Path</button>
+            <button id="undoBtn">Undo Last Point</button>
+            <button id="clearBtn">Clear All</button>
+            <button id="exportBtn" class="action-btn">Export Kotlin Code</button>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="canvas" width="600" height="600"></canvas>
+        </div>
+        
+        <textarea id="output" readonly placeholder="Kotlin code will be generated here upon export..."></textarea>
+    </div>
 
     <script>
+        document.getElementById('itemType').addEventListener('change', (e) => {
+            const isWeapon = e.target.value === 'WeaponHead' || e.target.value === 'Attachment';
+            document.getElementById('shaftGroup').style.display = isWeapon ? 'flex' : 'none';
+        });
+
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const output = document.getElementById('output');
-        const clearBtn = document.getElementById('clearBtn');
-        const undoBtn = document.getElementById('undoBtn');
-        const snapCheck = document.getElementById('snapCheck');
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        
+        // Colors from Bayeux Palette
+        const palette = [
+            { name: "Thread (Dark)", hex: "#2C2219", kt: "0xFF2C2219" },
+            { name: "Terracotta Red", hex: "#9E3624", kt: "0xFF9E3624" },
+            { name: "Mustard Gold", hex: "#B08221", kt: "0xFFB08221" },
+            { name: "Forest Green", hex: "#4C613D", kt: "0xFF4C613D" },
+            { name: "Navy Blue", hex: "#265063", kt: "0xFF265063" },
+            { name: "Leather Brown", hex: "#8A5E38", kt: "0xFF8A5E38" },
+            { name: "Steel Grey", hex: "#BAC5CC", kt: "0xFFBAC5CC" },
+            { name: "Chainmail Blue-Grey", hex: "#6B7882", kt: "0xFF6B7882" },
+            { name: "Undergarment White", hex: "#FAF6EB", kt: "0xFFFAF6EB" },
+            { name: "Skin Tone", hex: "#E8C5A4", kt: "0xFFE8C5A4" }
+        ];
 
-        let paths = [];
-        let currentPath = [];
+        let selectedColor = palette[0];
+        const colorPaletteEl = document.getElementById('colorPalette');
+        const colorLabelEl = document.getElementById('colorLabel');
 
-        function drawGrid() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#eee';
-            ctx.lineWidth = 1;
-            for (let i = 0; i < canvas.width; i += 20) {
-                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+        // Init Palette
+        palette.forEach(c => {
+            const swatch = document.createElement('div');
+            swatch.className = 'color-swatch';
+            swatch.style.backgroundColor = c.hex;
+            if (c === selectedColor) swatch.classList.add('selected');
+            swatch.onclick = () => {
+                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+                swatch.classList.add('selected');
+                selectedColor = c;
+                colorLabelEl.innerText = `${c.name} - ${c.kt}`;
+                if (paths.length > 0 && currentPoints.length === 0) {
+                    paths[paths.length - 1].color = selectedColor;
+                    updateLayerList();
+                }
+            };
+            colorPaletteEl.appendChild(swatch);
+        });
+
+        let paths = []; // Array of { points: [{x,y}], color: {}, isFilled: bool }
+        let currentPoints = [];
+
+        function initNewPath() {
+            if (currentPoints.length > 0) {
+                paths.push({
+                    points: [...currentPoints],
+                    color: selectedColor,
+                    isFilled: document.getElementById('fillShape').checked
+                });
+                currentPoints = [];
+                updateLayerList();
             }
-            // Draw axis
-            ctx.strokeStyle = '#ccc';
-            ctx.beginPath(); ctx.moveTo(canvas.width/2, 0); ctx.lineTo(canvas.width/2, canvas.height); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(0, canvas.height/2); ctx.lineTo(canvas.width, canvas.height/2); ctx.stroke();
         }
 
-        function draw() {
-            drawGrid();
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
-            
-            paths.forEach(path => {
-                if (path.length === 0) return;
-                ctx.beginPath();
-                ctx.moveTo(path[0].x, path[0].y);
-                for (let i = 1; i < path.length; i++) {
-                    ctx.lineTo(path[i].x, path[i].y);
-                }
-                ctx.stroke();
-                // Draw points
-                ctx.fillStyle = 'red';
-                path.forEach(pt => {
-                    ctx.beginPath();
-                    ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-                    ctx.fill();
-                });
-            });
-
-            if (currentPath.length > 0) {
-                ctx.beginPath();
-                ctx.moveTo(currentPath[0].x, currentPath[0].y);
-                for (let i = 1; i < currentPath.length; i++) {
-                    ctx.lineTo(currentPath[i].x, currentPath[i].y);
-                }
-                ctx.stroke();
-                ctx.fillStyle = 'red';
-                currentPath.forEach(pt => {
-                    ctx.beginPath();
-                    ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-                    ctx.fill();
-                });
+        document.getElementById('newPathBtn').onclick = initNewPath;
+        document.getElementById('clearBtn').onclick = () => { paths = []; currentPoints = []; updateLayerList(); };
+        document.getElementById('undoBtn').onclick = () => {
+            if (currentPoints.length > 0) currentPoints.pop();
+            else if (paths.length > 0) {
+                currentPoints = paths.pop().points;
+                currentPoints.pop();
             }
-            updateOutput();
+            updateLayerList();
+        };
+
+        function updateLayerList() {
+            const list = document.getElementById('layerList');
+            list.innerHTML = '';
+            paths.forEach((p, i) => {
+                const item = document.createElement('div');
+                item.className = 'layer-item';
+                item.innerHTML = `<span>Path ${i+1} (${p.points.length} pts)</span>
+                                  <div style="width:15px;height:15px;background:${p.color.hex};border:1px solid #000;"></div>`;
+                list.appendChild(item);
+            });
+            if (currentPoints.length > 0) {
+                const item = document.createElement('div');
+                item.className = 'layer-item';
+                item.style.border = '2px dashed #9e3624';
+                item.innerHTML = `<span>Active Path (${currentPoints.length} pts)</span>`;
+                list.appendChild(item);
+            }
         }
 
         function getMousePos(e) {
             const rect = canvas.getBoundingClientRect();
             let x = e.clientX - rect.left;
             let y = e.clientY - rect.top;
-            if (snapCheck.checked) {
+            if (document.getElementById('snapCheck').checked) {
                 x = Math.round(x / 10) * 10;
                 y = Math.round(y / 10) * 10;
             }
@@ -98,67 +336,263 @@
         }
 
         canvas.addEventListener('mousedown', (e) => {
-            const pos = getMousePos(e);
-            currentPath = [pos];
-            draw();
+            currentPoints.push(getMousePos(e));
+            updateLayerList();
         });
 
-        canvas.addEventListener('mousemove', (e) => {
-            if (e.buttons === 1) { // Left click held
-                const pos = getMousePos(e);
-                // Avoid duplicates
-                if (currentPath.length > 0) {
-                    const last = currentPath[currentPath.length - 1];
-                    if (last.x === pos.x && last.y === pos.y) return;
+        // Animation Loop
+        function renderLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const itemType = document.getElementById('itemType').value;
+            const handleType = document.getElementById('handleType').value;
+            let handleLen = 30; // short, iron, pick, wheel, fists
+            if (handleType === 'medium') handleLen = 55;
+            if (handleType === 'chain') handleLen = 60;
+            if (handleType === 'double') handleLen = 80;
+            if (handleType === 'long') handleLen = 110;
+
+            const isAnimating = document.getElementById('animCheck').checked;
+            let swing = isAnimating ? (Math.sin(Date.now() / 300) + 1) / 2 : 0; // 0 to 1
+            let armAngle = isAnimating ? -75 + 160 * swing : -30;
+
+            const hdx = 48;
+            const hdy = 5;
+            const sdx = handleLen * 0.8;
+            const sdy = -handleLen * 0.4;
+            
+            const unrotatedShaftEndX = hdx + sdx;
+            const unrotatedShaftEndY = hdy + sdy;
+
+            const armAngleRad = armAngle * Math.PI / 180;
+            const rotatedShaftEndX = unrotatedShaftEndX * Math.cos(armAngleRad) - unrotatedShaftEndY * Math.sin(armAngleRad);
+            const rotatedShaftEndY = unrotatedShaftEndX * Math.sin(armAngleRad) + unrotatedShaftEndY * Math.cos(armAngleRad);
+
+            let targetOffsetFromTorso = { x: 0, y: 0 };
+            if (itemType === 'WeaponHead' || itemType === 'Attachment') {
+                targetOffsetFromTorso = { x: -23 + rotatedShaftEndX, y: 25 + rotatedShaftEndY };
+            } else if (itemType === 'WeaponHandle' || itemType === 'RangedGear') {
+                const handX = hdx * Math.cos(armAngleRad) - hdy * Math.sin(armAngleRad);
+                const handY = hdx * Math.sin(armAngleRad) + hdy * Math.cos(armAngleRad);
+                targetOffsetFromTorso = { x: -23 + handX, y: 25 + handY };
+            } else if (itemType === 'Headgear' || itemType === 'Face' || itemType === 'Hair') {
+                targetOffsetFromTorso = { x: 0, y: -25 };
+            } else if (itemType === 'Shield') {
+                targetOffsetFromTorso = { x: 35, y: 40 }; 
+            }
+
+            const torsoX = cx - targetOffsetFromTorso.x;
+            const torsoY = cy - targetOffsetFromTorso.y;
+            const shoulderX = torsoX - 23;
+            const shoulderY = torsoY + 25;
+
+            if (document.getElementById('gridCheck').checked) {
+                ctx.strokeStyle = '#e0e0e0';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < canvas.width; i += 20) {
+                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
                 }
-                currentPath.push(pos);
-                draw();
+                ctx.strokeStyle = '#bbb';
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(canvas.width, cy); ctx.stroke();
+                
+                ctx.fillStyle = 'blue';
+                ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2); ctx.fill();
             }
-        });
 
-        canvas.addEventListener('mouseup', (e) => {
-            if (currentPath.length > 0) {
-                paths.push(currentPath);
-                currentPath = [];
-                draw();
+            // Draw Mannequin
+            if (document.getElementById('mannequinCheck').checked) {
+                ctx.save();
+                ctx.translate(torsoX, torsoY);
+                
+                ctx.globalAlpha = 0.4;
+                ctx.fillStyle = '#E8C5A4'; // Skin
+                ctx.strokeStyle = '#2C2219';
+                ctx.lineWidth = 2;
+
+                // Back leg
+                ctx.fillStyle = '#4C613D';
+                ctx.beginPath(); ctx.rect(-10, 60, 14, 45); ctx.fill(); ctx.stroke();
+                // Front leg
+                ctx.fillStyle = '#9E3624';
+                ctx.beginPath(); ctx.rect(5, 60, 14, 45); ctx.fill(); ctx.stroke();
+                
+                // Torso
+                ctx.fillStyle = '#E4D6B6';
+                ctx.beginPath(); ctx.rect(-20, -10, 40, 70); ctx.fill(); ctx.stroke();
+                
+                // Head (Side profile)
+                ctx.fillStyle = '#E8C5A4';
+                ctx.beginPath(); 
+                ctx.moveTo(-10, -10); // Neck base
+                ctx.lineTo(-12, -40); // Back head
+                ctx.lineTo(8, -42);   // Forehead
+                ctx.lineTo(10, -38);  // Brow indent
+                ctx.lineTo(16, -30);  // Nose
+                ctx.lineTo(10, -26);  // Lip
+                ctx.lineTo(12, -18);  // Chin
+                ctx.lineTo(-5, -10);  // Neck front
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+
+                ctx.restore();
+
+                // Arm and Weapon Handle
+                ctx.save();
+                ctx.translate(shoulderX, shoulderY);
+                ctx.rotate(armAngleRad);
+
+                // Sleeve
+                ctx.fillStyle = '#265063';
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(hdx, hdy); // To Hand
+                ctx.lineWidth = 14;
+                ctx.stroke();
+
+                // Hand
+                ctx.fillStyle = '#E8C5A4';
+                ctx.beginPath(); ctx.arc(hdx, hdy, 8, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+                if (itemType === 'WeaponHead' || itemType === 'Attachment') {
+                    // Draw the shaft!
+                    ctx.strokeStyle = '#8A5E38';
+                    ctx.lineWidth = 6;
+                    ctx.beginPath();
+                    ctx.moveTo(hdx - 25, hdy + 12); // Base of grip
+                    ctx.lineTo(hdx + sdx, hdy + sdy); // Shaft end
+                    ctx.stroke();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#2C2219';
+                    ctx.stroke();
+                }
+
+                ctx.restore();
             }
-        });
 
-        clearBtn.addEventListener('click', () => {
-            paths = [];
-            draw();
-        });
+            // Draw Paths
+            const drawPathData = (pList, isFilled, colorInfo, isCurrent) => {
+                if (pList.length === 0) return;
+                
+                ctx.save();
+                
+                // If animating AND we are simulating a weapon head, we want the drawn paths to swing along with the shaft!
+                // Wait, if we are drawing, we want the paths to be exactly where our mouse is.
+                // We'll draw them statically relative to the canvas, but if you want to preview animation, 
+                // we can draw a ghosted version attached to the moving shaft.
+                
+                ctx.beginPath();
+                ctx.moveTo(pList[0].x, pList[0].y);
+                for(let i=1; i<pList.length; i++) ctx.lineTo(pList[i].x, pList[i].y);
+                
+                if (isFilled && !isCurrent) {
+                    ctx.fillStyle = colorInfo.hex;
+                    ctx.fill();
+                } else if (!isCurrent) {
+                    ctx.strokeStyle = colorInfo.hex;
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                    ctx.strokeStyle = '#2C2219';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
 
-        undoBtn.addEventListener('click', () => {
-            if (paths.length > 0) {
-                paths.pop();
-                draw();
-            }
-        });
+                if (isCurrent) {
+                    ctx.strokeStyle = '#9e3624';
+                    ctx.setLineDash([5, 5]);
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+                
+                // Draw nodes
+                ctx.fillStyle = isCurrent ? '#9e3624' : '#000';
+                pList.forEach(pt => {
+                    ctx.beginPath(); ctx.arc(pt.x, pt.y, 3, 0, Math.PI*2); ctx.fill();
+                });
+                
+                ctx.restore();
+                
+                // Draw animated ghost
+                if (isAnimating && !isCurrent) {
+                    ctx.save();
+                    
+                    let targetGhostOffset = { x: 0, y: 0 };
+                    if (itemType === 'WeaponHead' || itemType === 'Attachment') {
+                        targetGhostOffset = { x: rotatedShaftEndX, y: rotatedShaftEndY };
+                    } else if (itemType === 'WeaponHandle' || itemType === 'RangedGear') {
+                        targetGhostOffset = { x: hdx * Math.cos(armAngleRad) - hdy * Math.sin(armAngleRad), y: hdx * Math.sin(armAngleRad) + hdy * Math.cos(armAngleRad) };
+                    }
+                    
+                    if (itemType === 'WeaponHead' || itemType === 'Attachment' || itemType === 'WeaponHandle' || itemType === 'RangedGear') {
+                        ctx.translate(shoulderX, shoulderY);
+                        ctx.translate(targetGhostOffset.x, targetGhostOffset.y);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(pList[0].x - cx, pList[0].y - cy);
+                        for(let i=1; i<pList.length; i++) ctx.lineTo(pList[i].x - cx, pList[i].y - cy);
+                        
+                        if (isFilled) {
+                            ctx.fillStyle = colorInfo.hex;
+                            ctx.fill();
+                        } else {
+                            ctx.strokeStyle = colorInfo.hex;
+                            ctx.lineWidth = 4;
+                            ctx.stroke();
+                        }
+                    }
+                    ctx.restore();
+                }
+            };
 
-        function updateOutput() {
-            if (paths.length === 0) {
-                output.value = "Path().apply {\n}";
-                return;
-            }
+            paths.forEach(p => drawPathData(p.points, p.isFilled, p.color, false));
+            drawPathData(currentPoints, document.getElementById('fillShape').checked, selectedColor, true);
+
+            requestAnimationFrame(renderLoop);
+        }
+        
+        requestAnimationFrame(renderLoop);
+
+        // Export logic
+        document.getElementById('exportBtn').onclick = () => {
+            initNewPath(); // commit current
             
-            let code = "Path().apply {\n";
-            // Map coordinates relative to center
-            const cx = canvas.width / 2;
-            const cy = canvas.height / 2;
+            const type = document.getElementById('itemType').value;
+            const name = document.getElementById('itemName').value;
+            const safeName = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
             
-            paths.forEach(path => {
-                if (path.length === 0) return;
-                code += `    moveTo(${path[0].x - cx}f, ${path[0].y - cy}f)\n`;
-                for (let i = 1; i < path.length; i++) {
-                    code += `    lineTo(${path[i].x - cx}f, ${path[i].y - cy}f)\n`;
+            let code = `// --- Generated Bayeux Kotlin Code ---\n`;
+            code += `// Item Type: ${type} | Name: ${name}\n\n`;
+            
+            code += `// Add this to your enum class (e.g. GameData.${type}s):\n`;
+            code += `${safeName}(\n    id = "${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}",\n    displayName = "Custom ${name}",\n    // ... add stat properties here ...\n),\n\n`;
+
+            code += `// Add this block to TapestryRenderer.kt inside the when(item.id) block:\n`;
+            code += `"${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}" -> {\n`;
+
+            paths.forEach((p, idx) => {
+                if (p.points.length === 0) return;
+                const pathVar = `path_${idx}`;
+                code += `    val ${pathVar} = Path().apply {\n`;
+                code += `        moveTo(${p.points[0].x - cx}f, ${p.points[0].y - cy}f)\n`;
+                for(let i=1; i<p.points.length; i++) {
+                    code += `        lineTo(${p.points[i].x - cx}f, ${p.points[i].y - cy}f)\n`;
+                }
+                code += `        close()\n    }\n`;
+                
+                if (p.isFilled) {
+                    code += `    drawStitchedFill(scope, ${pathVar}, Color(${p.color.kt}))\n`;
+                    code += `    scope.drawPath(${pathVar}, ThreadColor, style = StitchedStroke)\n`;
+                } else {
+                    code += `    scope.drawPath(${pathVar}, Color(${p.color.kt}), style = Stroke(width = 4f))\n`;
                 }
             });
-            code += "}";
-            output.value = code;
-        }
-
-        draw();
+            code += `}\n`;
+            
+            document.getElementById('output').value = code;
+        };
     </script>
 </body>
 </html>

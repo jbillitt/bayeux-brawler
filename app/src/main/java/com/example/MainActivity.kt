@@ -329,7 +329,8 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                                 uiState = uiState, 
                                 onSelect = { viewModel.selectGear(it) },
                                 onUpdatePhysical = { size, hairColor, hairStyle -> viewModel.updatePhysical(size, hairColor, hairStyle) },
-                                onToggleDualWield = { viewModel.toggleDualWield() }
+                                onToggleDualWield = { viewModel.toggleDualWield() },
+                                onToggleThroneMode = { viewModel.toggleThroneMode() }
                             )
                         }
                     }
@@ -343,7 +344,8 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                         StatsAndLaunchPanel(
                             uiState = uiState,
                             onCommence = { viewModel.startBattle() },
-                            onRandomize = { viewModel.randomizeGear() }
+                            onRandomize = { viewModel.randomizeGear() },
+                            onToggleThroneMode = { viewModel.toggleThroneMode() }
                         )
                     }
                 }
@@ -916,7 +918,8 @@ fun GearSelectionTabs(
     uiState: BattleSimState, 
     onSelect: (GearItem) -> Unit, 
     onUpdatePhysical: (Float, Color, String) -> Unit,
-    onToggleDualWield: () -> Unit
+    onToggleDualWield: () -> Unit,
+    onToggleThroneMode: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabTitles = listOf("Weapon ⚔️", "Shield 🛡️", "Armor 🛡️", "Helm 🪖", "Physical 🧍")
@@ -1150,7 +1153,7 @@ fun GearSelectionTabs(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = handle.name,
+                            text = handle.itemName,
                             color = if (isHandleSelected) TapestryLight else TapestryDark,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
@@ -1158,6 +1161,28 @@ fun GearSelectionTabs(
                         )
                     }
                 }
+            }
+        }
+        
+        // Throne Option (only in weapons tab)
+        if (selectedTab == 0 && uiState.hasThroneOption) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onToggleThroneMode,
+                colors = ButtonDefaults.buttonColors(containerColor = if (uiState.isThroneMode) TapestryGreen else TapestryDark),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(2.dp, TapestryDark),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Text(
+                    text = "I won't fight! A true leader has others do his fighing for him!",
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = TapestryLight
+                )
             }
         }
     }
@@ -1227,7 +1252,8 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit) {
 fun StatsAndLaunchPanel(
     uiState: BattleSimState,
     onCommence: () -> Unit,
-    onRandomize: () -> Unit
+    onRandomize: () -> Unit,
+    onToggleThroneMode: () -> Unit
 ) {
     // We compute live stats by spinning up a dummy player FighterState
     val dummyFighter = remember(uiState) {

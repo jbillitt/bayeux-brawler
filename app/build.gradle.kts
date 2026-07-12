@@ -15,7 +15,7 @@ android {
     minSdk = 24
     targetSdk = 36
     versionCode = 1
-    versionName = "0.1.7 Mercia"
+    versionName = "0.1.10 Mercia"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

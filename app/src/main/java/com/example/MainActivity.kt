@@ -1545,7 +1545,7 @@ fun BattlefieldScene(
                 // 2.5 Draw Background Environment Objects
                 uiState.backgroundObjects.forEach { bg ->
                     val scaledBgX = bg.posX * playerScaleX
-                    TapestryRenderer.drawBackgroundObject(this, bg, scaledBgX, scaleFactor)
+                    com.example.game.drawBackgroundObject(this, bg, scaledBgX, scaleFactor)
                 }
             
                 // 3. Draw Players and Enemies

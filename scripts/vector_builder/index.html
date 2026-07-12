@@ -207,7 +207,26 @@
         </div>
 
         <hr style="width: 100%; border-color: var(--border-color); opacity: 0.2;">
-        
+
+        <div class="control-group">
+            <label>Existing Assets (buildings, mounts, ancillaries, custom items)</label>
+            <select id="assetPicker">
+                <option value="">-- pick an asset to load --</option>
+            </select>
+            <button id="loadAssetBtn">Load Selected Asset</button>
+            <button id="syncAssetBtn" disabled>Sync Canvas Edits &rarr; Text</button>
+            <button id="saveAssetBtn" class="action-btn" style="background-color: #4C613D;" disabled>Save Loaded Asset Back</button>
+            <div id="assetHint" style="font-size: 11px; opacity: 0.8;"></div>
+        </div>
+
+        <div class="control-group" id="assetColorsGroup" style="display:none;">
+            <label>Asset Fill Colours</label>
+            <div id="assetColorList" style="display:flex; flex-direction:column; gap:4px; max-height:180px; overflow-y:auto;"></div>
+            <div style="font-size:11px; opacity:0.8;">Changing a colour rewrites the Kotlin text below live — then click "Save Loaded Asset Back".</div>
+        </div>
+
+        <hr style="width: 100%; border-color: var(--border-color); opacity: 0.2;">
+
         <div class="control-group">
             <label>Layers (Paths)</label>
             <div id="layerList" style="display:flex; flex-direction:column; gap:5px; max-height: 150px; overflow-y: auto;">
@@ -221,14 +240,16 @@
             <button id="newPathBtn">New Path</button>
             <button id="undoBtn">Undo Last Point</button>
             <button id="clearBtn">Clear All</button>
-            <button id="exportBtn" class="action-btn">Export Kotlin Code</button>
+            <button id="loadBtn" class="action-btn">Load Kotlin</button>
+            <button id="exportBtn" class="action-btn">Export Code</button>
+            <button id="injectBtn" class="action-btn" style="background-color: #4C613D;">Save & Inject</button>
         </div>
         
         <div class="canvas-container">
             <canvas id="canvas" width="600" height="600"></canvas>
         </div>
         
-        <textarea id="output" readonly placeholder="Kotlin code will be generated here upon export..."></textarea>
+        <textarea id="output" placeholder="Kotlin code goes here... (Paste code and click Load Kotlin, or Export to view generated code)"></textarea>
     </div>
 
     <script>
@@ -556,22 +577,8 @@
         requestAnimationFrame(renderLoop);
 
         // Export logic
-        document.getElementById('exportBtn').onclick = () => {
-            initNewPath(); // commit current
-            
-            const type = document.getElementById('itemType').value;
-            const name = document.getElementById('itemName').value;
-            const safeName = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-            
-            let code = `// --- Generated Bayeux Kotlin Code ---\n`;
-            code += `// Item Type: ${type} | Name: ${name}\n\n`;
-            
-            code += `// Add this to your enum class (e.g. GameData.${type}s):\n`;
-            code += `${safeName}(\n    id = "${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}",\n    displayName = "Custom ${name}",\n    // ... add stat properties here ...\n),\n\n`;
-
-            code += `// Add this block to TapestryRenderer.kt inside the when(item.id) block:\n`;
-            code += `"${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}" -> {\n`;
-
+        function generateCodeSnippet() {
+            let code = '';
             paths.forEach((p, idx) => {
                 if (p.points.length === 0) return;
                 const pathVar = `path_${idx}`;
@@ -589,9 +596,211 @@
                     code += `    scope.drawPath(${pathVar}, Color(${p.color.kt}), style = Stroke(width = 4f))\n`;
                 }
             });
+            return code;
+        }
+
+        document.getElementById('exportBtn').onclick = () => {
+            initNewPath(); // commit current
+            
+            const type = document.getElementById('itemType').value;
+            const name = document.getElementById('itemName').value;
+            const safeName = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+            
+            let code = `// --- Generated Bayeux Kotlin Code ---\n`;
+            code += `// Item Type: ${type} | Name: ${name}\n\n`;
+            
+            code += `// Add this to your enum class (e.g. GameData.${type}s):\n`;
+            code += `${safeName}(\n    id = "${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}",\n    displayName = "Custom ${name}",\n    // ... add stat properties here ...\n),\n\n`;
+
+            code += `// Add this block to TapestryRenderer.kt inside the when(item.id) block:\n`;
+            code += `"${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}" -> {\n`;
+            code += generateCodeSnippet();
             code += `}\n`;
             
             document.getElementById('output').value = code;
+        };
+
+        // Load Kotlin Logic
+        function parseKotlinIntoCanvas(code) {
+            paths = [];
+            currentPoints = [];
+            const lines = code.split('\n');
+            let currentPath = null;
+            let currentColor = palette[0];
+            let isFilled = false;
+
+            for (let line of lines) {
+                if (line.includes('Path().apply')) {
+                    if (currentPath) paths.push(currentPath);
+                    currentPath = { points: [], color: currentColor, isFilled: false };
+                } else if (line.includes('moveTo(')) {
+                    const match = line.match(/moveTo\(([-\d.]+)f,\s*([-\d.]+)f\)/);
+                    if (match && currentPath) currentPath.points.push({x: parseFloat(match[1]) + cx, y: parseFloat(match[2]) + cy});
+                } else if (line.includes('lineTo(')) {
+                    const match = line.match(/lineTo\(([-\d.]+)f,\s*([-\d.]+)f\)/);
+                    if (match && currentPath) currentPath.points.push({x: parseFloat(match[1]) + cx, y: parseFloat(match[2]) + cy});
+                } else if (line.includes('drawStitchedFill')) {
+                    if (currentPath) currentPath.isFilled = true;
+                    const colorMatch = line.match(/0xFF[A-Fa-f0-9]{6}/i);
+                    if (colorMatch && currentPath) {
+                        const ktColor = colorMatch[0].toUpperCase();
+                        const matchedPalette = palette.find(p => p.kt === ktColor);
+                        if (matchedPalette) currentPath.color = matchedPalette;
+                    }
+                } else if (line.includes('style = Stroke') && !line.includes('StitchedStroke')) {
+                    if (currentPath && !currentPath.isFilled) {
+                        const colorMatch = line.match(/0xFF[A-Fa-f0-9]{6}/i);
+                        if (colorMatch && currentPath) {
+                            const ktColor = colorMatch[0].toUpperCase();
+                            const matchedPalette = palette.find(p => p.kt === ktColor);
+                            if (matchedPalette) currentPath.color = matchedPalette;
+                        }
+                    }
+                }
+            }
+            if (currentPath) paths.push(currentPath);
+            updateLayerList();
+        }
+
+        document.getElementById('loadBtn').onclick = () => {
+            parseKotlinIntoCanvas(document.getElementById('output').value);
+            alert('Path loaded!');
+        };
+
+        // Save & Inject logic
+        document.getElementById('injectBtn').onclick = async () => {
+            initNewPath(); // commit current
+            
+            const type = document.getElementById('itemType').value;
+            const name = document.getElementById('itemName').value;
+            const codeSnippet = generateCodeSnippet();
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/inject', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ itemType: type, itemName: name, codeSnippet })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert('Success! ' + result.message);
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (err) {
+                alert('Network error connecting to Save & Inject server.');
+            }
+        };
+
+        // Existing-asset browser: load/edit/save-back buildings, mounts, ancillaries and
+        // previously-injected custom items straight from TapestryRenderer.kt via the server.
+        let assetsById = {}; // "type:id" -> asset
+        let currentAssetKey = null;
+
+        async function loadAssetList() {
+            try {
+                const res = await fetch('http://localhost:3000/api/assets');
+                const data = await res.json();
+                if (!data.success) { console.warn('Could not load asset list:', data.message); return; }
+
+                const groups = { building: 'Buildings', creature: 'Mounts & Creatures', ancillary: 'Ancillaries', custom: 'Custom (made in this tool)' };
+                const picker = document.getElementById('assetPicker');
+                Object.entries(groups).forEach(([type, label]) => {
+                    const items = data.assets.filter(a => a.type === type);
+                    if (items.length === 0) return;
+                    const og = document.createElement('optgroup');
+                    og.label = label;
+                    items.forEach(a => {
+                        const key = `${a.type}:${a.id}`;
+                        assetsById[key] = a;
+                        const opt = document.createElement('option');
+                        opt.value = key;
+                        opt.textContent = a.label;
+                        og.appendChild(opt);
+                    });
+                    picker.appendChild(og);
+                });
+            } catch (err) {
+                console.warn('Vector Builder server not running — Existing Assets list is empty. Run `node server.js`.');
+            }
+        }
+        loadAssetList();
+
+        document.getElementById('loadAssetBtn').onclick = () => {
+            const key = document.getElementById('assetPicker').value;
+            if (!key || !assetsById[key]) { alert('Pick an asset first.'); return; }
+            const asset = assetsById[key];
+            currentAssetKey = { type: asset.type, id: asset.id };
+
+            document.getElementById('output').value = asset.source;
+            paths = []; currentPoints = [];
+
+            const hasCurvesOrLoops = /quadraticTo|cubicTo|\bfor\s*\(|\bwhile\s*\(|withTransform/.test(asset.source);
+            if (hasCurvesOrLoops) {
+                document.getElementById('assetHint').textContent =
+                    'This asset uses curves/loops/transforms the canvas can\'t show — edit the Kotlin text below directly, then "Save Loaded Asset Back". (Canvas editing would flatten curves to straight lines and visibly wreck it, so it\'s left disabled here.)';
+                document.getElementById('syncAssetBtn').disabled = true;
+            } else {
+                parseKotlinIntoCanvas(asset.source);
+                document.getElementById('assetHint').textContent =
+                    'Loaded into the canvas. Draw/edit points, click "Sync Canvas Edits -> Text" to write them into the text box, THEN "Save Loaded Asset Back" (save always uses whatever is in the text box, not the canvas directly).';
+                document.getElementById('syncAssetBtn').disabled = false;
+            }
+            document.getElementById('saveAssetBtn').disabled = false;
+            buildColorPickers();
+        };
+
+        // Colour editing: every Color(0xAARRGGBB) literal in the loaded region gets a picker.
+        // Edits rewrite the textarea (the single source of truth for saving); alpha is preserved.
+        const COLOR_RE = /Color\(0x([0-9A-Fa-f]{8})\)/g;
+        function buildColorPickers() {
+            const src = document.getElementById('output').value;
+            const list = document.getElementById('assetColorList');
+            list.innerHTML = '';
+            const matches = [...src.matchAll(COLOR_RE)];
+            document.getElementById('assetColorsGroup').style.display = matches.length ? 'flex' : 'none';
+            matches.forEach((m, idx) => {
+                const argb = m[1].toUpperCase();
+                const row = document.createElement('div');
+                row.className = 'layer-item';
+                const label = document.createElement('span');
+                label.textContent = `Colour ${idx + 1} — 0x${argb}`;
+                const input = document.createElement('input');
+                input.type = 'color';
+                input.value = '#' + argb.slice(2);
+                input.onchange = () => {
+                    let i = 0;
+                    document.getElementById('output').value = document.getElementById('output').value.replace(
+                        COLOR_RE,
+                        (full, a) => (i++ === idx) ? `Color(0x${a.slice(0, 2).toUpperCase()}${input.value.slice(1).toUpperCase()})` : full
+                    );
+                    buildColorPickers();
+                };
+                row.appendChild(label);
+                row.appendChild(input);
+                list.appendChild(row);
+            });
+        }
+
+        document.getElementById('syncAssetBtn').onclick = () => {
+            initNewPath(); // commit current in-progress point set
+            document.getElementById('output').value = generateCodeSnippet();
+        };
+
+        document.getElementById('saveAssetBtn').onclick = async () => {
+            if (!currentAssetKey) { alert('Load an asset first.'); return; }
+            const source = document.getElementById('output').value;
+            try {
+                const response = await fetch('http://localhost:3000/api/asset/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: currentAssetKey.type, id: currentAssetKey.id, source })
+                });
+                const result = await response.json();
+                alert(result.success ? 'Saved! ' + result.message : 'Error: ' + result.message);
+            } catch (err) {
+                alert('Network error connecting to Save & Inject server.');
+            }
         };
     </script>
 </body>

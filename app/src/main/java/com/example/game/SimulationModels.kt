@@ -112,7 +112,7 @@ object GameData {
         WAR_FLAIL("head_war_flail", "Twin War Flail", 3.5f, blunt = 22f, pierce = 8f, reach = 1.8f, description = "Two spiked balls on branching chains. Absolute chaos.", color = Color(0xFF535C61)),
         BROADSWORD("head_broadsword", "Broadsword Blade", 1.4f, slash = 18f, pierce = 8f, reach = 1.5f, description = "A wide, brutal iron blade. Chips bones through mail.", color = Color(0xFF949B9E)),
         PITCHFORK("head_pitchfork", "Pitchfork", 1.1f, pierce = 16f, slash = 2f, reach = 2.1f, description = "Three rusty tines. Perfect for hay or heathen flesh.", color = Color(0xFF817A73)),
-        DAGGER_HILT("head_dagger_hilt", "Pommel Strike", 0.3f, blunt = 12f, reach = 0.6f, description = "Ending them rightly with a solid iron pommel.", color = Color(0xFFC4AD6C)),
+        DAGGER_HILT("head_dagger_hilt", "Pommel", 0.3f, blunt = 12f, reach = 0.6f, description = "Ending them rightly with a solid iron pommel.", color = Color(0xFFC4AD6C)),
         LUCERNE("head_lucerne", "Lucerne Hammer", 3.0f, blunt = 22f, pierce = 18f, reach = 2.3f, description = "A horrific combination of beak and hammer. Punctures anything.", color = Color(0xFF7D838A)),
         SABER("head_saber", "Huge Saber", 1.8f, slash = 28f, pierce = 5f, reach = 1.8f, description = "A massive curved blade sweeping across the battlefield.", color = Color(0xFF909BA0)),
         URUMI("head_urumi", "Urumi Whip", 1.5f, slash = 30f, pierce = 5f, reach = 2.5f, description = "A flexible whip-like sword with multiple blades. Unpredictable and deadly.", color = Color(0xFFA6B0B5)),
@@ -144,15 +144,17 @@ object GameData {
         MEDIUM("handle_medium", "Hickory Shaft", 0.8f, reach = 0.3f, speedPenalty = 0.05f, description = "A sturdy medium wooden handle. Balanced and reliable.", color = Color(0xFF8C6F47)),
         LONG("handle_long", "Long Ash Pole", 1.8f, reach = 1.2f, speedPenalty = 0.2f, description = "A lengthy 6-foot spear haft. Drastically increases reach but is slow to turn.", color = Color(0xFF735835)),
         IRON("handle_iron", "Iron-shod Haft", 2.5f, reach = 0.5f, speedPenalty = 0.15f, description = "A heavy, iron-reinforced shaft. Hits harder but swings slower.", color = Color(0xFF636A6E)),
-        WHEEL("handle_wheel", "Cart Wheel", 3.5f, reach = 0.6f, speedPenalty = 0.4f, description = "A literal wooden cart wheel as a handle. Ludicrously heavy, but incredible momentum.", color = Color(0xFF6E5536)),
+        WHEEL("handle_wheel", "Cart Wheel", 3.5f, reach = 0.6f, speedPenalty = 0.4f, blunt = 15f, description = "A literal wooden cart wheel as a handle. Ludicrously heavy, but incredible momentum.", color = Color(0xFF6E5536)),
         PICK("handle_pick", "Mining Pick Handle", 1.2f, reach = 0.4f, speedPenalty = 0.08f, description = "An angled wooden pick handle. Grants weird but effective striking angles.", color = Color(0xFF7A654C)),
         CHAIN("handle_chain", "Bayeux Iron Chain", 1.5f, reach = 0.8f, speedPenalty = 0.25f, description = "An iron chain linking your grip to the weapon. Swings wildly in a floppy arc! Slower, but hits with high momentum.", color = Color(0xFF4C5154)),
         DOUBLE_ENDED("handle_double_ended", "Double-Ended Pole", 2.0f, reach = 1.0f, speedPenalty = 0.35f, description = "A wooden pole allowing heads on BOTH ends! Slower, but covers both ends and deals 1.5x damage.", color = Color(0xFF5D4831)),
         FLAIL_CHAIN("handle_flail_chain", "Flail Chain", 1.2f, reach = 1.0f, speedPenalty = 0.30f, description = "A short iron chain with a swivel joint. Makes any head a flail. Bypasses shields.", color = Color(0xFF4C5154)),
         BLESSED_BRANCH("handle_blessed_branch", "Blessed Branch", 1.0f, reach = 0.8f, speedPenalty = 0.05f, description = "A twisted branch blessed by the monks. Smites heathens with holy splinters.", color = Color(0xFF8A5E38)),
-        STUMP("handle_stump", "Tree Stump", 5.0f, reach = 0.5f, speedPenalty = 0.6f, description = "An entire tree stump. Hilariously heavy and completely impractical.", color = Color(0xFF5E4B3C)),
-        RAM("handle_ram", "Battering Ram", 8.0f, reach = 1.5f, speedPenalty = 0.8f, description = "A solid iron-capped ram log. Swings with glacial speed but catastrophic force.", color = Color(0xFF452E1B)),
-        PLOUGH("handle_plough", "Plough Shaft", 3.0f, reach = 1.2f, speedPenalty = 0.25f, description = "The splintered wooden shaft of a farming plough.", color = Color(0xFF735835));
+        STUMP("handle_stump", "Tree Stump", 5.0f, reach = 0.5f, speedPenalty = 0.6f, blunt = 20f, description = "An entire tree stump. Hilariously heavy and completely impractical.", color = Color(0xFF5E4B3C)),
+        RAM("handle_ram", "Battering Ram", 8.0f, reach = 1.5f, speedPenalty = 0.8f, blunt = 35f, description = "A solid iron-capped ram log. Swings with glacial speed but catastrophic force.", color = Color(0xFF452E1B)),
+        PLOUGH("handle_plough", "Plough Shaft", 3.0f, reach = 1.2f, speedPenalty = 0.25f, blunt = 10f, description = "The splintered wooden shaft of a farming plough.", color = Color(0xFF735835)),
+        DAGGER("handle_dagger", "Dagger Grip", 0.2f, reach = 0.1f, speedPenalty = -0.25f, description = "A stubby leather-bound grip. Blindingly fast strikes, but you must be nose-to-nose to land them.", color = Color(0xFF6B4A33)),
+        PIKE_HANDLE("handle_pike_long", "Pike Handle", 3.2f, reach = 2.4f, speedPenalty = 0.55f, description = "A ludicrously long 12-foot pole. Glacial charge-up, but with a spearpoint it skewers whole ranks of Saxons at once.", color = Color(0xFF6E5536));
         override val type: ItemType get() = ItemType.WEAPON_HANDLE
     }
     val WEAPON_HANDLES = WeaponHandle.values().toList()
@@ -232,7 +234,8 @@ object GameData {
         KETTLE("helm_kettle", "Kettle Hat", 4.5f, defense = 50f, speedPenalty = 0.08f, description = "Wide brimmed hat of steel. Protects against arrows from above.", color = Color(0xFF8B9298)),
         MASK("helm_mask", "Masked Helm", 5.0f, defense = 58f, speedPenalty = 0.10f, description = "An enclosed helm with a menacing iron faceplate.", color = Color(0xFF7B858B)),
         GREAT("helm_great", "Great Helm", 6.0f, defense = 65f, speedPenalty = 0.15f, description = "A massive flat-topped steel bucket. Perfect protection, terrible visibility.", color = Color(0xFF6B747A)),
-        JESTER_HAT("helm_jester", "Jester's Cap", 0.1f, defense = 0f, speedPenalty = 0.0f, description = "A colorful motley cap with bells on. Unbelievably foolish. Score x20!", color = Color(0xFFD63C3C));
+        JESTER_HAT("helm_jester", "Jester's Cap", 0.1f, defense = 0f, speedPenalty = 0.0f, description = "A colorful motley cap with bells on. Unbelievably foolish. Score x20!", color = Color(0xFFD63C3C)),
+        CROWN("helm_crown", "King's Crown", 0.5f, defense = 10f, speedPenalty = 0.0f, description = "A golden crown fit for a king.", color = Color(0xFFFFD700));
         override val type: ItemType get() = ItemType.HEADGEAR
     }
     val HEADGEAR_PIECES = HeadgearPiece.values().toList()
@@ -257,6 +260,25 @@ data class EmbeddedProjectile(
     val offsetX: Float,
     val offsetY: Float,
     val angle: Float
+)
+
+enum class BackgroundObjectType {
+    SHIP, FORT_PALACE, FORT_DINAN, BUILDING_BOSHAM, BUILDING_MANOR, FORT_TOWER, FORT_MOTTE
+}
+
+data class BackgroundObject(
+    val id: String,
+    val type: BackgroundObjectType,
+    val posX: Float,
+    val posY: Float = 0f,
+    val width: Float,
+    var hp: Float,
+    val maxHp: Float,
+    var isDestroyed: Boolean = false,
+    val seed: Int = Random.nextInt(),
+    // Only arrow-like projectile hits leave visible shafts, split by firing direction
+    var stuckArrowsFromLeft: Int = 0,
+    var stuckArrowsFromRight: Int = 0
 )
 
 data class FighterState(
@@ -327,14 +349,19 @@ data class FighterState(
     var isMounted: Boolean = false,
     var mountHp: Float = 0f,
     var isChariot: Boolean = false,
+    var isStilts: Boolean = false,
     var isLord: Boolean = false,
     var grapplerId: String? = null,
+    var activeWrestlingMove: String? = null,
+    var crumpleDuration: Float = 0f,
     var visualOffsetY: Float = 0f,
     var pallbearerIndex: Int = -1,
     var trampleCooldown: Float = 0f,
     var kills: Int = 0,
     var stuckProjectiles: MutableList<StuckProj> = mutableListOf(),
-    var lateGameMultiplier: Float = 1f
+    var lateGameMultiplier: Float = 1f,
+    var bandagesCount: Int = 0,
+    val bloodDecals: MutableList<Triple<Float, Float, Int>> = mutableListOf()
 ) {
     // Simulated Base Stats
     val totalMass: Float
@@ -434,7 +461,7 @@ data class FighterState(
             val shieldFactor = if (missingArm) 1.0f else if (shield.id == "shield_none" && !isDualWielding) 0.5f else if (isDualWielding) 0.6f else 1.0f
             // Speed penalty from handle choices
             val handleSpeedPenalty = weaponHandle.speedPenalty + (if (weaponHandle.id == "handle_double_ended") 0.15f else 0f)
-            val crumpleFactor = if (isCrumpled) 1.5f else 1.0f
+            val crumpleFactor = if (crumpleDuration > 0f) 1.5f else 1.0f
             val finalDelay = baseDelay * weightFactor * shieldFactor * (1f + handleSpeedPenalty) * crumpleFactor
             return max(0.3f, finalDelay) // lower cap
         }
@@ -445,7 +472,7 @@ data class FighterState(
             val baseSpeed = if (isPlayer) 75f else 60f // Pixels per second
             // Bigger characters move slower base speed
             val sizeSpeed = baseSpeed / size
-            val crumplePenalty = if (isCrumpled) 0.5f else 1.0f
+            val crumplePenalty = if (crumpleDuration > 0f) 0.5f else 1.0f
             val slowPenalty = if (slowDuration > 0f) 0.4f else 1.0f
             val penaltyFactor = 1f - (totalMass * 0.01f).coerceIn(0f, 0.45f) // weight isn't so immobilizing
             return (sizeSpeed * penaltyFactor) * (1f + speedBoost) * crumplePenalty * slowPenalty * lateGameMultiplier
@@ -486,7 +513,8 @@ data class StuckProj(
     val size: Float,
     val velocityX: Float,
     val velocityY: Float,
-    val inShield: Boolean
+    val inShield: Boolean,
+    val isBallista: Boolean = false
 )
 
 class BloodParticle(
@@ -511,6 +539,11 @@ data class BattleSimState(
     val battleWon: Boolean = false,
     val battleLost: Boolean = false,
     val gameCount: Int = 0,
+    
+    // Environment State
+    val cameraX: Float = 0f,
+    val levelWidth: Float = 1000f,
+    val backgroundObjects: List<BackgroundObject> = emptyList(),
     
     // Selected gear (persistent between levels until customized)
     val weaponHead: GameData.WeaponHead = GameData.WEAPON_HEADS.first { it.id == "head_broadsword" },
@@ -537,6 +570,7 @@ data class BattleSimState(
     val rangedUpgrades: List<String> = emptyList(),
     val shieldUpgrades: List<String> = emptyList(),
     val brawlerUpgrades: List<String> = emptyList(),
+    val bandagesCount: Int = 0,
     val hasThroneOption: Boolean = false,
     val isThroneMode: Boolean = false,
     

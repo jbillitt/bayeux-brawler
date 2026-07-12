@@ -63,6 +63,7 @@ class GameViewModel : ViewModel() {
     val screenshake: StateFlow<Float> = _screenshake.asStateFlow()
 
     private var gameLoopJob: Job? = null
+    private var pendingReinforcements = 0
 
     init {
         // Initialize highscore and random starting gear
@@ -107,7 +108,7 @@ class GameViewModel : ViewModel() {
             }
             
             val newAttachments = if (choice.type == "attachment") state.extraAttachments + choice.itemId else state.extraAttachments
-            val newArmors = if (choice.type == "armor") state.extraArmors + choice.itemId else state.extraArmors
+            val newArmors = if (choice.type == "armor" || choice.type == "comedy") state.extraArmors + choice.itemId else state.extraArmors
             val newAncs = if (choice.type == "follower") state.unlockedAncillaries + GameData.ANCILLARIES.first { it.id == choice.itemId } else state.unlockedAncillaries
             val newExtensions = if (choice.type == "extension") state.handleExtensionCount + 1 else state.handleExtensionCount
             val newRangedUpgrades = if (choice.type == "ranged_upgrade") state.rangedUpgrades + choice.itemId else state.rangedUpgrades
@@ -178,8 +179,13 @@ class GameViewModel : ViewModel() {
                     newState = newState.copy(weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" })
                 } else if (item.type == ItemType.WEAPON_HANDLE) {
                     // if they are trying to select a handle while holding a bow, remove the bow
-                    newState = newState.copy(weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" })
+                    newState = newState.copy(weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" })
                 }
+            } else if (!isRangedNoJavelin && !isBareFists && newState.weaponHandle.id == "handle_fists") {
+                // Auto-select a handle if switching from fists/ranged to a standard melee weapon
+                val availableHandles = GameData.WEAPON_HANDLES.filter { it.id in state.unlockedGearIds && it.id != "handle_fists" }
+                val fallbackHandle = if (availableHandles.isNotEmpty()) availableHandles.first() else GameData.WEAPON_HANDLES.first { it.id == "handle_short" }
+                newState = newState.copy(weaponHandle = fallbackHandle)
             }
             newState
         }
@@ -277,16 +283,18 @@ class GameViewModel : ViewModel() {
 
         // Create player state with complete roguelike upgrade state
         val baseHp = 100f + state.totalHpBoost
-        val totalPlayerMaxHp = baseHp * state.characterSize
+        // Soften the size-HP penalty so small builds stay viable (0.8 size → ~0.95x HP, not 0.8x)
+        val totalPlayerMaxHp = baseHp * (0.75f + 0.25f * state.characterSize)
         val player = FighterState(
             id = "player_knight",
             name = state.playerName,
             isPlayer = true,
             maxHp = totalPlayerMaxHp,
             hp = totalPlayerMaxHp,
-            weaponHead = state.weaponHead,
-            weaponHandle = state.weaponHandle,
-            shield = state.shield,
+            // In throne mode the lord doesn't fight — his gear goes to the front pallbearers
+            weaponHead = if (state.isThroneMode) GameData.WEAPON_HEADS.first { it.id == "head_bare" } else state.weaponHead,
+            weaponHandle = if (state.isThroneMode) GameData.WEAPON_HANDLES.first { it.id == "handle_fists" } else state.weaponHandle,
+            shield = if (state.isThroneMode) GameData.SHIELDS.first { it.id == "shield_none" } else state.shield,
             armor = state.armor,
             headgear = state.headgear,
             isDualWielding = state.isDualWielding,
@@ -312,7 +320,9 @@ class GameViewModel : ViewModel() {
             isMounted = state.unlockedAncillaries.contains(Ancillary.WARHORSE) || state.unlockedAncillaries.contains(Ancillary.CHARIOT) || state.unlockedAncillaries.contains(Ancillary.STILTS) || state.isThroneMode,
             mountHp = if (state.isThroneMode) 100f else if (state.unlockedAncillaries.contains(Ancillary.STILTS)) 40f else if (state.unlockedAncillaries.contains(Ancillary.CHARIOT)) 100f else if (state.unlockedAncillaries.contains(Ancillary.WARHORSE)) 80f else 0f,
             isChariot = state.unlockedAncillaries.contains(Ancillary.CHARIOT),
-            isLord = state.isThroneMode
+            isStilts = !state.isThroneMode && state.unlockedAncillaries.contains(Ancillary.STILTS),
+            isLord = state.isThroneMode,
+            bandagesCount = state.bandagesCount
         )
         
         if (state.isThroneMode) {
@@ -326,13 +336,11 @@ class GameViewModel : ViewModel() {
         val perfBonus = ((state.performanceScore - 0.5f) * 2f).coerceIn(-0.3f, 0.5f)
         val rawEnemiesCount = (1 + (state.level / 2) + Random.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(1)
         val enemiesCount = rawEnemiesCount.coerceAtMost(10)
-        val lateGameMult = if (rawEnemiesCount > 10) 1f + (rawEnemiesCount - 10) * 0.1f else 1f
+        // Overflow beyond the on-screen cap arrives as reinforcements from the right once
+        // the battle scrolls past dead foes — longer battles instead of inflated HP.
+        pendingReinforcements = (rawEnemiesCount - enemiesCount).coerceIn(0, 8)
         val enemies = List(enemiesCount) { index ->
-            val saxon = generateRandomSaxon(index, state.level)
-            saxon.lateGameMultiplier = lateGameMult
-            saxon.maxHp *= lateGameMult
-            saxon.hp = saxon.maxHp
-            saxon
+            generateRandomSaxon(index, state.level)
         }.toMutableList()
 
         if (state.unlockedAncillaries.contains(Ancillary.FANATIC)) {
@@ -359,25 +367,14 @@ class GameViewModel : ViewModel() {
 
         if (state.unlockedAncillaries.contains(Ancillary.HAG)) {
             enemies.add(FighterState(
+                // head_slingshot makes her isRanged, so the AI kites at range and lobs mud instead of rushing to melee
                 id = "hag", name = "Local Hag", isPlayer = true, maxHp = 40f, hp = 40f,
-                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" }, // Using slingshot for mud
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
-                posX = 20f, targetX = 20f, facingRight = true, size = 0.8f, hairColor = androidx.compose.ui.graphics.Color(0xFF8C969E), hairStyle = "long", isDualWielding = false
-            ))
-        }
-
-        if (state.unlockedAncillaries.contains(Ancillary.SURGEON)) {
-            enemies.add(FighterState(
-                id = "surgeon", name = "Battle Surgeon", isPlayer = true, maxHp = 60f, hp = 60f,
-                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_saw_1" }, // Bone saw!
-                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_short" },
-                shield = GameData.SHIELDS.first { it.id == "shield_none" },
-                armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
-                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_cervelliere" },
-                posX = 40f, targetX = 40f, facingRight = true, size = 0.95f, hairColor = androidx.compose.ui.graphics.Color.White, hairStyle = "short", isDualWielding = false
+                posX = 20f, targetX = 20f, facingRight = true, size = 0.8f, hairColor = androidx.compose.ui.graphics.Color(0xFFAAAAAA), hairStyle = "long", isDualWielding = false
             ))
         }
 
@@ -395,13 +392,13 @@ class GameViewModel : ViewModel() {
         
         if (state.unlockedAncillaries.contains(Ancillary.WARDOG)) {
             enemies.add(FighterState(
-                id = "wardog", name = "Buster", isPlayer = true, maxHp = 40f, hp = 40f,
+                id = "wardog", name = "Buster", isPlayer = true, maxHp = 75f, hp = 75f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
-                posX = 70f, targetX = 70f, facingRight = true, size = 0.5f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = true,
+                posX = 70f, targetX = 70f, facingRight = true, size = 1.1f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = true,
                 speedBoost = 1.0f
             ))
         }
@@ -420,10 +417,28 @@ class GameViewModel : ViewModel() {
         }
         
         if (state.isThroneMode) {
-            val nonHumanIds = listOf("raven", "wardog", "trojan_horse", "mount_horse")
-            val humanAncillaries = enemies.filter { !nonHumanIds.contains(it.id) }.take(4)
-            for ((index, ancillary) in humanAncillaries.withIndex()) {
-                ancillary.pallbearerIndex = index
+            // Dedicated retinue of four. Front pair (0,1) inherit the lord's gear and fight:
+            // one wields his weapon, the other carries his shield (or the weapon again when
+            // dual-wielding). Rear pair (2,3) only carry the throne.
+            for (i in 0 until 4) {
+                val isFront = i < 2
+                enemies.add(FighterState(
+                    id = "pallbearer_$i", name = "Pallbearer", isPlayer = true,
+                    maxHp = 70f, hp = 70f,
+                    weaponHead = when {
+                        i == 0 -> state.weaponHead
+                        i == 1 && state.isDualWielding -> state.weaponHead
+                        else -> GameData.WEAPON_HEADS.first { it.id == "head_bare" }
+                    },
+                    weaponHandle = if (isFront) state.weaponHandle else GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                    shield = if (i == 1 && !state.isDualWielding) state.shield else GameData.SHIELDS.first { it.id == "shield_none" },
+                    armor = state.armor,
+                    headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                    posX = player.posX, targetX = player.posX, facingRight = true, size = 0.95f,
+                    hairColor = androidx.compose.ui.graphics.Color(0xFF5A442E), hairStyle = "short",
+                    isDualWielding = false,
+                    pallbearerIndex = i
+                ))
             }
         }
 
@@ -433,13 +448,44 @@ class GameViewModel : ViewModel() {
         _popupsState.value = emptyList()
         _particlesState.value = emptyList() // clear blood from previous battle
 
+        // Generate Environment
+        val levelWidth = if (state.level == 1) 1500f else if (state.level >= 5) 2500f else 1000f + (Random.nextFloat() * 500f)
+        val bgObjects = mutableListOf<BackgroundObject>()
+        
+        if (state.level == 1) {
+            // Level 1: Ship at spawn
+            // Boat hugs the bottom-left edge (hull draws ~±190 around posX); player lands on the beach beside it
+            bgObjects.add(BackgroundObject("ship_0", BackgroundObjectType.SHIP, -40f, 0f, 400f, 500f, 500f))
+            player.posX = 220f
+            player.targetX = 220f
+        } else {
+            // Generate some range cover buildings or forts
+            val numBuildings = if (state.level >= 5) Random.nextInt(1, 4) else Random.nextInt(0, 2)
+            for (i in 0 until numBuildings) {
+                val bx = 300f + Random.nextFloat() * (levelWidth - 600f)
+                val type = if (state.level >= 5 && i == 0) {
+                    listOf(
+                        BackgroundObjectType.FORT_DINAN, BackgroundObjectType.FORT_PALACE,
+                        BackgroundObjectType.FORT_TOWER, BackgroundObjectType.FORT_MOTTE
+                    ).random()
+                } else {
+                    if (Random.nextBoolean()) BackgroundObjectType.BUILDING_BOSHAM else BackgroundObjectType.BUILDING_MANOR
+                }
+                val hp = if (type in listOf(BackgroundObjectType.FORT_DINAN, BackgroundObjectType.FORT_PALACE, BackgroundObjectType.FORT_TOWER, BackgroundObjectType.FORT_MOTTE)) 1000f else 300f
+                bgObjects.add(BackgroundObject("bg_$i", type, bx, 0f, 300f, hp, hp))
+            }
+        }
+
         _uiState.update {
             it.copy(
                 isBattleActive = true,
                 battleWon = false,
                 battleLost = false,
                 playerHp = player.hp,
-                playerMaxHp = player.maxHp
+                playerMaxHp = player.maxHp,
+                levelWidth = levelWidth,
+                cameraX = 0f,
+                backgroundObjects = bgObjects
             )
         }
 
@@ -458,17 +504,21 @@ class GameViewModel : ViewModel() {
         )
         val saxonName = if (index < names.size) names[index] else "Saxon Foe ${index + 1}"
 
-        val rng = kotlin.random.Random(System.currentTimeMillis() + index)
+        // Random.Default, not a millis-based seed: same-tick spawns were getting near-identical rolls
+        val rng = kotlin.random.Random.Default
         val r = rng.nextFloat()
         
-        val arch = if (level <= 2) {
+        val arch = if (level == 1) {
+            // Level 1 is the landing beach — greenest rabble only
+            if (r < 0.55f) EnemyArchetype.PEASANT else if (r < 0.9f) EnemyArchetype.FYRD_LEVY else EnemyArchetype.SLINGER
+        } else if (level <= 2) {
             if (r < 0.3f) EnemyArchetype.PEASANT else if (r < 0.6f) EnemyArchetype.FYRD_LEVY else if (r < 0.8f) EnemyArchetype.SLINGER else EnemyArchetype.HOUSECARL
         } else if (level <= 4) {
             if (r < 0.2f) EnemyArchetype.PEASANT else if (r < 0.35f) EnemyArchetype.JAVELINEER else if (r < 0.5f) EnemyArchetype.MACEMAN else if (r < 0.65f) EnemyArchetype.ARCHER else if (r < 0.85f) EnemyArchetype.HOUSECARL else EnemyArchetype.SHIELD_WALL
         } else if (level <= 6) {
             if (r < 0.15f) EnemyArchetype.MACEMAN else if (r < 0.3f) EnemyArchetype.PIKEMAN else if (r < 0.45f) EnemyArchetype.SHIELD_WALL else if (r < 0.6f) EnemyArchetype.BERSERKER else if (r < 0.7f) EnemyArchetype.KNIGHT_DISMOUNTED else if (r < 0.8f) EnemyArchetype.CHARIOT_ARCHER else if (r < 0.95f) EnemyArchetype.CAVALRY else EnemyArchetype.LORD
         } else {
-            if (r < 0.1f) EnemyArchetype.PIKEMAN else if (r < 0.2f) EnemyArchetype.SHIELD_WALL else if (r < 0.35f) EnemyArchetype.KNIGHT_DISMOUNTED else if (r < 0.5f) EnemyArchetype.BERSERKER else if (r < 0.65f) EnemyArchetype.CAVALRY else if (r < 0.75f) EnemyArchetype.CHARIOT_LANCER else if (r < 0.9f) EnemyArchetype.CHAMPION else EnemyArchetype.KING
+            if (r < 0.15f) EnemyArchetype.ARCHER else if (r < 0.25f) EnemyArchetype.JAVELINEER else if (r < 0.4f) EnemyArchetype.SHIELD_WALL else if (r < 0.5f) EnemyArchetype.BERSERKER else if (r < 0.65f) EnemyArchetype.CAVALRY else if (r < 0.75f) EnemyArchetype.CHARIOT_ARCHER else if (r < 0.9f) EnemyArchetype.CHAMPION else EnemyArchetype.KING
         }
 
         fun <T> List<T>.safeRandom(fallback: T): T = if (this.isEmpty()) fallback else this.random(rng)
@@ -541,7 +591,8 @@ class GameViewModel : ViewModel() {
         val isLord = arch in listOf(EnemyArchetype.LORD, EnemyArchetype.KING)
 
         val sizeMultiplier = if (arch in listOf(EnemyArchetype.CHAMPION, EnemyArchetype.LORD, EnemyArchetype.KING)) 1.25f else if (arch == EnemyArchetype.BERSERKER) 1.1f else rng.nextFloat() * 0.4f + 0.9f
-        val baseHp = 50f + (level * 10f)
+        // Gentler early curve; only ramps hard again at very high levels
+        val baseHp = (if (level == 1) 32f else 50f) + (level * 7f) + (level - 15).coerceAtLeast(0) * 8f
         var enemyHp = baseHp * sizeMultiplier
         if (arch in listOf(EnemyArchetype.CHAMPION, EnemyArchetype.LORD)) enemyHp *= 1.5f
         if (arch == EnemyArchetype.KING) enemyHp *= 3f
@@ -573,7 +624,9 @@ class GameViewModel : ViewModel() {
             isChariot = isChariot,
             isLord = isLord,
             speedBoost = if (isMounted && !isChariot) 0.5f else if (isChariot) 0.5f else 0f,
-            shieldHp = (gear[2] as GameData.Shield).defense * 2f
+            shieldHp = (gear[2] as GameData.Shield).defense * 2f,
+            bandagesCount = if (level > 4 && rng.nextFloat() < 0.35f) 1 else 0,
+            extraAttachments = if (level >= 15 && rng.nextFloat() < 0.5f) List(rng.nextInt(1, 2 + (level - 14) / 5)) { GameData.WEAPON_HEADS.random(rng) } else emptyList()
         )
     }
 
@@ -628,12 +681,12 @@ class GameViewModel : ViewModel() {
             return
         }
 
-        val livingEnemies = enemies.filter { !it.isDead }
+        val livingEnemies = enemies.filter { !it.isDead && !it.isPlayer }
         if (livingEnemies.isEmpty()) {
             endBattle(won = true)
             return
         }
-        val targetableEnemies = enemies.filter { !it.isDead && !it.isDying }
+        val targetableEnemies = enemies.filter { !it.isDead && !it.isDying && !it.isPlayer }
 
         // 3. Update Player Fighter State
         val closestEnemy = targetableEnemies.minByOrNull { kotlin.math.abs(it.posX - player.posX) }
@@ -650,7 +703,8 @@ class GameViewModel : ViewModel() {
             val pTarget = if (enemy.isPlayer) {
                 enemies.filter { !it.isDead && !it.isDying && !it.isPlayer }.minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
             } else {
-                (enemies.filter { !it.isDead && !it.isDying && it.isPlayer } + listOfNotNull(if (!player.isDead && !player.isDying) player else null))
+                // Enemies ignore the trojan horse decoy until it has rolled past them
+                (enemies.filter { !it.isDead && !it.isDying && it.isPlayer && (it.id != "trojan_horse" || it.posX > enemy.posX) } + listOfNotNull(if (!player.isDead && !player.isDying) player else null))
                     .minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
             }
             updateFighter(enemy, pTarget, dt)
@@ -663,12 +717,12 @@ class GameViewModel : ViewModel() {
             if (!wasDead && enemy.isDead && enemy.id == "trojan_horse") {
                 for (i in 0 until 3) {
                     newEnemiesToSpawn.add(FighterState(
-                        id = "trojan_knight_${System.currentTimeMillis()}_$i", name = "Trojan Knight", isPlayer = true,
-                        maxHp = 60f, hp = 60f,
-                        weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
-                        weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_short" },
-                        shield = GameData.SHIELDS.first { it.id == "shield_kite" },
-                        armor = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" },
+                        id = "trojan_knight_${System.currentTimeMillis()}_$i", name = "Trojan Spearman", isPlayer = true,
+                        maxHp = 45f, hp = 45f,
+                        weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_spear" },
+                        weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+                        shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                        armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
                         headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_spangen" },
                         posX = enemy.posX + Random.nextInt(-40, 40),
                         targetX = enemy.posX, facingRight = true, size = 0.95f, hairColor = Color.Black, hairStyle = "short", isDualWielding = false
@@ -677,8 +731,48 @@ class GameViewModel : ViewModel() {
                 MedievalAudioSynth.playSound(SoundType.CRUNCH)
             }
         }
+        // Reinforcements: once dead foes have scrolled off the left edge and the field has
+        // thinned, feed in the overflow enemies from the right so later battles run longer.
+        val camX = _uiState.value.cameraX
+        if (pendingReinforcements > 0 &&
+            enemies.count { !it.isDead && !it.isDying && !it.isPlayer } < 5 &&
+            enemies.any { it.isDead && !it.isPlayer && it.posX < camX - 30f }
+        ) {
+            val reinforcement = generateRandomSaxon(enemies.size + kotlin.random.Random.nextInt(10000), _uiState.value.level)
+            reinforcement.posX = (camX + 1080f).coerceAtMost(_uiState.value.levelWidth - 20f)
+            reinforcement.targetX = reinforcement.posX
+            newEnemiesToSpawn.add(reinforcement)
+            pendingReinforcements--
+        }
+
         if (newEnemiesToSpawn.isNotEmpty()) {
             enemies = enemies + newEnemiesToSpawn
+            _enemiesState.value = enemies
+        }
+        
+        // --- Cleanup offscreen dead enemies and background objects to fix lag ---
+        val offscreenLeft = camX - 350f
+        val cleanEnemies = enemies.toMutableList()
+        val toRemove = mutableSetOf<FighterState>()
+        
+        val deadEnemies = cleanEnemies.filter { it.isDead && !it.isPlayer }
+        val piles = mutableMapOf<Int, MutableList<FighterState>>()
+        for (dead in deadEnemies) {
+            if (dead.posX < offscreenLeft) {
+                toRemove.add(dead)
+                continue
+            }
+            val bucket = (dead.posX / 40).toInt()
+            piles.getOrPut(bucket) { mutableListOf() }.add(dead)
+        }
+        for (pile in piles.values) {
+            if (pile.size > 5) {
+                toRemove.addAll(pile.take(pile.size - 5))
+            }
+        }
+        if (toRemove.isNotEmpty()) {
+            cleanEnemies.removeAll(toRemove)
+            enemies = cleanEnemies
             _enemiesState.value = enemies
         }
 
@@ -706,14 +800,29 @@ class GameViewModel : ViewModel() {
 
         // 5. Update Projectiles
         val remainingProjectiles = mutableListOf<Projectile>()
+        val bgObjects = _uiState.value.backgroundObjects
+        
         projectiles.forEach { proj ->
             proj.posX += proj.velocityX * dt
             proj.posY += proj.velocityY * dt
             proj.velocityY += (130f * proj.gravityMult) * dt // Gravity pulling it downwards!
 
             var hit = false
-            // Check collisions
-            if (proj.isPlayerOwned) {
+            // Check building collisions
+            // Ship is pure background scenery — it never blocks projectiles
+            val bgHit = bgObjects.firstOrNull { !it.isDestroyed && it.type != BackgroundObjectType.SHIP && proj.posX in (it.posX - 100f)..(it.posX + 100f) && proj.posY > 100f }
+            if (bgHit != null && proj.posY < 350f) {
+                hit = true
+                bgHit.hp -= proj.damage
+                if (proj.type == "arrow" || proj.type == "bolt" || proj.type == "javelin") {
+                    if (proj.velocityX > 0) bgHit.stuckArrowsFromLeft++ else bgHit.stuckArrowsFromRight++
+                }
+                if (bgHit.hp <= 0) bgHit.isDestroyed = true
+            }
+            
+            // Check entity collisions if not hit building
+            if (!hit) {
+                if (proj.isPlayerOwned) {
                 // Hit test against enemies
                 for (enemy in livingEnemies) {
                     if (abs(proj.posX - enemy.posX) < 30f && proj.posY in 100f..350f) {
@@ -729,9 +838,10 @@ class GameViewModel : ViewModel() {
                     hit = true
                 }
             }
+        }
 
-            // Boundary collision or hit
-            if (!hit && proj.posX in -500f..1700f && proj.posY < 350f) {
+        // Boundary collision or hit
+            if (!hit && proj.posX in -500f..(_uiState.value.levelWidth + 500f) && proj.posY < 350f) {
                 remainingProjectiles.add(proj)
             } else if (hit) {
                 // Play sound
@@ -792,13 +902,18 @@ class GameViewModel : ViewModel() {
             // Visually, the renderer will animate him walking up
         }
 
+        // Surgeon is a non-combatant follower (drawn via drawAncillaries), heal is passive
         val hasSurgeon = _uiState.value.unlockedAncillaries.contains(Ancillary.SURGEON)
-        val surgeonAlive = enemies.any { it.id == "surgeon" && !it.isDead && !it.isDying }
-        if (hasSurgeon && surgeonAlive && player.hp < player.maxHp) {
+        if (hasSurgeon && player.hp < player.maxHp) {
             player.hp = (player.hp + 4.0f * dt).coerceAtMost(player.maxHp)
             if (Random.nextFloat() < dt * 0.8f) {
                 addPopup("+HEAL+", player.posX + Random.nextInt(-20, 20), 100f, Color.Green)
             }
+        }
+
+        // Buster barks every now and then mid-battle (rare, for comedy)
+        if (enemies.any { it.id == "wardog" && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.2f) {
+            MedievalAudioSynth.playDogBark()
         }
 
         val hasLilGuy = _uiState.value.unlockedAncillaries.contains(Ancillary.LIL_GUY)
@@ -817,7 +932,10 @@ class GameViewModel : ViewModel() {
         }
 
         // Sync player HP to UI State for HUD bar
-        _uiState.update { it.copy(playerHp = player.hp, playerMaxHp = player.maxHp) }
+        val screenWidth = 1000f // Game canvas width
+        val newCameraX = (player.posX - screenWidth / 2f).coerceIn(0f, kotlin.math.max(0f, _uiState.value.levelWidth - screenWidth))
+        
+        _uiState.update { it.copy(playerHp = player.hp, playerMaxHp = player.maxHp, cameraX = newCameraX) }
         
         _gameTick.value = System.currentTimeMillis()
     }
@@ -834,6 +952,31 @@ class GameViewModel : ViewModel() {
             return
         }
         if (fighter.isDead) return
+
+        // Trojan horse never fights: it rolls right past the enemy line, then bursts open
+        if (fighter.id == "trojan_horse") {
+            val foes = _enemiesState.value.filter { !it.isDead && !it.isDying && !it.isPlayer }
+            if (foes.any { it.posX > fighter.posX - 60f } && fighter.posX < _uiState.value.levelWidth - 80f) {
+                fighter.posX += fighter.moveSpeed * 0.7f * dt
+                fighter.animFrame += dt * 6f
+                fighter.facingRight = true
+            } else {
+                // Behind every foe on the field — the belly bursts open
+                fighter.isDying = true
+                fighter.animFrame = 0f
+                fighter.deathType = 0
+                fighter.deathTime = System.currentTimeMillis()
+            }
+            return
+        }
+
+        // Ease out any stale wrestling lift (attacker died/switched targets mid-move);
+        // an active lift re-sets this every tick so it wins over the decay
+        if (fighter.visualOffsetY != 0f) {
+            val decay = 250f * dt
+            fighter.visualOffsetY = if (abs(fighter.visualOffsetY) <= decay) 0f
+                else fighter.visualOffsetY + if (fighter.visualOffsetY < 0f) decay else -decay
+        }
 
         // Update damage indicators
         if (fighter.damageIndicator != null) {
@@ -858,7 +1001,7 @@ class GameViewModel : ViewModel() {
         // Bleed tick over time
         if (fighter.bleedDuration > 0f) {
             fighter.bleedDuration -= dt
-            val bleedDmg = 6f * dt // deals 6 damage per second (halved)
+            val bleedDmg = 3f * dt // 3 damage per second — 6/s melted enemies too fast
             if (fighter.hp > 0f) {
                 if (Random.nextFloat() < dt * 1.5f) {
                     addPopup("BLEED!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFFA62B2B))
@@ -871,6 +1014,11 @@ class GameViewModel : ViewModel() {
         // Slow tick over time
         if (fighter.slowDuration > 0f) {
             fighter.slowDuration -= dt
+        }
+
+        // Crumple tick over time
+        if (fighter.crumpleDuration > 0f) {
+            fighter.crumpleDuration -= dt
         }
 
         // Cooldown tick
@@ -888,16 +1036,16 @@ class GameViewModel : ViewModel() {
             // Damage connects halfway through the swing visually, or near the end for heavy/chain windups
             val isChain = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain") || fighter.weaponHead.id in listOf("head_flail", "head_war_flail")
             val isHeavy = fighter.weaponHead.id in listOf("head_claymore", "head_maul", "head_axe", "head_lucerne", "head_saber")
-            val isChokeSlam = fighter.weaponHandle.id == "handle_fists" && fighter.isDualWielding
+            val isChokeSlam = fighter.activeWrestlingMove == "choke_slam"
+            val isSuplex = fighter.activeWrestlingMove == "suplex"
             val strikeThreshold = if (isChokeSlam) 0.7f else if (isChain) 0.65f else if (isHeavy) 0.85f else 0.5f
 
-            if (fighter.weaponHandle.id == "handle_fists" && target != null && !target.isDead) {
+            if (fighter.weaponHandle.id == "handle_fists" && fighter.weaponHead.id == "head_bare" && target != null && !target.isDead) {
                 // Apply visual lift for wrestling moves
                 val distToTarget = kotlin.math.abs(fighter.posX - target.posX)
                 if (distToTarget < fighter.reach * 40f + 60f) {
                     val p = effectiveSwingProgress.coerceIn(0f, 1f)
-                    val isSuplex = !fighter.isDualWielding && fighter.brawlerUpgrades.contains("champion_belt")
-                    val liftMax = if (isChokeSlam) -140f else if (isSuplex) -90f else 0f
+                    val liftMax = if (isChokeSlam) -140f else if (isSuplex) -90f else if (fighter.activeWrestlingMove == "body_throw") -70f else 0f
                     if (liftMax != 0f) {
                         target.visualOffsetY = if (p < strikeThreshold) {
                             liftMax * (p / strikeThreshold)
@@ -919,6 +1067,11 @@ class GameViewModel : ViewModel() {
                 fighter.isAttacking = false
                 fighter.hasLandedStrike = false
                 fighter.swingProgress = 0f
+                // Ensure a slammed enemy never sticks mid-air if the move was interrupted
+                if (fighter.activeWrestlingMove != null) {
+                    target?.visualOffsetY = 0f
+                    fighter.activeWrestlingMove = null
+                }
             }
         }
         // Pallbearer lock
@@ -936,8 +1089,8 @@ class GameViewModel : ViewModel() {
                 fighter.posX = player.posX + offset
                 fighter.animFrame = player.animFrame * 1.5f // Walk in sync with the throne
                 
-                // Allow them to attack if targets are near, but skip their own movement logic
-                if (target != null && !target.isDead) {
+                // Only the gear-bearing front pair fight; the rear pair just carry
+                if (fighter.pallbearerIndex < 2 && target != null && !target.isDead) {
                     val dist = kotlin.math.abs(fighter.posX - target.posX)
                     val reachPixels = fighter.reach * 40f + 40f
                     if (dist <= reachPixels && fighter.attackCooldown <= 0 && !fighter.isAttacking) {
@@ -949,10 +1102,11 @@ class GameViewModel : ViewModel() {
         }
 
         // Decide movement & actions
-        if (target != null && !target.isDead) {
+        if (target != null && !target.isDead && fighter.crumpleDuration <= 0f) {
             val dist = abs(fighter.posX - target.posX)
             val reachPixels = fighter.reach * 40f + 40f // generous hitbox
-            val optimalDistance = if (fighter.isRanged) reachPixels * 0.8f else reachPixels
+            val rangeMult = if (!fighter.isPlayer && fighter.level > 5) 0.8f + (fighter.level - 5) * 0.05f else 0.8f
+            val optimalDistance = if (fighter.isRanged) reachPixels * rangeMult else reachPixels
             val isShieldWall = !fighter.isPlayer && fighter.shield.id == "shield_tower"
 
             fighter.facingRight = target.posX > fighter.posX
@@ -963,27 +1117,31 @@ class GameViewModel : ViewModel() {
                 val moveMult = if (isShieldWall) 0.6f else 1f
                 fighter.posX += direction * fighter.moveSpeed * moveMult * dt
                 // Desync animations slightly based on maxHp to avoid identical marching
-                fighter.animFrame = (fighter.animFrame + dt * (9f + (fighter.maxHp % 3f))) % 4f 
+                fighter.animFrame = fighter.animFrame + dt * (9f + (fighter.maxHp % 3f))
             } else if (dist < optimalDistance * 0.7f && fighter.moveSpeed > 0f) {
                 // Step back to keep them at the tip of our longer weapon!
                 val direction = if (target.posX > fighter.posX) -1f else 1f
                 val retreatSpeed = if (fighter.isRanged) fighter.moveSpeed else (fighter.moveSpeed * 0.45f)
                 fighter.posX += direction * retreatSpeed * dt
-                fighter.animFrame = (fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))) % 4f 
+                fighter.animFrame = fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))
                 
                 if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) {
                     triggerAttack(fighter)
                 }
             } else {
                 // Wield weapon/Attack!
-                fighter.animFrame = 0f // stand
+                // Settle to the nearest sine-zero instead of snapping to 0, so the walk bob lands smoothly
+                val piF = Math.PI.toFloat()
+                val nearestRest = kotlin.math.round(fighter.animFrame / piF) * piF
+                fighter.animFrame += (nearestRest - fighter.animFrame).coerceIn(-8f * dt, 8f * dt)
                 if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) {
                     triggerAttack(fighter)
                 }
             }
             
-            // Clamp position to screen bounds
-            fighter.posX = fighter.posX.coerceIn(30f, 970f)
+            // Clamp position to level bounds
+            val lw = _uiState.value.levelWidth
+            fighter.posX = fighter.posX.coerceIn(30f, lw - 30f)
 
         }
     }
@@ -991,6 +1149,24 @@ class GameViewModel : ViewModel() {
     private fun triggerAttack(fighter: FighterState) {
         fighter.isAttacking = true
         fighter.swingProgress = 0f
+        
+        if (fighter.weaponHandle.id == "handle_fists" && fighter.weaponHead.id == "head_bare") {
+            if (fighter.missingArm) {
+                fighter.activeWrestlingMove = null
+            } else {
+                val rand = kotlin.random.Random.nextFloat()
+                // Default is always the plain punch; wrestling moves are the occasional special.
+                fighter.activeWrestlingMove = when {
+                    fighter.isDualWielding && rand < 0.25f -> "choke_slam"
+                    fighter.isDualWielding && rand < 0.4f -> "body_throw"
+                    !fighter.isDualWielding && fighter.brawlerUpgrades.contains("champion_belt") && rand < 0.35f -> "suplex"
+                    // One free hand is enough to grab a throat — shield-and-fist builds slam too, just rarer
+                    !fighter.isDualWielding && rand < 0.12f -> "choke_slam"
+                    !fighter.isDualWielding && rand < 0.2f -> "body_throw"
+                    else -> null
+                }
+            }
+        }
         
         var cooldown = fighter.attackSpeedDelay
         if (!fighter.isPlayer && fighter.isRanged && fighter.level > 15) {
@@ -1148,7 +1324,7 @@ class GameViewModel : ViewModel() {
                 val dir = if (attacker.facingRight) 1f else -1f
                 _enemiesState.value.filter { 
                     !it.isDead && !it.isDying && it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels && 
-                    ((dir > 0 && it.posX >= attacker.posX) || (dir < 0 && it.posX <= attacker.posX))
+                    ((dir > 0 && it.posX >= attacker.posX - 30f) || (dir < 0 && it.posX <= attacker.posX + 30f))
                 }.sortedBy { abs(attacker.posX - it.posX) }
             } else if (attacker.isPlayer && attacker.weaponHandle.id == "handle_double_ended") {
                 _enemiesState.value.filter { 
@@ -1158,7 +1334,7 @@ class GameViewModel : ViewModel() {
                 val dir = if (attacker.facingRight) 1f else -1f
                 _enemiesState.value.filter { 
                     !it.isDead && !it.isDying && it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels && 
-                    ((dir > 0 && it.posX >= attacker.posX) || (dir < 0 && it.posX <= attacker.posX))
+                    ((dir > 0 && it.posX >= attacker.posX - 30f) || (dir < 0 && it.posX <= attacker.posX + 30f))
                 }.sortedBy { abs(attacker.posX - it.posX) }
             } else {
                 listOf(defender)
@@ -1201,18 +1377,37 @@ class GameViewModel : ViewModel() {
                     addPopup("STOLEN!", target.posX, 130f, Color.Yellow)
                     MedievalAudioSynth.playSound(SoundType.CLANG)
                     // We continue into the regular attack loop below to hit them with their own weapon!
-                } else if (attacker.brawlerUpgrades.isNotEmpty() && attacker.brawlerUpgrades.contains("champion_belt") && kotlin.random.Random.nextFloat() < 0.4f) {
+                } else if (attacker.activeWrestlingMove == "suplex") {
                     val secondTarget = targets.drop(1).firstOrNull() ?: target
-                    applyFlatDamage(40f, target, attacker.isPlayer)
-                    applyFlatDamage(40f, secondTarget, attacker.isPlayer)
-                    target.isCrumpled = true
-                    secondTarget.isCrumpled = true
+                    applyFlatDamage(60f, target, attacker.isPlayer)
+                    applyFlatDamage(60f, secondTarget, attacker.isPlayer)
+                    if (!target.isPlayer) target.crumpleDuration = 3.5f
+                    if (!secondTarget.isPlayer) secondTarget.crumpleDuration = 3.5f
                     addPopup("SUPLEX!", target.posX, 120f, Color.Red)
                     MedievalAudioSynth.playSound(SoundType.CRUNCH)
                     return
-                } else if (attacker.isDualWielding && kotlin.random.Random.nextFloat() < 0.45f) {
-                    applyFlatDamage(attacker.baseDamage * 2.5f, target, attacker.isPlayer)
-                    target.isCrumpled = true
+                } else if (attacker.activeWrestlingMove == "body_throw") {
+                    // Hurl the grabbed enemy down the line — if he lands on a mate, both go down
+                    val dir = if (attacker.facingRight) 1f else -1f
+                    applyFlatDamage(45f, target, attacker.isPlayer)
+                    if (!target.isPlayer) {
+                        target.crumpleDuration = 3f
+                        target.posX += dir * 140f
+                        target.targetX = target.posX
+                    }
+                    val second = targets.drop(1).firstOrNull { kotlin.math.abs(it.posX - target.posX) < 60f }
+                    if (second != null) {
+                        applyFlatDamage(30f, second, attacker.isPlayer)
+                        if (!second.isPlayer) second.crumpleDuration = 3f
+                        addPopup("BOWLED OVER!", second.posX, 120f, Color.Red)
+                    }
+                    addPopup("HURLED!", target.posX, 120f, Color.Red)
+                    MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                    return
+                } else if (attacker.activeWrestlingMove == "choke_slam") {
+                    applyFlatDamage(attacker.baseDamage * 3.5f, target, attacker.isPlayer)
+                    if (!target.isPlayer) target.crumpleDuration = 2.5f
+                    addPopup("-CHOKE SLAM-", target.posX, 120f, Color.Red) // Using hyphens so it passes word filter
                     MedievalAudioSynth.playSound(SoundType.CRUNCH)
                     return
                 }
@@ -1239,7 +1434,7 @@ class GameViewModel : ViewModel() {
                 }
                 
                 // Speed Advantage: Interrupt slow enemy attack progress
-                if (currTarget.isAttacking && attacker.moveSpeed > currTarget.moveSpeed * 1.3f && !currTarget.isPlayer) {
+                if (currTarget.isAttacking && (attacker.moveSpeed > currTarget.moveSpeed * 1.2f || attacker.size < currTarget.size * 0.95f) && !currTarget.isPlayer) {
                     currTarget.isAttacking = false
                     currTarget.swingProgress = 0f
                     addPopup("INTERRUPT!", currTarget.posX, 150f, Color.Gray)
@@ -1375,16 +1570,16 @@ class GameViewModel : ViewModel() {
                         _particlesState.value = _particlesState.value + BloodParticle(x = px, y = py, vx = (Random.nextFloat() * 100f - 50f), vy = -200f - Random.nextFloat() * 100f, color = Color(0xFF8B0000), isSmoke = false)
                     }
                     
-                    // Crumple mechanic! (heavy blunt)
-                    if (blunt > 18f && kotlin.random.Random.nextFloat() < 0.25f && !currTarget.isCrumpled) {
-                        currTarget.isCrumpled = true
+                    // Crumple mechanic! (heavy blunt) - enemies can't knock the player down, only the reverse
+                    if (blunt > 18f && attacker.id != "raven" && kotlin.random.Random.nextFloat() < 0.25f && currTarget.crumpleDuration <= 0f && !currTarget.isPlayer) {
+                        currTarget.crumpleDuration = 2.5f
                         MedievalAudioSynth.playSound(SoundType.CRUNCH)
-                        addPopup("CRUMPLED!", currTarget.posX, 160f, androidx.compose.ui.graphics.Color.DarkGray)
+                        addPopup("-CRUMPLED-", currTarget.posX, 160f, androidx.compose.ui.graphics.Color.DarkGray)
                     }
 
                     // Wardog trip mechanic!
-                    if (attacker.id == "wardog" && kotlin.random.Random.nextFloat() < 0.25f && !currTarget.isCrumpled) {
-                        currTarget.isCrumpled = true
+                    if (attacker.id == "wardog" && kotlin.random.Random.nextFloat() < 0.25f && currTarget.crumpleDuration <= 0f && !currTarget.isPlayer) {
+                        currTarget.crumpleDuration = 2f
                         MedievalAudioSynth.playSound(SoundType.CRUNCH)
                     }
 
@@ -1403,7 +1598,8 @@ class GameViewModel : ViewModel() {
                 }
                 
                     if (isPiercingWeapon) {
-                        damageFalloff *= 0.5f // Halve damage for each enemy it passes through
+                        // Pike handle keeps most of its force as it skewers down the line
+                        damageFalloff *= if (attacker.weaponHandle.id == "handle_pike_long") 0.8f else 0.5f
                     }
                 }
             }
@@ -1426,7 +1622,7 @@ class GameViewModel : ViewModel() {
         if (isBlocked) {
             MedievalAudioSynth.playSound(SoundType.CLANG)
             if (proj.type == "arrow" || proj.type == "bolt" || proj.type == "javelin") {
-                defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, true))
+                defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, true, proj.isBallista))
             }
             
             if (defender.shieldHp > 0f) {
@@ -1449,7 +1645,7 @@ class GameViewModel : ViewModel() {
             applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
 
             if (proj.type == "arrow" || proj.type == "bolt" || proj.type == "javelin") {
-                defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, false))
+                defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, false, proj.isBallista))
             }
             // Apply Poison Upgrade
             if (proj.isPoisonous) {
@@ -1508,9 +1704,24 @@ class GameViewModel : ViewModel() {
                 defender.isMounted = false
                 addPopup("MOUNT SHATTERED!", defender.posX, 130f, Color.Gray)
                 MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                // Throne collapse: the whole retinue is crushed, the lord fights on bare-handed
+                if (defender.isLord) {
+                    defender.isLord = false
+                    _enemiesState.value.filter { it.pallbearerIndex >= 0 && !it.isDead && !it.isDying }.forEach { bearer ->
+                        bearer.pallbearerIndex = -1
+                        bearer.isDying = true
+                        bearer.animFrame = 0f
+                        bearer.deathType = kotlin.random.Random.nextInt(0, 5)
+                        bearer.deathTime = System.currentTimeMillis()
+                    }
+                    addPopup("THE THRONE FALLS!", defender.posX, 110f, Color.Red)
+                }
             }
         } else {
             defender.hp = (defender.hp - finalDmgInt).coerceAtLeast(0f)
+            val rx = kotlin.random.Random.nextFloat() * 14f - 7f
+            val ry = kotlin.random.Random.nextFloat() * 20f - 10f
+            defender.bloodDecals.add(Triple(rx, ry, kotlin.random.Random.nextInt(6)))
         }
         
         defender.damageIndicator = "-${finalDmgInt.toInt()}"
@@ -1534,7 +1745,9 @@ class GameViewModel : ViewModel() {
             }
             defender.isDying = true
             defender.animFrame = 0f
-            defender.deathType = kotlin.random.Random.nextInt(0, 6) // 0 to 5 for different ragdolls
+            // Killed while already crumpled on the ground → die where they lie (type 99),
+            // no standing back up. Otherwise 0..7 ragdolls (5 = decapitation).
+            defender.deathType = if (defender.crumpleDuration > 0f) 99 else kotlin.random.Random.nextInt(0, 8)
             defender.deathTime = System.currentTimeMillis()
             MedievalAudioSynth.playSound(SoundType.OUCH)
             val deathShout = if (defender.isPlayer) "VÆ MIHI MORTIS!" else "AARRGGHH!"
@@ -1542,6 +1755,8 @@ class GameViewModel : ViewModel() {
             if (isPlayerSource && !defender.isPlayer) {
                 _uiState.value = _uiState.value.copy(totalKills = _uiState.value.totalKills + 1)
             }
+        } else if (kotlin.random.Random.nextBoolean()) {
+            MedievalAudioSynth.playSound(SoundType.OUCH)
         }
     }
 
@@ -1587,6 +1802,10 @@ class GameViewModel : ViewModel() {
             val newScore = state.score + scoreEarned
             val newHighscore = kotlin.math.max(state.highscore, newScore)
             val nextLevel = if (won) state.level + 1 else state.level
+            
+            // Only a notably rough fight earns a new bandage, and they stop piling up past a handful
+            val tookHeavyDamage = state.playerHp < state.playerMaxHp * 0.6f
+            val newBandagesCount = if (won && tookHeavyDamage && state.bandagesCount < 4) state.bandagesCount + 1 else state.bandagesCount
 
             val pendingChoices = mutableListOf<LevelUpChoice>()
             var showLevelUp = false
@@ -1660,38 +1879,42 @@ class GameViewModel : ViewModel() {
                         type = "extension",
                         itemId = ""
                     ))
-                } else if (rndVal < 0.66f && state.shield.id != "shield_none") {
+                } else {
+                    // Shield upgrade if that slot rolled and one is available; otherwise armor.
+                    // (Armor used to be unreachable — it was nested behind "all shield upgrades taken".)
                     val shieldChoices = listOf(
                         LevelUpChoice("shield_oak", "Shield: Oak Reinforcing", "Bolt heavy oak planks onto your shield. Massively boosts shield durability!", "shield_upgrade", "oak_reinforcing"),
                         LevelUpChoice("shield_iron", "Shield: Iron Plating", "Rivet iron sheets across your shield. Indestructible but very heavy.", "shield_upgrade", "iron_plating"),
                         LevelUpChoice("shield_helmet", "Shield: Shield Helmet", "Why wear a helmet on your head when you can strap it to your shield? Excellent durability boost.", "shield_upgrade", "shield_helmet")
                     )
                     val availableShieldUpgrades = shieldChoices.filter { it.itemId !in state.shieldUpgrades }
-                    if (availableShieldUpgrades.isNotEmpty()) {
+                    if (rndVal < 0.66f && state.shield.id != "shield_none" && availableShieldUpgrades.isNotEmpty()) {
                         pendingChoices.add(availableShieldUpgrades.random())
                     } else {
-                    val baseArmorOptions = GameData.ARMOR_PIECES.filter { it.id != "armor_bare" && it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }
-                    val highLevelArmorOptions = GameData.ARMOR_PIECES.filter { it.id in listOf("armor_gauntlets", "armor_boots", "armor_coif") }
-                    
-                    val armorOptions = mutableListOf<GearItem>()
-                    armorOptions.addAll(baseArmorOptions)
-                    if (state.level > 10) {
-                        armorOptions.addAll(highLevelArmorOptions)
+                        val baseArmorOptions = GameData.ARMOR_PIECES.filter { it.id != "armor_bare" && it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }
+                        val highLevelArmorOptions = GameData.ARMOR_PIECES.filter { it.id in listOf("armor_gauntlets", "armor_boots", "armor_coif") }
+
+                        val armorOptions = mutableListOf<GearItem>()
+                        armorOptions.addAll(baseArmorOptions)
+                        if (state.level > 10) {
+                            armorOptions.addAll(highLevelArmorOptions)
+                        }
+                        if (state.level > 3) {
+                            armorOptions.add(GameData.ARMOR_PIECES.first { it.id == "armor_jester" })
+                        }
+
+                        val armorPiece = armorOptions.random()
+                        val isComedy = armorPiece.id == "armor_jester"
+                        val typeCat = if (isComedy) "comedy" else "armor"
+                        val titlePrefix = if (isComedy) "Joke Item" else if (armorPiece.id in listOf("armor_gauntlets", "armor_boots", "armor_coif")) "Equip" else "Layer Armor"
+                        pendingChoices.add(LevelUpChoice(
+                            id = "armor_${armorPiece.id}",
+                            title = "$titlePrefix: ${armorPiece.itemName}",
+                            description = if (isComedy) "A joke item! Removes all armor protection but gives a massive score multiplier." else "Add ${armorPiece.itemName} to your loadout, gaining +${armorPiece.defense.toInt()} Defense!",
+                            type = typeCat,
+                            itemId = armorPiece.id
+                        ))
                     }
-                    if (state.level > 3) {
-                        armorOptions.add(GameData.ARMOR_PIECES.first { it.id == "armor_jester" })
-                    }
-                    
-                    val armorPiece = armorOptions.random()
-                    val titlePrefix = if (armorPiece.id in listOf("armor_gauntlets", "armor_boots", "armor_coif")) "Equip" else "Layer Armor"
-                    pendingChoices.add(LevelUpChoice(
-                        id = "armor_${armorPiece.id}",
-                        title = "$titlePrefix: ${armorPiece.itemName}",
-                        description = if (armorPiece.id == "armor_jester") armorPiece.description else "Add ${armorPiece.itemName} to your loadout, gaining +${armorPiece.defense.toInt()} Defense!",
-                        type = "armor",
-                        itemId = armorPiece.id
-                    ))
-                }
                 }
 
                 // 4. Ranged Upgrades (only if current weapon is ranged!)
@@ -1734,6 +1957,7 @@ class GameViewModel : ViewModel() {
                 pendingLevelUpChoices = pendingChoices,
                 showLevelUpScreen = showLevelUp,
                 performanceScore = newPerf,
+                bandagesCount = newBandagesCount,
                 showMusicDecision = if (won && (state.level % 5 == 0)) true else state.showMusicDecision,
                 pendingMusicOptions = if (won && (state.level % 5 == 0)) {
                     val allMusic = listOf("More Tempo", "Merrier", "More Solemn", "Wilder", "Nobler")
@@ -1802,6 +2026,14 @@ class GameViewModel : ViewModel() {
                     faceBiteShape = (0..3).random(rng),
                     faceForehead = (0..2).random(rng),
                     faceMustache = (0..3).random(rng),
+                    // Preselect hair like gear — always one of the start-screen palette options
+                    hairColor = listOf(
+                        androidx.compose.ui.graphics.Color(0xFF888888),
+                        androidx.compose.ui.graphics.Color(0xFFC08030),
+                        androidx.compose.ui.graphics.Color(0xFF5A442E),
+                        androidx.compose.ui.graphics.Color(0xFF2C2219)
+                    ).random(rng),
+                    hairStyle = listOf("short", "long", "bald").random(rng),
                     unlockedGearIds = initialGear,
                     extraAttachments = emptyList(),
                     extraArmors = emptyList(),
@@ -1812,6 +2044,7 @@ class GameViewModel : ViewModel() {
                     hasThroneOption = kotlin.random.Random.nextFloat() < 0.2f,
                     isThroneMode = false,
                     unlockedAncillaries = emptySet(),
+                    bandagesCount = 0, // bandages are veterancy marks earned within a run, never at level 1
                     weaponHead = GameData.WEAPON_HEADS.filter { it.id in initialGear }.random(),
                     weaponHandle = GameData.WEAPON_HANDLES.filter { it.id in initialGear && it.id != "handle_fists" }.randomOrNull() ?: GameData.WEAPON_HANDLES[1],
                     shield = GameData.SHIELDS.filter { it.id in initialGear }.random(),
@@ -1844,6 +2077,3 @@ class GameViewModel : ViewModel() {
         super.onCleared()
     }
 }
-
-// Utility extension
-fun Float.coerceIn(min: Float, max: Float): Float = if (this < min) min else if (this > max) max else this

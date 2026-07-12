@@ -36,13 +36,24 @@ object TapestryRenderer {
         scale: Float = 1.0f,
         isBattleActive: Boolean = true
     ) {
+        val effectiveSize = if (fighter.isMounted && fighter.size > 1.3f) 1.3f + (fighter.size - 1.3f) * 0.5f else fighter.size
         drawScope.withTransform({
             // Apply scale (e.g. for flip/facing and overall sizing)
             val hFlip = if (fighter.facingRight) 1f else -1f
-            scale(hFlip * scale * fighter.size, scale * fighter.size, pivot = Offset(fighter.posX, 200f))
+            // Screen scale pivots at 200 (as the scene layout expects); the fighter's own
+            // size scales around the feet (358) so any size stands on the ground line
+            // instead of floating (small) or sinking (large).
+            scale(hFlip * scale, scale, pivot = Offset(fighter.posX, 200f))
+            // Size scales from the feet so everyone stands on the ground — except the raven,
+            // which pivots at shoulder height so it flies instead of shrinking into the floor
+            val sizePivotY = if (fighter.id == "raven") 240f else 358f
+            // The raven's sim size is tiny for balance; render it at proper raven size
+            val renderSize = if (fighter.id == "raven") effectiveSize.coerceAtLeast(0.85f) else effectiveSize
+            scale(renderSize, renderSize, pivot = Offset(fighter.posX, sizePivotY))
         }) {
             val cx = fighter.posX
             val cy = 200f
+            val bounceY = -kotlin.math.abs(sin(fighter.animFrame.toDouble())).toFloat() * 10f * (if (fighter.id == "lil_guy") 2f else 1f)
 
             // 1. Draw dropped weapon on the ground if dead or dying
             if (fighter.isDead || fighter.isDying) {
@@ -59,14 +70,14 @@ object TapestryRenderer {
 
             // Handle dying fall down rotation
             var rotationAngle = 0f
-            var offsetX = 0f
-            var offsetY = fighter.visualOffsetY
+            var offsetX = if (fighter.id == "lil_guy") -20f else 0f
+            var offsetY = fighter.visualOffsetY + bounceY + (if (fighter.id == "lil_guy") -40f else 0f)
             var scaleY = 1f
-            if (fighter.isCrumpled && !fighter.isDead && !fighter.isDying) {
-                // Smashed down into a squashed pancake, but still alive? Or normally it happens on death?
-                // Let's make them squashed if they got a huge blunt hit
-                scaleY = 0.6f
-                offsetY = 30f
+            if (fighter.crumpleDuration > 0f && !fighter.isDead && !fighter.isDying) {
+                // Ragdolled onto the floor
+                rotationAngle = if (fighter.facingRight) -90f else 90f
+                offsetY += 60f
+                offsetX += if (fighter.facingRight) -30f else 30f
             }
             if (fighter.isDead || fighter.isDying) {
                 val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
@@ -90,7 +101,7 @@ object TapestryRenderer {
                     }
                     3 -> { // Squashed pancake falling over
                         rotationAngle = if (fighter.facingRight) -85f * progress else 85f * progress
-                        scaleY = (if (fighter.isCrumpled) 0.6f else 1f) - 0.7f * progress
+                        scaleY = (if (fighter.crumpleDuration > 0f) 0.6f else 1f) - 0.7f * progress
                         offsetY = 65f * progress
                     }
                     4 -> { // Knocked flying backwards landing flat
@@ -98,6 +109,23 @@ object TapestryRenderer {
                         rotationAngle = flyDir * 270f * progress
                         offsetX = flyDir * 150f * progress
                         offsetY = 65f * progress - 100f * sin(progress * Math.PI).toFloat()
+                    }
+                    6 -> { // Sink to the knees, then keel over sideways
+                        val kneel = (progress * 2f).coerceAtMost(1f)
+                        val keel = ((progress - 0.5f) * 2f).coerceIn(0f, 1f)
+                        offsetY = 35f * kneel + 30f * keel
+                        rotationAngle = if (fighter.facingRight) -90f * keel else 90f * keel
+                    }
+                    7 -> { // Launched skyward spinning, crashes down flat
+                        val flyDir = if (fighter.facingRight) -1f else 1f
+                        rotationAngle = flyDir * 540f * progress
+                        offsetX = flyDir * 80f * progress
+                        offsetY = 65f * progress - 160f * sin(progress * Math.PI).toFloat()
+                    }
+                    99 -> { // Was already crumpled on the ground — dies where they lie
+                        rotationAngle = if (fighter.facingRight) -90f else 90f
+                        offsetX = if (fighter.facingRight) -30f else 30f
+                        offsetY = 65f
                     }
                     else -> { // Fall flat
                         rotationAngle = if (fighter.facingRight) -90f * progress else 90f * progress
@@ -116,13 +144,13 @@ object TapestryRenderer {
                     rotate(horseRot, pivot = Offset(cx, cy + 80f)) 
                     val rng = kotlin.random.Random(fighter.id.hashCode())
                     val horseScale = 0.9f + rng.nextFloat() * 0.2f
-                    scale(horseScale / fighter.size, horseScale / fighter.size, Offset(cx, cy + 80f))
+                    scale(horseScale / effectiveSize, horseScale / effectiveSize, Offset(cx, cy + 80f))
                 }) {
                     if (fighter.isChariot) {
                         drawChariot(this, cx, cy, fighter)
                     } else if (fighter.isLord) {
                         drawThrone(this, cx, cy, fighter, isBattleActive)
-                    } else if (fighter.mountHp == 40f) {
+                    } else if (fighter.isStilts) {
                         drawStilts(this, cx, cy, fighter)
                     } else {
                         drawHorse(this, cx, cy, fighter)
@@ -138,14 +166,14 @@ object TapestryRenderer {
                     val flyDir = if (fighter.facingRight) -1f else 1f
                     
                     // The pool is where the neck ultimately lands, but clamped to the floor level (cy+150f is feet)
-                    val poolCenterX = cx + flyDir * 70f * fighter.size
+                    val poolCenterX = cx + flyDir * 70f * effectiveSize
                     val poolCenterY = cy + 150f 
                     
                     // 2. Draw Pool
                     val poolProgress = ((fountainProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
                     if (poolProgress > 0f) {
-                        val poolW = 45f * poolProgress * fighter.size
-                        val poolH = 15f * poolProgress * fighter.size
+                        val poolW = 45f * poolProgress * effectiveSize
+                        val poolH = 15f * poolProgress * effectiveSize
                         drawScope.drawOval(
                             color = Color(0xFF9E3624).copy(alpha = 0.85f),
                             topLeft = Offset(poolCenterX - poolW, poolCenterY - poolH),
@@ -169,8 +197,8 @@ object TapestryRenderer {
                     val poolProgress = progress
                     val groundY = cy + 155f
                     val fallOffset = if (fighter.facingRight) -50f else 50f
-                    val poolW = 55f * poolProgress * fighter.size
-                    val poolH = 12f * poolProgress * fighter.size
+                    val poolW = 55f * poolProgress * effectiveSize
+                    val poolH = 12f * poolProgress * effectiveSize
                     drawScope.drawOval(
                         color = Color(0xAA600000).copy(alpha = 0.66f * poolProgress),
                         topLeft = Offset((cx + fallOffset) - poolW, groundY - poolH),
@@ -184,9 +212,12 @@ object TapestryRenderer {
                 rotate(rotationAngle, pivot = Offset(cx, cy + 80f))
                 scale(1f, scaleY, pivot = Offset(cx, cy + 80f))
             }) {
-                val mountOffsetY = if (fighter.isChariot) -15f else if (fighter.isMounted && fighter.isLord) -20f else if (fighter.isMounted && fighter.mountHp == 40f) -45f else if (fighter.isMounted) -35f else 0f
-                withTransform({ translate(0f, mountOffsetY) }) {
-                    if (fighter.id == "wardog") {
+                val mountOffsetY = if (fighter.isChariot) -15f else if (fighter.isMounted && fighter.isLord) -20f else if (fighter.isMounted && fighter.isStilts) -45f else if (fighter.isMounted) -35f else 0f
+                val adjustedMountOffsetY = mountOffsetY / effectiveSize
+                withTransform({ translate(0f, adjustedMountOffsetY) }) {
+                    if (fighter.id == "trojan_horse") {
+                        drawTrojanHorse(this, cx, cy, fighter)
+                    } else if (fighter.id == "wardog") {
                         drawWardog(this, cx, cy, fighter)
                     } else if (fighter.id == "raven") {
                         drawRaven(this, cx, cy, fighter)
@@ -197,6 +228,15 @@ object TapestryRenderer {
                         drawTorso(this, cx, cy, fighter)
                         drawHead(this, cx, cy, fighter)
                         drawBackArmAndShield(this, cx, cy, fighter)
+                        if (fighter.isChariot) {
+                            val cartW = 110f
+                            val cartH = 65f
+                            val cartTopY = cy + 35f - mountOffsetY
+                            this.drawRect(Color(0xFF8B5A2B), topLeft = Offset(cx - cartW/2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH))
+                            this.drawRect(ThreadColor, topLeft = Offset(cx - cartW/2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH), style = StitchedStroke)
+                            this.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 30f), Offset(cx + cartW/2, cartTopY + 30f), strokeWidth = 3f)
+                            this.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 60f), Offset(cx + cartW/2, cartTopY + 60f), strokeWidth = 3f)
+                        }
                         drawFrontArmAndWeapon(this, cx, cy, fighter)
                     }
                 }
@@ -216,7 +256,7 @@ object TapestryRenderer {
         val legColorR = if (fighter.isPlayer) Color(0xFFB08221) else Color(0xFF265063)
 
         // Left Leg (Back leg) - don't draw if mounted (hidden behind horse) unless on stilts
-        if (!fighter.isMounted || fighter.mountHp == 40f) {
+        if (!fighter.isMounted || fighter.isStilts) {
             scope.withTransform({
                 rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f))
             }) {
@@ -270,10 +310,22 @@ object TapestryRenderer {
         }
 
         // Color theme derived directly from the armor's designated color
-        val fillCol = fighter.armor.color
+        val fillCol = when (fighter.id) {
+            "hag" -> Color(0xFF3E3A2E) // dodgy ragged cloak
+            "fanatic_boris" -> Color(0xFF7A1F1F) // blood-red madman's rags, not a clean white shirt
+            else -> fighter.armor.color
+        }
 
         // Fill with textured stitching
         drawStitchedFill(scope, tunicPath, fillCol)
+
+        // Champion Belt brawler upgrade — big gold wrestling belt at the waist
+        if (fighter.brawlerUpgrades.contains("champion_belt")) {
+            scope.drawRect(Color(0xFFD6A420), topLeft = Offset(cx - 27f, cy + 68f), size = androidx.compose.ui.geometry.Size(54f, 10f))
+            scope.drawRect(ThreadColor, topLeft = Offset(cx - 27f, cy + 68f), size = androidx.compose.ui.geometry.Size(54f, 10f), style = Stroke(width = 1.5f))
+            scope.drawCircle(Color(0xFFF0D060), radius = 8f, center = Offset(cx, cy + 73f))
+            scope.drawCircle(ThreadColor, radius = 8f, center = Offset(cx, cy + 73f), style = Stroke(width = 1.5f))
+        }
 
         // Add a traditional embroidered pattern trim at the bottom hem
         val hemPath = Path().apply {
@@ -359,17 +411,21 @@ object TapestryRenderer {
             val dirX = baseDirX * cosV - baseDirY * sinV
             val dirY = baseDirX * sinV + baseDirY * cosV
 
-            val length = 35f * proj.size
+            // This draws inside the fighter's own scale transform, so divide it back out —
+            // otherwise big enemies wear giant arrows while the flying ones stayed small.
+            // Cap stuck-shaft size so ballista spears don't blot out the fighter
+            val effSize = ((if (proj.isBallista) 1.0f else 1f) * proj.size / fighter.size).coerceAtMost(1.8f)
+            val length = 35f * effSize
             val tailX = ax + (dirX * length)
             val tailY = ay + (dirY * length)
-            
+
             // Stick out the back (penetration)
-            val penetration = if (proj.inShield) 8f else 20f * proj.size
+            val penetration = if (proj.inShield) 8f else 20f * effSize
             val headX = ax - (dirX * penetration)
             val headY = ay - (dirY * penetration)
 
             // Draw shaft
-            val strokeW = if (proj.type == "javelin") 6f else 4.5f
+            val strokeW = (if (proj.type == "javelin") 6f else if (proj.isBallista) 8f else 3f) * effSize.coerceAtLeast(0.6f)
             scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(headX, headY), strokeWidth = strokeW)
 
             // Fletching (only for arrows/bolts)
@@ -426,11 +482,16 @@ object TapestryRenderer {
 
         if ((fighter.isDead || fighter.isDying) && fighter.deathType == 5) {
             val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
-            // Head flies up and back
+            // Head flies up and back — trajectory varies per victim for ragdoll variety:
+            // some heads pop straight up, some sail far, spin count differs
+            val seed = kotlin.math.abs(fighter.id.hashCode())
             val flyDir = if (fighter.facingRight) -1f else 1f
-            headOffsetX = flyDir * 120f * progress
-            headOffsetY = -150f * sin(progress * Math.PI).toFloat() + 50f * progress
-            headRot = flyDir * 360f * progress * 2f
+            val dist = 40f + (seed % 121)              // 40..160 px
+            val peak = 110f + ((seed / 7) % 91)        // 110..200 px arc height
+            val spins = 1f + (seed % 3)                // 1..3 full spins
+            headOffsetX = flyDir * dist * progress
+            headOffsetY = -peak * sin(progress * Math.PI).toFloat() + 50f * progress
+            headRot = flyDir * 360f * progress * spins
             
             // Blood fountain is now drawn in world-space in drawCharacter() so it connects properly to the pool!
         }
@@ -497,12 +558,27 @@ object TapestryRenderer {
         }
         drawStitchedFill(scope, headPath, skinColor)
         scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+        
+        if (fighter.id == "hag") {
+            val hagNose = Path().apply {
+                moveTo(hx + 10f, hy + 2f)
+                lineTo(hx + 35f, hy + 8f) // long pointy
+                lineTo(hx + 10f, hy + 10f)
+                close()
+            }
+            drawStitchedFill(scope, hagNose, Color(0xFF6B8E23)) // green warty
+            scope.drawPath(hagNose, ThreadColor, style = StitchedStroke)
+            // Warts
+            scope.drawCircle(Color(0xFF4A5D23), radius = 1.5f, center = Offset(hx + 20f, hy + 6f))
+            scope.drawCircle(Color(0xFF4A5D23), radius = 1f, center = Offset(hx + 28f, hy + 5f))
+            scope.drawCircle(Color(0xFF4A5D23), radius = 2f, center = Offset(hx + 15f, hy + 8f))
+        }
+
 
         // Face RNG for scars/eyepatches
         val faceRng = kotlin.random.Random(fighter.id.hashCode())
         val hasEyepatch = !fighter.isPlayer && faceRng.nextFloat() < 0.2f
         val hasScars = fighter.level > 1 && faceRng.nextFloat() < 0.5f
-        val hasBandage = fighter.level > 3 && faceRng.nextFloat() < 0.4f
         val hasTiredEyes = faceRng.nextFloat() < 0.2f
         val numWarts = if (faceRng.nextFloat() < 0.2f) faceRng.nextInt(1, 4) else 0
         val hasBeautySpot = faceRng.nextFloat() < 0.1f
@@ -541,11 +617,33 @@ object TapestryRenderer {
             }
         }
         
-        // Blocky, heavy embroidered eyebrow
-        scope.drawLine(ThreadColor, Offset(hx, hy), Offset(hx + 8f, hy + 1f), strokeWidth = 2.5f, cap = StrokeCap.Round)
-        
-        // Stylized mouth crease
-        scope.drawLine(ThreadColor, Offset(hx + 6f, hy + 13f), Offset(hx + 11f, hy + 13f), strokeWidth = 1.5f, cap = StrokeCap.Round)
+        // Eyebrow variants: bushy, angry-slanted, raised, or the classic blocky line
+        when ((kotlin.math.abs(fighter.id.hashCode()) / 13) % 4) {
+            0 -> scope.drawLine(ThreadColor, Offset(hx - 1f, hy - 1f), Offset(hx + 9f, hy + 1f), strokeWidth = 4f, cap = StrokeCap.Round) // bushy
+            1 -> scope.drawLine(ThreadColor, Offset(hx, hy + 2f), Offset(hx + 8f, hy - 2f), strokeWidth = 2.5f, cap = StrokeCap.Round) // angry slant
+            2 -> scope.drawLine(ThreadColor, Offset(hx, hy - 3f), Offset(hx + 8f, hy - 2f), strokeWidth = 2.5f, cap = StrokeCap.Round) // raised/surprised
+            else -> scope.drawLine(ThreadColor, Offset(hx, hy), Offset(hx + 8f, hy + 1f), strokeWidth = 2.5f, cap = StrokeCap.Round) // classic
+        }
+
+        // Cheek/jowl line on some faces
+        if (faceRng.nextFloat() < 0.3f) {
+            scope.drawPath(Path().apply {
+                moveTo(hx - 4f, hy + 8f)
+                quadraticTo(hx - 1f, hy + 12f, hx + 2f, hy + 15f)
+            }, ThreadColor.copy(alpha = 0.5f), style = Stroke(width = 1.5f, cap = StrokeCap.Round))
+        }
+
+        // Mouth variants: grim line, downturned frown, or slight open gawp
+        when ((kotlin.math.abs(fighter.id.hashCode()) / 29) % 3) {
+            0 -> scope.drawPath(Path().apply {
+                moveTo(hx + 6f, hy + 12f)
+                quadraticTo(hx + 8.5f, hy + 15f, hx + 11f, hy + 12f)
+            }, ThreadColor, style = Stroke(width = 1.5f, cap = StrokeCap.Round)) // frown
+            1 -> {
+                scope.drawCircle(Color(0xFF3A241C), radius = 2f, center = Offset(hx + 8f, hy + 13f)) // gawp
+            }
+            else -> scope.drawLine(ThreadColor, Offset(hx + 6f, hy + 13f), Offset(hx + 11f, hy + 13f), strokeWidth = 1.5f, cap = StrokeCap.Round) // grim line
+        }
 
         if (hasJuttingTooth) {
             scope.drawLine(Color(0xFFEFE6D4), Offset(hx + 8f, hy + 13f), Offset(hx + 8f, hy + 9f), strokeWidth = 2.5f)
@@ -562,53 +660,52 @@ object TapestryRenderer {
             scope.drawCircle(Color(0xFF1C2B11), radius = 0.5f, center = Offset(wx, wy)) // wart core
         }
 
-        // Dynamic Encounter-based Battle Scars
-        val maxHp = fighter.maxHp.coerceAtLeast(1f)
-        val damageTaken = (maxHp - fighter.hp).coerceAtLeast(0f)
-        val dmgSeed = (damageTaken / 10f).toInt()
-        val dmgRng = kotlin.random.Random(fighter.id.hashCode() + dmgSeed * 37 + fighter.stuckProjectiles.size * 13)
+        // Persistent Blood Decals
+        fighter.bloodDecals.forEach { decal ->
+            val sx = hx + decal.first
+            val sy = hy + decal.second
+            when (decal.third) {
+                0, 1 -> { // Cut with optional stitches
+                    scope.drawLine(Color(0xFF8B0000), Offset(sx, sy), Offset(sx + 8f, sy + 4f), strokeWidth = 2f)
+                    if (decal.first > 0f) {
+                        scope.drawLine(ThreadColor, Offset(sx + 2f, sy), Offset(sx + 2f, sy + 6f), strokeWidth = 1f)
+                        scope.drawLine(ThreadColor, Offset(sx + 5f, sy + 1f), Offset(sx + 5f, sy + 7f), strokeWidth = 1f)
+                    }
+                }
+                2 -> { // Eyepatch / big bruise
+                    scope.drawPath(Path().apply {
+                        moveTo(sx - 1f, sy + 2f)
+                        quadraticTo(sx + 4f, sy, sx + 10f, sy + 4f)
+                        quadraticTo(sx + 8f, sy + 10f, sx, sy + 7f)
+                        close()
+                    }, Color(0x661E1A17))
+                }
+                3 -> { // Puffy/Tears Eye
+                    val puffPath = androidx.compose.ui.graphics.Path().apply {
+                        addArc(androidx.compose.ui.geometry.Rect(sx + 1f, sy + 3f, sx + 11f, sy + 10f), 0f, 180f)
+                    }
+                    scope.drawPath(puffPath, Color(0xFFD4624A), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f, cap = StrokeCap.Round))
+                }
+                else -> { // Blood smear
+                     scope.drawCircle(Color(0x888B0000), radius = 3f + (decal.first % 4f), center = Offset(sx, sy))
+                }
+            }
+        }
 
-        if (damageTaken > 0f) {
-            val numDynamicScars = dmgRng.nextInt(1, 4)
-            for (i in 0 until numDynamicScars) {
-                val scarType = dmgRng.nextInt(6)
-                when (scarType) {
-                    0, 1 -> { // Cut with optional stitches
-                        val sx = hx - 5f + dmgRng.nextFloat() * 15f
-                        val sy = hy + 2f + dmgRng.nextFloat() * 12f
-                        scope.drawLine(Color(0xFF8B0000), Offset(sx, sy), Offset(sx + 8f, sy + 4f), strokeWidth = 2f)
-                        if (dmgRng.nextBoolean()) {
-                            scope.drawLine(ThreadColor, Offset(sx + 2f, sy), Offset(sx + 2f, sy + 6f), strokeWidth = 1f)
-                            scope.drawLine(ThreadColor, Offset(sx + 5f, sy + 1f), Offset(sx + 5f, sy + 7f), strokeWidth = 1f)
-                        }
-                    }
-                    2 -> { // Angled Bandage
-                        val by = hy - 4f + dmgRng.nextFloat() * 14f
-                        val ang = -15f + dmgRng.nextFloat() * 30f
-                        scope.withTransform({ rotate(ang, pivot = Offset(hx, by)) }) {
-                            scope.drawRect(Color(0xFFF5F0E8), topLeft = Offset(hx - 12f, by - 3f), size = androidx.compose.ui.geometry.Size(24f, 6f))
-                            scope.drawLine(Color(0xFFA8906A), Offset(hx - 4f, by - 3f), Offset(hx - 4f, by + 3f), strokeWidth = 1.5f)
-                            scope.drawLine(Color(0xFFA8906A), Offset(hx + 4f, by - 3f), Offset(hx + 4f, by + 3f), strokeWidth = 1.5f)
-                        }
-                    }
-                    3 -> { // Eyepatch
-                        scope.drawPath(Path().apply {
-                            moveTo(hx - 1f, hy + 2f)
-                            quadraticTo(hx + 4f, hy, hx + 10f, hy + 4f)
-                            quadraticTo(hx + 8f, hy + 10f, hx, hy + 7f)
-                            close()
-                        }, Color(0xFF1E1A17))
-                        scope.drawLine(Color(0xFF1E1A17), Offset(hx - 10f, hy - 2f), Offset(hx + 12f, hy + 8f), strokeWidth = 2.5f)
-                    }
-                    4 -> { // Puffy/Tears Eye
-                        val puffPath = androidx.compose.ui.graphics.Path().apply {
-                            addArc(androidx.compose.ui.geometry.Rect(hx + 1f, hy + 3f, hx + 11f, hy + 10f), 0f, 180f)
-                        }
-                        scope.drawPath(puffPath, Color(0xFFD4624A), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f, cap = StrokeCap.Round))
-                    }
-                    5 -> { // Blood smear
-                         scope.drawCircle(Color(0x888B0000), radius = 3f + dmgRng.nextFloat() * 4f, center = Offset(hx + dmgRng.nextFloat() * 10f, hy + 5f + dmgRng.nextFloat() * 10f))
-                    }
+        // Accrued Bandages
+        if (fighter.bandagesCount > 0) {
+            val bandageRng = kotlin.random.Random(fighter.id.hashCode())
+            for (i in 0 until fighter.bandagesCount) {
+                // Keep bandages up on the forehead/crown most of the time so the face
+                // stays visible on the share screen; only rarely across the face itself
+                val onFace = bandageRng.nextFloat() < 0.2f
+                val bx = hx - 5f + bandageRng.nextFloat() * 20f
+                val by = if (onFace) hy + 5f + bandageRng.nextFloat() * 15f else hy - 12f + bandageRng.nextFloat() * 8f
+                val ang = -30f + bandageRng.nextFloat() * 60f
+                scope.withTransform({ rotate(ang, pivot = Offset(bx, by)) }) {
+                    scope.drawRect(Color(0xFFF5F0E8), topLeft = Offset(bx - 12f, by - 3f), size = androidx.compose.ui.geometry.Size(24f, 6f))
+                    scope.drawLine(Color(0xFFA8906A), Offset(bx - 4f, by - 3f), Offset(bx - 4f, by + 3f), strokeWidth = 1.5f)
+                    scope.drawLine(Color(0xFFA8906A), Offset(bx + 4f, by - 3f), Offset(bx + 4f, by + 3f), strokeWidth = 1.5f)
                 }
             }
         }
@@ -643,6 +740,28 @@ object TapestryRenderer {
             drawStitchedFill(scope, hairPath, fighter.hairColor)
             scope.drawPath(hairPath, ThreadColor, style = StitchedStroke)
 
+            // Hag's dodgy crooked witch hat
+            if (fighter.id == "hag") {
+                val hatColor = Color(0xFF2B2A22)
+                val hatPath = Path().apply {
+                    moveTo(hx - 16f, hy - 6f)
+                    lineTo(hx + 4f, hy - 44f) // crooked pointed tip
+                    lineTo(hx + 11f, hy - 4f)
+                    close()
+                }
+                drawStitchedFill(scope, hatPath, hatColor)
+                scope.drawPath(hatPath, ThreadColor, style = StitchedStroke)
+                val brimPath = Path().apply {
+                    moveTo(hx - 21f, hy - 4f)
+                    lineTo(hx + 17f, hy - 6f)
+                    lineTo(hx + 13f, hy)
+                    lineTo(hx - 19f, hy + 2f)
+                    close()
+                }
+                drawStitchedFill(scope, brimPath, hatColor)
+                scope.drawPath(brimPath, ThreadColor, style = StitchedStroke)
+            }
+
             // Draw facial hair
             val mustache = Path().apply {
                 if (hasLongBeard) {
@@ -652,12 +771,12 @@ object TapestryRenderer {
                     lineTo(hx - 8f, hy + 35f)
                     lineTo(hx - 12f, hy + 18f)
                     close()
-                } else if (fighter.faceMustache == 0) { // Handlebar
-                    moveTo(hx + 10f, hy + 10f)
-                    quadraticTo(hx + 16f, hy + 9f, hx + 18f, hy + 13f)
+                } else if (fighter.faceMustache == 0) { // Handlebar: along the lip, tip curls up
+                    moveTo(hx + 8f, hy + 12f)
+                    quadraticTo(hx + 15f, hy + 13f, hx + 18f, hy + 9f)
                 } else if (fighter.faceMustache == 1) { // Drooping
-                    moveTo(hx + 10f, hy + 11f)
-                    quadraticTo(hx + 14f, hy + 14f, hx + 12f, hy + 18f)
+                    moveTo(hx + 8f, hy + 12f)
+                    quadraticTo(hx + 14f, hy + 13f, hx + 13f, hy + 18f)
                 } else if (fighter.faceMustache == 2) { // Bushy
                     moveTo(hx + 8f, hy + 11f)
                     lineTo(hx + 18f, hy + 12f)
@@ -850,6 +969,18 @@ object TapestryRenderer {
         when (headId) {
             "head_bare" -> {
                 // skip
+            }
+            "head_javelin" -> {
+                // Light throwing spear held in hand (was missing — javelineers looked empty-handed)
+                scope.drawLine(Color(0xFF6E5536), Offset(headPos.x - 30f, headPos.y + 15f), Offset(headPos.x + 22f, headPos.y - 11f), strokeWidth = 5f, cap = StrokeCap.Round)
+                val tip = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(headPos.x + 20f, headPos.y - 10f)
+                    lineTo(headPos.x + 34f, headPos.y - 17f)
+                    lineTo(headPos.x + 26f, headPos.y - 4f)
+                    close()
+                }
+                scope.drawPath(tip, headColor)
+                scope.drawPath(tip, ThreadColor, style = StitchedStroke)
             }
             "head_pike", "head_spear" -> {
                 val path = androidx.compose.ui.graphics.Path().apply {
@@ -1133,17 +1264,28 @@ object TapestryRenderer {
             }
             "head_club" -> {
                 val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(headPos.x - 5f, headPos.y - 8f)
-                    lineTo(headPos.x + 35f, headPos.y - 14f)
-                    lineTo(headPos.x + 38f, headPos.y + 14f)
-                    lineTo(headPos.x - 5f, headPos.y + 8f)
+                    // Start way back down the handle
+                    val startX = headPos.x - 45f * 0.894f
+                    val startY = headPos.y + 45f * 0.447f
+                    moveTo(startX, startY)
+                    
+                    // Left edge extending out (slimmed profile — full width looked ungainly)
+                    quadraticTo(headPos.x - 10f, headPos.y - 9f, headPos.x + 30f, headPos.y - 21f)
+                    // Bumpy top
+                    lineTo(headPos.x + 45f, headPos.y - 23f)
+                    quadraticTo(headPos.x + 65f, headPos.y - 12f, headPos.x + 55f, headPos.y + 6f)
+                    lineTo(headPos.x + 35f, headPos.y + 15f)
+                    // Right edge tapering back
+                    quadraticTo(headPos.x, headPos.y + 6f, startX, startY)
                     close()
                 }
                 scope.drawPath(path, headColor)
                 scope.drawPath(path, ThreadColor, style = StitchedStroke)
-                // Draw some wood grain lines
-                scope.drawLine(Color(0xFF3E2723), Offset(headPos.x + 5f, headPos.y - 2f), Offset(headPos.x + 30f, headPos.y - 4f), strokeWidth = 2f)
-                scope.drawLine(Color(0xFF3E2723), Offset(headPos.x + 8f, headPos.y + 3f), Offset(headPos.x + 25f, headPos.y + 5f), strokeWidth = 2f)
+                // Knots and bumps
+                scope.drawCircle(Color(0xFF3E2723), radius = 3.5f, center = Offset(headPos.x + 25f, headPos.y - 10f))
+                scope.drawCircle(Color(0xFF3E2723), radius = 4.5f, center = Offset(headPos.x + 40f, headPos.y + 5f))
+                scope.drawCircle(Color(0xFF3E2723), radius = 2.5f, center = Offset(headPos.x + 15f, headPos.y))
+                scope.drawCircle(Color(0xFF3E2723), radius = 3.5f, center = Offset(headPos.x + 45f, headPos.y - 20f))
             }
             "head_saw_1", "head_saw_2" -> {
                 val isHeavy = headId == "head_saw_2"
@@ -1182,8 +1324,8 @@ object TapestryRenderer {
             0f
         } else {
             val baseLen = when (fighter.weaponHandle.id) {
-                "handle_long" -> 110f
-                "handle_medium" -> 55f
+                "handle_long", "handle_plough" -> 110f
+                "handle_medium", "handle_stump", "handle_ram" -> 70f
                 "handle_chain", "handle_flail_chain" -> 60f
                 "handle_double_ended" -> 80f
                 "handle_blessed_branch" -> 70f
@@ -1242,6 +1384,70 @@ object TapestryRenderer {
                     val p2 = androidx.compose.ui.geometry.Offset(wheelCenter.x - kotlin.math.cos(angle)*18f, wheelCenter.y - kotlin.math.sin(angle)*18f)
                     scope.drawLine(fighter.weaponHandle.color, p1, p2, strokeWidth = 3f)
                 }
+            } else if (fighter.weaponHandle.id == "handle_stump") {
+                val logW = 45f
+                val logL = handleLen + 40f
+                val offsetX = -logL / 4f
+                scope.withTransform({
+                    translate(hx, hy)
+                    rotate(-26.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
+                }) {
+                    val stumpPath = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(offsetX, -logW/2)
+                        lineTo(offsetX + logL - 10f, -logW/2 + 5f)
+                        lineTo(offsetX + logL, -logW/2 + 15f)
+                        lineTo(offsetX + logL + 5f, 0f)
+                        lineTo(offsetX + logL - 5f, logW/2 - 10f)
+                        lineTo(offsetX + logL - 15f, logW/2)
+                        lineTo(offsetX, logW/2)
+                        close()
+                    }
+                    scope.drawPath(stumpPath, Color(0xFF4A2F1D))
+                    scope.drawPath(stumpPath, ThreadColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width=2f))
+                    // Wood grain
+                    scope.drawLine(Color(0xFF2E1A0F), Offset(offsetX + 10f, -logW/4), Offset(offsetX + logL - 20f, -logW/4), strokeWidth = 2f)
+                    scope.drawLine(Color(0xFF2E1A0F), Offset(offsetX + 5f, 0f), Offset(offsetX + logL - 10f, 0f), strokeWidth = 2f)
+                    scope.drawLine(Color(0xFF2E1A0F), Offset(offsetX + 15f, logW/4), Offset(offsetX + logL - 25f, logW/4), strokeWidth = 2f)
+                }
+                val effL = offsetX + logL
+                headPos = Offset(hx + effL * 0.894f, hy - effL * 0.447f)
+            } else if (fighter.weaponHandle.id == "handle_ram") {
+                val ramW = 32f
+                val ramL = handleLen + 80f
+                val offsetX = -ramL / 3
+                scope.withTransform({
+                    translate(hx, hy)
+                    rotate(-26.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
+                }) {
+                    scope.drawRect(Color(0xFF4A3C31), topLeft = Offset(offsetX, -ramW/2), size = androidx.compose.ui.geometry.Size(ramL, ramW))
+                    scope.drawRect(ThreadColor, topLeft = Offset(offsetX, -ramW/2), size = androidx.compose.ui.geometry.Size(ramL, ramW), style = Stroke(width=2f))
+                    scope.drawRect(Color(0xFF7A7A7A), topLeft = Offset(offsetX + 10f, -ramW/2), size = androidx.compose.ui.geometry.Size(8f, ramW))
+                    scope.drawRect(Color(0xFF7A7A7A), topLeft = Offset(offsetX + ramL - 25f, -ramW/2), size = androidx.compose.ui.geometry.Size(8f, ramW))
+                    scope.drawArc(Color(0xFF7A7A7A), startAngle = -90f, sweepAngle = 180f, useCenter = true, topLeft = Offset(offsetX + ramL - 10f, -ramW/2), size = androidx.compose.ui.geometry.Size(20f, ramW))
+                }
+                val effL = offsetX + ramL
+                headPos = Offset(hx + effL * 0.894f, hy - effL * 0.447f)
+            } else if (fighter.weaponHandle.id == "handle_plough") {
+                scope.withTransform({
+                    translate(hx, hy)
+                    rotate(-26.5f, pivot = androidx.compose.ui.geometry.Offset.Zero)
+                }) {
+                    scope.drawLine(Color(0xFF5E4933), Offset(0f, 0f), Offset(handleLen, 0f), strokeWidth = 8f)
+                    scope.drawLine(ThreadColor, Offset(0f, 0f), Offset(handleLen, 0f), strokeWidth = 2f)
+                    val share = Path().apply {
+                        moveTo(handleLen - 10f, 0f)
+                        lineTo(handleLen + 20f, 15f)
+                        lineTo(handleLen + 20f, -15f)
+                        close()
+                    }
+                    scope.drawPath(share, Color(0xFF7A7A7A))
+                    scope.drawPath(share, ThreadColor, style = Stroke(width=2f))
+                    scope.drawLine(Color(0xFF5E4933), Offset(30f, 0f), Offset(10f, -25f), strokeWidth = 6f)
+                    scope.drawLine(Color(0xFF5E4933), Offset(30f, 0f), Offset(10f, 25f), strokeWidth = 6f)
+                }
+                // Weapon head welds to the visual end of the rotated shaft (-26.5° = 0.894/0.447),
+                // not the generic shaftEnd, which sat ~10px short
+                headPos = Offset(hx + handleLen * 0.894f, hy - handleLen * 0.447f)
             } else if (fighter.weaponHandle.id == "handle_blessed_branch") {
                 scope.withTransform({ translate(hx, hy) }) {
                     val path_0 = Path().apply {
@@ -1287,6 +1493,9 @@ object TapestryRenderer {
                     drawStitchedFill(this, path_2, Color(0xFF8A5E38))
                     drawPath(path_2, ThreadColor, style = StitchedStroke)
                 }
+                // Weapon head welds to the branch's visual tip (60,-80 local), not the generic
+                // shaftEnd — there was a visible gap otherwise
+                headPos = Offset(hx + 60f, hy - 80f)
             } else if (fighter.weaponHandle.id == "handle_fists") {
                 // Do nothing for fists handle
             } else {
@@ -1319,11 +1528,13 @@ object TapestryRenderer {
         }
 
         // Dangle rotation if it's on a chain!
-        val isChain = fighter.weaponHandle.id == "handle_chain"
+        val isChain = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
         val dangleAngle = if (isChain) {
             val swing = fighter.swingProgress
             when {
-                fighter.isAttacking -> 90f - swing * 360f
+                fighter.isAttacking -> {
+                    if (fighter.facingRight) -90f + swing * 270f else 90f - swing * 270f
+                }
                 else -> 90f - (fighter.velocityX * 0.1f).coerceIn(-20f, 20f)
             }
         } else 0f
@@ -1386,13 +1597,16 @@ object TapestryRenderer {
             }
             
             fighter.extraAttachments.forEachIndexed { idx, attachment ->
-                // Pick a parent node to attach to (branching)
-                val parentNodeIdx = (attachment.id.hashCode() % attachmentPoints.size + attachmentPoints.size) % attachmentPoints.size
-                val attachPos = attachmentPoints[parentNodeIdx]
+                // Randomized organic angle, biased to generally point toward the enemy (forward)
+                // rather than back at the wielder's own face/body.
+                val hashAbs = (attachment.id.hashCode() % 1000).let { if (it < 0) it + 1000 else it }
+                val angleSeed = hashAbs / 1000f // 0f..1f
+                // Forward cone only — anything past ~±75° reads as sideways/upside-down (e.g. the club)
+                val attachAngle = -75f + angleSeed * 150f
 
-                // Randomized organic angles
-                val deterministicOffset = (attachment.id.hashCode() % 360).toFloat()
-                val attachAngle = deterministicOffset
+                val parentNodeIdx =
+                    (attachment.id.hashCode() % attachmentPoints.size + attachmentPoints.size) % attachmentPoints.size
+                val attachPos = attachmentPoints[parentNodeIdx]
 
                 scope.withTransform({
                     rotate(attachAngle, pivot = attachPos)
@@ -1441,7 +1655,8 @@ object TapestryRenderer {
             }
         } else if (fighter.isAttacking) {
             if (fighter.weaponHandle.id == "handle_double_ended") {
-                -360f * swing
+                val dir = if (fighter.lastAttackTime % 3L == 0L) -1f else 1f
+                360f * swing * dir
             } else if (isSaw) {
                 val sawExt = kotlin.math.sin(swing * Math.PI * 5).toFloat()
                 thrustOffset = Offset(30f * sawExt, 5f * sawExt)
@@ -1534,6 +1749,17 @@ object TapestryRenderer {
                 scope.drawCircle(if (fighter.poisonDuration > 0f) Color(0xFF8CAF8A) else Color(0xFFE8C5A4), radius = 6f, center = Offset(cx + 25f, cy + 30f))
                 scope.drawCircle(ThreadColor, radius = 6f, center = Offset(cx + 25f, cy + 30f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
             }
+            if (fighter.brawlerUpgrades.contains("brass_knuckles")) {
+                scope.drawRect(Color(0xFFB5A642), topLeft = Offset(cx + 27f, cy + 26f), size = androidx.compose.ui.geometry.Size(5f, 9f))
+                scope.drawRect(ThreadColor, topLeft = Offset(cx + 27f, cy + 26f), size = androidx.compose.ui.geometry.Size(5f, 9f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
+            }
+            if (fighter.brawlerUpgrades.contains("spiked_wraps")) {
+                scope.drawLine(Color(0xFF5C4033), Offset(cx + 22f, cy + 26f), Offset(cx + 28f, cy + 32f), strokeWidth = 2f)
+                scope.drawLine(Color(0xFF5C4033), Offset(cx + 22f, cy + 32f), Offset(cx + 28f, cy + 26f), strokeWidth = 2f)
+                scope.drawLine(Color(0xFF8B4513), Offset(cx + 28f, cy + 26f), Offset(cx + 33f, cy + 24f), strokeWidth = 1.5f)
+                scope.drawLine(Color(0xFF8B4513), Offset(cx + 28f, cy + 30f), Offset(cx + 34f, cy + 29f), strokeWidth = 1.5f)
+                scope.drawLine(Color(0xFF8B4513), Offset(cx + 28f, cy + 34f), Offset(cx + 33f, cy + 35f), strokeWidth = 1.5f)
+            }
 
             // Weapon (starts at hand and goes outwards) - Drop it if dead or dying
             if (!fighter.isDead && !fighter.isDying) {
@@ -1601,6 +1827,17 @@ object TapestryRenderer {
                     drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor)
                     scope.drawCircle(if (fighter.poisonDuration > 0f) Color(0xFF8CAF8A) else Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
+                    if (fighter.brawlerUpgrades.contains("brass_knuckles")) {
+                        scope.drawRect(Color(0xFFB5A642), topLeft = Offset(hx + 1f, hy - 4f), size = androidx.compose.ui.geometry.Size(4f, 8f))
+                        scope.drawRect(ThreadColor, topLeft = Offset(hx + 1f, hy - 4f), size = androidx.compose.ui.geometry.Size(4f, 8f), style = Stroke(width = 1f))
+                    }
+                    if (fighter.brawlerUpgrades.contains("spiked_wraps")) {
+                        scope.drawLine(Color(0xFF5C4033), Offset(hx - 3f, hy - 4f), Offset(hx + 3f, hy + 2f), strokeWidth = 1.5f)
+                        scope.drawLine(Color(0xFF5C4033), Offset(hx - 3f, hy + 2f), Offset(hx + 3f, hy - 4f), strokeWidth = 1.5f)
+                        scope.drawLine(Color(0xFF8B4513), Offset(hx + 3f, hy - 4f), Offset(hx + 7f, hy - 6f), strokeWidth = 1f)
+                        scope.drawLine(Color(0xFF8B4513), Offset(hx + 3f, hy), Offset(hx + 8f, hy - 1f), strokeWidth = 1f)
+                        scope.drawLine(Color(0xFF8B4513), Offset(hx + 3f, hy + 4f), Offset(hx + 7f, hy + 5f), strokeWidth = 1f)
+                    }
                     
                     if (!fighter.isDead && !fighter.isDying) {
                         drawWeapon(this, hx, hy, fighter)
@@ -1825,49 +2062,57 @@ object TapestryRenderer {
         // Base fill color (solid but soft)
         scope.drawPath(path, color)
 
-        // Add dense parallel lines to look like embroidered thread couching
+        // Add dense parallel lines to look like embroidered thread couching.
+        // Density is capped so huge shapes (buildings, forts, the ship) don't
+        // issue thousands of drawLine calls per frame; small shapes keep the
+        // original fine stitching. Jitter is deterministic (cheap hash), not
+        // Math.random() — that alone was ~16k synchronized calls/frame per building.
         scope.withTransform({
             clipPath(path)
         }) {
             val bounds = path.getBounds()
+            val rowStep = kotlin.math.max(3.5f, bounds.height / 40f)
+            val segmentLen = kotlin.math.max(8f, bounds.width / 30f)
+            val stitchColor = color.copy(alpha = 0.35f)
+            val anchorColor = ThreadColor.copy(alpha = 0.15f)
+            var row = 0
             var y = bounds.top
             while (y < bounds.bottom) {
-                // Horizontal couching threads with slight zigzag/noise for wool texture
                 val startX = bounds.left - 5f
                 val endX = bounds.right + 5f
-                
-                // Draw multiple segmented lines with slight vertical jitter
+
                 var currX = startX
-                val segmentLen = 8f
-                while(currX < endX) {
+                var seg = 0
+                var prevJitter = ((row * 7 + 3) % 5) * 0.3f - 0.6f
+                while (currX < endX) {
                     val nextX = currX + segmentLen
-                    val jitterY = y + (Math.random().toFloat() * 1.5f - 0.75f)
-                    val nextJitterY = y + (Math.random().toFloat() * 1.5f - 0.75f)
-                    
+                    val jitter = ((row * 31 + seg * 17) % 7) * 0.25f - 0.75f
                     scope.drawLine(
-                        color = color.copy(alpha = 0.35f), // subtle variance for thread definition
-                        start = Offset(currX, jitterY),
-                        end = Offset(nextX, nextJitterY),
+                        color = stitchColor,
+                        start = Offset(currX, y + prevJitter),
+                        end = Offset(nextX, y + jitter),
                         strokeWidth = 1.5f,
                         cap = StrokeCap.Round
                     )
-                    currX += segmentLen
+                    prevJitter = jitter
+                    currX = nextX
+                    seg++
                 }
-                
-                // Vertical anchor stitches (every few pixels)
-                var vx = bounds.left
+
+                // Sparse vertical anchor stitches
+                var vx = bounds.left + ((row * 13) % 7)
+                val vStep = segmentLen * 2.5f
                 while (vx < bounds.right) {
-                    if (Math.random() > 0.8) {
-                        scope.drawLine(
-                            color = ThreadColor.copy(alpha = 0.15f),
-                            start = Offset(vx, y - 2f),
-                            end = Offset(vx, y + 2f),
-                            strokeWidth = 1f
-                        )
-                    }
-                    vx += 4f
+                    scope.drawLine(
+                        color = anchorColor,
+                        start = Offset(vx, y - 2f),
+                        end = Offset(vx, y + 2f),
+                        strokeWidth = 1f
+                    )
+                    vx += vStep
                 }
-                y += 3.5f
+                y += rowStep
+                row++
             }
         }
     }
@@ -1890,10 +2135,20 @@ object TapestryRenderer {
         playerFighter: FighterState,
         scale: Float = 1.0f
     ) {
-        val sortedAncs = unlockedAncillaries.toList().filter { it != com.example.game.Ancillary.WARHORSE && it != com.example.game.Ancillary.CHARIOT && it != com.example.game.Ancillary.STILTS }.sortedBy { it.name }
+        val excludedAncillaries = setOf(
+            com.example.game.Ancillary.WARHORSE, 
+            com.example.game.Ancillary.CHARIOT, 
+            com.example.game.Ancillary.STILTS,
+            com.example.game.Ancillary.WARDOG,
+            com.example.game.Ancillary.RAVEN,
+            com.example.game.Ancillary.FANATIC,
+            com.example.game.Ancillary.HAG,
+            com.example.game.Ancillary.TROJAN_HORSE
+        )
+        val sortedAncs = unlockedAncillaries.toList().filter { it !in excludedAncillaries }.sortedBy { it.name }
         if (sortedAncs.isEmpty()) return
 
-        val normScale = scale * playerFighter.size
+        val normScale = scale
 
         sortedAncs.forEachIndexed { index, anc ->
             val offsetSign = if (playerFighter.facingRight) -1f else 1f
@@ -1901,18 +2156,23 @@ object TapestryRenderer {
             var dynamicWalkOffset = 0f
             if (anc == com.example.game.Ancillary.CUPBEARER && playerFighter.hp < playerFighter.maxHp) {
                 val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
-                dynamicWalkOffset = -60f * offsetSign * sin(attackAnim * Math.PI).toFloat()
+                dynamicWalkOffset = -60f * offsetSign * kotlin.math.sin(attackAnim * Math.PI).toFloat()
             }
             
             // Each follower stands behind the player
             val baseOffsetX = if (anc == com.example.game.Ancillary.LIL_GUY) {
-                15f * offsetSign // Piggyback position!
+                90f * offsetSign // Piggyback position!
             } else {
                 (index + 1) * 110f * offsetSign + dynamicWalkOffset
             }
             val cx = playerFighter.posX + baseOffsetX
-            val cy = if (anc == com.example.game.Ancillary.LIL_GUY) 110f else 200f
-            val finalScale = if (anc == com.example.game.Ancillary.LIL_GUY) normScale * 0.45f else normScale
+            val mountOffsetY = if (playerFighter.isChariot) -15f else if (playerFighter.isMounted && playerFighter.isLord) -20f else if (playerFighter.isMounted && playerFighter.isStilts) -45f else if (playerFighter.isMounted) -35f else 0f
+            val cy = if (anc == com.example.game.Ancillary.LIL_GUY) (90f + mountOffsetY) else 200f
+            val finalScale = when (anc) {
+                com.example.game.Ancillary.LIL_GUY -> normScale * 0.8f
+                com.example.game.Ancillary.SQUIRE -> normScale * 0.85f
+                else -> normScale
+            }
 
             // Legs walk in sync but slightly phase-shifted for hilarious visual desync
             val phaseShift = index * 1.5f
@@ -1962,28 +2222,30 @@ object TapestryRenderer {
                 rotate(rotationAngle, pivot = Offset(cx, cy + 80f))
                 scale(1f, scaleY, pivot = Offset(cx, cy + 80f))
             }) {
-                // 1. Draw Legs (Walking cycle)
-                // Left leg (back)
-                withTransform({
-                    rotate(radToDeg(angleL), pivot = Offset(cx - 5f, cy + 90f))
-                }) {
-                    drawStitchedStrap(this, Offset(cx - 5f, cy + 90f), Offset(cx - 10f, cy + 140f), Color(0xFF382F22))
-                    // Small shoe
-                    val shoeL = Path().apply {
-                        addOval(androidx.compose.ui.geometry.Rect(cx - 15f, cy + 135f, cx + 2f, cy + 143f))
+                // 1. Draw Legs (Walking cycle) only if not Lil Guy
+                if (anc != com.example.game.Ancillary.LIL_GUY) {
+                    // Left leg (back)
+                    withTransform({
+                        rotate(radToDeg(angleL), pivot = Offset(cx - 5f, cy + 90f))
+                    }) {
+                        drawStitchedStrap(this, Offset(cx - 5f, cy + 90f), Offset(cx - 10f, cy + 140f), Color(0xFF382F22))
+                        // Small shoe
+                        val shoeL = Path().apply {
+                            addOval(androidx.compose.ui.geometry.Rect(cx - 15f, cy + 135f, cx + 2f, cy + 143f))
+                        }
+                        drawStitchedFill(this, shoeL, Color(0xFF1E1C1A))
                     }
-                    drawStitchedFill(this, shoeL, Color(0xFF1E1C1A))
-                }
-                // Right leg (front)
-                withTransform({
-                    rotate(radToDeg(angleR), pivot = Offset(cx + 5f, cy + 90f))
-                }) {
-                    drawStitchedStrap(this, Offset(cx + 5f, cy + 90f), Offset(cx + 10f, cy + 140f), Color(0xFF382F22))
-                    // Small shoe
-                    val shoeR = Path().apply {
-                        addOval(androidx.compose.ui.geometry.Rect(cx + 2f, cy + 135f, cx + 18f, cy + 143f))
+                    // Right leg (front)
+                    withTransform({
+                        rotate(radToDeg(angleR), pivot = Offset(cx + 5f, cy + 90f))
+                    }) {
+                        drawStitchedStrap(this, Offset(cx + 5f, cy + 90f), Offset(cx + 10f, cy + 140f), Color(0xFF382F22))
+                        // Small shoe
+                        val shoeR = Path().apply {
+                            addOval(androidx.compose.ui.geometry.Rect(cx + 2f, cy + 135f, cx + 18f, cy + 143f))
+                        }
+                        drawStitchedFill(this, shoeR, Color(0xFF1E1C1A))
                     }
-                    drawStitchedFill(this, shoeR, Color(0xFF1E1C1A))
                 }
 
                 // 2. Draw Tiny Torso / Tunic
@@ -2006,10 +2268,31 @@ object TapestryRenderer {
                 }
                 drawStitchedFill(this, torsoPath, tunicColor)
                 drawPath(torsoPath, ThreadColor, style = Stroke(width = 2.5f))
+                
+                // If Lil Guy, draw the backpack enclosing his lower torso
+                if (anc == com.example.game.Ancillary.LIL_GUY) {
+                    val backpack = Path().apply {
+                        moveTo(cx - 35f, cy + 65f)
+                        lineTo(cx + 35f, cy + 65f)
+                        lineTo(cx + 30f, cy + 120f)
+                        lineTo(cx - 30f, cy + 120f)
+                        close()
+                    }
+                    drawStitchedFill(this, backpack, Color(0xFF5C4033)) // brown leather
+                    drawPath(backpack, ThreadColor, style = Stroke(width = 2.5f))
+                    // Straps going forward to the player's body
+                    val strapTargetX = cx + 65f
+                    val strapTargetY1 = cy + 50f // over shoulder
+                    val strapTargetY2 = cy + 90f // under arm
+                    drawLine(Color(0xFF382F22), Offset(cx + 20f, cy + 70f), Offset(strapTargetX, strapTargetY1), strokeWidth = 6f)
+                    drawLine(Color(0xFF382F22), Offset(cx - 20f, cy + 90f), Offset(strapTargetX, strapTargetY2), strokeWidth = 6f)
+                }
 
                 // Decorate the tunic with embroidery
                 val stripeColor = Color(0xFFFAF6EB)
-                drawLine(stripeColor, Offset(cx, cy + 45f), Offset(cx, cy + 95f), strokeWidth = 2.5f)
+                if (anc != com.example.game.Ancillary.LIL_GUY) {
+                    drawLine(stripeColor, Offset(cx, cy + 45f), Offset(cx, cy + 95f), strokeWidth = 2.5f)
+                }
                 drawLine(stripeColor, Offset(cx - 18f, cy + 70f), Offset(cx + 18f, cy + 70f), strokeWidth = 2f)
 
                 // 3. Draw Back Arm holding something (ancillary items!)
@@ -2028,6 +2311,7 @@ object TapestryRenderer {
                         val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
                         if (attackAnim > 0f && playerFighter.hp < playerFighter.maxHp) -45f * sin(attackAnim * Math.PI).toFloat() else 0f
                     }
+                    com.example.game.Ancillary.LIL_GUY -> -110f + sin(playerFighter.animFrame * 2f).toFloat() * 90f // constant slinging windup/throw
                     else -> 0f
                 }
                 
@@ -2155,6 +2439,11 @@ object TapestryRenderer {
                             drawStitchedFill(this, gobletPath, Color(0xFFE5C158))
                             drawPath(gobletPath, ThreadColor, style = Stroke(width = 2f))
                         }
+                        com.example.game.Ancillary.LIL_GUY -> {
+                            // Small stone clutched in his throwing hand
+                            drawCircle(Color(0xFF7A7A7A), radius = 5f, center = Offset(armHx, armHy))
+                            drawCircle(ThreadColor, radius = 5f, center = Offset(armHx, armHy), style = Stroke(width = 1.5f))
+                        }
                         com.example.game.Ancillary.MONK -> {
                             val monkArmAngle = -70f + kotlin.math.cos(playerFighter.animFrame * 1.5).toFloat() * 30f
                             withTransform({ rotate(monkArmAngle, pivot = Offset(cx, cy + 50f)) }) {
@@ -2180,19 +2469,42 @@ object TapestryRenderer {
                     }
                 }
 
-                // 4. Draw Head
+                // 4. Draw Head (hair, face features vary per ancillary so followers look distinct)
                 val headRadius = 14f
                 val hx = cx
                 val hy = cy + 25f
+                val faceSeed = kotlin.math.abs(anc.name.hashCode())
                 drawCircle(Color(0xFFE8C5A4), radius = headRadius, center = Offset(hx, hy))
                 drawCircle(ThreadColor, radius = headRadius, center = Offset(hx, hy), style = Stroke(width = 2.5f))
 
-                // Funny medieval hair/cap
-                val capPath = Path().apply {
-                    addArc(androidx.compose.ui.geometry.Rect(hx - headRadius, hy - headRadius, hx + headRadius, hy), 180f, 180f)
+                // Hair: color and style picked from the seed
+                val hairCol = listOf(
+                    Color(0xFF8B5A2B), Color(0xFF2C2219), Color(0xFFC08030), Color(0xFF888888)
+                )[faceSeed % 4]
+                when ((faceSeed / 5) % 3) {
+                    0 -> { // classic bowl cap
+                        val capPath = Path().apply {
+                            addArc(androidx.compose.ui.geometry.Rect(hx - headRadius, hy - headRadius, hx + headRadius, hy), 180f, 180f)
+                        }
+                        drawStitchedFill(this, capPath, hairCol)
+                        drawPath(capPath, ThreadColor, style = Stroke(width = 2f))
+                    }
+                    1 -> { // longer locks down the neck
+                        val locks = Path().apply {
+                            addArc(androidx.compose.ui.geometry.Rect(hx - headRadius, hy - headRadius, hx + headRadius, hy), 180f, 180f)
+                            moveTo(hx - headRadius, hy)
+                            lineTo(hx - headRadius - 3f, hy + 14f)
+                            lineTo(hx - headRadius + 6f, hy + 8f)
+                            close()
+                        }
+                        drawStitchedFill(this, locks, hairCol)
+                        drawPath(locks, ThreadColor, style = Stroke(width = 2f))
+                    }
+                    else -> { // balding fringe
+                        drawLine(hairCol, Offset(hx - headRadius + 2f, hy - 4f), Offset(hx - headRadius + 6f, hy - 10f), strokeWidth = 4f, cap = StrokeCap.Round)
+                        drawLine(hairCol, Offset(hx + headRadius - 6f, hy - 10f), Offset(hx + headRadius - 2f, hy - 4f), strokeWidth = 4f, cap = StrokeCap.Round)
+                    }
                 }
-                drawStitchedFill(this, capPath, Color(0xFF8B5A2B))
-                drawPath(capPath, ThreadColor, style = Stroke(width = 2f))
 
                 // Ridiculous eyes: "X" eyes if dead/dying, otherwise standard side-facing dot eye
                 if (playerFighter.isDead || playerFighter.isDying) {
@@ -2201,6 +2513,14 @@ object TapestryRenderer {
                     drawLine(Color(0xFF382F22), Offset(hx + 9f, hy - 4f), Offset(hx + 3f, hy + 2f), strokeWidth = 2f)
                 } else {
                     drawCircle(Color(0xFF382F22), radius = 2.5f, center = Offset(hx + 6f, hy - 2f))
+                    // Brow variant
+                    if (faceSeed % 3 == 0) drawLine(Color(0xFF382F22), Offset(hx + 2f, hy - 6f), Offset(hx + 10f, hy - 5f), strokeWidth = 2f, cap = StrokeCap.Round)
+                    // Nose or moustache variant
+                    when ((faceSeed / 11) % 3) {
+                        0 -> drawLine(Color(0xFFD8AE84), Offset(hx + 10f, hy + 1f), Offset(hx + 14f, hy + 4f), strokeWidth = 3f, cap = StrokeCap.Round) // big nose
+                        1 -> drawLine(hairCol, Offset(hx + 4f, hy + 6f), Offset(hx + 12f, hy + 7f), strokeWidth = 2.5f, cap = StrokeCap.Round) // moustache
+                        else -> {}
+                    }
                 }
 
                 // Front Arm (Properly stitched 2-handed grip)
@@ -2375,11 +2695,12 @@ object TapestryRenderer {
         drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
         scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
 
-        // Draw Stirrups (leather strap + iron loop)
+        // Draw Stirrups (leather strap + iron loop) — swings in sync with the rider's leg animation
         val strapColor = Color(0xFF382F22) // dark leather
         val ironColor = Color(0xFF5D666B)
-        val stirrupY = cy + 130f
-        val stirrupX = cx + 5f
+        val stirrupSwing = if (fighter.isDead || fighter.isDying) 0f else kotlin.math.sin(fighter.animFrame) * 0.45f
+        val stirrupX = cx + 5f + stirrupSwing * 40f
+        val stirrupY = cy + 123f - kotlin.math.abs(stirrupSwing) * 10f
         scope.drawLine(strapColor, Offset(cx + 5f, cy + 92f), Offset(stirrupX, stirrupY), strokeWidth = 3f)
         scope.drawLine(ironColor, Offset(stirrupX - 5f, stirrupY), Offset(stirrupX + 5f, stirrupY), strokeWidth = 4f)
         scope.drawCircle(ironColor, radius = 5f, center = Offset(stirrupX, stirrupY + 3f), style = Stroke(width = 3f))
@@ -2390,6 +2711,74 @@ object TapestryRenderer {
             quadraticTo(cx + 50f, cy + 70f, cx + 5f, cy + 75f) // curves down to rider's lap
         }
         scope.drawPath(reignPath, strapColor, style = Stroke(width = 3f))
+    }
+
+    // The great wooden decoy: planked angular horse on a wheeled platform
+    private fun drawTrojanHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val wood = Color(0xFF8B5A2B)
+        val darkWood = Color(0xFF5C4033)
+
+        // Wheeled platform (wheel bottoms sit on the ground line at cy + 175)
+        val platTop = cy + 130f
+        scope.drawRect(darkWood, topLeft = Offset(cx - 75f, platTop), size = androidx.compose.ui.geometry.Size(150f, 18f))
+        scope.drawRect(ThreadColor, topLeft = Offset(cx - 75f, platTop), size = androidx.compose.ui.geometry.Size(150f, 18f), style = StitchedStroke)
+        val wheelRot = fighter.posX * 2.5f
+        for (wx in listOf(cx - 50f, cx + 50f)) {
+            val wc = Offset(wx, cy + 158f)
+            scope.withTransform({ rotate(wheelRot, wc) }) {
+                drawCircle(darkWood, radius = 17f, center = wc)
+                drawCircle(ThreadColor, radius = 17f, center = wc, style = Stroke(width = 3f))
+                drawLine(ThreadColor, Offset(wc.x - 17f, wc.y), Offset(wc.x + 17f, wc.y), strokeWidth = 3f)
+                drawLine(ThreadColor, Offset(wc.x, wc.y - 17f), Offset(wc.x, wc.y + 17f), strokeWidth = 3f)
+            }
+        }
+
+        // Stiff plank legs
+        for (lx in listOf(cx - 45f, cx - 25f, cx + 25f, cx + 45f)) {
+            scope.drawLine(wood, Offset(lx, cy + 65f), Offset(lx, platTop), strokeWidth = 12f)
+            scope.drawLine(ThreadColor, Offset(lx, cy + 65f), Offset(lx, platTop), strokeWidth = 2f)
+        }
+
+        // Boxy planked body
+        val bodyPath = Path().apply {
+            moveTo(cx - 62f, cy + 30f)
+            lineTo(cx + 55f, cy + 25f)
+            lineTo(cx + 62f, cy + 75f)
+            lineTo(cx - 55f, cy + 80f)
+            close()
+        }
+        drawStitchedFill(scope, bodyPath, wood)
+        scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+        // Plank seams
+        scope.drawLine(darkWood, Offset(cx - 60f, cy + 47f), Offset(cx + 58f, cy + 42f), strokeWidth = 3f)
+        scope.drawLine(darkWood, Offset(cx - 58f, cy + 64f), Offset(cx + 60f, cy + 59f), strokeWidth = 3f)
+        // Belly hatch the soldiers burst from
+        scope.drawRect(darkWood, topLeft = Offset(cx - 14f, cy + 48f), size = androidx.compose.ui.geometry.Size(28f, 30f))
+        scope.drawRect(ThreadColor, topLeft = Offset(cx - 14f, cy + 48f), size = androidx.compose.ui.geometry.Size(28f, 30f), style = StitchedStroke)
+
+        // Angular neck and head
+        val neckPath = Path().apply {
+            moveTo(cx + 30f, cy + 35f)
+            lineTo(cx + 58f, cy - 45f)
+            lineTo(cx + 76f, cy - 42f)
+            lineTo(cx + 52f, cy + 40f)
+            close()
+        }
+        drawStitchedFill(scope, neckPath, wood)
+        scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
+        val headPath = Path().apply {
+            moveTo(cx + 56f, cy - 55f)
+            lineTo(cx + 98f, cy - 48f)
+            lineTo(cx + 94f, cy - 32f)
+            lineTo(cx + 60f, cy - 30f)
+            close()
+        }
+        drawStitchedFill(scope, headPath, wood)
+        scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+        scope.drawCircle(ThreadColor, radius = 3f, center = Offset(cx + 78f, cy - 44f))
+        // Plank mane ridge and rope tail
+        scope.drawLine(darkWood, Offset(cx + 40f, cy + 30f), Offset(cx + 64f, cy - 44f), strokeWidth = 5f)
+        scope.drawLine(Color(0xFF9C7D58), Offset(cx - 58f, cy + 38f), Offset(cx - 80f, cy + 75f), strokeWidth = 5f)
     }
 
     private fun drawChariot(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
@@ -2480,17 +2869,18 @@ object TapestryRenderer {
         val angleL = if (fighter.isDead || fighter.isDying) 0f else kotlin.math.sin(fighter.animFrame) * 0.45f
         val angleR = if (fighter.isDead || fighter.isDying) 0f else -kotlin.math.sin(fighter.animFrame) * 0.45f
 
+        // Rider is drawn 45px higher on stilts (mountOffsetY), so feet sit at cy+105 — start the poles there
         // Draw left stilt (attaches to left foot at cx - 18)
         scope.withTransform({ rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f)) }) {
-            drawLine(wColor, Offset(cx - 18f, cy + 150f), Offset(cx - 18f, cy + 220f), strokeWidth = 8f)
+            drawLine(wColor, Offset(cx - 18f, cy + 105f), Offset(cx - 18f, cy + 220f), strokeWidth = 8f)
             // Footrest
-            drawLine(Color(0xFF4A4A4A), Offset(cx - 25f, cy + 155f), Offset(cx - 5f, cy + 155f), strokeWidth = 4f)
+            drawLine(Color(0xFF4A4A4A), Offset(cx - 25f, cy + 110f), Offset(cx - 5f, cy + 110f), strokeWidth = 4f)
         }
         // Draw right stilt (attaches to right foot at cx + 18)
         scope.withTransform({ rotate(radToDeg(angleR), pivot = Offset(cx + 10f, cy + 90f)) }) {
-            drawLine(wColor, Offset(cx + 18f, cy + 150f), Offset(cx + 18f, cy + 220f), strokeWidth = 8f)
+            drawLine(wColor, Offset(cx + 18f, cy + 105f), Offset(cx + 18f, cy + 220f), strokeWidth = 8f)
             // Footrest
-            drawLine(Color(0xFF4A4A4A), Offset(cx + 10f, cy + 155f), Offset(cx + 35f, cy + 155f), strokeWidth = 4f)
+            drawLine(Color(0xFF4A4A4A), Offset(cx + 10f, cy + 110f), Offset(cx + 35f, cy + 110f), strokeWidth = 4f)
         }
     }
 
@@ -2531,7 +2921,7 @@ object TapestryRenderer {
         val ravenColor = androidx.compose.ui.graphics.Color(0xFF111111)
         
         scope.withTransform({
-            translate(0f, 60f)
+            translate(0f, -120f)
         }) {
             // Body
             scope.drawLine(ravenColor, androidx.compose.ui.geometry.Offset(cx - 10f, cy), androidx.compose.ui.geometry.Offset(cx + 15f, cy), strokeWidth = 14f, cap = StrokeCap.Round)
@@ -2546,5 +2936,463 @@ object TapestryRenderer {
             // Eye
             scope.drawCircle(androidx.compose.ui.graphics.Color.Red, radius = 2f, center = androidx.compose.ui.geometry.Offset(cx + 15f, cy - 5f))
         }
+    }
+    
+    // Background objects are static between damage events, but their stitched fills cost
+    // thousands of drawLine calls. Render each to an offscreen bitmap once and blit per frame.
+    // Key includes hp/destroyed so damage decals re-render when they change.
+    private val bgBitmapCache = HashMap<String, Pair<String, androidx.compose.ui.graphics.ImageBitmap>>()
+    private const val BG_BMP_W = 620
+    private const val BG_BMP_H = 540
+    private const val BG_BMP_CX = 310f // local anchor inside the bitmap
+    private const val BG_BMP_CY = 400f
+
+    fun drawBackgroundObject(
+        scope: DrawScope,
+        bg: BackgroundObject,
+        scaledPosX: Float,
+        scaleFactor: Float
+    ) {
+        val cx = scaledPosX
+        // Fighters' feet sit at 200 + 158*scaleFactor in screen space; these structures bottom
+        // out ~20px below their own cy (scaled about cy), so solve cy + 20*scale = feet line.
+        // Anchoring to the same line keeps buildings/ship grounded at any canvas size.
+        val cy = 200f + 138f * scaleFactor
+
+        val key = "${bg.type}_${bg.seed}_${bg.hp.toInt()}_${bg.isDestroyed}_${bg.stuckArrowsFromLeft}_${bg.stuckArrowsFromRight}"
+        val cached = bgBitmapCache[bg.id]
+        val bitmap = if (cached != null && cached.first == key) cached.second else {
+            val bmp = androidx.compose.ui.graphics.ImageBitmap(BG_BMP_W, BG_BMP_H)
+            val canvas = androidx.compose.ui.graphics.Canvas(bmp)
+            androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+                androidx.compose.ui.unit.Density(1f),
+                androidx.compose.ui.unit.LayoutDirection.Ltr,
+                canvas,
+                androidx.compose.ui.geometry.Size(BG_BMP_W.toFloat(), BG_BMP_H.toFloat())
+            ) {
+                renderBackgroundObject(this, bg, BG_BMP_CX, BG_BMP_CY)
+            }
+            bgBitmapCache[bg.id] = key to bmp
+            bmp
+        }
+
+        // Buildings/forts draw bigger than fighters (they towered under them otherwise) and sit
+        // slightly up the canvas for background perspective. The ship stays 1:1 on the ground.
+        val isShip = bg.type == BackgroundObjectType.SHIP
+        val bgScale = if (isShip) 1.25f else 1.7f
+        val lift = if (isShip) 0f else 14f
+        scope.withTransform({
+            scale(scaleFactor * bgScale, scaleFactor * bgScale, pivot = Offset(cx, cy))
+        }) {
+            scope.drawImage(bitmap, topLeft = Offset(cx - BG_BMP_CX, cy - BG_BMP_CY - lift))
+        }
+    }
+
+    private fun renderBackgroundObject(scope: DrawScope, bg: BackgroundObject, cx: Float, cy: Float) {
+        when (bg.type) {
+            BackgroundObjectType.SHIP -> drawShip(scope, cx, cy, bg)
+            BackgroundObjectType.FORT_PALACE -> drawFortPalace(scope, cx, cy, bg)
+            BackgroundObjectType.FORT_DINAN -> drawFortDinan(scope, cx, cy, bg)
+            BackgroundObjectType.BUILDING_BOSHAM -> drawBuildingBosham(scope, cx, cy, bg)
+            BackgroundObjectType.BUILDING_MANOR -> drawBuildingManor(scope, cx, cy, bg)
+            BackgroundObjectType.FORT_TOWER -> drawFortTower(scope, cx, cy, bg)
+            BackgroundObjectType.FORT_MOTTE -> drawFortMotte(scope, cx, cy, bg)
+        }
+
+        if (bg.stuckArrowsFromLeft + bg.stuckArrowsFromRight > 0) {
+            drawDamageDecals(scope, cx, cy, bg)
+        }
+    }
+    
+    private fun drawDamageDecals(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+
+        val random = kotlin.random.Random(bg.seed)
+        // Only arrow-type hits leave shafts; melee/stones/mud leave no marks.
+        // Arrows embed pointing the way they were actually fired.
+        val fromLeftCount = bg.stuckArrowsFromLeft.coerceAtMost(8)
+        val fromRightCount = bg.stuckArrowsFromRight.coerceAtMost(8)
+        val numDecals = fromLeftCount + fromRightCount
+
+        for (i in 0 until numDecals) {
+            val dx = cx + random.nextFloat() * bg.width - (bg.width / 2f)
+            val dy = cy - 20f - random.nextFloat() * 150f
+
+            // Shaft angled as if shot in from the side, slight downward arc
+            val fromLeft = i < fromLeftCount
+            val dirX = (if (fromLeft) 1f else -1f) * (0.85f + random.nextFloat() * 0.1f)
+            val dirY = 0.35f + random.nextFloat() * 0.25f
+            val mag = kotlin.math.hypot(dirX.toDouble(), dirY.toDouble()).toFloat()
+            val nx = dirX / mag; val ny = dirY / mag
+            val tailX = dx - nx * 30f; val tailY = dy - ny * 30f
+
+            scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(dx, dy), strokeWidth = 4.5f)
+            // Fletching at the tail
+            val perpX = -ny; val perpY = nx
+            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 7f + perpX * 6f, tailY - ny * 7f + perpY * 6f), strokeWidth = 3f)
+            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 7f - perpX * 6f, tailY - ny * 7f - perpY * 6f), strokeWidth = 3f)
+        }
+    }
+    
+    private fun drawShip(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        // Deep hull with slight curve
+        val hullPath = Path().apply {
+            moveTo(cx - 150f, cy - 80f) // Back
+            lineTo(cx - 120f, cy + 30f) // Steep back
+            quadraticTo(cx, cy + 50f, cx + 140f, cy + 30f) // Curved bottom
+            lineTo(cx + 190f, cy - 90f) // Prow base
+            lineTo(cx + 160f, cy - 70f)
+            lineTo(cx - 120f, cy - 60f) // Inner deck
+            close()
+        }
+        drawStitchedFill(scope, hullPath, Color(0xFF5D4831))
+        scope.drawPath(hullPath, ThreadColor, style = StitchedStroke)
+        
+        // Planking lines
+        for (i in 0 until 3) {
+            val yOffset = cy - 40f + (i * 20f)
+            scope.drawLine(Color(0x55000000), Offset(cx - 120f, yOffset), Offset(cx + 140f, yOffset), strokeWidth = 2f)
+        }
+
+        // Dragon Prow
+        val prowPath = Path().apply {
+            moveTo(cx + 190f, cy - 90f)
+            quadraticTo(cx + 220f, cy - 120f, cx + 230f, cy - 140f) // Neck
+            quadraticTo(cx + 250f, cy - 150f, cx + 240f, cy - 130f) // Snout
+            quadraticTo(cx + 220f, cy - 110f, cx + 210f, cy - 80f) // Back of neck
+        }
+        drawStitchedFill(scope, prowPath, Color(0xFF8C6F47))
+        scope.drawPath(prowPath, ThreadColor, style = StitchedStroke)
+        scope.drawCircle(Color.Red, radius = 4f, center = Offset(cx + 235f, cy - 140f)) // Eye
+
+        // Mast and Square Sail
+        val mastPath = Path().apply {
+            moveTo(cx + 20f, cy - 160f)
+            lineTo(cx + 30f, cy - 160f)
+            lineTo(cx + 30f, cy - 60f)
+            lineTo(cx + 20f, cy - 60f)
+            close()
+        }
+        drawStitchedFill(scope, mastPath, Color(0xFF382F22))
+        scope.drawPath(mastPath, ThreadColor, style = StitchedStroke)
+
+        val sailPath = Path().apply {
+            moveTo(cx - 60f, cy - 150f)
+            quadraticTo(cx + 25f, cy - 170f, cx + 110f, cy - 150f) // Top yard
+            lineTo(cx + 90f, cy - 70f)
+            quadraticTo(cx + 25f, cy - 50f, cx - 40f, cy - 70f) // Billowing bottom
+            close()
+        }
+        drawStitchedFill(scope, sailPath, Color(0xFF9E3624))
+        
+        // Striped sail pattern
+        scope.withTransform({ clipPath(sailPath) }) {
+            val stripePath = Path().apply {
+                addRect(androidx.compose.ui.geometry.Rect(cx - 20f, cy - 180f, cx + 10f, cy - 40f))
+                addRect(androidx.compose.ui.geometry.Rect(cx + 50f, cy - 180f, cx + 80f, cy - 40f))
+            }
+            drawStitchedFill(scope, stripePath, Color(0xFFD6A420))
+        }
+        scope.drawPath(sailPath, ThreadColor, style = StitchedStroke)
+        
+        // Overlapping shields on gunwale
+        for (i in 0 until 8) {
+            val sx = cx - 100f + (i * 32f)
+            val sy = cy - 65f + sin(i * 0.4f) * 5f
+            scope.drawCircle(if (i % 2 == 0) Color(0xFFD6A420) else Color(0xFF9E3624), radius = 15f, center = Offset(sx, sy))
+            scope.drawCircle(ThreadColor, radius = 15f, center = Offset(sx, sy), style = StitchedStroke)
+            scope.drawCircle(Color(0xFF9EA3A8), radius = 5f, center = Offset(sx, sy)) // Boss
+        }
+        
+        // Water path overlapping hull bottom for submerged perspective
+        val waterPath = Path().apply {
+            moveTo(cx - 200f, cy + 20f)
+            for (i in 0..400 step 20) {
+                lineTo(cx - 200f + i, cy + 20f + sin(i * 0.1f) * 6f)
+            }
+            lineTo(cx + 200f, cy + 100f)
+            lineTo(cx - 200f, cy + 100f)
+            close()
+        }
+        drawStitchedFill(scope, waterPath, Color(0xFF265063))
+        scope.drawPath(waterPath, ThreadColor, style = StitchedStroke)
+    }
+    
+    private fun drawFortTower(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        // Tall timber watchtower on stilted legs with a lookout platform
+        val wood = Color(0xFF8C6F47)
+        val darkWood = Color(0xFF5D4831)
+        // Legs
+        scope.drawLine(darkWood, Offset(cx - 45f, cy + 20f), Offset(cx - 25f, cy - 110f), strokeWidth = 9f)
+        scope.drawLine(darkWood, Offset(cx + 45f, cy + 20f), Offset(cx + 25f, cy - 110f), strokeWidth = 9f)
+        // Cross-brace
+        scope.drawLine(darkWood, Offset(cx - 38f, cy - 30f), Offset(cx + 38f, cy - 65f), strokeWidth = 5f)
+        scope.drawLine(darkWood, Offset(cx + 38f, cy - 30f), Offset(cx - 38f, cy - 65f), strokeWidth = 5f)
+        // Cabin
+        val cabin = Path().apply {
+            moveTo(cx - 40f, cy - 110f)
+            lineTo(cx + 40f, cy - 110f)
+            lineTo(cx + 34f, cy - 165f)
+            lineTo(cx - 34f, cy - 165f)
+            close()
+        }
+        drawStitchedFill(scope, cabin, wood)
+        scope.drawPath(cabin, ThreadColor, style = StitchedStroke)
+        // Battlement notches
+        for (i in 0 until 4) {
+            val bx = cx - 30f + i * 20f
+            scope.drawRect(darkWood, topLeft = Offset(bx, cy - 178f), size = androidx.compose.ui.geometry.Size(10f, 13f))
+        }
+        // Pointed roof with pennant
+        val roof = Path().apply {
+            moveTo(cx - 38f, cy - 165f)
+            lineTo(cx + 38f, cy - 165f)
+            lineTo(cx, cy - 210f)
+            close()
+        }
+        drawStitchedFill(scope, roof, Color(0xFF9E3624))
+        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        scope.drawLine(darkWood, Offset(cx, cy - 210f), Offset(cx, cy - 235f), strokeWidth = 3f)
+        val pennant = Path().apply {
+            moveTo(cx, cy - 235f); lineTo(cx + 26f, cy - 228f); lineTo(cx, cy - 221f); close()
+        }
+        scope.drawPath(pennant, Color(0xFFD6A420))
+        // Window
+        scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 8f, cy - 150f), size = androidx.compose.ui.geometry.Size(16f, 22f))
+    }
+
+    private fun drawFortMotte(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        // Motte-and-bailey: broad flat-topped earthwork with a plank palisade and squat keep
+        val mound = Path().apply {
+            moveTo(cx - 130f, cy + 20f)
+            quadraticTo(cx - 100f, cy - 55f, cx - 70f, cy - 62f) // curved left slope
+            lineTo(cx + 70f, cy - 62f)                           // flat plateau
+            quadraticTo(cx + 100f, cy - 55f, cx + 130f, cy + 20f) // curved right slope
+            close()
+        }
+        drawStitchedFill(scope, mound, Color(0xFF6B7C4A))
+        scope.drawPath(mound, ThreadColor, style = StitchedStroke)
+        // Winding path up the right slope
+        scope.drawLine(Color(0xFFB09A6C), Offset(cx + 100f, cy + 14f), Offset(cx + 55f, cy - 58f), strokeWidth = 8f)
+        // Palisade: solid plank wall along the plateau edge with pointed tips and rails
+        val palTop = cy - 92f
+        val palBase = cy - 60f
+        val wall = Path().apply {
+            moveTo(cx - 62f, palBase)
+            lineTo(cx - 62f, palTop)
+            var px = cx - 62f
+            while (px < cx + 62f) {
+                lineTo(px + 6f, palTop - 8f) // pointed plank tip
+                lineTo(px + 12f, palTop)
+                px += 12f
+            }
+            lineTo(cx + 62f, palBase)
+            close()
+        }
+        drawStitchedFill(scope, wall, Color(0xFF8C6F47))
+        scope.drawPath(wall, ThreadColor, style = StitchedStroke)
+        // Plank seams + horizontal rail
+        for (i in 1 until 10) {
+            val px = cx - 62f + i * 12.4f
+            scope.drawLine(ThreadColor.copy(alpha = 0.5f), Offset(px, palTop), Offset(px, palBase), strokeWidth = 1.5f)
+        }
+        scope.drawLine(Color(0xFF5D4831), Offset(cx - 62f, palBase - 10f), Offset(cx + 62f, palBase - 10f), strokeWidth = 4f)
+        // Keep
+        val keep = Path().apply {
+            moveTo(cx - 34f, cy - 84f)
+            lineTo(cx + 34f, cy - 84f)
+            lineTo(cx + 28f, cy - 150f)
+            lineTo(cx - 28f, cy - 150f)
+            close()
+        }
+        drawStitchedFill(scope, keep, Color(0xFF8C6F47))
+        scope.drawPath(keep, ThreadColor, style = StitchedStroke)
+        // Keep roof
+        val roof = Path().apply {
+            moveTo(cx - 32f, cy - 150f)
+            lineTo(cx + 32f, cy - 150f)
+            lineTo(cx, cy - 188f)
+            close()
+        }
+        drawStitchedFill(scope, roof, Color(0xFF265063))
+        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        // Door + window
+        scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 7f, cy - 108f), size = androidx.compose.ui.geometry.Size(14f, 24f))
+        scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 5f, cy - 140f), size = androidx.compose.ui.geometry.Size(10f, 12f))
+    }
+
+    private fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        // Stone Keep
+        val keepPath = Path().apply {
+            addRect(androidx.compose.ui.geometry.Rect(cx - 100f, cy - 150f, cx + 100f, cy + 20f))
+        }
+        drawStitchedFill(scope, keepPath, Color(0xFF8C969E))
+        scope.drawPath(keepPath, ThreadColor, style = StitchedStroke)
+        
+        // Crenellations
+        for (i in 0 until 5) {
+            val creX = cx - 100f + (i * 40f)
+            val crePath = Path().apply { addRect(androidx.compose.ui.geometry.Rect(creX, cy - 170f, creX + 20f, cy - 150f)) }
+            drawStitchedFill(scope, crePath, Color(0xFF7A868C))
+            scope.drawPath(crePath, ThreadColor, style = StitchedStroke)
+        }
+        
+        // Arched Gate
+        val gatePath = Path().apply {
+            moveTo(cx - 30f, cy + 20f)
+            lineTo(cx - 30f, cy - 50f)
+            arcTo(androidx.compose.ui.geometry.Rect(cx - 30f, cy - 80f, cx + 30f, cy - 20f), 180f, 180f, false)
+            lineTo(cx + 30f, cy + 20f)
+            close()
+        }
+        drawStitchedFill(scope, gatePath, Color(0xFF452E1B))
+        scope.drawPath(gatePath, ThreadColor, style = StitchedStroke)
+        
+        // Hinges
+        scope.drawLine(ThreadColor, Offset(cx - 30f, cy - 30f), Offset(cx + 30f, cy - 30f), strokeWidth = 4f)
+        scope.drawLine(ThreadColor, Offset(cx - 30f, cy), Offset(cx + 30f, cy), strokeWidth = 4f)
+        
+        // Masonry lines
+        for (y in -130..10 step 30) {
+            scope.drawLine(Color(0x33000000), Offset(cx - 100f, cy + y.toFloat()), Offset(cx + 100f, cy + y.toFloat()), strokeWidth = 2f)
+        }
+    }
+    
+    private fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        // Motte (Earthen Hill)
+        val hillPath = Path().apply {
+            moveTo(cx - 150f, cy + 20f)
+            quadraticTo(cx - 30f, cy + 20f, cx, cy - 70f)
+            quadraticTo(cx + 30f, cy + 20f, cx + 150f, cy + 20f)
+            close()
+        }
+        drawStitchedFill(scope, hillPath, Color(0xFF5E4B3C))
+        scope.drawPath(hillPath, ThreadColor, style = StitchedStroke)
+        
+        // Palisade
+        for (i in 0 until 8) {
+            val logX = cx - 40f + (i * 10f)
+            val logPath = Path().apply {
+                moveTo(logX, cy - 60f)
+                lineTo(logX + 5f, cy - 120f) // Spike
+                lineTo(logX + 10f, cy - 60f)
+                close()
+            }
+            drawStitchedFill(scope, logPath, Color(0xFF8C6F47))
+            scope.drawPath(logPath, ThreadColor, style = StitchedStroke)
+        }
+        
+        // Wooden Tower
+        val towerPath = Path().apply {
+            moveTo(cx - 20f, cy - 100f)
+            lineTo(cx - 10f, cy - 170f)
+            lineTo(cx + 10f, cy - 170f)
+            lineTo(cx + 20f, cy - 100f)
+            close()
+        }
+        drawStitchedFill(scope, towerPath, Color(0xFF735835))
+        scope.drawPath(towerPath, ThreadColor, style = StitchedStroke)
+        
+        // Crossbeams
+        scope.drawLine(ThreadColor, Offset(cx - 20f, cy - 100f), Offset(cx + 10f, cy - 170f), strokeWidth = 2f)
+        scope.drawLine(ThreadColor, Offset(cx + 20f, cy - 100f), Offset(cx - 10f, cy - 170f), strokeWidth = 2f)
+        
+        // Tower Roof
+        val roofPath = Path().apply {
+            moveTo(cx - 25f, cy - 165f)
+            lineTo(cx, cy - 195f)
+            lineTo(cx + 25f, cy - 165f)
+            close()
+        }
+        drawStitchedFill(scope, roofPath, Color(0xFF9E3624))
+        scope.drawPath(roofPath, ThreadColor, style = StitchedStroke)
+    }
+
+    private fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        // Pillared Hall (Bosham church style)
+        val buildingPath = Path().apply {
+            addRect(androidx.compose.ui.geometry.Rect(cx - 80f, cy - 120f, cx + 80f, cy + 20f))
+        }
+        drawStitchedFill(scope, buildingPath, Color(0xFFEFE6D4)) // Plaster
+        scope.drawPath(buildingPath, ThreadColor, style = StitchedStroke)
+        
+        // Pillars and arches
+        val pillarColor = Color(0xFF7D838A)
+        for (i in 0 until 3) {
+            val px = cx - 60f + (i * 50f)
+            val pPath = Path().apply { addRect(androidx.compose.ui.geometry.Rect(px, cy - 100f, px + 20f, cy + 20f)) }
+            drawStitchedFill(scope, pPath, pillarColor)
+            scope.drawPath(pPath, ThreadColor, style = StitchedStroke)
+            
+            // Arch above pillars
+            val archPath = Path().apply {
+                moveTo(px - 15f, cy - 100f)
+                quadraticTo(px + 10f, cy - 140f, px + 35f, cy - 100f)
+            }
+            scope.drawPath(archPath, ThreadColor, style = Stroke(width = 4f))
+        }
+        
+        // Shingle Roof
+        val roofPath = Path().apply {
+            moveTo(cx - 100f, cy - 120f)
+            lineTo(cx, cy - 200f)
+            lineTo(cx + 100f, cy - 120f)
+            close()
+        }
+        drawStitchedFill(scope, roofPath, Color(0xFF636A6E))
+        scope.drawPath(roofPath, ThreadColor, style = StitchedStroke)
+        
+        // Roof Tiles
+        for (y in -190..-130 step 15) {
+            val widthAtY = (y + 200f) * 1.25f
+            for (x in (-widthAtY.toInt()..widthAtY.toInt() step 20)) {
+                scope.drawCircle(Color(0xFF5D666B), radius = 8f, center = Offset(cx + x.toFloat(), cy + y.toFloat()))
+                scope.drawCircle(ThreadColor, radius = 8f, center = Offset(cx + x.toFloat(), cy + y.toFloat()), style = Stroke(width = 1.5f))
+            }
+        }
+    }
+
+    private fun drawBuildingManor(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        // Timber Manor (Mead Hall)
+        val wallPath = Path().apply {
+            moveTo(cx - 100f, cy + 20f)
+            lineTo(cx - 100f, cy - 80f)
+            lineTo(cx, cy - 120f)
+            lineTo(cx + 100f, cy - 80f)
+            lineTo(cx + 100f, cy + 20f)
+            close()
+        }
+        drawStitchedFill(scope, wallPath, Color(0xFF6B513C))
+        scope.drawPath(wallPath, ThreadColor, style = StitchedStroke)
+        
+        // Vertical planks
+        for (i in -90..90 step 15) {
+            scope.drawLine(ThreadColor, Offset(cx + i, cy + 20f), Offset(cx + i, cy - 80f), strokeWidth = 2f)
+        }
+        
+        // Crossed Gables (Dragon heads)
+        val gable1 = Path().apply {
+            moveTo(cx - 120f, cy - 70f)
+            lineTo(cx + 20f, cy - 140f)
+            lineTo(cx + 15f, cy - 150f)
+            lineTo(cx - 125f, cy - 80f)
+            close()
+        }
+        drawStitchedFill(scope, gable1, Color(0xFF382F22))
+        scope.drawPath(gable1, ThreadColor, style = StitchedStroke)
+        
+        val gable2 = Path().apply {
+            moveTo(cx + 120f, cy - 70f)
+            lineTo(cx - 20f, cy - 140f)
+            lineTo(cx - 15f, cy - 150f)
+            lineTo(cx + 125f, cy - 80f)
+            close()
+        }
+        drawStitchedFill(scope, gable2, Color(0xFF382F22))
+        scope.drawPath(gable2, ThreadColor, style = StitchedStroke)
+        
+        // Manor Door
+        val doorPath = Path().apply { addRect(androidx.compose.ui.geometry.Rect(cx - 30f, cy - 40f, cx + 30f, cy + 20f)) }
+        drawStitchedFill(scope, doorPath, Color(0xFF2C2219))
+        scope.drawPath(doorPath, ThreadColor, style = StitchedStroke)
     }
 }

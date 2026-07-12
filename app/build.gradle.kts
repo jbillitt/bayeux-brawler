@@ -14,8 +14,8 @@ android {
     applicationId = "com.aistudio.bayeuxsim.vpkzla"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "0.2.2 Wessex"
+    versionCode = 4
+    versionName = "0.2.3 Wessex"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

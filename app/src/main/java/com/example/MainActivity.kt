@@ -653,7 +653,10 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                     size = uiState.characterSize,
                     hairColor = uiState.hairColor,
                     hairStyle = uiState.hairStyle,
-                    isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)
+                    isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS) || uiState.isThroneMode,
+                    isChariot = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT),
+                    isLord = uiState.isThroneMode,
+                    mountHp = if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE)) 80f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT)) 120f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)) 40f else 0f
                 )
 
                 // Render at massive scale (Fancam style!)
@@ -991,6 +994,26 @@ fun GearSelectionTabs(
                 ) {
                     // Size Selection
                     Column {
+                        if (uiState.hasThroneOption) {
+                            Button(
+                                onClick = onToggleThroneMode,
+                                colors = ButtonDefaults.buttonColors(containerColor = if (uiState.isThroneMode) TapestryGreen else TapestryDark),
+                                shape = RoundedCornerShape(4.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(36.dp)
+                                    .padding(bottom = 8.dp),
+                                contentPadding = PaddingValues(4.dp)
+                            ) {
+                                Text(
+                                    text = "I WON'T FIGHT (Throne Mode)",
+                                    fontFamily = FontFamily.Serif,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = TapestryLight
+                                )
+                            }
+                        }
                         Text("BODY SIZE (Affects Mass/Speed)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1161,28 +1184,6 @@ fun GearSelectionTabs(
                         )
                     }
                 }
-            }
-        }
-        
-        // Throne Option (only in weapons tab)
-        if (selectedTab == 0 && uiState.hasThroneOption) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onToggleThroneMode,
-                colors = ButtonDefaults.buttonColors(containerColor = if (uiState.isThroneMode) TapestryGreen else TapestryDark),
-                shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(2.dp, TapestryDark),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-            ) {
-                Text(
-                    text = "I won't fight! A true leader has others do his fighing for him!",
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    color = TapestryLight
-                )
             }
         }
     }

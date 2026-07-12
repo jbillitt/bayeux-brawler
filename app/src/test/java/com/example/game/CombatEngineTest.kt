@@ -1,0 +1,135 @@
+package com.example.game
+
+import androidx.compose.ui.graphics.Color
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class CombatEngineTest {
+
+    private class FakeContext : BattleContext {
+        override var player: FighterState? = null
+        override var enemies: List<FighterState> = emptyList()
+        override val levelWidth = 1500f
+        override val unlockedAncillaries = emptySet<Ancillary>()
+        val projectiles = mutableListOf<Projectile>()
+        val popups = mutableListOf<String>()
+        var kills = 0
+        override fun spawnProjectile(p: Projectile) { projectiles.add(p) }
+        override fun sound(type: SoundType) {}
+        override fun popup(text: String, x: Float, y: Float, color: Color) { popups.add(text) }
+        override fun bloodParticles(x: Float, y: Float, count: Int) {}
+        override fun particle(p: BloodParticle) {}
+        override fun screenshake(amount: Float) {}
+        override fun enemyKilled() { kills++ }
+    }
+
+    private fun fighter(
+        head: String = "head_sword", handle: String = "handle_medium",
+        isPlayer: Boolean = false, posX: Float = 0f, size: Float = 1.0f
+    ) = FighterState(
+        id = "f_$head", name = "T", isPlayer = isPlayer, maxHp = 100f, hp = 100f,
+        weaponHead = GameData.WEAPON_HEADS.first { it.id == head },
+        weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handle },
+        shield = GameData.SHIELDS.first { it.id == "shield_none" },
+        armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+        headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+        posX = posX, targetX = posX, size = size, hairColor = Color.Black, hairStyle = "short"
+    )
+
+    @Test
+    fun slingersNeverRollWrestlingMoves() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val slinger = fighter(head = "head_slingshot", handle = "handle_fists")
+        repeat(200) {
+            engine.triggerAttack(slinger)
+            assertNull("slinger rolled ${slinger.activeWrestlingMove}", slinger.activeWrestlingMove)
+            slinger.isAttacking = false
+        }
+    }
+
+    @Test
+    fun brawlersDoRollWrestlingMoves() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val brawler = fighter(head = "head_bare", handle = "handle_fists").apply { isDualWielding = true }
+        var rolled = false
+        repeat(200) {
+            engine.triggerAttack(brawler)
+            if (brawler.activeWrestlingMove != null) rolled = true
+            brawler.isAttacking = false
+        }
+        assertTrue("brawler never rolled a wrestling move in 200 attacks", rolled)
+    }
+
+    @Test
+    fun queuedActionsFireAfterDelayAndClearOnReset() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        // Dual-wield ranged strike queues a 2nd shot at +160ms
+        val archer = fighter(head = "head_bow", handle = "handle_fists", isPlayer = true).apply { isDualWielding = true }
+        val target = fighter(posX = 100f)
+        ctx.enemies = listOf(target)
+        archer.isAttacking = true
+        archer.swingProgress = 0.99f
+        engine.updateFighter(archer, target, 0.033f) // crosses strike threshold -> fires
+        assertEquals(1, ctx.projectiles.size)
+        engine.tick(0.1f) // not yet due
+        assertEquals(1, ctx.projectiles.size)
+        engine.tick(0.1f) // 0.2s elapsed > 0.16s
+        assertEquals(2, ctx.projectiles.size)
+    }
+
+    @Test
+    fun queuedShotSkippedIfAttackerDies() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val archer = fighter(head = "head_bow", handle = "handle_fists", isPlayer = true).apply { isDualWielding = true }
+        val target = fighter(posX = 100f)
+        ctx.enemies = listOf(target)
+        archer.isAttacking = true
+        archer.swingProgress = 0.99f
+        engine.updateFighter(archer, target, 0.033f)
+        assertEquals(1, ctx.projectiles.size)
+        archer.isDead = true
+        engine.tick(0.3f)
+        assertEquals("dead archer fired from the grave", 1, ctx.projectiles.size)
+    }
+
+    @Test
+    fun flatDamageKillsAndCountsForPlayer() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val victim = fighter()
+        ctx.enemies = listOf(victim)
+        engine.applyFlatDamage(500f, victim, isPlayerSource = true)
+        assertTrue(victim.isDying)
+        assertEquals(1, ctx.kills)
+        // Already-dying fighters take no further damage
+        val hpAfter = victim.hp
+        engine.applyFlatDamage(500f, victim, isPlayerSource = true)
+        assertEquals(hpAfter, victim.hp, 0f)
+        assertEquals(1, ctx.kills)
+    }
+
+    @Test
+    fun trojanHorseRollsPastFoesThenBursts() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val horse = fighter(head = "head_bare", handle = "handle_fists", isPlayer = true, posX = 200f)
+            .let { it.copy(id = "trojan_horse") }
+        val foe = fighter(posX = 400f)
+        ctx.enemies = listOf(foe, horse)
+        val startX = horse.posX
+        engine.updateFighter(horse, foe, 0.033f)
+        assertTrue("horse should roll forward", horse.posX > startX)
+        assertFalse(horse.isDying)
+        // Move it past the last foe -> bursts
+        horse.posX = 600f
+        engine.updateFighter(horse, foe, 0.033f)
+        assertTrue("horse should burst once behind all foes", horse.isDying)
+    }
+}

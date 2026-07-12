@@ -77,8 +77,8 @@ class GameViewModel : ViewModel() {
         initialGear.addAll(GameData.WEAPON_HEADS.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
-        initialGear.addAll(GameData.ARMOR_PIECES.shuffled().take(2).map { it.id })
-        initialGear.addAll(GameData.HEADGEAR_PIECES.shuffled().take(2).map { it.id })
+        initialGear.addAll(GameData.ARMOR_PIECES.filter { it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }.shuffled().take(2).map { it.id })
+        initialGear.addAll(GameData.HEADGEAR_PIECES.filter { it.id != "helm_jester" }.shuffled().take(2).map { it.id })
 
         _uiState.update { it.copy(
             highscore = 0,
@@ -114,8 +114,14 @@ class GameViewModel : ViewModel() {
             val newShieldUpgrades = if (choice.type == "shield_upgrade") state.shieldUpgrades + choice.itemId else state.shieldUpgrades
             val newBrawlerUpgrades = if (choice.type == "brawler_upgrade") state.brawlerUpgrades + choice.itemId else state.brawlerUpgrades
             
+            var newHeadgear = state.headgear
+            if (choice.itemId == "armor_jester") {
+                newHeadgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_jester" }
+            }
+            
             // Gain dynamic buffs based on items or ancillaries selected
             state.copy(
+                headgear = newHeadgear,
                 extraAttachments = newAttachments,
                 extraArmors = newArmors,
                 unlockedAncillaries = newAncs,
@@ -305,7 +311,8 @@ class GameViewModel : ViewModel() {
             shieldHp = state.shield.defense * 2f + if (state.shieldUpgrades.contains("oak_reinforcing")) 50f else 0f + if (state.shieldUpgrades.contains("iron_plating")) 100f else 0f + if (state.shieldUpgrades.contains("shield_helmet")) 40f else 0f,
             isMounted = state.unlockedAncillaries.contains(Ancillary.WARHORSE) || state.unlockedAncillaries.contains(Ancillary.CHARIOT) || state.unlockedAncillaries.contains(Ancillary.STILTS) || state.isThroneMode,
             mountHp = if (state.isThroneMode) 100f else if (state.unlockedAncillaries.contains(Ancillary.STILTS)) 40f else if (state.unlockedAncillaries.contains(Ancillary.CHARIOT)) 100f else if (state.unlockedAncillaries.contains(Ancillary.WARHORSE)) 80f else 0f,
-            isChariot = state.unlockedAncillaries.contains(Ancillary.CHARIOT)
+            isChariot = state.unlockedAncillaries.contains(Ancillary.CHARIOT),
+            isLord = state.isThroneMode
         )
         
         if (state.isThroneMode) {
@@ -347,6 +354,42 @@ class GameViewModel : ViewModel() {
                 hairColor = androidx.compose.ui.graphics.Color(0xFFC02020),
                 hairStyle = "long",
                 isDualWielding = true
+            ))
+        }
+
+        if (state.unlockedAncillaries.contains(Ancillary.HAG)) {
+            enemies.add(FighterState(
+                id = "hag", name = "Local Hag", isPlayer = true, maxHp = 40f, hp = 40f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" }, // Using slingshot for mud
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 20f, targetX = 20f, facingRight = true, size = 0.8f, hairColor = androidx.compose.ui.graphics.Color(0xFF8C969E), hairStyle = "long", isDualWielding = false
+            ))
+        }
+
+        if (state.unlockedAncillaries.contains(Ancillary.SURGEON)) {
+            enemies.add(FighterState(
+                id = "surgeon", name = "Battle Surgeon", isPlayer = true, maxHp = 60f, hp = 60f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_saw_1" }, // Bone saw!
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_short" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_cervelliere" },
+                posX = 40f, targetX = 40f, facingRight = true, size = 0.95f, hairColor = androidx.compose.ui.graphics.Color.White, hairStyle = "short", isDualWielding = false
+            ))
+        }
+
+        if (state.unlockedAncillaries.contains(Ancillary.TROJAN_HORSE)) {
+            enemies.add(FighterState(
+                id = "trojan_horse", name = "Trojan Horse", isPlayer = true, maxHp = 200f, hp = 200f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 180f, targetX = 180f, facingRight = true, size = 1.8f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = false
             ))
         }
         
@@ -533,7 +576,7 @@ class GameViewModel : ViewModel() {
 
     private fun updateSimulation(dt: Float) {
         val player = _playerState.value ?: return
-        val enemies = _enemiesState.value
+        var enemies = _enemiesState.value
         val projectiles = _projectilesState.value
         val popups = _popupsState.value
 
@@ -586,8 +629,10 @@ class GameViewModel : ViewModel() {
             if (player.ghostHp < player.hp) player.ghostHp = player.hp
         }
 
+        val newEnemiesToSpawn = mutableListOf<FighterState>()
         // 4. Update Enemy Fighter States (and allied NPCs like Fanatic!)
         enemies.forEach { enemy ->
+            val wasDead = enemy.isDead
             val pTarget = if (enemy.isPlayer) {
                 enemies.filter { !it.isDead && !it.isDying && !it.isPlayer }.minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
             } else {
@@ -599,6 +644,28 @@ class GameViewModel : ViewModel() {
                 enemy.ghostHp -= 20f * dt
                 if (enemy.ghostHp < enemy.hp) enemy.ghostHp = enemy.hp
             }
+            
+            // Trojan Horse death spawn
+            if (!wasDead && enemy.isDead && enemy.id == "trojan_horse") {
+                for (i in 0 until 3) {
+                    newEnemiesToSpawn.add(FighterState(
+                        id = "trojan_knight_${System.currentTimeMillis()}_$i", name = "Trojan Knight", isPlayer = true,
+                        maxHp = 60f, hp = 60f,
+                        weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
+                        weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_short" },
+                        shield = GameData.SHIELDS.first { it.id == "shield_kite" },
+                        armor = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" },
+                        headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_spangen" },
+                        posX = enemy.posX + Random.nextInt(-40, 40),
+                        targetX = enemy.posX, facingRight = true, size = 0.95f, hairColor = Color.Black, hairStyle = "short", isDualWielding = false
+                    ))
+                }
+                MedievalAudioSynth.playSound(SoundType.CRUNCH)
+            }
+        }
+        if (newEnemiesToSpawn.isNotEmpty()) {
+            enemies = enemies + newEnemiesToSpawn
+            _enemiesState.value = enemies
         }
 
         // Trample Logic
@@ -711,6 +778,30 @@ class GameViewModel : ViewModel() {
             // Visually, the renderer will animate him walking up
         }
 
+        val hasSurgeon = _uiState.value.unlockedAncillaries.contains(Ancillary.SURGEON)
+        val surgeonAlive = enemies.any { it.id == "surgeon" && !it.isDead && !it.isDying }
+        if (hasSurgeon && surgeonAlive && player.hp < player.maxHp) {
+            player.hp = (player.hp + 4.0f * dt).coerceAtMost(player.maxHp)
+            if (Random.nextFloat() < dt * 0.8f) {
+                addPopup("+HEAL+", player.posX + Random.nextInt(-20, 20), 100f, Color.Green)
+            }
+        }
+
+        val hasLilGuy = _uiState.value.unlockedAncillaries.contains(Ancillary.LIL_GUY)
+        if (hasLilGuy && !player.isDead && Random.nextFloat() < dt * 0.7f) {
+            val dir = if (player.facingRight) 1f else -1f
+            val spawnX = player.posX - (15f * dir) // shoot from player's back
+            remainingProjectiles.add(Projectile(
+                id = "lilguy_${System.currentTimeMillis()}_${Random.nextInt(100)}",
+                isPlayerOwned = true, posX = spawnX, posY = 150f,
+                velocityX = dir * (300f + Random.nextFloat() * 80f), velocityY = -25f,
+                damage = 4f, pierce = 2f, blunt = 1f, type = "rock",
+                sizeMultiplier = 0.5f, hasSpikes = false, launchedWeaponId = null,
+                isSplash = false, isPoisonous = false, isBallista = false
+            ))
+            MedievalAudioSynth.playSound(SoundType.SWOOSH)
+        }
+
         // Sync player HP to UI State for HUD bar
         _uiState.update { it.copy(playerHp = player.hp, playerMaxHp = player.maxHp) }
         
@@ -761,6 +852,11 @@ class GameViewModel : ViewModel() {
                 }
                 applyFlatDamage(bleedDmg, fighter, isPlayerSource = !fighter.isPlayer)
             }
+        }
+
+        // Slow tick over time
+        if (fighter.slowDuration > 0f) {
+            fighter.slowDuration -= dt
         }
 
         // Cooldown tick
@@ -875,7 +971,7 @@ class GameViewModel : ViewModel() {
             // Stats based on weapon head
             val isSlingshot = attacker.weaponHead.id == "head_slingshot"
             val isJavelin = attacker.weaponHead.id == "head_javelin"
-            val projType = if (isSlingshot) "stone" else if (isJavelin) "javelin" else "arrow"
+            var projType = if (isSlingshot) "stone" else if (isJavelin) "javelin" else "arrow"
             
             var sizeMult = 1f
             var spikes = false
@@ -955,8 +1051,16 @@ class GameViewModel : ViewModel() {
                 }
             }
 
+            var projId = "proj_${System.currentTimeMillis()}_${Random.nextInt(100)}"
+            if (attacker.id == "hag") {
+                projId = "hag_mud_${System.currentTimeMillis()}_${Random.nextInt(100)}"
+                finalDmg = 5f
+                splash = true
+                projType = "rock"
+            }
+
             val proj = Projectile(
-                id = "proj_${System.currentTimeMillis()}_${Random.nextInt(100)}",
+                id = projId,
                 isPlayerOwned = isPlayer,
                 posX = startX,
                 posY = startY,
@@ -1271,6 +1375,13 @@ class GameViewModel : ViewModel() {
                 addPopup("+POISONED+", defender.posX, 120f, Color(0xFF2E7D32))
             }
             
+            // Hag Mud effect
+            if (proj.id.startsWith("hag_mud_")) {
+                defender.slowDuration = 3.0f
+                defender.poisonDuration = 3.0f
+                addPopup("SLIMED!", defender.posX, 140f, Color(0xFF384033))
+            }
+            
             // Apply Spikes Bleed
             if (proj.hasSpikes) {
                 defender.bleedDuration = 4.0f
@@ -1353,7 +1464,9 @@ class GameViewModel : ViewModel() {
     }
 
     private fun addPopup(text: String, x: Float, y: Float, color: Color) {
-        // Disabled per user request to eliminate visual clutter
+        // Only allow damage numbers or specific numeric text, no words!
+        if (text.any { it.isLetter() }) return
+        _popupsState.value = _popupsState.value + CombatPopup(text, x, y, 0f, color)
     }
 
     private fun addBloodParticles(x: Float, y: Float, count: Int = 10) {
@@ -1407,9 +1520,12 @@ class GameViewModel : ViewModel() {
                 val availableAncs = GameData.ANCILLARIES.filter { it !in state.unlockedAncillaries }
                 if (availableAncs.isNotEmpty()) {
                     val anc = availableAncs.random()
+                    val isObject = anc in listOf(com.example.game.Ancillary.WARHORSE, com.example.game.Ancillary.CHARIOT, com.example.game.Ancillary.STILTS, com.example.game.Ancillary.TROJAN_HORSE)
+                    val titlePrefix = if (isObject) "Acquire" else "Rally"
+                    val titleSuffix = if (isObject) "" else " the ${anc.role}"
                     pendingChoices.add(LevelUpChoice(
                         id = "follower_${anc.id}",
-                        title = "Rally: ${anc.ancillaryName} the ${anc.role}",
+                        title = "$titlePrefix: ${anc.ancillaryName}$titleSuffix",
                         description = "${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)",
                         type = "follower",
                         itemId = anc.id
@@ -1460,20 +1576,28 @@ class GameViewModel : ViewModel() {
                     if (availableShieldUpgrades.isNotEmpty()) {
                         pendingChoices.add(availableShieldUpgrades.random())
                     } else {
-                        val armorOptions = GameData.ARMOR_PIECES.filter { it.id != "armor_bare" }
-                        val armorPiece = armorOptions.random()
-                        pendingChoices.add(LevelUpChoice("armor_${armorPiece.id}", "Layer Armor: ${armorPiece.itemName}", "Drape ${armorPiece.itemName} layered directly on top of your current armor, gaining +${armorPiece.defense.toInt()} Defense!", "armor", armorPiece.id))
+                    val baseArmorOptions = GameData.ARMOR_PIECES.filter { it.id != "armor_bare" && it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }
+                    val highLevelArmorOptions = GameData.ARMOR_PIECES.filter { it.id in listOf("armor_gauntlets", "armor_boots", "armor_coif") }
+                    
+                    val armorOptions = mutableListOf<GearItem>()
+                    armorOptions.addAll(baseArmorOptions)
+                    if (state.level > 10) {
+                        armorOptions.addAll(highLevelArmorOptions)
                     }
-                } else {
-                    val armorOptions = GameData.ARMOR_PIECES.filter { it.id != "armor_bare" }
+                    if (state.level > 3) {
+                        armorOptions.add(GameData.ARMOR_PIECES.first { it.id == "armor_jester" })
+                    }
+                    
                     val armorPiece = armorOptions.random()
+                    val titlePrefix = if (armorPiece.id in listOf("armor_gauntlets", "armor_boots", "armor_coif")) "Equip" else "Layer Armor"
                     pendingChoices.add(LevelUpChoice(
                         id = "armor_${armorPiece.id}",
-                        title = "Layer Armor: ${armorPiece.itemName}",
-                        description = "Drape ${armorPiece.itemName} layered directly on top of your current armor, gaining +${armorPiece.defense.toInt()} Defense!",
+                        title = "$titlePrefix: ${armorPiece.itemName}",
+                        description = if (armorPiece.id == "armor_jester") armorPiece.description else "Add ${armorPiece.itemName} to your loadout, gaining +${armorPiece.defense.toInt()} Defense!",
                         type = "armor",
                         itemId = armorPiece.id
                     ))
+                }
                 }
 
                 // 4. Ranged Upgrades (only if current weapon is ranged!)
@@ -1558,20 +1682,28 @@ class GameViewModel : ViewModel() {
                 initialGear.addAll(GameData.WEAPON_HEADS.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(3).map { it.id })
                 initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
-                initialGear.addAll(GameData.ARMOR_PIECES.shuffled().take(2).map { it.id })
-                initialGear.addAll(GameData.HEADGEAR_PIECES.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.ARMOR_PIECES.filter { it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.HEADGEAR_PIECES.filter { it.id != "helm_jester" }.shuffled().take(2).map { it.id })
                 
                 val rng = kotlin.random.Random.Default
                 val size = state.characterSize
                 val firstNames = if (size > 1.1f) {
-                    listOf("Guillaume", "Hugo", "Rollo", "Thorold", "Drogo", "Godfrey", "Taillefer", "Balduin", "Ranulf", "Fulk", "Goliath", "Gros-Jean", "Robert", "Richard", "Odo", "William", "Geoffrey", "Eustace")
+                    listOf("William", "Robert", "Henry", "Richard", "Hugh", "Odo", "Fulk", "Alan", "Amaury", "Drogo", "Tancred", "Bernard", "Reginald", "Herbert", "Arnulf", "Guillaume", "Hugo", "Rollo", "Thorold", "Godfrey", "Taillefer", "Balduin", "Ranulf", "Goliath", "Gros-Jean", "Geoffrey", "Eustace")
                 } else if (size < 0.9f) {
-                    listOf("Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred", "Wimund", "Bodo", "Osbern", "Wulfric", "Little John", "Alberic", "Berengar", "Drogo", "Erfast")
+                    listOf("Ive", "Ives", "Eudo", "Eudes", "Odo", "Hamo", "Hamon", "Milo", "Milon", "Wido", "Widon", "Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred", "Wimund", "Bodo", "Osbern", "Wulfric", "Little John", "Alberic", "Berengar", "Drogo", "Erfast")
                 } else {
-                    listOf("Arthur", "Lancelot", "Gawain", "Percival", "Bors", "Gareth", "Tristan", "Bedivere", "Galahad", "Kay", "Odo", "William", "Robert", "Richard", "Roger", "Hugh")
+                    listOf("Roger", "Walter", "Ralph", "Geoffrey", "Gilbert", "Baldwin", "Humphrey", "Eustace", "Miles", "Guy", "Achard", "Aimery", "Engenulf", "Gerelm", "Goubert", "Ilbert", "Ivon", "Mauger", "Osmund", "Pain", "Serlo", "Turold", "Turstin", "Vital", "Wadard", "Arthur", "Lancelot", "Gawain", "Percival", "Bors", "Gareth", "Tristan", "Bedivere", "Galahad", "Kay", "Odo", "William", "Robert", "Richard", "Hugh")
                 }
+                
+                val weakBynames = listOf("Weak-feet", "Soft-bread", "The Timid", "The Bastard", "The Infirm")
                 val firstName = firstNames.random(rng)
-                val lastName = state.playerName.split(" ").drop(1).joinToString(" ").ifEmpty { "the Unknown" }
+                
+                val currentLastName = state.playerName.split(" ").drop(1).joinToString(" ")
+                val lastName = if (size < 0.9f) {
+                    weakBynames.random(rng)
+                } else {
+                    currentLastName.ifEmpty { "the Unknown" }
+                }
                 val newName = "$firstName $lastName"
 
                 // Completely random starter gear for the next attempt (each attempt starts fresh and unique!)

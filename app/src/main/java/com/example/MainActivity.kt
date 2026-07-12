@@ -1807,7 +1807,7 @@ fun BattlefieldScene(
                             Button(
                                 onClick = {
                                     shareScope.launch(Dispatchers.IO) {
-                                        val uri = generateShareImage(context, player, uiState.scoreMultiplier, uiState.totalKills, isWin)
+                                        val uri = generateShareImage(context, player, uiState.score, uiState.totalKills, isWin)
                                         if (uri != null) withContext(Dispatchers.Main) {
                                             val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                                 type = "image/png"
@@ -2011,7 +2011,7 @@ private fun drawTapestryBorder(
     }
 }
 
-fun generateShareImage(context: android.content.Context, player: com.example.game.FighterState?, score: Float, kills: Int, isWin: Boolean): android.net.Uri? {
+fun generateShareImage(context: android.content.Context, player: com.example.game.FighterState?, score: Int, kills: Int, isWin: Boolean): android.net.Uri? {
     if (player == null) return null
     val width = 800
     val height = 800
@@ -2035,7 +2035,7 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
     paint.textSize = 35f
     paint.typeface = android.graphics.Typeface.SERIF
     val statusText = if(isWin) "Vanquished" else "Perished"
-    androidCanvas.drawText("Status: " + statusText + " | Score: " + score + "x | Kills: " + kills, width / 2f, 150f, paint)
+    androidCanvas.drawText("Status: " + statusText + " | Score: " + score + " | Kills: " + kills, width / 2f, 150f, paint)
     
     val wpnBase = player.weaponHead.itemName + " on a " + player.weaponHandle.itemName
     val wpnName = if (player.extraAttachments.isNotEmpty()) {

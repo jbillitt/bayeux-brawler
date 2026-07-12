@@ -51,7 +51,11 @@ enum class Ancillary(
     MONK("anc_monk", "Brother Tuck", "Monk", "Blesses you with holy incense. Smells heavenly.", hpBoost = 30f, speedBoost = 0f, color = Color(0xFF5E4B3C)),
     FANATIC("anc_fanatic", "Mad Boris", "Fanatic", "A screaming madman who charges the enemy naked with a huge axe.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFC02020)),
     CHARIOT("anc_mount_chariot", "War Chariot", "Chariot", "A sturdy wooden chariot. Faster and deadlier than a horse, but hard to turn.", hpBoost = 100f, speedBoost = 0.6f, color = Color(0xFF8B5A2B)),
-    STILTS("anc_mount_stilts", "Stilts", "Stilts", "Tall wooden poles. Elevates you above the common rabble.", hpBoost = -10f, speedBoost = -0.2f, color = Color(0xFFC2A077))
+    STILTS("anc_mount_stilts", "Stilts", "Stilts", "Tall wooden poles. Elevates you above the common rabble.", hpBoost = -10f, speedBoost = -0.2f, color = Color(0xFFC2A077)),
+    HAG("anc_hag", "Local Hag", "Hag", "Spawns in your backline, lobs mud, applies slow and minor poison.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF384033)),
+    TROJAN_HORSE("anc_trojan_horse", "Trojan Horse", "Decoy", "Rolls forward, absorbs hits, spawns 3 knights on death.", hpBoost = 200f, speedBoost = 0f, color = Color(0xFF8B5A2B)),
+    LIL_GUY("anc_lil_guy", "Lil Guy", "Backpack Slinger", "Renders on your back, passively shoots projectiles.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFFC78440)),
+    SURGEON("anc_surgeon", "Battle Surgeon", "Surgeon", "Spawns behind you, applies passive slow HP regen.", hpBoost = 10f, speedBoost = 0f, color = Color(0xFF801A1A))
 }
 
 interface GearItem {
@@ -108,7 +112,13 @@ object GameData {
         PITCHFORK("head_pitchfork", "Pitchfork", 1.1f, pierce = 16f, slash = 2f, reach = 2.1f, description = "Three rusty tines. Perfect for hay or heathen flesh.", color = Color(0xFF817A73)),
         DAGGER_HILT("head_dagger_hilt", "Pommel Strike", 0.3f, blunt = 12f, reach = 0.6f, description = "Ending them rightly with a solid iron pommel.", color = Color(0xFFC4AD6C)),
         LUCERNE("head_lucerne", "Lucerne Hammer", 3.0f, blunt = 22f, pierce = 18f, reach = 2.3f, description = "A horrific combination of beak and hammer. Punctures anything.", color = Color(0xFF7D838A)),
-        SABER("head_saber", "Huge Saber", 1.8f, slash = 28f, pierce = 5f, reach = 1.8f, description = "A massive curved blade sweeping across the battlefield.", color = Color(0xFF909BA0));
+        SABER("head_saber", "Huge Saber", 1.8f, slash = 28f, pierce = 5f, reach = 1.8f, description = "A massive curved blade sweeping across the battlefield.", color = Color(0xFF909BA0)),
+        URUMI("head_urumi", "Urumi Whip", 1.5f, slash = 30f, pierce = 5f, reach = 2.5f, description = "A flexible whip-like sword with multiple blades. Unpredictable and deadly.", color = Color(0xFFA6B0B5)),
+        WINGED_AXE("head_winged_axe", "Winged Axe", 2.8f, slash = 25f, blunt = 8f, reach = 1.6f, description = "A heavy axe with side wings to prevent over-penetration.", color = Color(0xFF7A868C)),
+        SPIKED_MACE("head_spiked_mace", "Spiked Mace", 2.5f, blunt = 22f, pierce = 8f, reach = 1.4f, description = "A mace adorned with vicious iron spikes.", color = Color(0xFF535C61)),
+        BASIC_CLUB("head_club", "Basic Club", 1.8f, blunt = 15f, reach = 1.3f, description = "A crude wooden club. Cheap and surprisingly effective.", color = Color(0xFF8A5E38)),
+        SAW_1("head_saw_1", "Bone Saw", 1.2f, slash = 18f, pierce = 2f, reach = 1.2f, description = "A crude saw meant for bone, repurposed for Saxon flesh.", color = Color(0xFF8C969E)),
+        SAW_2("head_saw_2", "Lumber Saw", 2.0f, slash = 28f, pierce = 5f, reach = 1.8f, description = "A massive two-man saw wielded by a single lunatic.", color = Color(0xFF909BA0));
         override val type: ItemType get() = ItemType.WEAPON_HEAD
     }
     val WEAPON_HEADS = WeaponHead.values().toList()
@@ -137,7 +147,10 @@ object GameData {
         CHAIN("handle_chain", "Bayeux Iron Chain", 1.5f, reach = 0.8f, speedPenalty = 0.25f, description = "An iron chain linking your grip to the weapon. Swings wildly in a floppy arc! Slower, but hits with high momentum.", color = Color(0xFF4C5154)),
         DOUBLE_ENDED("handle_double_ended", "Double-Ended Pole", 2.0f, reach = 1.0f, speedPenalty = 0.35f, description = "A wooden pole allowing heads on BOTH ends! Slower, but covers both ends and deals 1.5x damage.", color = Color(0xFF5D4831)),
         FLAIL_CHAIN("handle_flail_chain", "Flail Chain", 1.2f, reach = 1.0f, speedPenalty = 0.30f, description = "A short iron chain with a swivel joint. Makes any head a flail. Bypasses shields.", color = Color(0xFF4C5154)),
-        BLESSED_BRANCH("handle_blessed_branch", "Blessed Branch", 1.0f, reach = 0.8f, speedPenalty = 0.05f, description = "A twisted branch blessed by the monks. Smites heathens with holy splinters.", color = Color(0xFF8A5E38));
+        BLESSED_BRANCH("handle_blessed_branch", "Blessed Branch", 1.0f, reach = 0.8f, speedPenalty = 0.05f, description = "A twisted branch blessed by the monks. Smites heathens with holy splinters.", color = Color(0xFF8A5E38)),
+        STUMP("handle_stump", "Tree Stump", 5.0f, reach = 0.5f, speedPenalty = 0.6f, description = "An entire tree stump. Hilariously heavy and completely impractical.", color = Color(0xFF5E4B3C)),
+        RAM("handle_ram", "Battering Ram", 8.0f, reach = 1.5f, speedPenalty = 0.8f, description = "A solid iron-capped ram log. Swings with glacial speed but catastrophic force.", color = Color(0xFF452E1B)),
+        PLOUGH("handle_plough", "Plough Shaft", 3.0f, reach = 1.2f, speedPenalty = 0.25f, description = "The splintered wooden shaft of a farming plough.", color = Color(0xFF735835));
         override val type: ItemType get() = ItemType.WEAPON_HANDLE
     }
     val WEAPON_HANDLES = WeaponHandle.values().toList()
@@ -180,10 +193,17 @@ object GameData {
         override val color: Color = Color.Gray
     ) : GearItem {
         BARE("armor_bare", "Naked Norman", 0.0f, defense = 0f, speedPenalty = -0.15f, description = "FIGHT IN YOUR TUNIC UNDERGARMENTS! Absolute maximum score multiplier (x10.0), but one hit will pierce your fleshy bits.", color = Color(0xFFEFE6D4)),
+        FELT_GAMBESON("armor_felt", "Felt Gambeson", 2.0f, defense = 12f, speedPenalty = 0.02f, description = "Layers of boiled felt. Cheaper than proper padded armor.", color = Color(0xFFBCA683)),
         PADDED("armor_padded", "Padded Gambeson", 3.5f, defense = 15f, speedPenalty = 0.04f, description = "Stuffed layers of raw linen. Surprisingly effective against slashing.", color = Color(0xFFD6C39F)),
+        FUR_JACKET("armor_fur", "Wolf Fur Jacket", 2.5f, defense = 18f, speedPenalty = 0.05f, description = "A heavy pelt taken from a large wolf. Surprisingly warm and decent protection.", color = Color(0xFF6B513C)),
         LEATHER("armor_leather", "Leather Jerkin", 5.0f, defense = 22f, speedPenalty = 0.08f, description = "Tough boiled leather hides. Smells like grease and wet dog.", color = Color(0xFF7D583F)),
+        LAMELLAR("armor_lamellar", "Lamellar Armor", 10.0f, defense = 50f, speedPenalty = 0.20f, description = "Small metal plates laced together in rows. Often brought back by Byzantine mercenaries.", color = Color(0xFF60665B)),
         CHAINMAIL("armor_chainmail", "Rings of Hauberk", 12.0f, defense = 55f, speedPenalty = 0.22f, description = "Thousands of interlocking iron rings. Heavy defense against sword edges.", color = Color(0xFF717A80)),
-        SCALE("armor_scale", "Iron Scale Armor", 16.0f, defense = 70f, speedPenalty = 0.35f, description = "Overlapping iron scales sewn to leather. Exceptional protection, exhausting to wear.", color = Color(0xFF5D666B));
+        SCALE("armor_scale", "Iron Scale Armor", 16.0f, defense = 70f, speedPenalty = 0.35f, description = "Overlapping iron scales sewn to leather. Exceptional protection, exhausting to wear.", color = Color(0xFF5D666B)),
+        GAUNTLETS("armor_gauntlets", "Iron Gauntlets", 1.5f, defense = 15f, speedPenalty = 0.02f, description = "Heavy iron gloves that protect the hands.", color = Color(0xFF6B747A)),
+        BOOTS("armor_boots", "Iron-shod Boots", 2.0f, defense = 15f, speedPenalty = 0.03f, description = "Heavy boots protecting the feet from lowly Saxon spears.", color = Color(0xFF5D666B)),
+        EXTRA_COIF("armor_coif", "Mail Coif Layer", 2.0f, defense = 20f, speedPenalty = 0.02f, description = "An extra coif draped over your shoulders and neck.", color = Color(0xFF868C91)),
+        JESTER_OUTFIT("armor_jester", "Jester's Motley", 0.5f, defense = 0f, speedPenalty = 0.0f, description = "A full set of colorful motley. Complete lack of protection. High score multi!", color = Color(0xFF3C5CD6));
         override val type: ItemType get() = ItemType.ARMOR
     }
     val ARMOR_PIECES = ArmorPiece.values().toList()
@@ -209,7 +229,8 @@ object GameData {
         SPANGEN("helm_spangen", "Spangenhelm", 4.0f, defense = 45f, speedPenalty = 0.06f, description = "Metal strips riveting plates together. A classic medieval bruiser helm.", color = Color(0xFF7A8389)),
         KETTLE("helm_kettle", "Kettle Hat", 4.5f, defense = 50f, speedPenalty = 0.08f, description = "Wide brimmed hat of steel. Protects against arrows from above.", color = Color(0xFF8B9298)),
         MASK("helm_mask", "Masked Helm", 5.0f, defense = 58f, speedPenalty = 0.10f, description = "An enclosed helm with a menacing iron faceplate.", color = Color(0xFF7B858B)),
-        GREAT("helm_great", "Great Helm", 6.0f, defense = 65f, speedPenalty = 0.15f, description = "A massive flat-topped steel bucket. Perfect protection, terrible visibility.", color = Color(0xFF6B747A));
+        GREAT("helm_great", "Great Helm", 6.0f, defense = 65f, speedPenalty = 0.15f, description = "A massive flat-topped steel bucket. Perfect protection, terrible visibility.", color = Color(0xFF6B747A)),
+        JESTER_HAT("helm_jester", "Jester's Cap", 0.1f, defense = 0f, speedPenalty = 0.0f, description = "A colorful motley cap with bells on. Unbelievably foolish. Score x20!", color = Color(0xFFD63C3C));
         override val type: ItemType get() = ItemType.HEADGEAR
     }
     val HEADGEAR_PIECES = HeadgearPiece.values().toList()
@@ -300,6 +321,7 @@ data class FighterState(
     var shieldHp: Float = 0f,
     var poisonDuration: Float = 0f,
     var bleedDuration: Float = 0f,
+    var slowDuration: Float = 0f,
     var isMounted: Boolean = false,
     var mountHp: Float = 0f,
     var isChariot: Boolean = false,
@@ -402,7 +424,7 @@ data class FighterState(
             } else 1.1f
             // Weight slows you down slightly, but being little makes you attack much faster
             val sizeScale = if (isRanged) (0.2f + size * 0.8f) else (0.4f + size * 0.6f)
-            val weightFactor = (1f + (totalMass * 0.02f)) * sizeScale // reduced mass penalty slightly to match enemies better
+            val weightFactor = (1f + (totalMass * 0.01f)) * sizeScale // vastly reduced mass penalty
             // Two-handing (no shield) doubles weapon speed! Missing an arm means you can't two-hand.
             val shieldFactor = if (missingArm) 1.0f else if (shield.id == "shield_none" && !isDualWielding) 0.5f else if (isDualWielding) 0.6f else 1.0f
             // Speed penalty from handle choices
@@ -419,8 +441,9 @@ data class FighterState(
             // Bigger characters move slower base speed
             val sizeSpeed = baseSpeed / size
             val crumplePenalty = if (isCrumpled) 0.5f else 1.0f
-            val penaltyFactor = 1f - (totalMass * 0.025f).coerceIn(0f, 0.6f)
-            return (sizeSpeed * penaltyFactor) * (1f + speedBoost) * crumplePenalty * lateGameMultiplier
+            val slowPenalty = if (slowDuration > 0f) 0.4f else 1.0f
+            val penaltyFactor = 1f - (totalMass * 0.01f).coerceIn(0f, 0.45f) // weight isn't so immobilizing
+            return (sizeSpeed * penaltyFactor) * (1f + speedBoost) * crumplePenalty * slowPenalty * lateGameMultiplier
         }
 
     // Multiplier for points: naked = high risk = huge bonus points!
@@ -436,6 +459,9 @@ data class FighterState(
             val weaponMass = weaponHead.mass + weaponHandle.mass
             if (weaponMass < 1.0f) {
                 mult += 1.0f
+            }
+            if (headgear.id == "helm_jester" || armor.id == "armor_jester" || extraArmors.any { it.id == "armor_jester" }) {
+                mult += 20.0f
             }
             return mult
         }

@@ -402,8 +402,8 @@ object TapestryRenderer {
             // This draws inside the fighter's own scale transform, so divide it back out —
             // otherwise big enemies wear giant arrows while the flying ones stayed small.
             // Cap stuck-shaft size so ballista spears don't blot out the fighter
-            val effSize = ((if (proj.isBallista) 1.0f else 1f) * proj.size / fighter.size).coerceAtMost(1.8f)
-            val length = 35f * effSize
+            val effSize = ((if (proj.isBallista) 0.4f else if (proj.type == ProjectileType.BOLT) 0.6f else 1f) * proj.size / fighter.size).coerceAtMost(1.2f)
+            val length = (if (proj.type == ProjectileType.BOLT && !proj.isBallista) 20f else 35f) * effSize
             val tailX = ax + (dirX * length)
             val tailY = ay + (dirY * length)
 

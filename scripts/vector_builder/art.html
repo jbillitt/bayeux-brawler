@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opus Anglicanum — art workbench</title>
+<style>
+  :root {
+    /* Pulled from the game's own theme (ui/theme/Color.kt) — the tool and the tapestry share a palette */
+    --linen:      #F1E6CC;
+    --linen-card: #E4D6B6;
+    --thread:     #382F22;
+    --madder:     #9E3624;
+    --woad:       #265063;
+    --mustard:    #B08221;
+    --wool-green: #4C613D;
+
+    /* The bench the linen lies on */
+    --bench:      #241D14;
+    --bench-hi:   #33291C;
+    --bench-line: #4A3D2B;
+    --chalk:      #CFC0A0;
+    --chalk-dim:  #8A7C64;
+
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    height: 100vh;
+    display: grid;
+    grid-template-columns: 232px 1fr 300px;
+    grid-template-rows: 1fr auto;
+    background: var(--bench);
+    color: var(--chalk);
+    font-family: var(--serif);
+    overflow: hidden;
+  }
+
+  /* Latin caption capitals — the tapestry's own way of labelling things */
+  .eyebrow {
+    font-family: var(--serif);
+    font-size: 11px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--chalk-dim);
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--bench-line);
+  }
+
+  .rail {
+    background: var(--bench-hi);
+    border-right: 1px solid var(--bench-line);
+    padding: 18px 16px;
+    overflow-y: auto;
+  }
+  .rail.right { border-right: 0; border-left: 1px solid var(--bench-line); }
+
+  /* --- asset list --- */
+  .asset {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-left: 2px solid transparent;
+    color: var(--chalk);
+    font-family: var(--serif);
+    font-size: 15px;
+    padding: 9px 10px;
+    cursor: pointer;
+    display: block;
+  }
+  .asset:hover { background: #ffffff0d; }
+  .asset[aria-current="true"] { border-left-color: var(--madder); background: #ffffff12; color: #fff; }
+  .asset .meta {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--chalk-dim);
+    margin-top: 3px;
+  }
+  .asset .spawns { color: var(--wool-green); }
+
+  /* --- the linen, lit on the bench --- */
+  .work {
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    overflow: auto;
+  }
+  .panel {
+    background: var(--linen);
+    padding: 10px;
+    /* the stitched border of the tapestry itself */
+    border: 2px solid var(--thread);
+    outline: 2px dashed var(--thread);
+    outline-offset: 5px;
+    box-shadow: 0 24px 60px #0009;
+  }
+  canvas { display: block; cursor: crosshair; }
+
+  /* --- thread skeins: the signature. Colours are wound wool, not swatch chips --- */
+  .skein {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+  }
+  .skein input[type=color] {
+    inline-size: 40px;
+    block-size: 28px;
+    padding: 0;
+    border: 1px solid var(--chalk-dim);
+    border-radius: 14px / 8px;   /* wound thread, not a square chip */
+    cursor: pointer;
+    flex: none;
+    -webkit-appearance: none;
+    appearance: none;            /* strip the native well; the element *is* the thread */
+  }
+  .skein input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  .skein input[type=color]::-webkit-color-swatch { border: 0; border-radius: 13px / 7px; }
+  .skein label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--chalk);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .skein .hex { font-family: var(--mono); font-size: 10px; color: var(--chalk-dim); margin-left: auto; }
+
+  /* --- layers --- */
+  .layer {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-left: 2px solid transparent;
+    color: var(--chalk);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .layer:hover { background: #ffffff0d; }
+  .layer[aria-current="true"] { border-left-color: var(--mustard); background: #ffffff12; }
+  .layer .dot { inline-size: 10px; block-size: 10px; border: 1px solid var(--thread); flex: none; }
+  .layer .n { color: var(--chalk-dim); margin-left: auto; }
+
+  /* Code-drawn art: shown so you can see it exists and why you cannot drag it */
+  .coded {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--chalk-dim);
+    border: 1px dashed var(--woad);
+    background: #26506322;
+    padding: 8px 9px;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+  .coded b { color: #7FB4CC; font-weight: 400; }
+
+  /* --- command bar --- */
+  .bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 18px;
+    background: var(--bench-hi);
+    border-top: 1px solid var(--bench-line);
+  }
+  button.act {
+    font-family: var(--serif);
+    font-size: 13px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 9px 18px;
+    border: 1px solid var(--thread);
+    background: var(--mustard);
+    color: var(--thread);
+    cursor: pointer;
+  }
+  button.act:hover { background: #C9973A; }
+  button.act.ghost { background: none; color: var(--chalk-dim); border-color: var(--bench-line); }
+  button.act.ghost:hover { color: var(--chalk); border-color: var(--chalk-dim); }
+  button.act:disabled { opacity: .4; cursor: not-allowed; }
+
+  #status { font-family: var(--mono); font-size: 12px; color: var(--chalk-dim); margin-left: auto; text-align: right; white-space: pre-line; }
+  #status.ok { color: var(--wool-green); }
+  #status.bad { color: #D9705E; }
+
+  .empty { color: var(--chalk-dim); font-family: var(--mono); font-size: 12px; line-height: 1.6; }
+
+  :focus-visible { outline: 2px solid var(--mustard); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<aside class="rail">
+  <p class="eyebrow">Assets</p>
+  <div id="assetList" class="empty">Loading…</div>
+</aside>
+
+<main class="work">
+  <div class="panel">
+    <canvas id="c" width="620" height="540"></canvas>
+  </div>
+</main>
+
+<aside class="rail right">
+  <p class="eyebrow">Threads</p>
+  <div id="palette" class="empty">No asset open.</div>
+
+  <p class="eyebrow" style="margin-top:26px">Layers</p>
+  <div id="layers" class="empty">Pick an asset from the left.</div>
+
+  <div id="anchors"></div>
+</aside>
+
+<div class="bar">
+  <button class="act" id="save" disabled>Save asset</button>
+  <button class="act ghost" id="revert" disabled>Revert</button>
+  <span id="status">Pick an asset to begin.</span>
+</div>
+
+<script>
+const API = '';
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const CX = canvas.width / 2;
+const CY = canvas.height * 0.72;   // ground line, matching the game's y=0
+const HANDLE_R = 5;
+
+let art = null;          // the asset being edited
+let pristine = null;     // for Revert
+let selectedLayer = 0;
+let drag = null;         // {kind:'point'|'anchor', ...}
+
+const toX = x => CX + x;
+const toY = y => CY + y;
+const fromX = px => px - CX;
+const fromY = py => py - CY;
+
+// Every numeric pair in a command is a draggable point. Ops whose args are not
+// coordinate pairs (CIRCLE's radius) are held back so they cannot be dragged into nonsense.
+const POINT_PAIRS = { M: [[0,1]], L: [[0,1]], Q: [[0,1],[2,3]], C: [[0,1],[2,3],[4,5]], Z: [],
+                      RECT: [[0,1],[2,3]], OVAL: [[0,1],[2,3]], CIRCLE: [[0,1]], LINE: [[0,1],[2,3]] };
+
+function status(msg, kind) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = kind || '';
+}
+
+// ---------- load ----------
+async function loadList() {
+  const list = await (await fetch(`${API}/api/art`)).json();
+  const el = document.getElementById('assetList');
+  if (!list.length) {
+    el.className = 'empty';
+    el.textContent = 'No assets yet. Add a .json file to app/src/main/assets/art/.';
+    return;
+  }
+  el.className = '';
+  el.innerHTML = '';
+  list.forEach(a => {
+    const b = document.createElement('button');
+    b.className = 'asset';
+    b.dataset.id = a.id;
+    b.innerHTML = `${a.id}<span class="meta">${a.layers} layers` +
+      (a.spawns ? ` · <span class="spawns">spawns in game</span>` : ' · not spawned') +
+      (a.anchors.length ? ` · ${a.anchors.length} anchor` : '') + `</span>`;
+    b.onclick = () => openAsset(a.id);
+    el.appendChild(b);
+  });
+
+  // Deep-link (?asset=building_manor), or just open it if there is only one thing to open
+  const wanted = new URLSearchParams(location.search).get('asset');
+  if (!art && (wanted || list.length === 1)) openAsset(wanted || list[0].id);
+}
+
+async function openAsset(id) {
+  const res = await fetch(`${API}/api/art/${id}`);
+  if (!res.ok) { status(`Could not open ${id}.`, 'bad'); return; }
+  art = await res.json();
+  pristine = JSON.stringify(art);
+  selectedLayer = 0;
+  document.querySelectorAll('.asset').forEach(b => b.setAttribute('aria-current', String(b.dataset.id === id)));
+  document.getElementById('save').disabled = false;
+  document.getElementById('revert').disabled = false;
+  status(`${id} open. Drag a point to move it.`);
+  renderPalette();
+  renderLayers();
+  renderAnchors();
+  draw();
+}
+
+// ---------- inspector ----------
+function renderPalette() {
+  const el = document.getElementById('palette');
+  el.className = '';
+  el.innerHTML = '';
+  Object.entries(art.palette).forEach(([key, hex]) => {
+    const row = document.createElement('div');
+    row.className = 'skein';
+    row.innerHTML = `<input type="color" value="${hex}" id="col_${key}" aria-label="${key} thread">
+                     <label for="col_${key}">${key}</label>
+                     <span class="hex">${hex}</span>`;
+    // Paint the skein ourselves: the native colour well renders its own chrome and buries dark
+    // threads in white, which is useless when half this palette is near-black
+    const input = row.querySelector('input');
+    input.style.background = hex;
+    input.oninput = e => {
+      art.palette[key] = e.target.value;
+      e.target.style.background = e.target.value;
+      row.querySelector('.hex').textContent = e.target.value;
+      renderLayers(); // layer dots follow their thread
+      draw();
+    };
+    el.appendChild(row);
+  });
+}
+
+function renderLayers() {
+  const el = document.getElementById('layers');
+  el.className = '';
+  el.innerHTML = '';
+  art.layers.forEach((l, i) => {
+    const b = document.createElement('button');
+    b.className = 'layer';
+    b.setAttribute('aria-current', String(i === selectedLayer));
+    const col = art.palette[l.fill] || art.palette[l.stroke] || '#000';
+    b.innerHTML = `<span class="dot" style="background:${col}"></span>${l.id}<span class="n">${l.commands.length}</span>`;
+    b.onclick = () => { selectedLayer = i; renderLayers(); draw(); };
+    el.appendChild(b);
+  });
+}
+
+function renderAnchors() {
+  const el = document.getElementById('anchors');
+  const names = Object.keys(art.anchors || {});
+  if (!names.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<p class="eyebrow" style="margin-top:26px">Code-drawn</p>` +
+    names.map(n => `<div class="coded"><b>${n}</b> — drawn in code, seeded per object, so it differs
+      every time and cannot be hand-placed. Drag its blue bar on the linen to say where it sits;
+      the code follows.</div>`).join('');
+}
+
+// ---------- canvas ----------
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // linen weave
+  ctx.fillStyle = '#F1E6CC';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#382F2210';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < canvas.width; i += 6) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+  for (let i = 0; i < canvas.height; i += 6) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
+
+  // ground line — where the object stands. y=0 in asset coordinates.
+  ctx.strokeStyle = '#382F2255';
+  ctx.setLineDash([6, 5]);
+  ctx.beginPath(); ctx.moveTo(0, CY); ctx.lineTo(canvas.width, CY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(CX, 0); ctx.lineTo(CX, canvas.height); ctx.stroke();
+  ctx.setLineDash([]);
+
+  if (!art) return;
+  art.layers.forEach((l, i) => drawLayer(l, i === selectedLayer));
+  drawAnchors();
+  if (art.layers[selectedLayer]) drawHandles(art.layers[selectedLayer]);
+}
+
+function drawLayer(layer, isSelected) {
+  const fill = art.palette[layer.fill];
+  const stroke = art.palette[layer.stroke];
+  const p = new Path2D();
+  let any = false;
+
+  for (const cmd of layer.commands) {
+    const op = String(cmd[0]).toUpperCase();
+    const a = cmd.slice(1);
+    switch (op) {
+      case 'M': p.moveTo(toX(a[0]), toY(a[1])); any = true; break;
+      case 'L': p.lineTo(toX(a[0]), toY(a[1])); any = true; break;
+      case 'Q': p.quadraticCurveTo(toX(a[0]), toY(a[1]), toX(a[2]), toY(a[3])); any = true; break;
+      case 'C': p.bezierCurveTo(toX(a[0]), toY(a[1]), toX(a[2]), toY(a[3]), toX(a[4]), toY(a[5])); any = true; break;
+      case 'Z': p.closePath(); break;
+      case 'RECT': p.rect(toX(a[0]), toY(a[1]), a[2] - a[0], a[3] - a[1]); any = true; break;
+      case 'OVAL': p.ellipse((toX(a[0]) + toX(a[2])) / 2, (toY(a[1]) + toY(a[3])) / 2,
+                             Math.abs(a[2] - a[0]) / 2, Math.abs(a[3] - a[1]) / 2, 0, 0, Math.PI * 2); any = true; break;
+      case 'CIRCLE': p.moveTo(toX(a[0]) + a[2], toY(a[1])); p.arc(toX(a[0]), toY(a[1]), a[2], 0, Math.PI * 2); any = true; break;
+      case 'LINE': {
+        ctx.save();
+        ctx.strokeStyle = stroke || fill || '#382F22';
+        ctx.lineWidth = layer.strokeWidth || 2;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(toX(a[0]), toY(a[1])); ctx.lineTo(toX(a[2]), toY(a[3])); ctx.stroke();
+        ctx.restore();
+        break;
+      }
+    }
+  }
+  if (!any) return;
+
+  if (fill) { ctx.fillStyle = fill; ctx.fill(p); }
+  // the stitched outline: a dashed thread line, as the game draws it
+  ctx.save();
+  ctx.strokeStyle = stroke || '#382F22';
+  ctx.lineWidth = layer.strokeWidth || 2;
+  if (layer.stitched !== false) ctx.setLineDash([5, 3]);
+  ctx.stroke(p);
+  ctx.restore();
+
+  if (isSelected) {
+    ctx.save();
+    ctx.strokeStyle = '#B08221';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.stroke(p);
+    ctx.restore();
+  }
+}
+
+function eachPoint(layer, fn) {
+  layer.commands.forEach((cmd, ci) => {
+    const op = String(cmd[0]).toUpperCase();
+    (POINT_PAIRS[op] || []).forEach(([xi, yi]) => fn(ci, xi, yi, cmd[xi + 1], cmd[yi + 1]));
+  });
+}
+
+function drawHandles(layer) {
+  eachPoint(layer, (ci, xi, yi, x, y) => {
+    ctx.beginPath();
+    ctx.arc(toX(x), toY(y), HANDLE_R, 0, Math.PI * 2);
+    ctx.fillStyle = '#F1E6CC';
+    ctx.fill();
+    ctx.strokeStyle = '#9E3624';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+}
+
+function drawAnchors() {
+  Object.entries(art.anchors || {}).forEach(([name, a]) => {
+    ctx.save();
+    ctx.strokeStyle = '#265063';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([7, 4]);
+    ctx.beginPath();
+    ctx.moveTo(toX(a.x0), toY(a.y));
+    ctx.lineTo(toX(a.x1), toY(a.y));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    [a.x0, a.x1].forEach(x => {
+      ctx.beginPath();
+      ctx.arc(toX(x), toY(a.y), HANDLE_R, 0, Math.PI * 2);
+      ctx.fillStyle = '#265063';
+      ctx.fill();
+    });
+    ctx.fillStyle = '#265063';
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.fillText(name, toX(a.x0), toY(a.y) - 9);
+    ctx.restore();
+  });
+}
+
+// ---------- dragging ----------
+function hit(mx, my) {
+  // anchors first — they sit on top and are the thing people reach for
+  for (const [name, a] of Object.entries(art.anchors || {})) {
+    if (Math.hypot(toX(a.x0) - mx, toY(a.y) - my) <= HANDLE_R + 3) return { kind: 'anchor', name, end: 'x0' };
+    if (Math.hypot(toX(a.x1) - mx, toY(a.y) - my) <= HANDLE_R + 3) return { kind: 'anchor', name, end: 'x1' };
+  }
+  const layer = art.layers[selectedLayer];
+  if (!layer) return null;
+  let found = null;
+  eachPoint(layer, (ci, xi, yi, x, y) => {
+    if (!found && Math.hypot(toX(x) - mx, toY(y) - my) <= HANDLE_R + 3) found = { kind: 'point', ci, xi, yi };
+  });
+  return found;
+}
+
+canvas.onmousedown = e => {
+  if (!art) return;
+  const r = canvas.getBoundingClientRect();
+  drag = hit(e.clientX - r.left, e.clientY - r.top);
+};
+
+canvas.onmousemove = e => {
+  if (!art) return;
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  if (!drag) {
+    canvas.style.cursor = hit(mx, my) ? 'grab' : 'crosshair';
+    return;
+  }
+  canvas.style.cursor = 'grabbing';
+  const x = Math.round(fromX(mx));
+  const y = Math.round(fromY(my));
+  if (drag.kind === 'point') {
+    const cmd = art.layers[selectedLayer].commands[drag.ci];
+    cmd[drag.xi + 1] = x;
+    cmd[drag.yi + 1] = y;
+  } else {
+    const a = art.anchors[drag.name];
+    a[drag.end] = x;
+    a.y = y;
+  }
+  draw();
+};
+
+window.onmouseup = () => { drag = null; canvas.style.cursor = 'crosshair'; };
+
+// ---------- save ----------
+document.getElementById('save').onclick = async () => {
+  const res = await fetch(`${API}/api/art/${art.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(art)
+  });
+  const out = await res.json();
+  if (out.success) {
+    pristine = JSON.stringify(art);
+    status(out.message, 'ok');
+    loadList();
+  } else {
+    status(out.message, 'bad');
+  }
+};
+
+document.getElementById('revert').onclick = () => {
+  art = JSON.parse(pristine);
+  renderPalette(); renderLayers(); renderAnchors(); draw();
+  status('Reverted to the last saved version.');
+};
+
+loadList();
+draw();
+</script>
+</body>
+</html>

@@ -308,6 +308,87 @@ app.post('/api/asset/save', (req, res) => {
     }
 });
 
+// --- Data-driven art (assets/art/*.json) ---
+// The game reads these directly. No Kotlin, no rebuild: edit here, relaunch the app, see it.
+
+const ART_DIR = path.join(__dirname, '..', '..', 'app', 'src', 'main', 'assets', 'art');
+const VALID_OPS = new Set(['M', 'L', 'Q', 'C', 'Z', 'RECT', 'OVAL', 'CIRCLE', 'LINE']);
+const ARG_COUNT = { M: 2, L: 2, Q: 4, C: 6, Z: 0, RECT: 4, OVAL: 4, CIRCLE: 3, LINE: 4 };
+
+/** Rejects anything the Kotlin loader would choke on, so a bad save cannot break the game. */
+function validateArt(art) {
+    const errs = [];
+    if (!art || typeof art !== 'object') return ['Asset must be a JSON object.'];
+    if (!art.id) errs.push('Asset needs an id.');
+    if (!art.palette || typeof art.palette !== 'object') errs.push('Asset needs a palette object.');
+    if (!Array.isArray(art.layers)) errs.push('Asset needs a layers array.');
+
+    const paletteKeys = new Set(Object.keys(art.palette || {}));
+    for (const [key, hex] of Object.entries(art.palette || {})) {
+        if (!/^#?[0-9a-fA-F]{6}$/.test(String(hex).replace(/^0x/i, '').replace(/^ff/i, ''))) {
+            if (!/^#[0-9a-fA-F]{6}$/.test(hex)) errs.push(`Palette "${key}" is not a #RRGGBB colour.`);
+        }
+    }
+    (art.layers || []).forEach((layer, i) => {
+        const where = `Layer ${i} (${layer.id || 'unnamed'})`;
+        if (layer.fill && !paletteKeys.has(layer.fill)) errs.push(`${where} fills with "${layer.fill}", which is not in the palette.`);
+        if (layer.stroke && !paletteKeys.has(layer.stroke)) errs.push(`${where} strokes with "${layer.stroke}", which is not in the palette.`);
+        if (!Array.isArray(layer.commands)) { errs.push(`${where} has no commands array.`); return; }
+        layer.commands.forEach((cmd, c) => {
+            if (!Array.isArray(cmd) || cmd.length === 0) { errs.push(`${where}, command ${c} is empty.`); return; }
+            const op = String(cmd[0]).toUpperCase();
+            if (!VALID_OPS.has(op)) { errs.push(`${where}, command ${c}: "${cmd[0]}" is not a known op.`); return; }
+            if (cmd.length - 1 !== ARG_COUNT[op]) {
+                errs.push(`${where}, command ${c}: ${op} takes ${ARG_COUNT[op]} numbers, got ${cmd.length - 1}.`);
+            }
+            cmd.slice(1).forEach(n => { if (typeof n !== 'number' || !isFinite(n)) errs.push(`${where}, command ${c}: "${n}" is not a number.`); });
+        });
+    });
+    for (const [name, a] of Object.entries(art.anchors || {})) {
+        if (['x0', 'x1', 'y'].some(k => typeof a[k] !== 'number')) errs.push(`Anchor "${name}" needs numeric x0, x1 and y.`);
+    }
+    return errs;
+}
+
+app.get('/api/art', (req, res) => {
+    try {
+        if (!fs.existsSync(ART_DIR)) return res.json([]);
+        const list = fs.readdirSync(ART_DIR).filter(f => f.endsWith('.json')).map(f => {
+            const art = JSON.parse(fs.readFileSync(path.join(ART_DIR, f), 'utf-8'));
+            return {
+                id: art.id || f.replace(/\.json$/, ''),
+                layers: (art.layers || []).length,
+                spawns: !!art.spawn,
+                anchors: Object.keys(art.anchors || {})
+            };
+        });
+        res.json(list);
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.get('/api/art/:id', (req, res) => {
+    const file = path.join(ART_DIR, `${path.basename(req.params.id)}.json`);
+    if (!fs.existsSync(file)) return res.status(404).json({ success: false, message: `No asset called "${req.params.id}".` });
+    res.json(JSON.parse(fs.readFileSync(file, 'utf-8')));
+});
+
+app.post('/api/art/:id', (req, res) => {
+    const errs = validateArt(req.body);
+    if (errs.length) return res.status(400).json({ success: false, message: errs.join('\n') });
+    try {
+        if (!fs.existsSync(ART_DIR)) fs.mkdirSync(ART_DIR, { recursive: true });
+        const file = path.join(ART_DIR, `${path.basename(req.params.id)}.json`);
+        fs.writeFileSync(file, JSON.stringify(req.body, null, 2) + '\n');
+        res.json({ success: true, message: `Saved ${req.params.id}. Relaunch the app to see it.` });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.use(express.static(__dirname));
+
 const PORT = 3000;
 if (require.main === module) {
     app.listen(PORT, () => {

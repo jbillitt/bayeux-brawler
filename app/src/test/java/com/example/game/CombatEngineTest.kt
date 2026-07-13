@@ -245,4 +245,37 @@ class CombatEngineTest {
         val rangeMult = 0.8f
         assertTrue("Chariot ranged player didn't hold distance: dist=$dist, optimal=${reachPixels * rangeMult}", dist >= reachPixels * rangeMult - 5f)
     }
+
+    @Test
+    fun daggerWielderClosesToHitboxHugeEnemy() {
+        // dagger vs size 1.45f enemy
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        
+        // test tiny player
+        val tinyDagger = fighter(head = "head_sword", handle = "handle_dagger", isPlayer = true, posX = 0f, size = 0.8f)
+        val hugeEnemy1 = fighter(posX = 300f, size = 1.45f)
+        hugeEnemy1.crumpleDuration = 100f // stand still
+        
+        ctx.player = tinyDagger
+        ctx.enemies = listOf(hugeEnemy1)
+        repeat(300) { engine.updateFighter(tinyDagger, hugeEnemy1, 0.1f) }
+        
+        val dist1 = kotlin.math.abs(tinyDagger.posX - hugeEnemy1.posX)
+        val reachPixels1 = tinyDagger.reach * 40f + 40f
+        assertTrue("Tiny dagger player stopped too far away: dist=$dist1, reachPixels=$reachPixels1", dist1 <= reachPixels1)
+
+        // test huge player
+        val hugeDagger = fighter(head = "head_sword", handle = "handle_dagger", isPlayer = true, posX = 0f, size = 1.45f)
+        val hugeEnemy2 = fighter(posX = 300f, size = 1.45f)
+        hugeEnemy2.crumpleDuration = 100f // stand still
+        
+        ctx.player = hugeDagger
+        ctx.enemies = listOf(hugeEnemy2)
+        repeat(300) { engine.updateFighter(hugeDagger, hugeEnemy2, 0.1f) }
+        
+        val dist2 = kotlin.math.abs(hugeDagger.posX - hugeEnemy2.posX)
+        val reachPixels2 = hugeDagger.reach * 40f + 40f
+        assertTrue("Huge dagger player stopped too far away: dist=$dist2, reachPixels=$reachPixels2", dist2 <= reachPixels2)
+    }
 }

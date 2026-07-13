@@ -1317,6 +1317,7 @@ object TapestryRenderer {
                 "handle_chain", "handle_flail_chain" -> 60f
                 "handle_double_ended" -> 80f
                 "handle_blessed_branch" -> 70f
+                "handle_dagger" -> 15f
                 else -> 30f // short, iron, wheel, pick, fists
             }
             baseLen + fighter.handleExtensionCount * 25f

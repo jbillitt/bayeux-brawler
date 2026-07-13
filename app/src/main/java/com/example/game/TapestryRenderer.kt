@@ -15,6 +15,10 @@ import kotlin.random.Random
 
 object TapestryRenderer {
 
+    /** Plague palette: the pallor of the sick, and Aldwin's mud-coloured rags. */
+    private val PlagueFlesh = Color(0xFF7A9B4E)
+    private val PlagueRags = Color(0xFF6B7D4A)
+
     /**
      * Draw a character (Player Norman Knight or Saxon Enemy)
      */
@@ -288,6 +292,17 @@ object TapestryRenderer {
         }
     }
 
+    /**
+     * Flesh colour for every exposed part — face, neck, hands. One place so the sick look the same
+     * whether they are the player, an enemy or a follower.
+     */
+    private fun skinTone(fighter: FighterState): Color = when {
+        // Plague shows before it hurts: the peasant is contagious from the moment he spawns
+        fighter.diseaseDuration > 0f || fighter.isContagious -> PlagueFlesh
+        fighter.poisonDuration > 0f -> Color(0xFF8CAF8A)
+        else -> Color(0xFFE8C5A4)
+    }
+
     private fun drawTorso(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val tunicPath = Path().apply {
             moveTo(cx - 25f, cy + 15f)
@@ -301,6 +316,7 @@ object TapestryRenderer {
         val fillCol = when (fighter.id) {
             "hag" -> Color(0xFF3E3A2E) // dodgy ragged cloak
             "fanatic_boris" -> Color(0xFF7A1F1F) // blood-red madman's rags, not a clean white shirt
+            "plague_peasant" -> PlagueRags // filthy undyed homespun
             else -> fighter.armor.color
         }
 
@@ -315,16 +331,35 @@ object TapestryRenderer {
             scope.drawCircle(ThreadColor, radius = 8f, center = Offset(cx, cy + 73f), style = Stroke(width = 1.5f))
         }
 
-        // Add a traditional embroidered pattern trim at the bottom hem
-        val hemPath = Path().apply {
-            moveTo(cx - 29f, cy + 85f)
-            lineTo(cx + 29f, cy + 85f)
-            lineTo(cx + 30f, cy + 95f)
-            lineTo(cx - 30f, cy + 95f)
-            close()
+        if (fighter.id == "plague_peasant") {
+            // No embroidery for a dying man: the hem is torn into a row of ragged teeth
+            val ragPath = Path().apply {
+                moveTo(cx - 30f, cy + 82f)
+                var x = -30f
+                var deep = true
+                while (x < 30f) {
+                    val nextX = (x + 7.5f).coerceAtMost(30f)
+                    lineTo(cx + (x + nextX) / 2f, cy + if (deep) 100f else 92f)
+                    lineTo(cx + nextX, cy + 82f)
+                    deep = !deep
+                    x = nextX
+                }
+                close()
+            }
+            drawStitchedFill(scope, ragPath, fillCol)
+            scope.drawPath(ragPath, ThreadColor, style = StitchedStroke)
+        } else {
+            // Add a traditional embroidered pattern trim at the bottom hem
+            val hemPath = Path().apply {
+                moveTo(cx - 29f, cy + 85f)
+                lineTo(cx + 29f, cy + 85f)
+                lineTo(cx + 30f, cy + 95f)
+                lineTo(cx - 30f, cy + 95f)
+                close()
+            }
+            drawStitchedFill(scope, hemPath, Color(0xFFB08221)) // Gold/mustard border
+            scope.drawPath(hemPath, ThreadColor, style = StitchedStroke)
         }
-        drawStitchedFill(scope, hemPath, Color(0xFFB08221)) // Gold/mustard border
-        scope.drawPath(hemPath, ThreadColor, style = StitchedStroke)
 
         // Torso outline
         scope.drawPath(tunicPath, ThreadColor, style = StitchedStroke)
@@ -499,7 +534,7 @@ object TapestryRenderer {
                 lineTo(cx + 10f, cy + 15f)
                 close()
             }
-            val skinColor = if (fighter.poisonDuration > 0f) Color(0xFF8CAF8A) else Color(0xFFE8C5A4)
+            val skinColor = skinTone(fighter)
         drawStitchedFill(scope, neckPath, skinColor)
         scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
 
@@ -1735,7 +1770,7 @@ object TapestryRenderer {
                 scope.drawRect(Color(0xFF6B747A), topLeft = Offset(cx + 19f, cy + 24f), size = androidx.compose.ui.geometry.Size(12f, 12f))
                 scope.drawRect(ThreadColor, topLeft = Offset(cx + 19f, cy + 24f), size = androidx.compose.ui.geometry.Size(12f, 12f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
             } else {
-                scope.drawCircle(if (fighter.poisonDuration > 0f) Color(0xFF8CAF8A) else Color(0xFFE8C5A4), radius = 6f, center = Offset(cx + 25f, cy + 30f))
+                scope.drawCircle(skinTone(fighter), radius = 6f, center = Offset(cx + 25f, cy + 30f))
                 scope.drawCircle(ThreadColor, radius = 6f, center = Offset(cx + 25f, cy + 30f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
             }
             if (fighter.brawlerUpgrades.contains("brass_knuckles")) {
@@ -1814,7 +1849,7 @@ object TapestryRenderer {
                     val hy = cy + 40f
                     val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
                     drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor)
-                    scope.drawCircle(if (fighter.poisonDuration > 0f) Color(0xFF8CAF8A) else Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
+                    scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
                     if (fighter.brawlerUpgrades.contains("brass_knuckles")) {
                         scope.drawRect(Color(0xFFB5A642), topLeft = Offset(hx + 1f, hy - 4f), size = androidx.compose.ui.geometry.Size(4f, 8f))
@@ -1897,7 +1932,7 @@ object TapestryRenderer {
                     
                     val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
                     drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor)
-                    scope.drawCircle(if (fighter.poisonDuration > 0f) Color(0xFF8CAF8A) else Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
+                    scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
                 }
             }
@@ -1911,7 +1946,7 @@ object TapestryRenderer {
             val hy = cy + 45f
             val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
             drawStitchedStrap(this, Offset(cx + 15f, cy + 25f), Offset(hx, hy), sleeveColor)
-            scope.drawCircle(if (fighter.poisonDuration > 0f) Color(0xFF8CAF8A) else Color(0xFFE8C5A4), radius = 5f, center = Offset(hx, hy))
+            scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
             scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
         }
 

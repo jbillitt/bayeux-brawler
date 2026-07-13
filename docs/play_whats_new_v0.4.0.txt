@@ -1,0 +1,8 @@
+NEW
+• Plague-Bearer: a dying peasant who charges the foe, infecting all nearby — you included.
+• Divine weather (lvl 12+): bolt, flood, hail, frost — tap the border.
+• Late Saxons: shield-walls, brutes, a healing war-priest — Shieldbreaker and Armour-Piercing answer.
+• Pick your mount. Heavy armour collapses the chariot.
+
+FIXED
+Fists reach and interrupt. Small builds viable. Poison and bleed were 15x too strong. Bare chests bare, palisades timber. New buildings, woad war paint.

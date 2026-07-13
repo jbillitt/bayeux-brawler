@@ -22,6 +22,9 @@ object TapestryRenderer {
     /** The war-priest's habit — monk's undyed wool, so he reads as a churchman among soldiers. */
     private val MonkBrown = Color(0xFF5E4B3C)
 
+    /** Woad: the old blue, daubed on before a fight. */
+    private val Woad = Color(0xFF3A5A8C)
+
     /**
      * Draw a character (Player Norman Knight or Saxon Enemy)
      */
@@ -357,6 +360,21 @@ object TapestryRenderer {
                 }
                 scope.drawPath(curl, fighter.hairColor.copy(alpha = 0.75f), style = Stroke(width = 1.6f, cap = StrokeCap.Round))
             }
+
+            if (fighter.warPaint == 1) {
+                // A woad spiral across the bare chest — the paint goes on the skin, not the shirt
+                val spiral = Path().apply {
+                    moveTo(cx, cy + 45f)
+                    var r = 3f
+                    var a = 0f
+                    while (r < 20f) {
+                        a += 0.5f
+                        r += 1.1f
+                        lineTo(cx + cos(a) * r, cy + 45f + sin(a) * r * 0.8f)
+                    }
+                }
+                scope.drawPath(spiral, Woad, style = Stroke(width = 2.5f, cap = StrokeCap.Round))
+            }
         }
 
         if (fighter.isWarPriest) {
@@ -634,7 +652,28 @@ object TapestryRenderer {
         }
         drawStitchedFill(scope, headPath, skinColor)
         scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
-        
+
+        if (fighter.warPaint == 1) {
+            // Woad, daubed straight over the skin: two bars across the eyes and a stripe down the jaw.
+            // Deterministic from the id, so a given Saxon wears the same paint every frame.
+            val woadRng = Random(fighter.id.hashCode() * 31)
+            scope.drawLine(
+                Woad,
+                Offset(hx - 10f, hy + 2f), Offset(hx + 15f + woadRng.nextFloat() * 4f, hy + 1f),
+                strokeWidth = 5f, cap = StrokeCap.Round
+            )
+            scope.drawLine(
+                Woad.copy(alpha = 0.85f),
+                Offset(hx - 8f, hy + 9f), Offset(hx + 8f + woadRng.nextFloat() * 5f, hy + 8f),
+                strokeWidth = 3f, cap = StrokeCap.Round
+            )
+            scope.drawLine(
+                Woad,
+                Offset(hx + 2f, hy + 13f), Offset(hx + 4f, hy + 22f),
+                strokeWidth = 3f, cap = StrokeCap.Round
+            )
+        }
+
         if (fighter.id == "hag") {
             val hagNose = Path().apply {
                 moveTo(hx + 10f, hy + 2f)

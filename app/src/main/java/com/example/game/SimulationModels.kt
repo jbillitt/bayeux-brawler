@@ -332,8 +332,9 @@ data class FighterState(
     val faceBiteShape: Int = (0..3).random(), // 0: normal, 1: underbite, 2: overbite, 3: lantern jaw
     val faceForehead: Int = (0..2).random(), // 0: normal, 1: big, 2: sloped
     val faceMustache: Int = (0..3).random(),
+    val warPaint: Int = 0, // 0 none, 1 blue woad
     val level: Int = 1,
-    
+
     // Death tracking
     var deathType: DeathType = DeathType.FALL_BACK,
     var deathTime: Long = 0L,

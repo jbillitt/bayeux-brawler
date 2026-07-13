@@ -197,7 +197,12 @@ object EnemyFactory {
         if (arch in listOf(EnemyArchetype.CHAMPION, EnemyArchetype.LORD)) enemyHp *= 1.5f
         if (arch == EnemyArchetype.KING) enemyHp *= 3f
 
-        val hairColors = listOf(Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF8A7156), Color(0xFF2C2219), Color(0xFF888888))
+        // Wider palette so a wave stops looking like one man cloned: ginger, flaxen, ash, soot, grey,
+        // chestnut, tow-head, rust
+        val hairColors = listOf(
+            Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF8A7156), Color(0xFF2C2219), Color(0xFF888888),
+            Color(0xFF6E4B22), Color(0xFFD8C08A), Color(0xFF9C4A1E)
+        )
         val hairStyles = listOf("short", "long", "bald")
 
         val startX = spawnX(index)
@@ -219,6 +224,12 @@ object EnemyFactory {
             size = sizeMultiplier,
             hairColor = hairColors.random(rng),
             hairStyle = hairStyles.random(rng),
+            faceNoseShape = rng.nextInt(4),
+            faceBiteShape = rng.nextInt(4),
+            faceForehead = rng.nextInt(3),
+            faceMustache = rng.nextInt(4),
+            // Old blood in the Saxon line: about one in seven daubs himself in woad before a fight
+            warPaint = if (rng.nextFloat() < 0.15f) 1 else 0,
             level = level,
             isMounted = isMounted,
             isChariot = isChariot,

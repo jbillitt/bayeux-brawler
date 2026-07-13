@@ -11,6 +11,9 @@ interface BattleContext {
     val enemies: List<FighterState>
     val levelWidth: Float
     val unlockedAncillaries: Set<Ancillary>
+    /** Player's "out" cards against the late-game counters. */
+    val hasShieldbreaker: Boolean get() = false
+    val hasArmorPiercing: Boolean get() = false
     fun spawnProjectile(p: Projectile)
     fun sound(type: SoundType)
     fun popup(text: String, x: Float, y: Float, color: Color)
@@ -35,6 +38,12 @@ class CombatEngine(private val ctx: BattleContext) {
         // Damage-over-time rates, in points per second (see applyDotDamage).
         const val POISON_DPS = 4f
         const val BLEED_DPS = 3f
+
+        // Curve counters and their outs.
+        const val SHIELDBREAKER_MULT = 3f
+        const val ARMOR_PIERCE_FRACTION = 0.33f
+        const val WAR_PRIEST_HEAL_PER_SEC = 5f
+        const val WAR_PRIEST_RADIUS_PX = 260f
 
         // Plague peasant contagion. Tunable starting values.
         const val DISEASE_DPS = 1.5f
@@ -197,6 +206,37 @@ class CombatEngine(private val ctx: BattleContext) {
         if (fighter.attackCooldown > 0) {
             val cooldownRate = if (!fighter.isPlayer && fighter.armor.id == "armor_bare") 1.3f else 1f
             fighter.attackCooldown -= dt * cooldownRate
+        }
+
+        // The war-priest never lifts a hand. He keeps behind his flock and mends whoever is worst
+        // hurt — so he must be killed first, or the host heals faster than you can cut it down.
+        // (Below the status ticks above, so plague and poison still rot him; flattened by hail he stops.)
+        if (fighter.isWarPriest) {
+            fighter.isAttacking = false
+            fighter.swingProgress = 0f
+            if (fighter.crumpleDuration > 0f) return
+
+            ctx.enemies
+                .filter { it !== fighter && !it.isPlayer && !it.isDead && !it.isDying }
+                .filter { it.hp < it.maxHp && abs(it.posX - fighter.posX) <= WAR_PRIEST_RADIUS_PX }
+                .minByOrNull { it.hp }
+                ?.let { worstHurt ->
+                    worstHurt.hp = (worstHurt.hp + WAR_PRIEST_HEAL_PER_SEC * dt).coerceAtMost(worstHurt.maxHp)
+                    if (Random.nextFloat() < dt * 0.8f) {
+                        ctx.popup("BENEDICTIO!", worstHurt.posX, 150f, Color(0xFFD6C48A))
+                    }
+                }
+
+            val player = ctx.player
+            if (player != null && !player.isDead) {
+                val gap = fighter.posX - player.posX
+                if (gap > WAR_PRIEST_RADIUS_PX * 0.75f) {
+                    fighter.posX -= fighter.moveSpeed * 0.45f * dt
+                    fighter.animFrame += dt * 5f
+                }
+                fighter.facingRight = gap < 0f
+            }
+            return
         }
 
         // Update Swing Progress
@@ -517,7 +557,11 @@ class CombatEngine(private val ctx: BattleContext) {
             val slash = ((attacker.damageSlash - attachSlash * scaleLvl) + attachSlash * scaleLvl * attachmentDmgMultiplier) * damageFalloff
             val pierce = ((attacker.damagePierce - attachPierce * scaleLvl) + attachPierce * scaleLvl * attachmentDmgMultiplier) * damageFalloff
             val blunt = ((attacker.damageBlunt - attachBlunt * scaleLvl) + attachBlunt * scaleLvl * attachmentDmgMultiplier) * damageFalloff
-            val armorFactor = (1f - (currTarget.totalArmor / 100f)).coerceIn(0.1f, 1f)
+            val baseArmorFactor = (1f - (currTarget.totalArmor / 100f)).coerceIn(0.1f, 1f)
+            // Armour-Piercing Stitch: a third of the damage the armour would have eaten gets through
+            val armorFactor = if (attacker.isPlayer && ctx.hasArmorPiercing) {
+                baseArmorFactor + (1f - baseArmorFactor) * ARMOR_PIERCE_FRACTION
+            } else baseArmorFactor
 
             if (isBlocked) {
                 // Blocked by shield!
@@ -526,7 +570,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 val blockDamage = ((slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt) * dmgScale
 
                 if (currTarget.shieldHp > 0f) {
-                    currTarget.shieldHp -= blockDamage * 0.5f // Shield takes half damage
+                    // Shield takes half damage — unless you took Shieldbreaker, which splinters it
+                    val shieldMult = if (attacker.isPlayer && ctx.hasShieldbreaker) SHIELDBREAKER_MULT else 1f
+                    currTarget.shieldHp -= blockDamage * 0.5f * shieldMult
                     if (currTarget.shieldHp <= 0f) {
                         currTarget.shieldHp = 0f
                         currTarget.shield = GameData.SHIELDS.first { it.id == "shield_none" }

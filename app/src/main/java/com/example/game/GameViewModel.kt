@@ -144,6 +144,8 @@ class GameViewModel : ViewModel() {
         override val enemies get() = _enemiesState.value
         override val levelWidth get() = _uiState.value.levelWidth
         override val unlockedAncillaries get() = _uiState.value.unlockedAncillaries
+        override val hasShieldbreaker get() = _uiState.value.hasShieldbreaker
+        override val hasArmorPiercing get() = _uiState.value.hasArmorPiercing
         override fun spawnProjectile(p: Projectile) { _projectilesState.value = _projectilesState.value + p }
         override fun sound(type: SoundType) = MedievalAudioSynth.playSound(type)
         override fun popup(text: String, x: Float, y: Float, color: Color) = addPopup(text, x, y, color)
@@ -204,6 +206,8 @@ class GameViewModel : ViewModel() {
             val newShieldUpgrades = if (choice.type == "shield_upgrade") state.shieldUpgrades + choice.itemId else state.shieldUpgrades
             val newBrawlerUpgrades = if (choice.type == "brawler_upgrade") state.brawlerUpgrades + choice.itemId else state.brawlerUpgrades
             val newHasSilkenGarments = state.hasSilkenGarments || choice.id == "silken_garments"
+            val newHasShieldbreaker = state.hasShieldbreaker || choice.itemId == "counter_shieldbreaker"
+            val newHasArmorPiercing = state.hasArmorPiercing || choice.itemId == "counter_armor_piercing"
             
             var newHeadgear = state.headgear
             if (choice.itemId == "armor_jester") {
@@ -222,6 +226,8 @@ class GameViewModel : ViewModel() {
                 brawlerUpgrades = newBrawlerUpgrades,
                 hasSilkenGarments = newHasSilkenGarments,
                 divineWeathers = newWeathers,
+                hasShieldbreaker = newHasShieldbreaker,
+                hasArmorPiercing = newHasArmorPiercing,
                 showLevelUpScreen = false,
                 pendingLevelUpChoices = emptyList()
             )
@@ -467,6 +473,22 @@ class GameViewModel : ViewModel() {
             ))
         }
 
+        // Curve counters: phase in with level, and record which ones the player has actually met so
+        // the matching "out" card can join the reward pool afterwards.
+        val metCounters = mutableSetOf<String>()
+        if (state.level >= EnemyFactory.SHIELD_WALL_FROM_LEVEL && Random.nextFloat() < 0.20f) {
+            enemies.addAll(EnemyFactory.shieldWallPair(enemiesCount, state.level))
+            metCounters.add(EnemyFactory.COUNTER_SHIELD_WALL)
+        }
+        if (state.level >= EnemyFactory.BRUTE_FROM_LEVEL && Random.nextFloat() < 0.25f) {
+            enemies.add(EnemyFactory.armouredBrute(enemiesCount + 2, state.level))
+            metCounters.add(EnemyFactory.COUNTER_BRUTE)
+        }
+        if (state.level >= EnemyFactory.WAR_PRIEST_FROM_LEVEL && Random.nextFloat() < 0.15f) {
+            enemies.add(EnemyFactory.warPriest(enemiesCount + 3, state.level))
+            metCounters.add(EnemyFactory.COUNTER_WAR_PRIEST)
+        }
+
         if (state.unlockedAncillaries.contains(Ancillary.PLAGUE_PEASANT)) {
             enemies.add(FighterState(
                 // Dying already, so he simply runs at the foe and breathes on them until one of them drops
@@ -616,7 +638,8 @@ class GameViewModel : ViewModel() {
                 cameraX = 0f,
                 backgroundObjects = bgObjects,
                 // Every weather charge is ready when the horns blow
-                weatherCooldowns = it.divineWeathers.associate { w -> w.id to 0f }
+                weatherCooldowns = it.divineWeathers.associate { w -> w.id to 0f },
+                seenCounters = it.seenCounters + metCounters
             )
         }
 
@@ -1140,6 +1163,28 @@ class GameViewModel : ViewModel() {
                     }
                 }
                 
+                // 4b. Counter "outs" — the whole of the light guidance: if the player has met a
+                // counter and lacks its answer, that answer joins the pool. Nothing is removed and
+                // nothing is auto-picked; they can still walk past it.
+                if (EnemyFactory.COUNTER_SHIELD_WALL in state.seenCounters && !state.hasShieldbreaker) {
+                    pendingChoices.add(LevelUpChoice(
+                        id = "counter_shieldbreaker",
+                        title = "Shieldbreaker",
+                        description = "Your blows splinter shields to kindling. Triple damage to shield hp.",
+                        type = "counter",
+                        itemId = "counter_shieldbreaker"
+                    ))
+                }
+                if (EnemyFactory.COUNTER_BRUTE in state.seenCounters && !state.hasArmorPiercing) {
+                    pendingChoices.add(LevelUpChoice(
+                        id = "counter_armor_piercing",
+                        title = "Armour-Piercing Stitch",
+                        description = "A blessed needle-point edge. A third of your damage ignores armour.",
+                        type = "counter",
+                        itemId = "counter_armor_piercing"
+                    ))
+                }
+
                 // 5. Divine weather — late-game, rare, and you may only hold two
                 val unheldWeathers = DivineWeather.values().filter { it !in state.divineWeathers }
                 if (state.level >= WEATHER_UNLOCK_LEVEL &&

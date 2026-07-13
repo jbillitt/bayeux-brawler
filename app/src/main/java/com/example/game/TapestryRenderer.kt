@@ -19,6 +19,9 @@ object TapestryRenderer {
     private val PlagueFlesh = Color(0xFF7A9B4E)
     private val PlagueRags = Color(0xFF6B7D4A)
 
+    /** The war-priest's habit — monk's undyed wool, so he reads as a churchman among soldiers. */
+    private val MonkBrown = Color(0xFF5E4B3C)
+
     /**
      * Draw a character (Player Norman Knight or Saxon Enemy)
      */
@@ -317,11 +320,28 @@ object TapestryRenderer {
             "hag" -> Color(0xFF3E3A2E) // dodgy ragged cloak
             "fanatic_boris" -> Color(0xFF7A1F1F) // blood-red madman's rags, not a clean white shirt
             "plague_peasant" -> PlagueRags // filthy undyed homespun
-            else -> fighter.armor.color
+            else -> if (fighter.isWarPriest) MonkBrown else fighter.armor.color
         }
 
         // Fill with textured stitching
         drawStitchedFill(scope, tunicPath, fillCol)
+
+        if (fighter.isWarPriest) {
+            // Unarmed and robed: a tall staff and a rope girdle mark him out as the man to kill first
+            val staffX = cx + 34f
+            scope.drawLine(
+                Color(0xFF6B5433),
+                Offset(staffX, cy - 55f), Offset(staffX, cy + 95f),
+                strokeWidth = 5f, cap = StrokeCap.Round
+            )
+            scope.drawCircle(Color(0xFFD6A420), radius = 7f, center = Offset(staffX, cy - 58f))
+            scope.drawCircle(ThreadColor, radius = 7f, center = Offset(staffX, cy - 58f), style = Stroke(width = 1.5f))
+            scope.drawLine(
+                Color(0xFFD6C48A),
+                Offset(cx - 26f, cy + 62f), Offset(cx + 26f, cy + 62f),
+                strokeWidth = 3f
+            )
+        }
 
         // Champion Belt brawler upgrade — big gold wrestling belt at the waist
         if (fighter.brawlerUpgrades.contains("champion_belt")) {

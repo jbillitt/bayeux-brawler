@@ -363,6 +363,7 @@ data class FighterState(
     var isChariot: Boolean = false,
     var isStilts: Boolean = false,
     var isLord: Boolean = false,
+    val isWarPriest: Boolean = false, // never attacks; heals the worst-hurt foe near him
     var grapplerId: String? = null,
     var activeWrestlingMove: WrestlingMove? = null,
     var crumpleDuration: Float = 0f,
@@ -605,6 +606,10 @@ data class BattleSimState(
     val hasSilkenGarments: Boolean = false,
     val divineWeathers: List<DivineWeather> = emptyList(),
     val weatherCooldowns: Map<String, Float> = emptyMap(), // id -> seconds remaining; charged at battle start
+    val hasShieldbreaker: Boolean = false,
+    val hasArmorPiercing: Boolean = false,
+    // Counters the player has actually met. Drives which "out" card gets added to the reward pool.
+    val seenCounters: Set<String> = emptySet(),
     
     // Roguelike level upgrades persistent state
     val extraAttachments: List<String> = emptyList(), // stores GearItem IDs of extra blades/heads

@@ -15,6 +15,8 @@ class CombatEngineTest {
         override var enemies: List<FighterState> = emptyList()
         override val levelWidth = 1500f
         override val unlockedAncillaries = emptySet<Ancillary>()
+        override var hasShieldbreaker: Boolean = false
+        override var hasArmorPiercing: Boolean = false
         val projectiles = mutableListOf<Projectile>()
         val popups = mutableListOf<String>()
         var kills = 0
@@ -277,6 +279,82 @@ class CombatEngineTest {
         val dist2 = kotlin.math.abs(hugeDagger.posX - hugeEnemy2.posX)
         val reachPixels2 = hugeDagger.reach * 40f + 40f
         assertTrue("Huge dagger player stopped too far away: dist=$dist2, reachPixels=$reachPixels2", dist2 <= reachPixels2)
+    }
+
+    @Test
+    fun warPriestHealsTheWorstHurtOfHisFlockAndNeverAttacks() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val priest = EnemyFactory.warPriest(0, 18).apply { posX = 500f }
+        val scratched = fighter(posX = 480f).apply { hp = 90f }
+        val dying = fighter(posX = 520f).apply { hp = 20f }
+        val player = fighter(isPlayer = true, posX = 100f)
+        ctx.player = player
+        ctx.enemies = listOf(priest, scratched, dying)
+
+        repeat(10) { engine.updateFighter(priest, player, 0.1f) } // one second of prayer
+
+        assertEquals("priest healed the wrong man", 20f + CombatEngine.WAR_PRIEST_HEAL_PER_SEC, dying.hp, 0.6f)
+        assertEquals("priest healed someone he should not have", 90f, scratched.hp, 0.01f)
+        assertFalse("the priest raised a hand", priest.isAttacking)
+    }
+
+    @Test
+    fun warPriestCannotHealBeyondFullHealthOrAcrossTheField() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val priest = EnemyFactory.warPriest(0, 18).apply { posX = 500f }
+        val faraway = fighter(posX = 500f + CombatEngine.WAR_PRIEST_RADIUS_PX + 100f).apply { hp = 10f }
+        ctx.enemies = listOf(priest, faraway)
+        repeat(10) { engine.updateFighter(priest, null, 0.1f) }
+        assertEquals("priest healed a man out of earshot", 10f, faraway.hp, 0.01f)
+    }
+
+    @Test
+    fun shieldbreakerTriplesShieldDamage() {
+        fun shieldLossAfterOneStrike(withCard: Boolean): Float {
+            val ctx = FakeContext()
+            ctx.hasShieldbreaker = withCard
+            val engine = CombatEngine(ctx)
+            val player = fighter(head = "head_maul", isPlayer = true, posX = 0f)
+            val walled = fighter(posX = 60f)
+            walled.shield = GameData.SHIELDS.first { it.id == "shield_tower" }
+            walled.shieldHp = 500f
+            walled.crumpleDuration = 100f // hold still
+            ctx.player = player
+            ctx.enemies = listOf(walled)
+            // Drive strikes until the shield takes a hit (blocks are a dice roll)
+            repeat(400) { engine.updateFighter(player, walled, 0.1f) }
+            return 500f - walled.shieldHp
+        }
+        val plain = shieldLossAfterOneStrike(withCard = false)
+        val broken = shieldLossAfterOneStrike(withCard = true)
+        assertTrue("shield took no damage at all, test is not exercising the block path", plain > 0f)
+        assertTrue("shieldbreaker did not splinter harder: plain=$plain broken=$broken", broken > plain * 1.8f)
+    }
+
+    @Test
+    fun armorPiercingPushesDamageThroughScale() {
+        fun hpLost(withCard: Boolean): Float {
+            val ctx = FakeContext()
+            ctx.hasArmorPiercing = withCard
+            val engine = CombatEngine(ctx)
+            val player = fighter(head = "head_sword", isPlayer = true, posX = 0f)
+            val brute = fighter(posX = 60f)
+            brute.armor = GameData.ARMOR_PIECES.first { it.id == "armor_scale" }
+            brute.shield = GameData.SHIELDS.first { it.id == "shield_none" }
+            brute.hp = 5000f
+            brute.maxHp = 5000f
+            brute.crumpleDuration = 1000f
+            ctx.player = player
+            ctx.enemies = listOf(brute)
+            repeat(600) { engine.updateFighter(player, brute, 0.1f) }
+            return 5000f - brute.hp
+        }
+        val plain = hpLost(withCard = false)
+        val pierced = hpLost(withCard = true)
+        assertTrue("no damage landed at all", plain > 0f)
+        assertTrue("armour-piercing did not help: plain=$plain pierced=$pierced", pierced > plain * 1.05f)
     }
 
     @Test

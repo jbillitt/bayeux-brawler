@@ -212,6 +212,47 @@ class GameViewModelTest {
     }
 
     @Test
+    fun `the out card is offered once its counter has been met, and not before`() {
+        val method = GameViewModel::class.java.getDeclaredMethod("endBattle", Boolean::class.javaPrimitiveType)
+        method.isAccessible = true
+
+        // Never met a shield wall: no Shieldbreaker on offer
+        mutateState { it.copy(level = 14, seenCounters = emptySet(), hasShieldbreaker = false) }
+        repeat(20) {
+            method.invoke(viewModel, true)
+            assertFalse(
+                "Shieldbreaker offered before the player ever saw a shield wall",
+                viewModel.uiState.value.pendingLevelUpChoices.any { c -> c.id == "counter_shieldbreaker" }
+            )
+            mutateState { it.copy(level = 14, seenCounters = emptySet(), hasShieldbreaker = false) }
+        }
+
+        // Met one: the answer is always in the pool
+        mutateState { it.copy(level = 14, seenCounters = setOf(EnemyFactory.COUNTER_SHIELD_WALL), hasShieldbreaker = false) }
+        method.invoke(viewModel, true)
+        assertTrue(
+            "Shieldbreaker never offered after meeting a shield wall",
+            viewModel.uiState.value.pendingLevelUpChoices.any { c -> c.id == "counter_shieldbreaker" }
+        )
+
+        // Already holding it: never offered again
+        mutateState { it.copy(level = 14, seenCounters = setOf(EnemyFactory.COUNTER_SHIELD_WALL), hasShieldbreaker = true) }
+        method.invoke(viewModel, true)
+        assertFalse(
+            "Shieldbreaker offered to a player who already has it",
+            viewModel.uiState.value.pendingLevelUpChoices.any { c -> c.id == "counter_shieldbreaker" }
+        )
+    }
+
+    @Test
+    fun `taking the out card sets the flag the engine reads`() {
+        val card = LevelUpChoice("counter_armor_piercing", "Armour-Piercing Stitch", "", "counter", "counter_armor_piercing")
+        mutateState { it.copy(pendingLevelUpChoices = listOf(card)) }
+        viewModel.selectLevelUpChoice("counter_armor_piercing")
+        assertTrue(viewModel.uiState.value.hasArmorPiercing)
+    }
+
+    @Test
     fun `chariot collapses if armor is too heavy`() {
         // headgear must be pinned: BattleSimState defaults it to a *random* piece (0-6kg),
         // which silently decided whether this loadout crossed the weight limit

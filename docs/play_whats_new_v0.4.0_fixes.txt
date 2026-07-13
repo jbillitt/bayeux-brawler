@@ -1,0 +1,9 @@
+FIXES
+• New runs no longer inherit your last mount or upgrades.
+• Dual wield swings both weapons — one hand missing no longer cancels the other.
+• No more swinging at foes you cannot hit.
+• Floored enemies get back up and fight again.
+• The pike is a 12-foot pole again, with its own lunge.
+• Stilts hold you above the melee. Naked Normans hit and move faster.
+• Crowns render, chariots stopped doubling, buildings stopped overlapping.
+• New hats, a hunchbacked hag, followers with names.

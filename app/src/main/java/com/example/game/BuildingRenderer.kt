@@ -70,12 +70,10 @@ internal fun renderBackgroundObject(scope: DrawScope, bg: BackgroundObject, cx: 
             BackgroundObjectType.FORT_TOWER -> drawFortTower(scope, cx, cy, bg)
             BackgroundObjectType.FORT_MOTTE -> drawFortMotte(scope, cx, cy, bg)
             BackgroundObjectType.BROKEN_CHARIOT -> {
-                // Just draw a broken chariot
-                val dummy = FighterState(id="dummy", name="dummy", isPlayer=true, maxHp=1f, hp=1f, weaponHead=GameData.WEAPON_HEADS[0], weaponHandle=GameData.WEAPON_HANDLES[0], shield=GameData.SHIELDS[0], armor=GameData.ARMOR_PIECES[0], headgear=GameData.HEADGEAR_PIECES[0], posX=0f, targetX=0f)
                 scope.withTransform({
                     translate(cx, cy)
                 }) {
-                    drawChariot(this, 0f, 0f, dummy)
+                    drawChariot(this, 0f, 0f, null, isCollapsed = true)
                 }
             }
         }

@@ -186,11 +186,40 @@ internal fun drawTrojanHorse(scope: DrawScope, cx: Float, cy: Float, fighter: Fi
         scope.drawLine(Color(0xFF9C7D58), Offset(cx - 58f, cy + 38f), Offset(cx - 80f, cy + 75f), strokeWidth = 5f)
     }
 
-internal fun drawChariot(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+internal fun drawChariot(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState?, isCollapsed: Boolean = false) {
+        if (isCollapsed) {
+            // Draw broken chariot (snapped axle, tilted body)
+            val cartW = 110f
+            val cartH = 90f
+            val cartTopY = cy + 65f
+            
+            scope.withTransform({ rotate(15f, Offset(cx, cy)) }) {
+                scope.drawRect(Color(0xFF8B5A2B), topLeft = Offset(cx - cartW/2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH))
+                scope.drawRect(ThreadColor, topLeft = Offset(cx - cartW/2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH), style = StitchedStroke)
+                scope.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 30f), Offset(cx + cartW/2, cartTopY + 30f), strokeWidth = 3f)
+                scope.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 60f), Offset(cx + cartW/2, cartTopY + 60f), strokeWidth = 3f)
+            }
+            
+            // Broken wheel detached
+            val wheelRadius = 45f
+            val wheelCenter = Offset(cx + 40f, cy + 140f)
+            scope.withTransform({ rotate(45f, wheelCenter) }) {
+                scope.drawCircle(Color(0xFF5C4033), radius = wheelRadius, center = wheelCenter)
+                scope.drawCircle(ThreadColor, radius = wheelRadius, center = wheelCenter, style = Stroke(width = 4f))
+                scope.drawLine(ThreadColor, Offset(wheelCenter.x - wheelRadius, wheelCenter.y), Offset(wheelCenter.x + wheelRadius, wheelCenter.y), strokeWidth = 4f)
+                scope.drawLine(ThreadColor, Offset(wheelCenter.x, wheelCenter.y - wheelRadius), Offset(wheelCenter.x, wheelCenter.y + wheelRadius), strokeWidth = 4f)
+            }
+
+            // Snapped axle
+            scope.drawLine(Color(0xFF5C4033), Offset(cx - 30f, cy + 120f), Offset(cx + 60f, cy + 130f), strokeWidth = 8f)
+            return
+        }
+
+        val fighterSafe = fighter!!
         // Draw horse further ahead
         val horseOffsetX = 120f
         scope.withTransform({ translate(horseOffsetX, 0f) }) {
-            drawHorse(this, cx, cy, fighter)
+            drawHorse(this, cx, cy, fighterSafe)
         }
         
         // Draw wooden traces connecting horse to chariot
@@ -210,7 +239,7 @@ internal fun drawChariot(scope: DrawScope, cx: Float, cy: Float, fighter: Fighte
         // Draw wheel
         val wheelRadius = 45f
         val wheelCenter = Offset(cx, cy + 130f) // bottom is cy + 175f
-        val wheelRot = fighter.posX * 2f // spin based on position
+        val wheelRot = fighterSafe.posX * 2f // spin based on position
         scope.withTransform({ rotate(wheelRot, wheelCenter) }) {
             scope.drawCircle(Color(0xFF5C4033), radius = wheelRadius, center = wheelCenter)
             scope.drawCircle(ThreadColor, radius = wheelRadius, center = wheelCenter, style = Stroke(width = 4f))

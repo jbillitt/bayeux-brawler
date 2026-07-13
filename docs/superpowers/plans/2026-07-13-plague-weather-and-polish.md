@@ -65,7 +65,7 @@
 
 ---
 
-### Task 3: Small-fighter viability (HP + attack speed) — [sonnet/low]
+### Task 3: Small-fighter viability (HP + attack speed) — [OUTSOURCED: Gemini/antigravity; reviewed in main session. Sequence AFTER Tasks 2/4/6/7 — shares SimulationModels.kt/GameViewModel.kt with them]
 
 **Files:**
 - Modify: `app/src/main/java/com/example/game/GameViewModel.kt` (player maxHp setup at battle start)
@@ -81,7 +81,7 @@
 
 ---
 
-### Task 4: Chariot closes to melee range — [sonnet/medium]
+### Task 4: Chariot closes to melee range — [OUTSOURCED: Gemini/antigravity, worktree; reviewed in main session. Touches CombatEngine.kt — branch from main AFTER Task 2 merges]
 
 **Files:**
 - Modify: `app/src/main/java/com/example/game/CombatEngine.kt` (optimal-distance logic ~lines 210-228)
@@ -96,7 +96,7 @@
 
 ---
 
-### Task 5: Crossbow bolt embed size — [sonnet/low]
+### Task 5: Crossbow bolt embed size — [OUTSOURCED: Gemini/antigravity; reviewed in main session. Renderer-only, safe to run in parallel]
 
 **Files:**
 - Modify: wherever bolts spawn `StuckProj` / building `stuckArrows` (search `ProjectileType.BOLT` in `GameViewModel.kt` / `CombatEngine.kt`; rendering in `TapestryRenderer.kt` and `BuildingRenderer.kt`)
@@ -110,7 +110,7 @@
 
 ---
 
-### Task 6: Dagger — short hilt art + guaranteed-hit approach — [sonnet/medium]
+### Task 6: Dagger — short hilt art + guaranteed-hit approach — [OUTSOURCED: Gemini/antigravity, worktree; reviewed in main session. Touches CombatEngine.kt — branch from main AFTER Tasks 2 & 4 merge]
 
 **Files:**
 - Modify: `app/src/main/java/com/example/game/TapestryRenderer.kt` (dagger grip drawing in `drawWeapon`, search `handle_dagger`)
@@ -124,7 +124,7 @@
 
 ---
 
-### Task 7: Armour weight → chariot collapse + Silken Garments card — [sonnet/medium]
+### Task 7: Armour weight → chariot collapse + Silken Garments card — [OUTSOURCED: Gemini/antigravity, worktree; reviewed in main session. Touches GameViewModel.kt/SimulationModels.kt — expect a small rebase against parallel tasks]
 
 **Files:**
 - Modify: `app/src/main/java/com/example/game/SimulationModels.kt` (BattleSimState: add `hasSilkenGarments: Boolean = false`)
@@ -223,7 +223,7 @@ enum class DivineWeather(val id: String, val label: String, val description: Str
 
 ---
 
-### Task 12: Mount selector on reward screen — [sonnet/medium] — use frontend-design skill
+### Task 12: Mount selector on reward screen — [OUTSOURCED: Gemini/antigravity, worktree; reviewed in main session. Match existing reward-screen styling exactly]
 
 **Files:**
 - Modify: `app/src/main/java/com/example/game/ui/GameMainScreen.kt` (level-up/reward screen composables)
@@ -316,7 +316,7 @@ enum class DivineWeather(val id: String, val label: String, val description: Str
 
 ---
 
-### Task 18: Vector builder auto-discovery — [sonnet/low]
+### Task 18: Vector builder auto-discovery — [OUTSOURCED: Gemini/antigravity; reviewed in main session. scripts/vector_builder/ only, fully parallel-safe]
 
 **Files:**
 - Modify: `scripts/vector_builder/server.js` (replace `BUILDING_FNS`/`CREATURE_FNS`/`ANCILLARY_IDS` whitelists, lines 158-165)

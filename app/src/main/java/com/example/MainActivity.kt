@@ -67,7 +67,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // it's an idle auto-battler, screen shouldn't sleep mid-fight
         com.example.game.MedievalAudioSynth.init(applicationContext)
-        
+        com.example.game.VectorAsset.init(applicationContext) // data-driven building art in assets/art/
+
         // Initialize the free, offline, local vocalization engine
         // com.example.game.MedievalVocalizer.init(applicationContext)
         com.example.game.MedievalHarpPlayer.init(applicationContext)

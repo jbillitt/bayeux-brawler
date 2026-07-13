@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,6 +41,12 @@ class ArtScreenshotTest {
     val composeTestRule = createComposeRule()
 
     private val linen = Color(0xFFF1E6CC)
+
+    @Before
+    fun loadArt() {
+        // The JSON-backed buildings draw nothing without this
+        VectorAsset.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())
+    }
 
     private fun bgObject(type: BackgroundObjectType, seed: Int = 1) = BackgroundObject(
         id = "shot_${type.name}_$seed",

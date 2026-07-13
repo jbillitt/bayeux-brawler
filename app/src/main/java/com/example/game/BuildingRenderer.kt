@@ -71,6 +71,18 @@ internal fun renderBackgroundObject(scope: DrawScope, bg: BackgroundObject, cx: 
             BackgroundObjectType.FORT_MOTTE -> drawFortMotte(scope, cx, cy, bg)
             BackgroundObjectType.BUILDING_BAYEUX -> drawBayeuxBuilding(scope, cx, cy, bg)
             BackgroundObjectType.TOWER_SPIRAL -> drawSpiralTower(scope, cx, cy, bg)
+            BackgroundObjectType.VECTOR -> {
+                bg.artId?.let { id ->
+                    VectorAsset.cached(id)?.let { asset ->
+                        scope.drawVectorAsset(asset, cx, cy)
+                        // Procedural art hangs off named anchors, so it follows the asset when it is
+                        // edited in the builder instead of floating where the code used to expect it
+                        asset.anchors["palisade"]?.let { a ->
+                            drawPalisadeRun(scope, cx + a.x0, cx + a.x1, cy + a.y, 40f, bg.seed)
+                        }
+                    }
+                }
+            }
             BackgroundObjectType.BROKEN_CHARIOT -> {
                 scope.withTransform({
                     translate(cx, cy)
@@ -635,47 +647,8 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
         }
     }
 
+// Timber Manor (Mead Hall) — art now lives in assets/art/building_manor.json, editable in the
+// vector builder. Nothing about it is seeded, so it ports cleanly with no code left behind.
 internal fun drawBuildingManor(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
-        // Timber Manor (Mead Hall)
-        val wallPath = Path().apply {
-            moveTo(cx - 100f, cy + 20f)
-            lineTo(cx - 100f, cy - 80f)
-            lineTo(cx, cy - 120f)
-            lineTo(cx + 100f, cy - 80f)
-            lineTo(cx + 100f, cy + 20f)
-            close()
-        }
-        drawStitchedFill(scope, wallPath, Color(0xFF6B513C))
-        scope.drawPath(wallPath, ThreadColor, style = StitchedStroke)
-        
-        // Vertical planks
-        for (i in -90..90 step 15) {
-            scope.drawLine(ThreadColor, Offset(cx + i, cy + 20f), Offset(cx + i, cy - 80f), strokeWidth = 2f)
-        }
-        
-        // Crossed Gables (Dragon heads)
-        val gable1 = Path().apply {
-            moveTo(cx - 120f, cy - 70f)
-            lineTo(cx + 20f, cy - 140f)
-            lineTo(cx + 15f, cy - 150f)
-            lineTo(cx - 125f, cy - 80f)
-            close()
-        }
-        drawStitchedFill(scope, gable1, Color(0xFF382F22))
-        scope.drawPath(gable1, ThreadColor, style = StitchedStroke)
-        
-        val gable2 = Path().apply {
-            moveTo(cx + 120f, cy - 70f)
-            lineTo(cx - 20f, cy - 140f)
-            lineTo(cx - 15f, cy - 150f)
-            lineTo(cx + 125f, cy - 80f)
-            close()
-        }
-        drawStitchedFill(scope, gable2, Color(0xFF382F22))
-        scope.drawPath(gable2, ThreadColor, style = StitchedStroke)
-        
-        // Manor Door
-        val doorPath = Path().apply { addRect(androidx.compose.ui.geometry.Rect(cx - 30f, cy - 40f, cx + 30f, cy + 20f)) }
-        drawStitchedFill(scope, doorPath, Color(0xFF2C2219))
-        scope.drawPath(doorPath, ThreadColor, style = StitchedStroke)
+        VectorAsset.cached("building_manor")?.let { scope.drawVectorAsset(it, cx, cy) }
     }

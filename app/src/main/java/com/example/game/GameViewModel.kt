@@ -612,21 +612,46 @@ class GameViewModel : ViewModel() {
         } else {
             // Generate some range cover buildings or forts
             val numBuildings = if (state.level >= 5) Random.nextInt(1, 4) else Random.nextInt(0, 2)
+
+            // Code-drawn buildings (procedural, or with seeded overlays) plus every JSON asset in
+            // assets/art/ that declares a spawn block. A new .json file therefore needs no code here.
+            val codeBuildings = listOf(
+                BackgroundObjectType.BUILDING_BOSHAM,
+                BackgroundObjectType.BUILDING_BAYEUX,
+                BackgroundObjectType.TOWER_SPIRAL
+            )
+            val assetBuildings = VectorAsset.spawnable().filter { state.level >= (it.spawn?.minLevel ?: 2) }
+
             for (i in 0 until numBuildings) {
                 val bx = 300f + Random.nextFloat() * (levelWidth - 600f)
-                val type = if (state.level >= 5 && i == 0) {
-                    listOf(
+                if (state.level >= 5 && i == 0) {
+                    val fort = listOf(
                         BackgroundObjectType.FORT_DINAN, BackgroundObjectType.FORT_PALACE,
                         BackgroundObjectType.FORT_TOWER, BackgroundObjectType.FORT_MOTTE
                     ).random()
-                } else {
-                    listOf(
-                        BackgroundObjectType.BUILDING_BOSHAM, BackgroundObjectType.BUILDING_MANOR,
-                        BackgroundObjectType.BUILDING_BAYEUX, BackgroundObjectType.TOWER_SPIRAL
-                    ).random()
+                    bgObjects.add(BackgroundObject("bg_$i", fort, bx, 0f, 300f, 1000f, 1000f))
+                    continue
                 }
-                val hp = if (type in listOf(BackgroundObjectType.FORT_DINAN, BackgroundObjectType.FORT_PALACE, BackgroundObjectType.FORT_TOWER, BackgroundObjectType.FORT_MOTTE)) 1000f else 300f
-                bgObjects.add(BackgroundObject("bg_$i", type, bx, 0f, 300f, hp, hp))
+                // Weighted draw across both pools
+                val assetPicks = assetBuildings.flatMap { a -> List(a.spawn?.weight ?: 1) { a } }
+                val pick = Random.nextInt(codeBuildings.size + assetPicks.size)
+                if (pick < codeBuildings.size) {
+                    bgObjects.add(BackgroundObject("bg_$i", codeBuildings[pick], bx, 0f, 300f, 300f, 300f))
+                } else {
+                    val asset = assetPicks[pick - codeBuildings.size]
+                    val hp = asset.spawn?.hp ?: 300f
+                    bgObjects.add(
+                        BackgroundObject(
+                            id = "bg_$i",
+                            type = BackgroundObjectType.VECTOR,
+                            posX = bx,
+                            width = 300f,
+                            hp = hp,
+                            maxHp = hp,
+                            artId = asset.id
+                        )
+                    )
+                }
             }
         }
 

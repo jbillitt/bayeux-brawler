@@ -312,24 +312,28 @@ class CombatEngineTest {
 
     @Test
     fun shieldbreakerTriplesShieldDamage() {
-        fun shieldLossAfterOneStrike(withCard: Boolean): Float {
+        // The shield is made unbreakable on purpose: let it shatter and the damage stops accruing
+        // once it is gone, so the better card would score *lower*. Measure the rate, not the total.
+        val unbreakable = 1_000_000f
+        fun shieldLoss(withCard: Boolean): Float {
             val ctx = FakeContext()
             ctx.hasShieldbreaker = withCard
             val engine = CombatEngine(ctx)
             val player = fighter(head = "head_maul", isPlayer = true, posX = 0f)
             val walled = fighter(posX = 60f)
             walled.shield = GameData.SHIELDS.first { it.id == "shield_tower" }
-            walled.shieldHp = 500f
-            walled.crumpleDuration = 100f // hold still
+            walled.shieldHp = unbreakable
+            walled.hp = unbreakable
+            walled.maxHp = unbreakable
+            walled.crumpleDuration = 10_000f // hold still and take it
             ctx.player = player
             ctx.enemies = listOf(walled)
-            // Drive strikes until the shield takes a hit (blocks are a dice roll)
-            repeat(400) { engine.updateFighter(player, walled, 0.1f) }
-            return 500f - walled.shieldHp
+            repeat(600) { engine.updateFighter(player, walled, 0.1f) } // blocks are a dice roll: sample a lot
+            return unbreakable - walled.shieldHp
         }
-        val plain = shieldLossAfterOneStrike(withCard = false)
-        val broken = shieldLossAfterOneStrike(withCard = true)
-        assertTrue("shield took no damage at all, test is not exercising the block path", plain > 0f)
+        val plain = shieldLoss(withCard = false)
+        val broken = shieldLoss(withCard = true)
+        assertTrue("shield took no damage at all — the test never exercised the block path", plain > 0f)
         assertTrue("shieldbreaker did not splinter harder: plain=$plain broken=$broken", broken > plain * 1.8f)
     }
 

@@ -273,7 +273,10 @@ data class EmbeddedProjectile(
 
 enum class BackgroundObjectType {
     SHIP, FORT_PALACE, FORT_DINAN, BUILDING_BOSHAM, BUILDING_MANOR, FORT_TOWER, FORT_MOTTE, BROKEN_CHARIOT,
-    BUILDING_BAYEUX, TOWER_SPIRAL
+    BUILDING_BAYEUX, TOWER_SPIRAL,
+
+    /** Drawn entirely from assets/art/<artId>.json. New art needs no new enum value. */
+    VECTOR
 }
 
 data class BackgroundObject(
@@ -285,6 +288,7 @@ data class BackgroundObject(
     var hp: Float,
     val maxHp: Float,
     var isDestroyed: Boolean = false,
+    val artId: String? = null, // for type VECTOR: which assets/art/<id>.json to draw
     val seed: Int = Random.nextInt(),
     // Only arrow-like projectile hits leave visible shafts, split by firing direction
     var stuckArrowsFromLeft: Int = 0,

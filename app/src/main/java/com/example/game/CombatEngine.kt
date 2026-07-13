@@ -219,10 +219,11 @@ class CombatEngine(private val ctx: BattleContext) {
             // Only ranged fighters kite to keep their distance; melee (including fists) holds ground
             // and stands to trade blows once in range, so a fists player is never stalled just outside
             // reach by an enemy backpedaling from a weapon it doesn't have.
+            val mountReachPixels = if (fighter.isMounted) 1.5f * 40f else 0f
             val optimalDistance = when {
                 fighter.isRanged -> reachPixels * rangeMult
-                target.isRanged -> reachPixels * MELEE_VS_RANGED_CHASE_MULT // tighten up chasing a kiting target
-                else -> reachPixels
+                target.isRanged -> (reachPixels - mountReachPixels) * MELEE_VS_RANGED_CHASE_MULT // tighten up chasing a kiting target
+                else -> reachPixels - mountReachPixels
             }
             val isShieldWall = !fighter.isPlayer && fighter.shield.id == "shield_tower"
 

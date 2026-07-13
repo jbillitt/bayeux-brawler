@@ -170,6 +170,7 @@ class CombatEngineTest {
         val enemy = fighter(head = "head_sword", handle = "handle_medium", posX = 300f)
         ctx.player = player
         ctx.enemies = listOf(enemy)
+        enemy.crumpleDuration = 100f
         repeat(180) {
             engine.updateFighter(player, enemy, 0.033f)
             engine.updateFighter(enemy, player, 0.033f)
@@ -203,5 +204,45 @@ class CombatEngineTest {
             }
         }
         assertTrue("fists never interrupted a defender's swing across many attempts", interrupted)
+    }
+
+    @Test
+    fun chariotMeleeClosesToHitbox() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val chariotPlayer = fighter(head = "head_sword", handle = "handle_medium", isPlayer = true, posX = 0f).apply { isMounted = true }
+        val enemy = fighter(posX = 500f)
+        ctx.player = chariotPlayer
+        ctx.enemies = listOf(enemy)
+        
+        // Force the enemy to stand still
+        enemy.crumpleDuration = 100f
+        
+        repeat(300) { engine.updateFighter(chariotPlayer, enemy, 0.1f) }
+        
+        val dist = kotlin.math.abs(chariotPlayer.posX - enemy.posX)
+        val reachPixels = chariotPlayer.reach * 40f + 40f
+        val mountReachPixels = 60f
+        assertTrue("Chariot melee player stopped too far away: dist=$dist, hit range=${reachPixels - mountReachPixels}", dist <= reachPixels - mountReachPixels + 1f)
+    }
+
+    @Test
+    fun chariotRangedKeepsDistance() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val chariotArcher = fighter(head = "head_bow", handle = "handle_fists", isPlayer = true, posX = 0f).apply { isMounted = true }
+        val enemy = fighter(posX = 800f)
+        ctx.player = chariotArcher
+        ctx.enemies = listOf(enemy)
+        
+        // Force the enemy to stand still
+        enemy.crumpleDuration = 100f
+        
+        repeat(300) { engine.updateFighter(chariotArcher, enemy, 0.1f) }
+        
+        val dist = kotlin.math.abs(chariotArcher.posX - enemy.posX)
+        val reachPixels = chariotArcher.reach * 40f + 40f
+        val rangeMult = 0.8f
+        assertTrue("Chariot ranged player didn't hold distance: dist=$dist, optimal=${reachPixels * rangeMult}", dist >= reachPixels * rangeMult - 5f)
     }
 }

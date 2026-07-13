@@ -306,6 +306,23 @@ object TapestryRenderer {
         else -> Color(0xFFE8C5A4)
     }
 
+    /**
+     * Arm colour. Bare-chested fighters have bare *arms* — the six sleeve sites used to hardcode a
+     * blue/red sleeve regardless of armour, which is what put a shirt on a naked man.
+     */
+    private fun sleeveTone(fighter: FighterState, back: Boolean): Color = when {
+        fighter.isWarPriest -> if (back) Color(0xFF4A3B2F) else MonkBrown
+        fighter.armor.id == "armor_bare" -> skinTone(fighter)
+        fighter.isPlayer -> if (back) Color(0xFF1E3F4F) else Color(0xFF265063)
+        else -> if (back) Color(0xFF8A2E1E) else Color(0xFF9E3624)
+    }
+
+    /** True when nothing covers the chest — so it is drawn as flesh, with hair on it. */
+    private fun isBarechested(fighter: FighterState): Boolean =
+        fighter.armor.id == "armor_bare" &&
+            !fighter.isWarPriest &&
+            fighter.id !in setOf("hag", "fanatic_boris", "plague_peasant")
+
     private fun drawTorso(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val tunicPath = Path().apply {
             moveTo(cx - 25f, cy + 15f)
@@ -316,15 +333,31 @@ object TapestryRenderer {
         }
 
         // Color theme derived directly from the armor's designated color
-        val fillCol = when (fighter.id) {
-            "hag" -> Color(0xFF3E3A2E) // dodgy ragged cloak
-            "fanatic_boris" -> Color(0xFF7A1F1F) // blood-red madman's rags, not a clean white shirt
-            "plague_peasant" -> PlagueRags // filthy undyed homespun
-            else -> if (fighter.isWarPriest) MonkBrown else fighter.armor.color
+        val fillCol = when {
+            fighter.id == "hag" -> Color(0xFF3E3A2E) // dodgy ragged cloak
+            fighter.id == "fanatic_boris" -> Color(0xFF7A1F1F) // blood-red madman's rags, not a clean white shirt
+            fighter.id == "plague_peasant" -> PlagueRags // filthy undyed homespun
+            fighter.isWarPriest -> MonkBrown
+            isBarechested(fighter) -> skinTone(fighter) // bare means bare: skin, not a white shirt
+            else -> fighter.armor.color
         }
 
         // Fill with textured stitching
         drawStitchedFill(scope, tunicPath, fillCol)
+
+        if (isBarechested(fighter)) {
+            // Sparse chest thatch. Seeded off the fighter's id so it does not crawl about between frames.
+            val hairRng = Random(fighter.id.hashCode())
+            repeat(14) {
+                val hx = cx - 18f + hairRng.nextFloat() * 36f
+                val hy = cy + 26f + hairRng.nextFloat() * 44f
+                val curl = Path().apply {
+                    moveTo(hx, hy)
+                    quadraticBezierTo(hx + 2f, hy + 3f, hx - 1f + hairRng.nextFloat() * 3f, hy + 6f)
+                }
+                scope.drawPath(curl, fighter.hairColor.copy(alpha = 0.75f), style = Stroke(width = 1.6f, cap = StrokeCap.Round))
+            }
+        }
 
         if (fighter.isWarPriest) {
             // Unarmed and robed: a tall staff and a rope girdle mark him out as the man to kill first
@@ -1767,7 +1800,7 @@ object TapestryRenderer {
             scope.withTransform({
                 rotate(armAngle, pivot = Offset(cx - 23f, cy + 25f))
             }) {
-                val sleeveColor = if (fighter.isPlayer) Color(0xFF265063) else Color(0xFF9E3624)
+                val sleeveColor = sleeveTone(fighter, back = false)
                 drawStitchedStrap(this, Offset(cx - 23f, cy + 25f), Offset(cx + 4f, cy + 28f), sleeveColor)
                 scope.drawCircle(Color(0xFF9E3624), radius = 8f, center = Offset(cx + 4f, cy + 28f))
                 scope.drawCircle(Color(0xFFBF2A2A), radius = 4f, center = Offset(cx + 4f, cy + 28f))
@@ -1781,7 +1814,7 @@ object TapestryRenderer {
             translate(thrustOffset.x, thrustOffset.y)
         }) {
             // Sleeve/Arm
-            val sleeveColor = if (fighter.isPlayer) Color(0xFF265063) else Color(0xFF9E3624)
+            val sleeveColor = sleeveTone(fighter, back = false)
             drawStitchedStrap(this, Offset(cx - 23f, cy + 25f), Offset(cx + 25f, cy + 30f), sleeveColor)
             
             // Hand
@@ -1824,7 +1857,7 @@ object TapestryRenderer {
         
         if (fighter.missingArm) {
             scope.withTransform({ rotate(shieldArmAngle, pivot = Offset(cx + 23f, cy + 25f)) }) {
-                val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
+                val sleeveColor = sleeveTone(fighter, back = true)
                 drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(cx + 20f, cy + 35f), sleeveColor)
                 scope.drawCircle(Color(0xFF9E3624), radius = 7f, center = Offset(cx + 20f, cy + 35f))
                 scope.drawCircle(Color(0xFFBF2A2A), radius = 3.5f, center = Offset(cx + 20f, cy + 35f))
@@ -1867,7 +1900,7 @@ object TapestryRenderer {
                 }) {
                     val hx = cx + 35f
                     val hy = cy + 40f
-                    val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
+                    val sleeveColor = sleeveTone(fighter, back = true)
                     drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor)
                     scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
@@ -1950,7 +1983,7 @@ object TapestryRenderer {
                     val hx = frontHandX + handleLen * 0.8f * gripFraction
                     val hy = frontHandY - handleLen * 0.4f * gripFraction
                     
-                    val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
+                    val sleeveColor = sleeveTone(fighter, back = true)
                     drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor)
                     scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
@@ -1964,7 +1997,7 @@ object TapestryRenderer {
         }) {
             val hx = cx + 18f
             val hy = cy + 45f
-            val sleeveColor = if (fighter.isPlayer) Color(0xFF1E3F4F) else Color(0xFF8A2E1E)
+            val sleeveColor = sleeveTone(fighter, back = true)
             drawStitchedStrap(this, Offset(cx + 15f, cy + 25f), Offset(hx, hy), sleeveColor)
             scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
             scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))

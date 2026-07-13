@@ -61,6 +61,14 @@ enum class Ancillary(
     PLAGUE_PEASANT("anc_plague_peasant", "Wretched Aldwin", "Plague-Bearer", "A dying peasant who sprints at the foe. His pestilence spreads to ALL who come near — there is a small chance YOU catch it too.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF6B7D4A))
 }
 
+/** Divine intervention, called down from the tapestry border once per battle-ish. */
+enum class DivineWeather(val id: String, val label: String, val description: String) {
+    LIGHTNING("weather_lightning", "Divine Bolt", "The heavens smite your mightiest foe."),
+    FLOOD("weather_flood", "The Deluge", "A wall of water sweeps enemies from the field."),
+    HAIL("weather_hail", "Hailstorm", "Fist-sized hail batters every foe to the ground."),
+    FROST("weather_frost", "Killing Frost", "Ice underfoot — the enemy host slips and falls.")
+}
+
 interface GearItem {
     val id: String
     val itemName: String
@@ -595,6 +603,8 @@ data class BattleSimState(
     val activeMount: Ancillary? = null,
     val isDualWielding: Boolean = false,
     val hasSilkenGarments: Boolean = false,
+    val divineWeathers: List<DivineWeather> = emptyList(),
+    val weatherCooldowns: Map<String, Float> = emptyMap(), // id -> seconds remaining; charged at battle start
     
     // Roguelike level upgrades persistent state
     val extraAttachments: List<String> = emptyList(), // stores GearItem IDs of extra blades/heads

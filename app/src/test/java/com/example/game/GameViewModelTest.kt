@@ -111,6 +111,106 @@ class GameViewModelTest {
         flow.value = mutator(flow.value)
     }
 
+    private fun foes() = viewModel.enemiesState.value.filter { !it.isPlayer && !it.isDead && !it.isDying }
+
+    @Test
+    fun `divine bolt smites the mightiest foe`() {
+        mutateState { it.copy(divineWeathers = listOf(DivineWeather.LIGHTNING)) }
+        viewModel.startBattle()
+        val mightiest = foes().maxByOrNull { it.hp }!!
+        val before = mightiest.hp
+        viewModel.triggerWeather("weather_lightning")
+        assertTrue("the heavens did nothing", mightiest.hp < before || mightiest.isDying)
+    }
+
+    @Test
+    fun `the deluge sweeps the furthest foes off the field`() {
+        mutateState { it.copy(divineWeathers = listOf(DivineWeather.FLOOD)) }
+        viewModel.startBattle()
+        val before = foes()
+        val furthest = before.maxByOrNull { it.posX }!!
+        viewModel.triggerWeather("weather_flood")
+        assertTrue("furthest foe was not swept away", furthest.isDying || furthest.isDead)
+        assertEquals(DeathType.KNOCKED_FLYING, furthest.deathType)
+        assertTrue("swept foe has no wash-away velocity", furthest.velocityX > 0f)
+    }
+
+    @Test
+    fun `hail batters every foe to the ground`() {
+        mutateState { it.copy(divineWeathers = listOf(DivineWeather.HAIL)) }
+        viewModel.startBattle()
+        val before = foes()
+        viewModel.triggerWeather("weather_hail")
+        assertTrue("hail left someone standing", before.all { it.isCrumpled && it.crumpleDuration > 0f })
+    }
+
+    @Test
+    fun `killing frost slows the whole host`() {
+        mutateState { it.copy(divineWeathers = listOf(DivineWeather.FROST)) }
+        viewModel.startBattle()
+        val before = foes()
+        viewModel.triggerWeather("weather_frost")
+        assertTrue("frost slowed nobody", before.all { it.slowDuration > 0f })
+    }
+
+    @Test
+    fun `a weather cannot be called twice until it recharges, and battle start recharges it`() {
+        mutateState { it.copy(divineWeathers = listOf(DivineWeather.HAIL)) }
+        viewModel.startBattle()
+        viewModel.triggerWeather("weather_hail")
+        assertTrue("no cooldown after use", viewModel.uiState.value.weatherCooldowns["weather_hail"]!! > 0f)
+
+        // Second call must be a no-op: everyone gets back up, and hail does not re-crumple them
+        val foe = foes().first()
+        foe.isCrumpled = false
+        foe.crumpleDuration = 0f
+        viewModel.triggerWeather("weather_hail")
+        assertFalse("hail fired while still cooling down", foe.isCrumpled)
+
+        // Next battle: the charge is full again (startBattle no-ops while one is still running)
+        mutateState { it.copy(isBattleActive = false) }
+        viewModel.startBattle()
+        assertEquals(0f, viewModel.uiState.value.weatherCooldowns["weather_hail"]!!, 0.001f)
+    }
+
+    @Test
+    fun `weather is only offered late and never a third time`() {
+        val method = GameViewModel::class.java.getDeclaredMethod("endBattle", Boolean::class.javaPrimitiveType)
+        method.isAccessible = true
+
+        // Too early: level 5 must never offer it
+        mutateState { it.copy(level = 5, divineWeathers = emptyList()) }
+        repeat(40) {
+            method.invoke(viewModel, true)
+            assertFalse(
+                "weather offered below level $12",
+                viewModel.uiState.value.pendingLevelUpChoices.any { c -> c.type == "weather" }
+            )
+            mutateState { it.copy(level = 5) }
+        }
+
+        // Already holding two: never offer a third
+        mutateState { it.copy(level = 20, divineWeathers = listOf(DivineWeather.HAIL, DivineWeather.FROST)) }
+        repeat(40) {
+            method.invoke(viewModel, true)
+            assertFalse(
+                "a third weather was offered",
+                viewModel.uiState.value.pendingLevelUpChoices.any { c -> c.type == "weather" }
+            )
+            mutateState { it.copy(level = 20) }
+        }
+
+        // Late and holding none: it shows up eventually
+        mutateState { it.copy(level = 20, divineWeathers = emptyList()) }
+        var offered = false
+        repeat(80) {
+            method.invoke(viewModel, true)
+            if (viewModel.uiState.value.pendingLevelUpChoices.any { c -> c.type == "weather" }) offered = true
+            mutateState { it.copy(level = 20, divineWeathers = emptyList()) }
+        }
+        assertTrue("weather never offered at level 20", offered)
+    }
+
     @Test
     fun `chariot collapses if armor is too heavy`() {
         // headgear must be pinned: BattleSimState defaults it to a *random* piece (0-6kg),

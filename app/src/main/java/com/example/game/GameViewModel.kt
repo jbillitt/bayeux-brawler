@@ -69,7 +69,67 @@ class GameViewModel : ViewModel() {
     // per-hit list copies were the biggest allocation churn in the loop
     private val particleBuffer = mutableListOf<BloodParticle>()
     // 20kg: chainmail (12) + coif (2) rides fine; scale (16) + gauntlets/boots/coif (5.5) does not
-    private companion object { const val MAX_PARTICLES = 250; const val ARMOR_WEIGHT_LIMIT = 20f }
+    private companion object {
+        const val MAX_PARTICLES = 250
+        const val ARMOR_WEIGHT_LIMIT = 20f
+        const val WEATHER_COOLDOWN = 60f
+        const val WEATHER_UNLOCK_LEVEL = 12
+        const val MAX_WEATHERS_HELD = 2
+    }
+
+    /**
+     * Call down a held divine weather on the enemy host. No-op if it is still cooling down, if the
+     * player never earned it, or if the battle is over.
+     */
+    fun triggerWeather(id: String) {
+        val state = _uiState.value
+        val weather = state.divineWeathers.firstOrNull { it.id == id } ?: return
+        if (!state.isBattleActive || state.battleWon || state.battleLost) return
+        if ((state.weatherCooldowns[id] ?: 0f) > 0f) return
+
+        // Allies (fanatic, hag, the peasant) live in the enemies list under isPlayer=true — spare them
+        val foes = _enemiesState.value.filter { !it.isPlayer && !it.isDead && !it.isDying }
+        when (weather) {
+            DivineWeather.LIGHTNING -> {
+                foes.maxByOrNull { it.hp }?.let { biggest ->
+                    addPopup("SMITTEN!", biggest.posX, 110f, Color(0xFFF2C14E))
+                    engine.applyFlatDamage(150f, biggest, isPlayerSource = true)
+                    _screenshake.value = 30f
+                }
+            }
+            DivineWeather.FLOOD -> {
+                // The 2-3 furthest downfield get taken by the water, horse and all
+                foes.sortedByDescending { it.posX }.take(Random.nextInt(2, 4)).forEach { swept ->
+                    swept.isMounted = false
+                    swept.mountHp = 0f
+                    engine.applyFlatDamage(9999f, swept, isPlayerSource = true)
+                    swept.deathType = DeathType.KNOCKED_FLYING
+                    swept.velocityX = 900f + Random.nextFloat() * 300f
+                }
+                addPopup("THE DELUGE!", (_playerState.value?.posX ?: 0f) + 200f, 110f, Color(0xFF3A6EA5))
+                _screenshake.value = 25f
+            }
+            DivineWeather.HAIL -> {
+                foes.forEach {
+                    it.isCrumpled = true
+                    it.crumpleDuration = 2.5f
+                }
+                addPopup("HAILSTORM!", (_playerState.value?.posX ?: 0f) + 200f, 110f, Color(0xFFDCE6EC))
+                _screenshake.value = 18f
+            }
+            DivineWeather.FROST -> {
+                foes.forEach {
+                    it.slowDuration = 6f
+                    if (Random.nextFloat() < 0.5f) {
+                        it.isCrumpled = true
+                        it.crumpleDuration = 1.2f
+                    }
+                }
+                addPopup("KILLING FROST!", (_playerState.value?.posX ?: 0f) + 200f, 110f, Color(0xFF8FC1D4))
+            }
+        }
+        _uiState.update { it.copy(weatherCooldowns = it.weatherCooldowns + (id to WEATHER_COOLDOWN)) }
+    }
 
     // Combat rules live in CombatEngine; this context is its window into the battle state
     private val engine = CombatEngine(object : BattleContext {
@@ -131,6 +191,7 @@ class GameViewModel : ViewModel() {
             val newAttachments = if (choice.type == "attachment") state.extraAttachments + choice.itemId else state.extraAttachments
             val newArmors = if (choice.type == "armor" || choice.type == "comedy") state.extraArmors + choice.itemId else state.extraArmors
             val newAncs = if (choice.type == "follower") state.unlockedAncillaries + GameData.ANCILLARIES.first { it.id == choice.itemId } else state.unlockedAncillaries
+            val newWeathers = if (choice.type == "weather") state.divineWeathers + DivineWeather.values().first { it.id == choice.itemId } else state.divineWeathers
             val newExtensions = if (choice.type == "extension") state.handleExtensionCount + 1 else state.handleExtensionCount
             val newRangedUpgrades = if (choice.type == "ranged_upgrade") state.rangedUpgrades + choice.itemId else state.rangedUpgrades
             val newShieldUpgrades = if (choice.type == "shield_upgrade") state.shieldUpgrades + choice.itemId else state.shieldUpgrades
@@ -152,7 +213,8 @@ class GameViewModel : ViewModel() {
                 rangedUpgrades = newRangedUpgrades,
                 shieldUpgrades = newShieldUpgrades,
                 brawlerUpgrades = newBrawlerUpgrades,
-                    hasSilkenGarments = newHasSilkenGarments,
+                hasSilkenGarments = newHasSilkenGarments,
+                divineWeathers = newWeathers,
                 showLevelUpScreen = false,
                 pendingLevelUpChoices = emptyList()
             )
@@ -545,7 +607,9 @@ class GameViewModel : ViewModel() {
                 playerMaxHp = player.maxHp,
                 levelWidth = levelWidth,
                 cameraX = 0f,
-                backgroundObjects = bgObjects
+                backgroundObjects = bgObjects,
+                // Every weather charge is ready when the horns blow
+                weatherCooldowns = it.divineWeathers.associate { w -> w.id to 0f }
             )
         }
 
@@ -599,6 +663,13 @@ class GameViewModel : ViewModel() {
 
         if (_uiState.value.unlockedAncillaries.contains(Ancillary.MONK)) {
             addIncenseParticles(player.posX - (40f * player.size), 190f, count = 2)
+        }
+
+        // Weather charges come back over time
+        if (_uiState.value.weatherCooldowns.any { it.value > 0f }) {
+            _uiState.update { s ->
+                s.copy(weatherCooldowns = s.weatherCooldowns.mapValues { (_, cd) -> (cd - dt).coerceAtLeast(0f) })
+            }
         }
 
         // Decay screenshake
@@ -1062,8 +1133,23 @@ class GameViewModel : ViewModel() {
                     }
                 }
                 
-                // 5. Brawler Upgrades (removed from here, moved to slot 2)
-                
+                // 5. Divine weather — late-game, rare, and you may only hold two
+                val unheldWeathers = DivineWeather.values().filter { it !in state.divineWeathers }
+                if (state.level >= WEATHER_UNLOCK_LEVEL &&
+                    state.divineWeathers.size < MAX_WEATHERS_HELD &&
+                    unheldWeathers.isNotEmpty() &&
+                    Random.nextFloat() < 0.25f
+                ) {
+                    val weather = unheldWeathers.random()
+                    pendingChoices.add(LevelUpChoice(
+                        id = "weather_${weather.id}",
+                        title = "Divine Favour: ${weather.label}",
+                        description = "${weather.description} Call it down from the tapestry border once per minute of battle.",
+                        type = "weather",
+                        itemId = weather.id
+                    ))
+                }
+
                 showLevelUp = true
             }
 

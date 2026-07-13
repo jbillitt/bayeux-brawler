@@ -239,6 +239,50 @@ internal fun drawFortTower(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
         scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 8f, cy - 150f), size = androidx.compose.ui.geometry.Size(16f, 22f))
     }
 
+/**
+ * A run of palisade: separate sharpened timber posts with gaps you can see daylight through, lashed
+ * to two rails. Both forts share it.
+ *
+ * The old palisades were a single lumpy silhouette with spikes along the top, which is what made
+ * them read as termite mounds rather than timber. Posts are jittered from [seed] so each fort's wall
+ * is its own, but the same fort draws the same wall every frame (the bg bitmap cache demands it).
+ */
+internal fun drawPalisadeRun(scope: DrawScope, x0: Float, x1: Float, baseY: Float, height: Float, seed: Int) {
+    val rng = Random(seed)
+    val postW = 9f
+    val gap = 3.5f
+
+    var x = x0
+    while (x < x1) {
+        val h = height * (0.86f + rng.nextFloat() * 0.28f)  // uneven heights — no two trees alike
+        val lean = (rng.nextFloat() - 0.5f) * 3.5f          // a few posts sit crooked
+        val topY = baseY - h
+        val post = Path().apply {
+            moveTo(x, baseY)
+            lineTo(x + lean, topY + 7f)
+            lineTo(x + postW / 2f + lean, topY) // sharpened tip
+            lineTo(x + postW + lean, topY + 7f)
+            lineTo(x + postW, baseY)
+            close()
+        }
+        drawStitchedFill(scope, post, if (rng.nextBoolean()) Color(0xFF735835) else Color(0xFF8C6F47))
+        scope.drawPath(post, ThreadColor, style = StitchedStroke)
+        // A single grain line down the middle of the trunk
+        scope.drawLine(
+            ThreadColor.copy(alpha = 0.35f),
+            Offset(x + postW * 0.5f, topY + 11f),
+            Offset(x + postW * 0.5f, baseY - 4f),
+            strokeWidth = 1f
+        )
+        x += postW + gap
+    }
+
+    // Two horizontal lashing rails holding the run together
+    listOf(baseY - height * 0.34f, baseY - height * 0.70f).forEach { railY ->
+        scope.drawLine(Color(0xFF5D4831), Offset(x0 - 3f, railY), Offset(x1 + 3f, railY), strokeWidth = 3.5f)
+    }
+}
+
 internal fun drawFortMotte(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
         // Motte-and-bailey: broad flat-topped earthwork with a plank palisade and squat keep
         val mound = Path().apply {
@@ -252,29 +296,8 @@ internal fun drawFortMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
         scope.drawPath(mound, ThreadColor, style = StitchedStroke)
         // Winding path up the right slope
         scope.drawLine(Color(0xFFB09A6C), Offset(cx + 100f, cy + 14f), Offset(cx + 55f, cy - 58f), strokeWidth = 8f)
-        // Palisade: solid plank wall along the plateau edge with pointed tips and rails
-        val palTop = cy - 92f
-        val palBase = cy - 60f
-        val wall = Path().apply {
-            moveTo(cx - 62f, palBase)
-            lineTo(cx - 62f, palTop)
-            var px = cx - 62f
-            while (px < cx + 62f) {
-                lineTo(px + 6f, palTop - 8f) // pointed plank tip
-                lineTo(px + 12f, palTop)
-                px += 12f
-            }
-            lineTo(cx + 62f, palBase)
-            close()
-        }
-        drawStitchedFill(scope, wall, Color(0xFF8C6F47))
-        scope.drawPath(wall, ThreadColor, style = StitchedStroke)
-        // Plank seams + horizontal rail
-        for (i in 1 until 10) {
-            val px = cx - 62f + i * 12.4f
-            scope.drawLine(ThreadColor.copy(alpha = 0.5f), Offset(px, palTop), Offset(px, palBase), strokeWidth = 1.5f)
-        }
-        scope.drawLine(Color(0xFF5D4831), Offset(cx - 62f, palBase - 10f), Offset(cx + 62f, palBase - 10f), strokeWidth = 4f)
+        // Palisade of individual timbers around the plateau edge
+        drawPalisadeRun(scope, cx - 62f, cx + 62f, baseY = cy - 60f, height = 36f, seed = bg.id.hashCode())
         // Keep
         val keep = Path().apply {
             moveTo(cx - 34f, cy - 84f)
@@ -337,28 +360,20 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
     }
     
 internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
-        // Motte (Earthen Hill)
+        // Motte: a flat-topped earthwork, not a smooth cone — the cone was the other half of the
+        // "termite mound" look, since it gave the spikes nothing to stand on
         val hillPath = Path().apply {
             moveTo(cx - 150f, cy + 20f)
-            quadraticTo(cx - 30f, cy + 20f, cx, cy - 70f)
-            quadraticTo(cx + 30f, cy + 20f, cx + 150f, cy + 20f)
+            quadraticTo(cx - 95f, cy - 30f, cx - 66f, cy - 58f)
+            lineTo(cx + 66f, cy - 58f) // plateau for the wall to stand on
+            quadraticTo(cx + 95f, cy - 30f, cx + 150f, cy + 20f)
             close()
         }
         drawStitchedFill(scope, hillPath, Color(0xFF5E4B3C))
         scope.drawPath(hillPath, ThreadColor, style = StitchedStroke)
-        
-        // Palisade
-        for (i in 0 until 8) {
-            val logX = cx - 40f + (i * 10f)
-            val logPath = Path().apply {
-                moveTo(logX, cy - 60f)
-                lineTo(logX + 5f, cy - 120f) // Spike
-                lineTo(logX + 10f, cy - 60f)
-                close()
-            }
-            drawStitchedFill(scope, logPath, Color(0xFF8C6F47))
-            scope.drawPath(logPath, ThreadColor, style = StitchedStroke)
-        }
+
+        // Palisade of individual timbers along the plateau
+        drawPalisadeRun(scope, cx - 60f, cx + 60f, baseY = cy - 58f, height = 48f, seed = bg.id.hashCode())
         
         // Wooden Tower
         val towerPath = Path().apply {

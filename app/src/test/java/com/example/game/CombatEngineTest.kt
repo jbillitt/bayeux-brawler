@@ -278,4 +278,82 @@ class CombatEngineTest {
         val reachPixels2 = hugeDagger.reach * 40f + 40f
         assertTrue("Huge dagger player stopped too far away: dist=$dist2, reachPixels=$reachPixels2", dist2 <= reachPixels2)
     }
+
+    @Test
+    fun contagiousCarrierInfectsNearbyFoe() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val peasant = fighter(isPlayer = true, posX = 0f).apply { isContagious = true }
+        val foe = fighter(posX = CombatEngine.DISEASE_RADIUS_PX - 20f)
+        ctx.enemies = listOf(peasant, foe)
+        engine.updateFighter(foe, null, 0.016f)
+        assertTrue("foe standing in the miasma was not infected", foe.diseaseDuration > 0f)
+    }
+
+    @Test
+    fun contagionDoesNotReachAcrossTheField() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val peasant = fighter(isPlayer = true, posX = 0f).apply { isContagious = true }
+        val foe = fighter(posX = CombatEngine.DISEASE_RADIUS_PX + 200f)
+        ctx.enemies = listOf(peasant, foe)
+        engine.updateFighter(foe, null, 0.016f)
+        assertEquals("foe infected from out of range", 0f, foe.diseaseDuration, 0.001f)
+    }
+
+    @Test
+    fun freshCorpseStillSpreadsPlague() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val peasant = fighter(isPlayer = true, posX = 0f).apply {
+            isContagious = true
+            isDead = true
+            deathTime = System.currentTimeMillis() // just fell
+        }
+        val foe = fighter(posX = 30f)
+        ctx.enemies = listOf(peasant, foe)
+        engine.updateFighter(foe, null, 0.016f)
+        assertTrue("fresh plague corpse stopped being contagious", foe.diseaseDuration > 0f)
+
+        // ...but a long-cold one does not
+        val coldPeasant = fighter(isPlayer = true, posX = 0f).apply {
+            isContagious = true
+            isDead = true
+            deathTime = System.currentTimeMillis() - 60_000L
+        }
+        val foe2 = fighter(posX = 30f)
+        ctx.enemies = listOf(coldPeasant, foe2)
+        engine.updateFighter(foe2, null, 0.016f)
+        assertEquals("cold corpse still infecting", 0f, foe2.diseaseDuration, 0.001f)
+    }
+
+    @Test
+    fun diseaseDealsDamageOverTime() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val sick = fighter(posX = 500f).apply { diseaseDuration = CombatEngine.DISEASE_DURATION }
+        ctx.enemies = listOf(sick)
+        // 10 seconds of rot — damage lands in whole points, so measure over a long enough window
+        repeat(100) { engine.updateFighter(sick, null, 0.1f) }
+        val lost = 100f - sick.hp
+        assertEquals("disease dps off", CombatEngine.DISEASE_DPS * 10f, lost, 1.5f)
+    }
+
+    @Test
+    fun playerEventuallyCatchesPlagueAndBecomesContagious() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val peasant = fighter(isPlayer = true, posX = 0f).apply { isContagious = true }
+        val player = fighter(isPlayer = true, posX = 40f)
+        ctx.player = player
+        ctx.enemies = listOf(peasant)
+        // 0.1%/sec — thousands of seconds of exposure makes a catch near-certain (E[catches] ≈ 20)
+        for (i in 0 until 20_000) {
+            if (player.isContagious) break
+            player.hp = 100f // keep him upright through the exposure so he can't die of it first
+            engine.updateFighter(player, null, 1f)
+        }
+        assertTrue("player never caught the plague", player.isContagious)
+        assertTrue("caught plague but no disease timer", player.diseaseDuration > 0f)
+    }
 }

@@ -68,7 +68,8 @@ class GameViewModel : ViewModel() {
     // New particles collect here and flush to the StateFlow once per tick —
     // per-hit list copies were the biggest allocation churn in the loop
     private val particleBuffer = mutableListOf<BloodParticle>()
-    private companion object { const val MAX_PARTICLES = 250; const val ARMOR_WEIGHT_LIMIT = 22f }
+    // 20kg: chainmail (12) + coif (2) rides fine; scale (16) + gauntlets/boots/coif (5.5) does not
+    private companion object { const val MAX_PARTICLES = 250; const val ARMOR_WEIGHT_LIMIT = 20f }
 
     // Combat rules live in CombatEngine; this context is its window into the battle state
     private val engine = CombatEngine(object : BattleContext {
@@ -394,6 +395,30 @@ class GameViewModel : ViewModel() {
                 hairColor = androidx.compose.ui.graphics.Color(0xFFC02020),
                 hairStyle = "long",
                 isDualWielding = true
+            ))
+        }
+
+        if (state.unlockedAncillaries.contains(Ancillary.PLAGUE_PEASANT)) {
+            enemies.add(FighterState(
+                // Dying already, so he simply runs at the foe and breathes on them until one of them drops
+                id = "plague_peasant",
+                name = "Wretched Aldwin",
+                isPlayer = true,
+                maxHp = 15f,
+                hp = 15f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 60f,
+                targetX = 60f,
+                facingRight = true,
+                size = 0.9f,
+                speedBoost = 0.5f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFFC8B98A),
+                hairStyle = "short",
+                isContagious = true
             ))
         }
 

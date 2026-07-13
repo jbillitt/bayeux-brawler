@@ -2,6 +2,7 @@ package com.example.game
 
 import androidx.compose.ui.graphics.Color
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.random.Random
 
 /** Everything the combat rules need from the battle around them. */
@@ -30,6 +31,17 @@ class CombatEngine(private val ctx: BattleContext) {
         const val FIST_INTERRUPT_CHANCE = 0.25f
         // Melee pursuers tighten up on a kiting (ranged) target instead of stalling at their full reach.
         private const val MELEE_VS_RANGED_CHASE_MULT = 0.8f
+
+        // Damage-over-time rates, in points per second (see applyDotDamage).
+        const val POISON_DPS = 4f
+        const val BLEED_DPS = 3f
+
+        // Plague peasant contagion. Tunable starting values.
+        const val DISEASE_DPS = 1.5f
+        const val DISEASE_DURATION = 12f
+        const val DISEASE_RADIUS_PX = 70f
+        const val PLAYER_CATCH_CHANCE_PER_SEC = 0.001f
+        const val CORPSE_CONTAGION_SECS = 4f
     }
 
     // Delayed follow-up swings/shots (dual-wield 2nd hit, double-ended pole hits, multishot).
@@ -49,6 +61,35 @@ class CombatEngine(private val ctx: BattleContext) {
 
     private fun schedule(delay: Float, action: () -> Unit) {
         queuedActions.add(QueuedAction(delay, action))
+    }
+
+    /**
+     * Damage-over-time, in whole points at the stated rate.
+     *
+     * [applyFlatDamage] clamps every call to a minimum of 1 point, which is right for a sword blow and
+     * ruinous for a per-tick trickle: a nominal 4/sec poison landed 1 point *per frame* (~60/sec), with a
+     * screenshake and blood spray each time. So sub-point damage accrues here and is spent only once it
+     * makes a whole point.
+     */
+    private fun applyDotDamage(dps: Float, dt: Float, fighter: FighterState) {
+        fighter.dotDebt += dps * dt
+        if (fighter.dotDebt < 1f) return
+        val whole = floor(fighter.dotDebt)
+        fighter.dotDebt -= whole
+        applyFlatDamage(whole, fighter, isPlayerSource = !fighter.isPlayer)
+    }
+
+    /** True if a plague carrier — living, or a corpse not yet cold — is close enough to breathe on [f]. */
+    // ponytail: O(n²) across the roster each tick; fine at <=16 fighters, bucket by x if the cap ever rises
+    private fun carrierNear(f: FighterState): Boolean {
+        val now = System.currentTimeMillis()
+        val corpseWindowMs = (CORPSE_CONTAGION_SECS * 1000f).toLong()
+        val all = ctx.enemies + listOfNotNull(ctx.player)
+        return all.any { c ->
+            c !== f && c.isContagious &&
+                (!c.isDead || now - c.deathTime <= corpseWindowMs) &&
+                abs(c.posX - f.posX) <= DISEASE_RADIUS_PX
+        }
     }
 
     fun updateFighter(fighter: FighterState, target: FighterState?, dt: Float) {
@@ -99,25 +140,46 @@ class CombatEngine(private val ctx: BattleContext) {
         // Poison tick over time
         if (fighter.poisonDuration > 0f) {
             fighter.poisonDuration -= dt
-            val poisonDmg = 4f * dt // deals 4 damage per second (halved)
             if (fighter.hp > 0f) {
                 if (Random.nextFloat() < dt * 1.5f) { // occasionally show green "+POISON+" popup
                     ctx.popup("POISON!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFF2E7D32))
                 }
-                applyFlatDamage(poisonDmg, fighter, isPlayerSource = !fighter.isPlayer)
+                applyDotDamage(POISON_DPS, dt, fighter)
             }
         }
 
         // Bleed tick over time
         if (fighter.bleedDuration > 0f) {
             fighter.bleedDuration -= dt
-            val bleedDmg = 3f * dt // 3 damage per second — 6/s melted enemies too fast
             if (fighter.hp > 0f) {
                 if (Random.nextFloat() < dt * 1.5f) {
                     ctx.popup("BLEED!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFFA62B2B))
                     ctx.bloodParticles(fighter.posX, 100f, 3)
                 }
-                applyFlatDamage(bleedDmg, fighter, isPlayerSource = !fighter.isPlayer)
+                applyDotDamage(BLEED_DPS, dt, fighter)
+            }
+        }
+
+        // Plague: rot away, then breathe in whatever the neighbours are carrying
+        if (fighter.diseaseDuration > 0f) {
+            fighter.diseaseDuration -= dt
+            if (fighter.hp > 0f) {
+                if (Random.nextFloat() < dt * 1.2f) {
+                    ctx.popup("PESTILENCE!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFF6B7D4A))
+                }
+                applyDotDamage(DISEASE_DPS, dt, fighter)
+            }
+        }
+        if (carrierNear(fighter)) {
+            if (fighter === ctx.player) {
+                // The peasant is your own man, so you only risk it by standing in his miasma
+                if (!fighter.isContagious && Random.nextFloat() < PLAYER_CATCH_CHANCE_PER_SEC * dt) {
+                    fighter.diseaseDuration = DISEASE_DURATION
+                    fighter.isContagious = true
+                    ctx.popup("YOU FEEL UNWELL...", fighter.posX, 150f, Color(0xFF6B7D4A))
+                }
+            } else if (!fighter.isPlayer) {
+                fighter.diseaseDuration = DISEASE_DURATION
             }
         }
 

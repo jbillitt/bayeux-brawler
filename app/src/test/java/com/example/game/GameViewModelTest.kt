@@ -113,9 +113,12 @@ class GameViewModelTest {
 
     @Test
     fun `chariot collapses if armor is too heavy`() {
+        // headgear must be pinned: BattleSimState defaults it to a *random* piece (0-6kg),
+        // which silently decided whether this loadout crossed the weight limit
         mutateState { it.copy(
             unlockedAncillaries = setOf(Ancillary.CHARIOT),
             armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
+            headgear = GameData.HEADGEAR_PIECES.first { h -> h.id == "helm_none" },
             extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif")
         )}
         viewModel.startBattle()
@@ -130,6 +133,7 @@ class GameViewModelTest {
         mutateState { it.copy(
             unlockedAncillaries = setOf(Ancillary.CHARIOT),
             armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
+            headgear = GameData.HEADGEAR_PIECES.first { h -> h.id == "helm_none" },
             extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif"),
             hasSilkenGarments = true
         )}
@@ -142,6 +146,7 @@ class GameViewModelTest {
     fun `silken_garments appears in level up choices if over limit`() {
         mutateState { it.copy(
             armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
+            headgear = GameData.HEADGEAR_PIECES.first { h -> h.id == "helm_none" },
             extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif"),
             level = 5
         )}

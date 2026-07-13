@@ -45,17 +45,17 @@ enum class Ancillary(
     HERALD("anc_herald", "Sir Boast-a-lot", "Herald", "Announces your presence loudly. Intimidates peasants.", speedBoost = 0.2f, color = Color(0xFFB03131)),
     TRUMPETER("anc_trumpeter", "Tooty", "Trumpeter", "Plays off-key trumpet blasts during battle.", hpBoost = 10f, speedBoost = 0.1f, color = Color(0xFFD6A420)),
     CROSSBOWMAN("anc_crossbowman", "Gaston", "Crossbowman", "Slow but devastating ranged cover fire. Pierces mail.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF3B2F2F)),
-    WARHORSE("anc_mount_horse", "Warhorse", "Destrier", "A towering Norman warhorse. Grants massive speed and HP.", hpBoost = 80f, speedBoost = 0.5f, color = Color(0xFF452E1B)),
+    WARHORSE("anc_mount_horse", "Blanche", "Destrier", "A towering Norman warhorse. Grants massive speed and HP.", hpBoost = 80f, speedBoost = 0.5f, color = Color(0xFF452E1B)),
     CUPBEARER("anc_cupbearer", "Geoffrey", "Cupbearer", "Refills your goblet with fine wine mid-swing.", hpBoost = 40f, speedBoost = -0.1f, color = Color(0xFF632873)),
     ARCHER("anc_archer", "Robin", "Longbowman", "Fires covering arrows into the fray. Just mind your back.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFF4C613D)),
     MONK("anc_monk", "Brother Tuck", "Monk", "Blesses you with holy incense. Smells heavenly.", hpBoost = 30f, speedBoost = 0f, color = Color(0xFF5E4B3C)),
     FANATIC("anc_fanatic", "Mad Boris", "Fanatic", "A screaming madman who charges the enemy naked with a huge axe.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFC02020)),
-    CHARIOT("anc_mount_chariot", "War Chariot", "Chariot", "A sturdy wooden chariot. Faster and deadlier than a horse, but hard to turn.", hpBoost = 100f, speedBoost = 0.6f, color = Color(0xFF8B5A2B)),
-    STILTS("anc_mount_stilts", "Stilts", "Stilts", "Tall wooden poles. Elevates you above the common rabble.", hpBoost = -10f, speedBoost = -0.2f, color = Color(0xFFC2A077)),
-    HAG("anc_hag", "Local Hag", "Hag", "Spawns in your backline, lobs mud, applies slow and minor poison.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF384033)),
-    TROJAN_HORSE("anc_trojan_horse", "Trojan Horse", "Decoy", "Rolls forward, absorbs hits, spawns 3 knights on death.", hpBoost = 200f, speedBoost = 0f, color = Color(0xFF8B5A2B)),
+    CHARIOT("anc_mount_chariot", "The Rattler", "Chariot", "A sturdy wooden chariot. Faster and deadlier than a horse, but hard to turn.", hpBoost = 100f, speedBoost = 0.6f, color = Color(0xFF8B5A2B)),
+    STILTS("anc_mount_stilts", "Long Shanks", "Stilts", "Tall wooden poles. Elevates you above the common rabble.", hpBoost = -10f, speedBoost = -0.2f, color = Color(0xFFC2A077)),
+    HAG("anc_hag", "Old Maud", "Hag", "Spawns in your backline, lobs mud, applies slow and minor poison.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF384033)),
+    TROJAN_HORSE("anc_trojan_horse", "The Great Horse", "Decoy", "Rolls forward, absorbs hits, spawns 3 knights on death.", hpBoost = 200f, speedBoost = 0f, color = Color(0xFF8B5A2B)),
     LIL_GUY("anc_lil_guy", "Lil Guy", "Backpack Slinger", "Renders on your back, passively shoots projectiles.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFFC78440)),
-    SURGEON("anc_surgeon", "Battle Surgeon", "Surgeon", "Spawns behind you, applies passive slow HP regen.", hpBoost = 10f, speedBoost = 0f, color = Color(0xFF801A1A)),
+    SURGEON("anc_surgeon", "Sawbones Silas", "Surgeon", "Spawns behind you, applies passive slow HP regen.", hpBoost = 10f, speedBoost = 0f, color = Color(0xFF801A1A)),
     RAVEN("anc_raven", "Munin", "Raven", "Rests on your off-hand, flies out to peck enemy eyes, blinding them.", hpBoost = 0f, speedBoost = 0f, color = Color.Black),
     WARDOG("anc_wardog", "Buster", "Wardog", "Charges fast, bites enemies, hard to hit, sometimes trips them.", hpBoost = 25f, speedBoost = 0.2f, color = Color(0xFF452E1B)),
     PLAGUE_PEASANT("anc_plague_peasant", "Wretched Aldwin", "Plague-Bearer", "A dying peasant who sprints at the foe. His pestilence spreads to ALL who come near — there is a small chance YOU catch it too.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF6B7D4A))
@@ -243,6 +243,9 @@ object GameData {
         KETTLE("helm_kettle", "Kettle Hat", 4.5f, defense = 50f, speedPenalty = 0.08f, description = "Wide brimmed hat of steel. Protects against arrows from above.", color = Color(0xFF8B9298)),
         MASK("helm_mask", "Masked Helm", 5.0f, defense = 58f, speedPenalty = 0.10f, description = "An enclosed helm with a menacing iron faceplate.", color = Color(0xFF7B858B)),
         GREAT("helm_great", "Great Helm", 6.0f, defense = 65f, speedPenalty = 0.15f, description = "A massive flat-topped steel bucket. Perfect protection, terrible visibility.", color = Color(0xFF6B747A)),
+        PHRYGIAN("helm_phrygian", "Phrygian Helm", 3.0f, defense = 35f, speedPenalty = 0.04f, description = "A forward-curling iron cap, as worn by the Normans on the tapestry itself.", color = Color(0xFF8C959B)),
+        MITRE("helm_mitre", "Bishop's Mitre", 1.0f, defense = 12f, speedPenalty = 0.0f, description = "Odo himself wore no sword. Cloth of gold turns few blades, but God is watching.", color = Color(0xFFD8C48A)),
+        STRAW("helm_straw", "Straw Hat", 0.2f, defense = 3f, speedPenalty = -0.03f, description = "A farmhand's wide straw brim. Keeps the sun off. Keeps nothing else off.", color = Color(0xFFD9B871)),
         JESTER_HAT("helm_jester", "Jester's Cap", 0.1f, defense = 0f, speedPenalty = 0.0f, description = "A colorful motley cap with bells on. Unbelievably foolish. Score x20!", color = Color(0xFFD63C3C)),
         CROWN("helm_crown", "King's Crown", 0.5f, defense = 10f, speedPenalty = 0.0f, description = "A golden crown fit for a king.", color = Color(0xFFFFD700));
         override val type: ItemType get() = ItemType.HEADGEAR
@@ -321,6 +324,8 @@ data class FighterState(
     var hasLandedStrike: Boolean = false,
     var attackCooldown: Float = 0f, // in seconds
     var lastAttackTime: Long = 0,
+    var whirlCounterClockwise: Boolean = false, // double-ended: this swing reverses the overhead whirl
+    var headSquashed: Boolean = false, // heavy blunt hit drove an enemy's head into his shoulders. It stays there.
     var swingProgress: Float = 0f, // 0 to 1 during swing
     var damageIndicator: String? = null,
     var damageIndicatorTimer: Float = 0f,
@@ -447,7 +452,7 @@ data class FighterState(
             val att = extraAttachments.sumOf { it.pierce.toDouble() * 0.5 }.toFloat()
             val brawlerBonus = if (weaponHead.id == "head_bare" && weaponHandle.id == "handle_fists" && brawlerUpgrades.contains("spiked_wraps")) 8f else 0f
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
-            return (base + att + brawlerBonus) * scaleLvl * lateGameMultiplier
+            return (base + att + brawlerBonus) * scaleLvl * lateGameMultiplier * nakedBoldness
         }
 
     val damageSlash: Float 
@@ -456,7 +461,7 @@ data class FighterState(
             val base = weaponHead.slash * size * size
             val att = extraAttachments.sumOf { it.slash.toDouble() * 0.5 }.toFloat()
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
-            return (base + att) * scaleLvl * lateGameMultiplier
+            return (base + att) * scaleLvl * lateGameMultiplier * nakedBoldness
         }
 
     val damageBlunt: Float 
@@ -465,7 +470,7 @@ data class FighterState(
             val att = extraAttachments.sumOf { it.blunt.toDouble() * 0.5 }.toFloat()
             val brawlerBonus = if (weaponHead.id == "head_bare" && weaponHandle.id == "handle_fists" && brawlerUpgrades.contains("brass_knuckles")) 15f else 0f
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
-            return (base + att + brawlerBonus) * scaleLvl * lateGameMultiplier
+            return (base + att + brawlerBonus) * scaleLvl * lateGameMultiplier * nakedBoldness
         }
 
     // Attack delay influenced by total mass & handle speed penalty
@@ -492,6 +497,13 @@ data class FighterState(
             return max(0.3f, finalDelay) // lower cap
         }
 
+    /**
+     * The naked Norman: fighting in nothing but your trousers is madness, and madness is rewarded.
+     * Hits harder and moves faster — you are carrying nothing and you have nothing to lose.
+     */
+    val nakedBoldness: Float
+        get() = if (isPlayer && armor.id == "armor_bare" && extraArmors.isEmpty()) 1.25f else 1f
+
     // Move speed multiplier based on mass and speed penalties
     val moveSpeed: Float
         get() {
@@ -501,7 +513,7 @@ data class FighterState(
             val crumplePenalty = if (crumpleDuration > 0f) 0.5f else 1.0f
             val slowPenalty = if (slowDuration > 0f) 0.4f else 1.0f
             val penaltyFactor = 1f - (totalMass * 0.01f).coerceIn(0f, 0.45f) // weight isn't so immobilizing
-            return (sizeSpeed * penaltyFactor) * (1f + speedBoost) * crumplePenalty * slowPenalty * lateGameMultiplier
+            return (sizeSpeed * penaltyFactor) * (1f + speedBoost) * crumplePenalty * slowPenalty * lateGameMultiplier * nakedBoldness
         }
 
     // Multiplier for points: naked = high risk = huge bonus points!

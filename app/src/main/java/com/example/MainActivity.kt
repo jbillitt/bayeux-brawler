@@ -308,7 +308,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                             .weight(0.19f)
                             .fillMaxHeight()
                     ) {
-                        CharacterPreviewCard(uiState = uiState)
+                        CharacterPreviewCard(uiState = uiState, onSelectMount = { viewModel.selectMount(it) })
                     }
 
                     // Middle: Tabbed Component Lists or Level Up Screen
@@ -523,7 +523,7 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
 }
 
 @Composable
-fun CharacterPreviewCard(uiState: BattleSimState) {
+fun CharacterPreviewCard(uiState: BattleSimState, onSelectMount: (com.example.game.Ancillary) -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -694,6 +694,60 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
                         )
                         TapestryRenderer.drawAncillaries(this, uiState.unlockedAncillaries, dummyFighter, scale = 1.35f)
                         TapestryRenderer.drawCharacter(this, dummyFighter, scale = 1.35f, isBattleActive = false)
+                    }
+                }
+            }
+        }
+
+        // Mount picklist, directly under the man it changes. The preview box above takes weight(1f),
+        // so it simply gives up the height this needs — no squashing anything else on the screen.
+        val mounts = uiState.unlockedAncillaries.filter { it.id.startsWith("anc_mount_") }
+        if (mounts.size > 1) {
+            val activeMount = uiState.activeMount ?: mounts.last()
+            Text(
+                text = "MOUNT",
+                fontSize = 8.sp,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.5.sp,
+                color = TapestryDark.copy(alpha = 0.65f),
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 3.dp),
+                textAlign = TextAlign.Center
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                mounts.forEach { mount ->
+                    val isSelected = mount == activeMount
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .background(
+                                if (isSelected) TapestryMustard.copy(alpha = 0.35f) else Color.Transparent,
+                                RoundedCornerShape(3.dp)
+                            )
+                            .border(
+                                if (isSelected) 1.5.dp else 1.dp,
+                                if (isSelected) TapestryRed else TapestryDark.copy(alpha = 0.35f),
+                                RoundedCornerShape(3.dp)
+                            )
+                            .clickable { onSelectMount(mount) }
+                            .padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isSelected) "▸" else " ",
+                            fontSize = 9.sp,
+                            color = TapestryRed,
+                            modifier = Modifier.width(10.dp)
+                        )
+                        Text(
+                            text = mount.ancillaryName,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Normal,
+                            color = TapestryDark,
+                            maxLines = 1
+                        )
                     }
                 }
             }
@@ -937,44 +991,8 @@ fun LevelUpScreen(
             }
         }
 
-        // --- MOUNT SELECTOR ---
-        val mounts = uiState.unlockedAncillaries.filter { it.id.startsWith("anc_mount_") }
-        if (mounts.size > 1) {
-            val activeMount = uiState.activeMount ?: mounts.last()
-            Text("Select Active Mount:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TapestryDark, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                mounts.forEach { mount ->
-                    val isSelected = mount == activeMount
-                    val bgColor = if (isSelected) TapestryMustard.copy(alpha = 0.3f) else Color.Transparent
-                    val borderColor = if (isSelected) TapestryRed else TapestryDark.copy(alpha = 0.5f)
-                    val dummy = remember(uiState) { com.example.game.FighterState(id="m", name="", isPlayer=true, maxHp=1f, hp=1f, weaponHead=uiState.weaponHead, weaponHandle=uiState.weaponHandle, shield=uiState.shield, armor=uiState.armor, headgear=uiState.headgear, posX=0f, targetX=0f) }
-                    Card(
-                        modifier = Modifier.size(80.dp).clickable { onSelectMount(mount) }.border(2.dp, borderColor, RoundedCornerShape(8.dp)),
-                        colors = CardDefaults.cardColors(containerColor = bgColor)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
-                            Canvas(modifier = Modifier.size(50.dp)) {
-                                withTransform({
-                                    translate(left = size.width / 2, top = size.height / 2 + 20f)
-                                    scale(0.35f, 0.35f)
-                                }) {
-                                    when (mount) {
-                                        com.example.game.Ancillary.WARHORSE -> com.example.game.drawHorse(this, 0f, 0f, dummy)
-                                        com.example.game.Ancillary.CHARIOT -> com.example.game.drawChariot(this, 0f, 0f, dummy)
-                                        com.example.game.Ancillary.STILTS -> com.example.game.drawStilts(this, 0f, 0f, dummy)
-                                        else -> {}
-                                    }
-                                }
-                            }
-                            Text(mount.ancillaryName, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
-                        }
-                    }
-                }
-            }
-        }
+        // Mount selection lives under the character preview now — see CharacterPreviewCard.
+        // It used to sit here as a row of 80dp cards, which squashed the rest of the screen.
     }
 }
 
@@ -1587,7 +1605,16 @@ fun BattlefieldScene(
 
             val shakeAmt = shake
             val playerScaleX = size.width / 1000f
-            val scaleFactor = size.height / 350f
+            // Pull the camera back only when the player needs the headroom — a big fighter, a mount,
+            // or stilts. A normal-sized man on foot sees exactly what he always did.
+            val worldZoom = when {
+                playerFighter == null -> 1f
+                playerFighter.isStilts -> 0.80f
+                playerFighter.isChariot || playerFighter.isMounted -> 0.88f
+                playerFighter.size > 1.2f -> 0.90f
+                else -> 1f
+            }
+            val scaleFactor = (size.height / 350f) * worldZoom
             
             val scaledCameraX = uiState.cameraX * playerScaleX
             val offsetX = (if (shakeAmt > 0f) (kotlin.random.Random.nextFloat() * shakeAmt * 2f - shakeAmt) else 0f) - scaledCameraX

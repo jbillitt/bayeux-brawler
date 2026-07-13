@@ -13,7 +13,10 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 // Mounts, decoys and beasts: horse, chariot, throne, stilts, trojan horse, wardog, raven
-internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+
+/** How high the stilts hold the rider above the ground. Shared by the mount art and the body offset. */
+internal const val STILTS_LIFT_PX = 90f
+internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState, withStirrups: Boolean = true) {
         val anim = fighter.animFrame
         val walking = !fighter.isDead && !fighter.isDying
         val legSwing = if (walking) sin(anim) * 18f else 0f
@@ -100,15 +103,18 @@ internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
         drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
         scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
 
-        // Draw Stirrups (leather strap + iron loop) — swings in sync with the rider's leg animation
-        val strapColor = Color(0xFF382F22) // dark leather
-        val ironColor = Color(0xFF5D666B)
-        val stirrupSwing = if (fighter.isDead || fighter.isDying) 0f else kotlin.math.sin(fighter.animFrame) * 0.45f
-        val stirrupX = cx + 5f + stirrupSwing * 40f
-        val stirrupY = cy + 123f - kotlin.math.abs(stirrupSwing) * 10f
-        scope.drawLine(strapColor, Offset(cx + 5f, cy + 92f), Offset(stirrupX, stirrupY), strokeWidth = 3f)
-        scope.drawLine(ironColor, Offset(stirrupX - 5f, stirrupY), Offset(stirrupX + 5f, stirrupY), strokeWidth = 4f)
-        scope.drawCircle(ironColor, radius = 5f, center = Offset(stirrupX, stirrupY + 3f), style = Stroke(width = 3f))
+        // Stirrups (leather strap + iron loop), swinging with the rider's leg. A chariot horse is
+        // driven from a cart, not ridden, so it hangs none.
+        val strapColor = Color(0xFF382F22) // dark leather (also the reins, below)
+        if (withStirrups) {
+            val ironColor = Color(0xFF5D666B)
+            val stirrupSwing = if (fighter.isDead || fighter.isDying) 0f else kotlin.math.sin(fighter.animFrame) * 0.45f
+            val stirrupX = cx + 5f + stirrupSwing * 40f
+            val stirrupY = cy + 123f - kotlin.math.abs(stirrupSwing) * 10f
+            scope.drawLine(strapColor, Offset(cx + 5f, cy + 92f), Offset(stirrupX, stirrupY), strokeWidth = 3f)
+            scope.drawLine(ironColor, Offset(stirrupX - 5f, stirrupY), Offset(stirrupX + 5f, stirrupY), strokeWidth = 4f)
+            scope.drawCircle(ironColor, radius = 5f, center = Offset(stirrupX, stirrupY + 3f), style = Stroke(width = 3f))
+        }
 
         // Draw Reigns (leather strap from snout to saddle/rider hands)
         val reignPath = Path().apply {
@@ -219,7 +225,7 @@ internal fun drawChariot(scope: DrawScope, cx: Float, cy: Float, fighter: Fighte
         // Draw horse further ahead
         val horseOffsetX = 120f
         scope.withTransform({ translate(horseOffsetX, 0f) }) {
-            drawHorse(this, cx, cy, fighterSafe)
+            drawHorse(this, cx, cy, fighterSafe, withStirrups = false) // driven, not ridden
         }
         
         // Draw wooden traces connecting horse to chariot
@@ -303,18 +309,21 @@ internal fun drawStilts(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
         val angleL = if (fighter.isDead || fighter.isDying) 0f else kotlin.math.sin(fighter.animFrame) * 0.45f
         val angleR = if (fighter.isDead || fighter.isDying) 0f else -kotlin.math.sin(fighter.animFrame) * 0.45f
 
-        // Rider is drawn 45px higher on stilts (mountOffsetY), so feet sit at cy+105 — start the poles there
+        // The rider sits STILTS_LIFT_PX higher (mountOffsetY), so his feet are at cy + 105 - lift.
+        // The poles run from there down to the ground line at cy + 220.
+        val footY = cy + 105f - (STILTS_LIFT_PX - 45f)
+
         // Draw left stilt (attaches to left foot at cx - 18)
-        scope.withTransform({ rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f)) }) {
-            drawLine(wColor, Offset(cx - 18f, cy + 105f), Offset(cx - 18f, cy + 220f), strokeWidth = 8f)
+        scope.withTransform({ rotate(radToDeg(angleL), pivot = Offset(cx - 10f, footY)) }) {
+            drawLine(wColor, Offset(cx - 18f, footY), Offset(cx - 18f, cy + 220f), strokeWidth = 8f)
             // Footrest
-            drawLine(Color(0xFF4A4A4A), Offset(cx - 25f, cy + 110f), Offset(cx - 5f, cy + 110f), strokeWidth = 4f)
+            drawLine(Color(0xFF4A4A4A), Offset(cx - 25f, footY + 5f), Offset(cx - 5f, footY + 5f), strokeWidth = 4f)
         }
         // Draw right stilt (attaches to right foot at cx + 18)
-        scope.withTransform({ rotate(radToDeg(angleR), pivot = Offset(cx + 10f, cy + 90f)) }) {
-            drawLine(wColor, Offset(cx + 18f, cy + 105f), Offset(cx + 18f, cy + 220f), strokeWidth = 8f)
+        scope.withTransform({ rotate(radToDeg(angleR), pivot = Offset(cx + 10f, footY)) }) {
+            drawLine(wColor, Offset(cx + 18f, footY), Offset(cx + 18f, cy + 220f), strokeWidth = 8f)
             // Footrest
-            drawLine(Color(0xFF4A4A4A), Offset(cx + 10f, cy + 110f), Offset(cx + 35f, cy + 110f), strokeWidth = 4f)
+            drawLine(Color(0xFF4A4A4A), Offset(cx + 10f, footY + 5f), Offset(cx + 35f, footY + 5f), strokeWidth = 4f)
         }
     }
 

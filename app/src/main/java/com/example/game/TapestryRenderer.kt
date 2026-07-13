@@ -210,7 +210,7 @@ object TapestryRenderer {
                 rotate(rotationAngle, pivot = Offset(cx, cy + 80f))
                 scale(1f, scaleY, pivot = Offset(cx, cy + 80f))
             }) {
-                val mountOffsetY = if (fighter.isChariot) -15f else if (fighter.isMounted && fighter.isLord) -20f else if (fighter.isMounted && fighter.isStilts) -45f else if (fighter.isMounted) -35f else 0f
+                val mountOffsetY = if (fighter.isChariot) -15f else if (fighter.isMounted && fighter.isLord) -20f else if (fighter.isMounted && fighter.isStilts) -STILTS_LIFT_PX else if (fighter.isMounted) -35f else 0f
                 val adjustedMountOffsetY = mountOffsetY / effectiveSize
                 withTransform({ translate(0f, adjustedMountOffsetY) }) {
                     if (fighter.id == "trojan_horse") {
@@ -227,13 +227,24 @@ object TapestryRenderer {
                         drawHead(this, cx, cy, fighter)
                         drawBackArmAndShield(this, cx, cy, fighter)
                         if (fighter.isChariot) {
-                            val cartW = 110f
-                            val cartH = 65f
-                            val cartTopY = cy + 35f - mountOffsetY
-                            this.drawRect(Color(0xFF8B5A2B), topLeft = Offset(cx - cartW/2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH))
-                            this.drawRect(ThreadColor, topLeft = Offset(cx - cartW/2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH), style = StitchedStroke)
-                            this.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 30f), Offset(cx + cartW/2, cartTopY + 30f), strokeWidth = 3f)
-                            this.drawLine(Color(0xFF5C4033), Offset(cx - cartW/2, cartTopY + 60f), Offset(cx + cartW/2, cartTopY + 60f), strokeWidth = 3f)
+                            // The cart's front rail, drawn over the rider so he stands *in* the cart.
+                            // It must sit in the same space as the cart body from drawChariot — this
+                            // used to be drawn in the rider's own scale, so a small man got a second,
+                            // smaller cart bouncing along in front of the real one.
+                            val railRng = kotlin.random.Random(fighter.id.hashCode())
+                            val railScale = (0.9f + railRng.nextFloat() * 0.2f) / effectiveSize
+                            withTransform({
+                                translate(0f, -adjustedMountOffsetY) // undo the rider's lift
+                                scale(railScale, railScale, Offset(cx, cy + 80f)) // match the mount layer
+                            }) {
+                                val cartW = 110f
+                                val cartH = 65f
+                                val cartTopY = cy + 35f
+                                drawRect(Color(0xFF8B5A2B), topLeft = Offset(cx - cartW / 2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH))
+                                drawRect(ThreadColor, topLeft = Offset(cx - cartW / 2, cartTopY), size = androidx.compose.ui.geometry.Size(cartW, cartH), style = StitchedStroke)
+                                drawLine(Color(0xFF5C4033), Offset(cx - cartW / 2, cartTopY + 30f), Offset(cx + cartW / 2, cartTopY + 30f), strokeWidth = 3f)
+                                drawLine(Color(0xFF5C4033), Offset(cx - cartW / 2, cartTopY + 60f), Offset(cx + cartW / 2, cartTopY + 60f), strokeWidth = 3f)
+                            }
                         }
                         drawFrontArmAndWeapon(this, cx, cy, fighter)
                     }
@@ -375,6 +386,28 @@ object TapestryRenderer {
                 }
                 scope.drawPath(spiral, Woad, style = Stroke(width = 2.5f, cap = StrokeCap.Round))
             }
+        }
+
+        if (fighter.id == "hag") {
+            // A proper hag: humped back and a long trailing gown over the ragged cloak
+            val gown = Path().apply {
+                moveTo(cx - 30f, cy + 60f)
+                lineTo(cx + 30f, cy + 60f)
+                lineTo(cx + 42f, cy + 150f)
+                quadraticTo(cx, cy + 138f, cx - 42f, cy + 150f)
+                close()
+            }
+            drawStitchedFill(scope, gown, Color(0xFF2F2C25))
+            scope.drawPath(gown, ThreadColor, style = StitchedStroke)
+            // Hunch: a great rounded hump rising behind the shoulders
+            val hump = Path().apply {
+                moveTo(cx - 26f, cy + 26f)
+                quadraticTo(cx - 34f, cy - 22f, cx + 4f, cy - 10f)
+                quadraticTo(cx + 2f, cy + 14f, cx - 26f, cy + 26f)
+                close()
+            }
+            drawStitchedFill(scope, hump, Color(0xFF3E3A2E))
+            scope.drawPath(hump, ThreadColor, style = StitchedStroke)
         }
 
         if (fighter.isWarPriest) {
@@ -590,9 +623,13 @@ object TapestryRenderer {
             // Blood fountain is now drawn in world-space in drawCharacter() so it connects properly to the pool!
         }
 
+        // A heavy blunt hit drove this head into the shoulders. It does not come back out.
+        val squash = if (fighter.headSquashed) 0.72f else 1f
+
         scope.withTransform({
             translate(headOffsetX, headOffsetY)
             rotate(headRot, pivot = Offset(cx, cy - 25f))
+            if (squash != 1f) scale(1f + (1f - squash) * 0.5f, squash, pivot = Offset(cx, cy + 12f))
         }) {
             val hx = cx
             val hy = cy - 25f
@@ -959,6 +996,53 @@ object TapestryRenderer {
             }
             drawStitchedFill(scope, skullCap, Color(0xFF9EA3A8))
             scope.drawPath(skullCap, ThreadColor, style = StitchedStroke)
+        } else if (helmId == "helm_phrygian") {
+            // Iron cap whose peak curls forward over the brow — the Norman helm of the tapestry
+            val cap = Path().apply {
+                moveTo(hx - 15f, hy + 2f)
+                quadraticTo(hx - 14f, hy - 20f, hx + 2f, hy - 24f)
+                quadraticTo(hx + 16f, hy - 26f, hx + 13f, hy - 12f) // the forward curl
+                quadraticTo(hx + 11f, hy - 4f, hx + 15f, hy + 2f)
+                close()
+            }
+            drawStitchedFill(scope, cap, Color(0xFF8C959B))
+            scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+            scope.drawLine(ThreadColor, Offset(hx - 12f, hy - 6f), Offset(hx + 10f, hy - 10f), strokeWidth = 1.5f)
+        } else if (helmId == "helm_mitre") {
+            // Bishop Odo's cloth-of-gold mitre: two peaks with an orphrey band
+            val mitre = Path().apply {
+                moveTo(hx - 14f, hy + 2f)
+                lineTo(hx - 9f, hy - 30f)
+                lineTo(hx, hy - 16f)
+                lineTo(hx + 9f, hy - 32f)
+                lineTo(hx + 14f, hy + 2f)
+                close()
+            }
+            drawStitchedFill(scope, mitre, Color(0xFFD8C48A))
+            scope.drawPath(mitre, ThreadColor, style = StitchedStroke)
+            scope.drawLine(Color(0xFF9E3624), Offset(hx - 12f, hy - 6f), Offset(hx + 12f, hy - 6f), strokeWidth = 3f)
+            scope.drawLine(Color(0xFF9E3624), Offset(hx - 2f, hy - 24f), Offset(hx + 2f, hy - 4f), strokeWidth = 2f)
+        } else if (helmId == "helm_straw") {
+            // Wide straw brim with a low crown
+            val brim = Path().apply {
+                moveTo(hx - 26f, hy + 1f)
+                quadraticTo(hx, hy - 6f, hx + 26f, hy + 1f)
+                quadraticTo(hx, hy + 7f, hx - 26f, hy + 1f)
+                close()
+            }
+            drawStitchedFill(scope, brim, Color(0xFFD9B871))
+            scope.drawPath(brim, ThreadColor, style = StitchedStroke)
+            val crown = Path().apply {
+                moveTo(hx - 12f, hy - 1f)
+                quadraticTo(hx, hy - 20f, hx + 12f, hy - 1f)
+                close()
+            }
+            drawStitchedFill(scope, crown, Color(0xFFC9A45C))
+            scope.drawPath(crown, ThreadColor, style = StitchedStroke)
+            // straw texture
+            for (i in -2..2) {
+                scope.drawLine(Color(0xFFA98643), Offset(hx + i * 5f, hy - 2f), Offset(hx + i * 5f + 2f, hy - 12f), strokeWidth = 1f)
+            }
         } else if (helmId == "helm_spangen") {
             val spangen = Path().apply {
                 moveTo(hx - 16f, hy + 2f)
@@ -1051,7 +1135,9 @@ object TapestryRenderer {
             scope.drawCircle(Color(0xFFFFD700), radius = 4f, center = Offset(hx + 30f, hy - 10f))
         }
 
-        if (fighter.isLord) {
+        // A crown is worn by an enemy lord — and by any player who equips one. It used to hang on
+        // isLord alone, so the King's Crown headgear rendered as nothing at all.
+        if (fighter.isLord || fighter.headgear.id == "helm_crown") {
             val crownPath = Path().apply {
                 moveTo(hx - 12f, hy - 10f)
                 lineTo(hx - 15f, hy - 25f)
@@ -1439,13 +1525,17 @@ object TapestryRenderer {
             0f
         } else {
             val baseLen = when (fighter.weaponHandle.id) {
+                // The pike is a 12-foot pole and must read as the longest haft in the game. It used
+                // to fall through to the 30f default, drawing shorter than a medium handle.
+                "handle_pike_long" -> 210f
                 "handle_long", "handle_plough" -> 110f
                 "handle_medium", "handle_stump", "handle_ram" -> 70f
                 "handle_chain", "handle_flail_chain" -> 60f
                 "handle_double_ended" -> 80f
                 "handle_blessed_branch" -> 70f
-                "handle_dagger" -> 15f
-                else -> 30f // short, iron, wheel, pick, fists
+                "handle_iron" -> 45f
+                "handle_dagger" -> 8f // a grip, barely more than a fist
+                else -> 30f // short, wheel, pick, fists
             }
             baseLen + fighter.handleExtensionCount * 25f
         }
@@ -1763,6 +1853,8 @@ object TapestryRenderer {
         val isLanceCompatible = fighter.weaponHead.id in listOf("head_pike", "head_spear", "head_halberd")
         val isSaw = fighter.weaponHead.id in listOf("head_saw_1", "head_saw_2")
         val isChokeSlam = fighter.weaponHandle.id == "handle_fists" && fighter.isDualWielding
+        // A pike is not a spear: it is couched, braced, and driven forward off the back foot.
+        val isPikeThrust = fighter.weaponHead.id == "head_pike"
         val armAngle = if (fighter.isDead || fighter.isDying) {
             if (fighter.isDying) {
                 sin(fighter.animFrame * 1.5f) * 85f
@@ -1771,8 +1863,25 @@ object TapestryRenderer {
             }
         } else if (fighter.isAttacking) {
             if (fighter.weaponHandle.id == "handle_double_ended") {
-                val dir = if (fighter.lastAttackTime % 3L == 0L) -1f else 1f
+                // Overhead whirl, clockwise. The alternate swing sometimes reverses — rolled once per
+                // attack in triggerAttack, not read off a timestamp's parity every frame.
+                val dir = if (fighter.whirlCounterClockwise) -1f else 1f
                 360f * swing * dir
+            } else if (isPikeThrust) {
+                // Long wind-back, then a heavy committed drive: slow to level, then a long lunge that
+                // holds at full extension before recovering.
+                if (swing < 0.45f) {
+                    val draw = swing / 0.45f
+                    thrustOffset = Offset(-45f * draw, -6f * draw) // haul it back and level the point
+                    -6f * draw
+                } else {
+                    val lunge = ((swing - 0.45f) / 0.55f).coerceIn(0f, 1f)
+                    // ease out hard, hold, then withdraw
+                    val ext = kotlin.math.sin(lunge * Math.PI).toFloat()
+                    val drive = kotlin.math.min(1f, ext * 1.6f)
+                    thrustOffset = Offset(-45f + 145f * drive, -6f + 6f * drive)
+                    -6f + 8f * drive
+                }
             } else if (isSaw) {
                 val sawExt = kotlin.math.sin(swing * Math.PI * 5).toFloat()
                 thrustOffset = Offset(30f * sawExt, 5f * sawExt)
@@ -2211,7 +2320,7 @@ object TapestryRenderer {
                 (index + 1) * 110f * offsetSign + dynamicWalkOffset
             }
             val cx = playerFighter.posX + baseOffsetX
-            val mountOffsetY = if (playerFighter.isChariot) -15f else if (playerFighter.isMounted && playerFighter.isLord) -20f else if (playerFighter.isMounted && playerFighter.isStilts) -45f else if (playerFighter.isMounted) -35f else 0f
+            val mountOffsetY = if (playerFighter.isChariot) -15f else if (playerFighter.isMounted && playerFighter.isLord) -20f else if (playerFighter.isMounted && playerFighter.isStilts) -STILTS_LIFT_PX else if (playerFighter.isMounted) -35f else 0f
             val cy = if (anc == com.example.game.Ancillary.LIL_GUY) (90f + mountOffsetY) else 200f
             val finalScale = when (anc) {
                 com.example.game.Ancillary.LIL_GUY -> normScale * 0.8f

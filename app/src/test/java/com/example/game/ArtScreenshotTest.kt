@@ -98,6 +98,50 @@ class ArtScreenshotTest {
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/buildings.png")
     }
 
+    /** The mounts, at a small size and a normal one — a little man in a chariot draws a second box. */
+    @Test
+    fun mounts() {
+        fun rider(id: String, size: Float, chariot: Boolean = false, stilts: Boolean = false, crown: Boolean = false) =
+            FighterState(
+                id = id, name = id, isPlayer = true, maxHp = 100f, hp = 100f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == if (crown) "helm_crown" else "helm_none" },
+                posX = 0f, targetX = 0f, facingRight = true,
+                size = size,
+                hairColor = Color(0xFF5A442E), hairStyle = "short",
+                isMounted = true,
+                isChariot = chariot,
+                isStilts = stilts
+            )
+
+        val cast = listOf(
+            rider("small_chariot", 0.65f, chariot = true),
+            rider("big_chariot", 1.3f, chariot = true),
+            rider("small_stilts", 0.65f, stilts = true),
+            rider("normal_stilts", 1.0f, stilts = true),
+            rider("small_horse", 0.65f),
+            rider("crowned", 1.0f, crown = true)
+        )
+
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                cast.chunked(2).forEach { row ->
+                    Row {
+                        row.forEach { f ->
+                            Canvas(modifier = Modifier.width(206.dp).height(190.dp)) {
+                                TapestryRenderer.drawCharacter(this, f, scale = 0.8f, isBattleActive = true)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/mounts.png")
+    }
+
     @Test
     fun fighters() {
         fun f(

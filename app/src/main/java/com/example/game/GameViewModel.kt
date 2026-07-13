@@ -78,6 +78,8 @@ class GameViewModel : ViewModel() {
         private const val ARMOR_WEIGHT_LIMIT = 20f
         private const val WEATHER_UNLOCK_LEVEL = 12
         private const val MAX_WEATHERS_HELD = 2
+        /** Buildings draw ~300px wide and were spawning on top of each other. */
+        private const val MIN_BUILDING_GAP = 340f
 
         /** Seconds before a spent weather charge is ready again. The border icons dim against it. */
         const val WEATHER_COOLDOWN = 60f
@@ -622,8 +624,24 @@ class GameViewModel : ViewModel() {
             )
             val assetBuildings = VectorAsset.spawnable().filter { state.level >= (it.spawn?.minLevel ?: 2) }
 
+            // Keep them apart: a random x per building had them growing out of each other
+            val placedX = mutableListOf<Float>()
+            fun placeX(): Float {
+                repeat(24) {
+                    val candidate = 300f + Random.nextFloat() * (levelWidth - 600f)
+                    if (placedX.none { abs(it - candidate) < MIN_BUILDING_GAP }) {
+                        placedX.add(candidate)
+                        return candidate
+                    }
+                }
+                // Crowded level: fall back to evenly spaced rather than stacked
+                val fallback = 300f + placedX.size * MIN_BUILDING_GAP
+                placedX.add(fallback)
+                return fallback.coerceAtMost(levelWidth - 300f)
+            }
+
             for (i in 0 until numBuildings) {
-                val bx = 300f + Random.nextFloat() * (levelWidth - 600f)
+                val bx = placeX()
                 if (state.level >= 5 && i == 0) {
                     val fort = listOf(
                         BackgroundObjectType.FORT_DINAN, BackgroundObjectType.FORT_PALACE,
@@ -1337,6 +1355,16 @@ class GameViewModel : ViewModel() {
                     hasThroneOption = kotlin.random.Random.nextFloat() < 0.2f,
                     isThroneMode = false,
                     unlockedAncillaries = emptySet(),
+                    // A new man starts with nothing. activeMount was surviving the reset, so the
+                    // next run began already riding the last one's chariot.
+                    activeMount = null,
+                    isDualWielding = false,
+                    hasSilkenGarments = false,
+                    divineWeathers = emptyList(),
+                    weatherCooldowns = emptyMap(),
+                    hasShieldbreaker = false,
+                    hasArmorPiercing = false,
+                    seenCounters = emptySet(),
                     bandagesCount = 0, // bandages are veterancy marks earned within a run, never at level 1
                     weaponHead = newHead,
                     weaponHandle = newHandle,

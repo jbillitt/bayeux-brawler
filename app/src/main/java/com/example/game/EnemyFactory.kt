@@ -237,7 +237,11 @@ object EnemyFactory {
             speedBoost = if (isMounted && !isChariot) 0.5f else if (isChariot) 0.5f else 0f,
             shieldHp = (gear[2] as GameData.Shield).defense * 2f,
             bandagesCount = if (level > 4 && rng.nextFloat() < 0.35f) 1 else 0,
-            extraAttachments = if (level >= 15 && rng.nextFloat() < 0.5f) List(rng.nextInt(1, 2 + (level - 14) / 5)) { GameData.WEAPON_HEADS.random(rng) } else emptyList()
+            // Saxons weld junk to their weapons too, from level 10 — but at most two pieces, and only
+            // sometimes. The player's ludicrous tree of attachments has to stay the winning edge.
+            extraAttachments = if (level >= 10 && rng.nextFloat() < 0.3f) {
+                List(rng.nextInt(1, if (level >= 18) 3 else 2)) { GameData.WEAPON_HEADS.random(rng) }
+            } else emptyList()
         )
     }
 }

@@ -32,6 +32,25 @@ class CombatEngine(private val ctx: BattleContext) {
     companion object {
         // Fists hit fast enough to occasionally stagger a mid-swing defender.
         const val FIST_INTERRUPT_CHANCE = 0.25f
+
+        /** Each dual-wielded weapon swings and misses on its own. Two hands, two rolls. */
+        const val DUAL_WIELD_MISS_CHANCE = 0.35f
+
+        /** Up on stilts you are simply above most of it — a man on foot swings at your poles. */
+        const val STILTS_EVASION = 0.55f
+
+        /** Odds a heavy blunt hit permanently concertinas an enemy's head into his shoulders. */
+        const val HEAD_SQUASH_CHANCE = 0.4f
+        /** How often a double-ended swing reverses its overhead whirl. */
+        const val DOUBLE_ENDED_REVERSE_CHANCE = 0.25f
+
+        /**
+         * Melee fighters close to this fraction of their reach before swinging, instead of stopping
+         * dead on the hitbox boundary. Standing exactly at max reach meant any drift during a slow
+         * windup — a pike takes most of a second — dropped the target out of range and every blow
+         * whiffed. Close a little further and the swing lands.
+         */
+        private const val MELEE_ENGAGE_MARGIN = 0.8f
         // Melee pursuers tighten up on a kiting (ranged) target instead of stalling at their full reach.
         private const val MELEE_VS_RANGED_CHASE_MULT = 0.8f
 
@@ -197,9 +216,19 @@ class CombatEngine(private val ctx: BattleContext) {
             fighter.slowDuration -= dt
         }
 
-        // Crumple tick over time
+        // Crumple tick over time. isCrumpled was never cleared, so anyone knocked down stayed
+        // flagged down forever — they stood back up and never swung again.
         if (fighter.crumpleDuration > 0f) {
             fighter.crumpleDuration -= dt
+            if (fighter.crumpleDuration <= 0f) {
+                fighter.crumpleDuration = 0f
+                fighter.isCrumpled = false
+                // Get up ready to fight, not stuck mid-swing from before they were floored
+                fighter.isAttacking = false
+                fighter.hasLandedStrike = false
+                fighter.swingProgress = 0f
+                fighter.attackCooldown = 0f
+            }
         }
 
         // Cooldown tick
@@ -323,7 +352,10 @@ class CombatEngine(private val ctx: BattleContext) {
             // reach by an enemy backpedaling from a weapon it doesn't have.
             val mountReachPixels = if (fighter.isMounted) 1.5f * 40f else 0f
             val baseOptimal = reachPixels - mountReachPixels
-            val approachTarget = if (!fighter.isRanged && fighter.reach < 1.2f) baseOptimal * 0.6f else baseOptimal
+            // Short weapons step right inside the boundary; everything else still closes enough that a
+            // slow swing cannot whiff on a target that shuffled a few pixels during the windup.
+            val approachTarget = if (!fighter.isRanged && fighter.reach < 1.2f) baseOptimal * 0.45f
+                else baseOptimal * MELEE_ENGAGE_MARGIN
             val optimalDistance = when {
                 fighter.isRanged -> reachPixels * rangeMult
                 target.isRanged -> approachTarget * MELEE_VS_RANGED_CHASE_MULT // tighten up chasing a kiting target
@@ -370,6 +402,11 @@ class CombatEngine(private val ctx: BattleContext) {
     fun triggerAttack(fighter: FighterState) {
         fighter.isAttacking = true
         fighter.swingProgress = 0f
+        // Double-ended whirl: clockwise overhead by default, occasionally reversed. Rolled once here,
+        // per swing, rather than read off the parity of a millisecond timestamp in the renderer.
+        if (fighter.weaponHandle.id == "handle_double_ended") {
+            fighter.whirlCounterClockwise = Random.nextFloat() < DOUBLE_ENDED_REVERSE_CHANCE
+        }
 
         if (fighter.isBrawler) {
             if (fighter.missingArm) {
@@ -444,15 +481,12 @@ class CombatEngine(private val ctx: BattleContext) {
                 return
             }
 
-            // Dual Wield miss chance (higher for dual wield in general)
-            if (attacker.isDualWielding && Random.nextFloat() < 0.35f) {
-                ctx.popup("MISS!", defender.posX, 140f, Color.Gray)
-                ctx.sound(SoundType.SWOOSH)
-                return
-            }
-
+            // Dual wield swings BOTH weapons. The miss is rolled per swing inside meleeSweep — the
+            // hands are independent, so one going wide must not cancel the other.
             val hitCount = if (attacker.weaponHandle.id == "handle_double_ended") {
                 if (attacker.isDualWielding) 4 else 2
+            } else if (attacker.isDualWielding) {
+                2
             } else {
                 1
             }
@@ -519,10 +553,25 @@ class CombatEngine(private val ctx: BattleContext) {
 
     // One swing sweeping through all gathered targets, with piercing falloff
     private fun meleeSweep(attacker: FighterState, targets: List<FighterState>, dmgScale: Float, isPiercingWeapon: Boolean) {
+        // This swing's own miss roll. A dual-wielder throws two of these, and one going wide says
+        // nothing about the other hand.
+        if (attacker.isDualWielding && Random.nextFloat() < DUAL_WIELD_MISS_CHANCE) {
+            targets.firstOrNull()?.let { ctx.popup("MISS!", it.posX, 140f, Color.Gray) }
+            ctx.sound(SoundType.SWOOSH)
+            return
+        }
+
         var damageFalloff = 1f
 
         for (currTarget in targets) {
             if (currTarget.isDead || currTarget.isDying) continue
+
+            // Stilts hold you above the fight. A man on the ground mostly hits wood.
+            if (currTarget.isStilts && !attacker.isStilts && !attacker.isMounted && Random.nextFloat() < STILTS_EVASION) {
+                ctx.popup("TOO HIGH!", currTarget.posX, 150f, Color.Gray)
+                ctx.sound(SoundType.SWOOSH)
+                continue
+            }
 
             // Speed Advantage: Capped melee dodge chance
             val meleeDodgeChance = (currTarget.moveSpeed * 0.0015f).coerceIn(0f, 0.25f)
@@ -608,6 +657,12 @@ class CombatEngine(private val ctx: BattleContext) {
                     currTarget.isAttacking = false
                     currTarget.attackCooldown = currTarget.attackCooldown.coerceAtLeast(0.4f)
                     ctx.popup("INTERRUPTUS!", currTarget.posX, 150f, Color.Yellow)
+                }
+
+                // A heavy blunt blow drives an enemy's head down into his shoulders, and it stays
+                // there. Enemies only — the player keeps his dignity.
+                if (blunt > 14f && !currTarget.isPlayer && Random.nextFloat() < HEAD_SQUASH_CHANCE) {
+                    currTarget.headSquashed = true
                 }
 
                 // Knock off helmet randomly!

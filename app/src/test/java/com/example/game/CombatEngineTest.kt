@@ -160,8 +160,12 @@ class CombatEngineTest {
         assertTrue("fists player should have closed to melee reach ($reachPixels) but nearest was $minDist", minDist <= reachPixels)
     }
 
+    /**
+     * An enthroned lord does not swing — the retinue fights for him. He still advances, and he only
+     * takes up the fight himself, bare-handed, once the throne is smashed out from under him.
+     */
     @Test
-    fun throneModeFistsPlayerReachesAdjacentEnemy() {
+    fun throneModeLordHoldsHisHandUntilTheThroneFalls() {
         val ctx = FakeContext()
         val engine = CombatEngine(ctx)
         val player = fighter(head = "head_bare", handle = "handle_fists", isPlayer = true, posX = 0f).apply {
@@ -169,18 +173,31 @@ class CombatEngineTest {
             isMounted = true
             mountHp = 100f
         }
+        // Crumpled for the whole test, so it never hits back: whatever damage lands is the lord's.
         val enemy = fighter(head = "head_sword", handle = "handle_medium", posX = 300f)
         ctx.player = player
         ctx.enemies = listOf(enemy)
         enemy.crumpleDuration = 100f
+
         repeat(180) {
             engine.updateFighter(player, enemy, 0.033f)
             engine.updateFighter(enemy, player, 0.033f)
         }
+
         val reachPixels = player.reach * 40f + 40f
         val dist = abs(player.posX - enemy.posX)
-        assertTrue("throne-mode lord should have closed to melee reach ($reachPixels) but dist=$dist", dist <= reachPixels)
-        assertTrue("throne-mode fists lord should have landed punches", enemy.hp < enemy.maxHp || enemy.isDying)
+        assertTrue("throne-mode lord should still have closed to melee reach ($reachPixels) but dist=$dist", dist <= reachPixels)
+        assertEquals("an enthroned lord should not be swinging himself", enemy.maxHp, enemy.hp, 0.001f)
+
+        // Smash the throne. It absorbs the blow, collapses, and sets him down on his own two feet.
+        engine.applyFlatDamage(150f, player)
+        assertFalse("the throne should have collapsed", player.isLord)
+
+        repeat(180) {
+            engine.updateFighter(player, enemy, 0.033f)
+            engine.updateFighter(enemy, player, 0.033f)
+        }
+        assertTrue("a dethroned lord should fight on bare-handed", enemy.hp < enemy.maxHp || enemy.isDying)
     }
 
     @Test

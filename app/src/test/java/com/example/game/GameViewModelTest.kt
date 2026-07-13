@@ -113,6 +113,41 @@ class GameViewModelTest {
 
     private fun foes() = viewModel.enemiesState.value.filter { !it.isPlayer && !it.isDead && !it.isDying }
 
+    private fun endBattle(won: Boolean) {
+        val m = GameViewModel::class.java.getDeclaredMethod("endBattle", Boolean::class.java)
+        m.isAccessible = true
+        m.invoke(viewModel, won)
+    }
+
+    @Test
+    fun `the throne is only a mount option once actually taken`() {
+        // Being *offered* the throne is not the same as sitting on it.
+        mutateState { it.copy(hasThroneOption = true, isThroneMode = false, hasTakenThrone = false) }
+        assertFalse("an unaccepted offer put a throne in the picklist", viewModel.uiState.value.hasTakenThrone)
+
+        viewModel.selectThrone()
+        assertTrue(viewModel.uiState.value.hasTakenThrone)
+
+        // Switching to a horse dismounts the throne, but you keep the right to climb back on.
+        viewModel.selectMount(Ancillary.WARHORSE)
+        assertFalse("should be off the throne", viewModel.uiState.value.isThroneMode)
+        assertTrue("throne vanished from the picklist after mounting a horse", viewModel.uiState.value.hasTakenThrone)
+    }
+
+    @Test
+    fun `a defeated run keeps its score until dismissed, so the shared tale can show it`() {
+        viewModel.startBattle()
+        mutateState { it.copy(score = 4200) }
+
+        endBattle(won = false)
+        // The defeat card — and the share PNG generated from it — is on screen now. It read 0 before.
+        assertTrue("battle should be lost", viewModel.uiState.value.battleLost)
+        assertEquals("score was wiped before the player could see or share it", 4200, viewModel.uiState.value.score)
+
+        viewModel.dismissBattleResult()
+        assertEquals("score should reset once the next run begins", 0, viewModel.uiState.value.score)
+    }
+
     @Test
     fun `divine bolt smites the mightiest foe`() {
         mutateState { it.copy(divineWeathers = listOf(DivineWeather.LIGHTNING)) }

@@ -72,9 +72,12 @@ class GameViewModel : ViewModel() {
     // New particles collect here and flush to the StateFlow once per tick —
     // per-hit list copies were the biggest allocation churn in the loop
     private val particleBuffer = mutableListOf<BloodParticle>()
+    private var incenseTick = 0
     // 20kg: chainmail (12) + coif (2) rides fine; scale (16) + gauntlets/boots/coif (5.5) does not
     companion object {
-        private const val MAX_PARTICLES = 250
+        // Every live particle is a draw call per frame, so this is a frame-budget number, not a
+        // taste one. 120 still reads as a gout of blood; 250 was costing frames on mid devices.
+        private const val MAX_PARTICLES = 120
         private const val ARMOR_WEIGHT_LIMIT = 20f
         private const val WEATHER_UNLOCK_LEVEL = 12
         private const val MAX_WEATHERS_HELD = 2
@@ -183,7 +186,13 @@ class GameViewModel : ViewModel() {
         val sizes = listOf(0.85f, 1.0f, 1.15f)
         val hairColors = listOf(Color(0xFFE5C09F), Color(0xFFC08030), Color(0xFF2C2219), Color(0xFF5A442E))
         val styles = listOf("short", "long", "bald")
-        updatePhysical(sizes.random(), hairColors.random(), styles.random())
+        val startSize = sizes.random()
+        val rng = kotlin.random.Random.Default
+        _uiState.update { it.copy(
+            honorific = randomHonorific(rng),
+            givenName = givenNamesFor(startSize).random(rng)
+        ) }
+        updatePhysical(startSize, hairColors.random(), styles.random())
     }
 
     fun selectLevelUpChoice(choiceId: String) {
@@ -250,9 +259,14 @@ class GameViewModel : ViewModel() {
 
     fun selectMount(a: Ancillary) {
         if (_uiState.value.isBattleActive) return
-        _uiState.update { state ->
-            state.copy(activeMount = a)
-        }
+        // Picking a mount means dismounting the throne — you cannot ride two things at once
+        _uiState.update { it.copy(activeMount = a, isThroneMode = false) }
+    }
+
+    /** The throne is a mount too, once you have one. */
+    fun selectThrone() {
+        if (_uiState.value.isBattleActive) return
+        _uiState.update { it.copy(activeMount = null, isThroneMode = true, hasTakenThrone = true) }
     }
 
     fun selectGear(item: GearItem) {
@@ -298,6 +312,24 @@ class GameViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Norman and English styles of address, as the tapestry's own titulus would give them. Blank is
+     * in the pot on purpose — plenty of men in the embroidery are named with no title at all.
+     */
+    private fun randomHonorific(rng: kotlin.random.Random): String = listOf(
+        "", "", "", "", "",
+        "Syr", "Sire", "Ser", "Messire", "Seigneur", "Sieur",
+        "Lord", "Baron", "Earl", "Count", "Vicomte", "Duke",
+        "Thegn", "Ealdorman", "Reeve", "Marshal", "Steward", "Chevalier"
+    ).random(rng)
+
+    /** Given names only — a byname is appended separately. Big men and runts are named differently. */
+    private fun givenNamesFor(size: Float): List<String> = when {
+        size > 1.1f -> listOf("William", "Robert", "Henry", "Richard", "Hugh", "Odo", "Fulk", "Alan", "Amaury", "Drogo", "Tancred", "Bernard", "Reginald", "Herbert", "Arnulf", "Guillaume", "Hugo", "Rollo", "Thorold", "Godfrey", "Taillefer", "Balduin", "Ranulf", "Goliath", "Gros-Jean", "Geoffrey", "Eustace")
+        size < 0.9f -> listOf("Ive", "Ives", "Eudo", "Eudes", "Odo", "Hamo", "Hamon", "Milo", "Milon", "Wido", "Widon", "Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred", "Wimund", "Bodo", "Osbern", "Wulfric", "Little John", "Alberic", "Berengar", "Drogo", "Erfast")
+        else -> listOf("Roger", "Walter", "Ralph", "Geoffrey", "Gilbert", "Baldwin", "Humphrey", "Eustace", "Miles", "Guy", "Achard", "Aimery", "Engenulf", "Gerelm", "Goubert", "Ilbert", "Ivon", "Mauger", "Osmund", "Pain", "Serlo", "Turold", "Turstin", "Vital", "Wadard", "Arthur", "Lancelot", "Gawain", "Percival", "Bors", "Gareth", "Tristan", "Bedivere", "Galahad", "Kay", "Odo", "William", "Robert", "Richard", "Hugh")
+    }
+
     fun updatePhysical(size: Float, hairColor: Color, hairStyle: String) {
         if (_uiState.value.isBattleActive) return
         
@@ -314,15 +346,14 @@ class GameViewModel : ViewModel() {
                 else -> listOf("the Brown", "the Muddy", "Earth-born", "the Common").random(rng)
             }
         }
-        val currentFirstName = _uiState.value.playerName.split(" ").firstOrNull() ?: "Syr"
-        val newName = "$currentFirstName $lastName"
-
         _uiState.update { state ->
             state.copy(
                 characterSize = size,
                 hairColor = hairColor,
                 hairStyle = hairStyle,
-                playerName = newName
+                // Only the byname tracks the hair. The given name and title are his to keep — they
+                // used to be re-parsed out of the display string here, and quietly lost.
+                byname = lastName
                 // Removed face rerolls here so they stay constant during customization
             )
         }
@@ -737,8 +768,11 @@ class GameViewModel : ViewModel() {
         particleBuffer.clear()
         _particlesState.value = if (liveParticles.size > MAX_PARTICLES) liveParticles.takeLast(MAX_PARTICLES) else liveParticles
 
-        if (_uiState.value.unlockedAncillaries.contains(Ancillary.MONK)) {
-            addIncenseParticles(player.posX - (40f * player.size), 190f, count = 2)
+        // One puff every 4th tick, not two every tick: at 30fps the old rate spawned 60 smoke
+        // particles a second, which pinned the particle cap on its own and starved out the blood.
+        incenseTick = (incenseTick + 1) % 4
+        if (incenseTick == 0 && _uiState.value.unlockedAncillaries.contains(Ancillary.MONK)) {
+            addIncenseParticles(player.posX - (40f * player.size), 190f, count = 1)
         }
 
         // Weather charges come back over time
@@ -932,7 +966,14 @@ class GameViewModel : ViewModel() {
         val hasArcher = _uiState.value.unlockedAncillaries.contains(Ancillary.ARCHER)
         val hasCrossbow = _uiState.value.unlockedAncillaries.contains(Ancillary.CROSSBOWMAN)
         if (!player.isDead && !player.isDying) {
-            val sortedAncs = _uiState.value.unlockedAncillaries.sortedBy { it.name }
+            // Must match the entourage TapestryRenderer.drawAncillaries actually draws, or the arrows
+            // fly out of thin air — unlocking a mount shifted the index and Long Shanks "shot arrows".
+            val sortedAncs = _uiState.value.unlockedAncillaries
+                .filter {
+                    !it.id.startsWith("anc_mount_") &&
+                        it !in listOf(Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG, Ancillary.TROJAN_HORSE)
+                }
+                .sortedBy { it.name }
             val archerIdx = sortedAncs.indexOf(Ancillary.ARCHER)
             val crossbowIdx = sortedAncs.indexOf(Ancillary.CROSSBOWMAN)
             
@@ -1270,12 +1311,8 @@ class GameViewModel : ViewModel() {
             )
         }
 
-        if (won) {
-            // Victory voice clip will play via MainActivity
-        } else {
-            // reset score on defeat so they start over
-            _uiState.update { it.copy(score = 0) }
-        }
+        // The run's score is NOT cleared here: the defeat card and its shared tapestry are still
+        // showing it. It resets in dismissBattleResult, when the next run actually begins.
     }
 
     fun dismissBattleResult() {
@@ -1298,24 +1335,15 @@ class GameViewModel : ViewModel() {
                 
                 val rng = kotlin.random.Random.Default
                 val size = state.characterSize
-                val firstNames = if (size > 1.1f) {
-                    listOf("William", "Robert", "Henry", "Richard", "Hugh", "Odo", "Fulk", "Alan", "Amaury", "Drogo", "Tancred", "Bernard", "Reginald", "Herbert", "Arnulf", "Guillaume", "Hugo", "Rollo", "Thorold", "Godfrey", "Taillefer", "Balduin", "Ranulf", "Goliath", "Gros-Jean", "Geoffrey", "Eustace")
-                } else if (size < 0.9f) {
-                    listOf("Ive", "Ives", "Eudo", "Eudes", "Odo", "Hamo", "Hamon", "Milo", "Milon", "Wido", "Widon", "Pippin", "Leofric", "Giles", "Alan", "Eustace", "Aethelred", "Wimund", "Bodo", "Osbern", "Wulfric", "Little John", "Alberic", "Berengar", "Drogo", "Erfast")
-                } else {
-                    listOf("Roger", "Walter", "Ralph", "Geoffrey", "Gilbert", "Baldwin", "Humphrey", "Eustace", "Miles", "Guy", "Achard", "Aimery", "Engenulf", "Gerelm", "Goubert", "Ilbert", "Ivon", "Mauger", "Osmund", "Pain", "Serlo", "Turold", "Turstin", "Vital", "Wadard", "Arthur", "Lancelot", "Gawain", "Percival", "Bors", "Gareth", "Tristan", "Bedivere", "Galahad", "Kay", "Odo", "William", "Robert", "Richard", "Hugh")
-                }
-                
                 val weakBynames = listOf("Weak-feet", "Soft-bread", "The Timid", "The Bastard", "The Infirm")
-                val firstName = firstNames.random(rng)
+                val firstName = givenNamesFor(size).random(rng)
                 
-                val currentLastName = state.playerName.split(" ").drop(1).joinToString(" ")
+                // A runt is mocked for it; anyone else keeps the byname he earned.
                 val lastName = if (size < 0.9f) {
                     weakBynames.random(rng)
                 } else {
-                    currentLastName.ifEmpty { "the Unknown" }
+                    state.byname.ifEmpty { "the Unknown" }
                 }
-                val newName = "$firstName $lastName"
 
                 // Completely random starter gear for the next attempt (each attempt starts fresh and unique!)
                 // Invariant: head_bare (fists) must always pair with handle_fists — never a hilt.
@@ -1332,7 +1360,10 @@ class GameViewModel : ViewModel() {
                     level = 1,
                     gameCount = state.gameCount + 1,
                     totalKills = 0,
-                    playerName = newName,
+                    score = 0, // a new man starts with no glory (highscore survives)
+                    honorific = randomHonorific(rng),
+                    givenName = firstName,
+                    byname = lastName,
                     faceNoseShape = (0..3).random(rng),
                     faceBiteShape = (0..3).random(rng),
                     faceForehead = (0..2).random(rng),
@@ -1354,6 +1385,7 @@ class GameViewModel : ViewModel() {
                     brawlerUpgrades = emptyList(),
                     hasThroneOption = kotlin.random.Random.nextFloat() < 0.2f,
                     isThroneMode = false,
+                    hasTakenThrone = false,
                     unlockedAncillaries = emptySet(),
                     // A new man starts with nothing. activeMount was surviving the reset, so the
                     // next run began already riding the last one's chariot.
@@ -1386,7 +1418,10 @@ class GameViewModel : ViewModel() {
 
 
     fun toggleThroneMode() {
-        _uiState.update { it.copy(isThroneMode = !it.isThroneMode) }
+        _uiState.update {
+            val taking = !it.isThroneMode
+            it.copy(isThroneMode = taking, hasTakenThrone = it.hasTakenThrone || taking)
+        }
     }
 
     fun clearSkipBonus() {

@@ -55,8 +55,8 @@ class CombatEngine(private val ctx: BattleContext) {
         private const val MELEE_VS_RANGED_CHASE_MULT = 0.8f
 
         // Damage-over-time rates, in points per second (see applyDotDamage).
-        const val POISON_DPS = 4f
-        const val BLEED_DPS = 3f
+        const val POISON_DPS = 14f
+        const val BLEED_DPS = 10f
 
         // Curve counters and their outs.
         const val SHIELDBREAKER_MULT = 3f
@@ -65,7 +65,7 @@ class CombatEngine(private val ctx: BattleContext) {
         const val WAR_PRIEST_RADIUS_PX = 260f
 
         // Plague peasant contagion. Tunable starting values.
-        const val DISEASE_DPS = 1.5f
+        const val DISEASE_DPS = 5f
         const val DISEASE_DURATION = 12f
         const val DISEASE_RADIUS_PX = 70f
         const val PLAYER_CATCH_CHANCE_PER_SEC = 0.001f
@@ -104,7 +104,7 @@ class CombatEngine(private val ctx: BattleContext) {
         if (fighter.dotDebt < 1f) return
         val whole = floor(fighter.dotDebt)
         fighter.dotDebt -= whole
-        applyFlatDamage(whole, fighter, isPlayerSource = !fighter.isPlayer)
+        applyFlatDamage(whole, fighter, isPlayerSource = !fighter.isPlayer, quiet = true)
     }
 
     /** True if a plague carrier — living, or a corpse not yet cold — is close enough to breathe on [f]. */
@@ -182,7 +182,6 @@ class CombatEngine(private val ctx: BattleContext) {
             if (fighter.hp > 0f) {
                 if (Random.nextFloat() < dt * 1.5f) {
                     ctx.popup("BLEED!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFFA62B2B))
-                    ctx.bloodParticles(fighter.posX, 100f, 3)
                 }
                 applyDotDamage(BLEED_DPS, dt, fighter)
             }
@@ -378,7 +377,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 fighter.posX += direction * fighter.moveSpeed * dt
                 fighter.animFrame = fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))
 
-                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && (!fighter.isLord || fighter.isFists)) {
+                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) { // enthroned lords let the retinue fight until the throne falls
                     triggerAttack(fighter)
                 }
             } else {
@@ -389,7 +388,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 fighter.animFrame += (nearestRest - fighter.animFrame).coerceIn(-8f * dt, 8f * dt)
                 // A lord normally lets his retinue fight — but a bare-fisted lord leans off the
                 // throne and swings himself (throne mode strips the player to fists).
-                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && (!fighter.isLord || fighter.isFists)) {
+                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) { // enthroned lords let the retinue fight until the throne falls
                     triggerAttack(fighter)
                 }
             }
@@ -952,7 +951,8 @@ class CombatEngine(private val ctx: BattleContext) {
         }
     }
 
-    fun applyFlatDamage(dmg: Float, defender: FighterState, isPlayerSource: Boolean = false) {
+    /** [quiet] = damage-over-time: no blood spray, no screenshake, no decals. They cost frames. */
+    fun applyFlatDamage(dmg: Float, defender: FighterState, isPlayerSource: Boolean = false, quiet: Boolean = false) {
         if (defender.isDead || defender.isDying) return
         var finalDmg = dmg
         if (!defender.isPlayer && defender.armor.id == "armor_bare") {
@@ -982,21 +982,25 @@ class CombatEngine(private val ctx: BattleContext) {
             }
         } else {
             defender.hp = (defender.hp - finalDmgInt).coerceAtLeast(0f)
-            val rx = Random.nextFloat() * 14f - 7f
-            val ry = Random.nextFloat() * 20f - 10f
-            defender.bloodDecals.add(Triple(rx, ry, Random.nextInt(6)))
-            if (defender.bloodDecals.size > 30) defender.bloodDecals.removeAt(0) // cap: decals stack forever otherwise
+            if (!quiet) {
+                val rx = Random.nextFloat() * 14f - 7f
+                val ry = Random.nextFloat() * 20f - 10f
+                defender.bloodDecals.add(Triple(rx, ry, Random.nextInt(6)))
+                if (defender.bloodDecals.size > 30) defender.bloodDecals.removeAt(0) // cap: decals stack forever otherwise
+            }
         }
 
         defender.damageIndicator = "-${finalDmgInt.toInt()}"
         defender.damageIndicatorTimer = 0.5f
 
-        // Trigger screenshake on hit! (Reduced unless absolute unit)
-        val shakeMultiplier = if ((ctx.player?.size ?: 1.0f) > 1.2f) 1.5f else 0.4f
-        ctx.screenshake((finalDmgInt * shakeMultiplier).coerceIn(4f, 35f))
+        if (!quiet) {
+            // Trigger screenshake on hit! (Reduced unless absolute unit)
+            val shakeMultiplier = if ((ctx.player?.size ?: 1.0f) > 1.2f) 1.5f else 0.4f
+            ctx.screenshake((finalDmgInt * shakeMultiplier).coerceIn(4f, 35f))
 
-        // Spawn blood particles based on damage
-        ctx.bloodParticles(defender.posX, 160f * defender.size, (finalDmgInt / 2).toInt().coerceIn(5, 20))
+            // Spawn blood particles based on damage
+            ctx.bloodParticles(defender.posX, 160f * defender.size, (finalDmgInt / 4).toInt().coerceIn(3, 10))
+        }
 
         if (defender.hp <= 0f) {
             if (defender.isMounted && Random.nextFloat() < 0.5f) {

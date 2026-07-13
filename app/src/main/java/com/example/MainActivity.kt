@@ -284,7 +284,13 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
         Column(modifier = Modifier.fillMaxSize()) {
             
             // 1. HUD / HEADER BAR
-            HeaderBar(uiState = uiState, musicOn = musicOn, onToggleMusic = onToggleMusic, playerState = playerFighter)
+            HeaderBar(
+                uiState = uiState,
+                musicOn = musicOn,
+                onToggleMusic = onToggleMusic,
+                playerState = playerFighter,
+                onTriggerWeather = { viewModel.triggerWeather(it) }
+            )
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -308,7 +314,11 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                             .weight(0.19f)
                             .fillMaxHeight()
                     ) {
-                        CharacterPreviewCard(uiState = uiState, onSelectMount = { viewModel.selectMount(it) })
+                        CharacterPreviewCard(
+                            uiState = uiState,
+                            onSelectMount = { viewModel.selectMount(it) },
+                            onSelectThrone = { viewModel.selectThrone() }
+                        )
                     }
 
                     // Middle: Tabbed Component Lists or Level Up Screen
@@ -364,7 +374,13 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
 // --- SUB-COMPONENTS ---
 
 @Composable
-fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Unit, playerState: FighterState? = null) {
+fun HeaderBar(
+    uiState: BattleSimState,
+    musicOn: Boolean,
+    onToggleMusic: () -> Unit,
+    playerState: FighterState? = null,
+    onTriggerWeather: (String) -> Unit = {}
+) {
     var showStatsPopup by remember { mutableStateOf(false) }
 
     if (showStatsPopup) {
@@ -460,16 +476,30 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
             )
         }
         
-        // Center: Battle Name
-        Text(
-            text = FlavourText.battleName(MedievalHarpPlayer.gameSeed, uiState.level),
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Bold,
-            color = TapestryDark,
+        // Center: Battle Name, with any held divine weathers pinned beside it like relic
+        // medallions on the titulus band
+        Row(
             modifier = Modifier.weight(1f),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = FlavourText.battleName(MedievalHarpPlayer.gameSeed, uiState.level),
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                color = TapestryDark,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            uiState.divineWeathers.forEach { weather ->
+                Spacer(modifier = Modifier.width(6.dp))
+                WeatherCharge(
+                    weather = weather,
+                    cooldownFraction = (uiState.weatherCooldowns[weather.id] ?: 0f) / WEATHER_COOLDOWN_SECS,
+                    onTrigger = { onTriggerWeather(weather.id) }
+                )
+            }
+        }
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -523,7 +553,15 @@ fun HeaderBar(uiState: BattleSimState, musicOn: Boolean, onToggleMusic: () -> Un
 }
 
 @Composable
-fun CharacterPreviewCard(uiState: BattleSimState, onSelectMount: (com.example.game.Ancillary) -> Unit = {}) {
+fun CharacterPreviewCard(
+    uiState: BattleSimState,
+    onSelectMount: (com.example.game.Ancillary) -> Unit = {},
+    onSelectThrone: () -> Unit = {}
+) {
+    // The mount the player is actually riding into the next battle
+    val previewMount: com.example.game.Ancillary? = if (uiState.isThroneMode) null else
+        uiState.activeMount ?: uiState.unlockedAncillaries.lastOrNull { it.id.startsWith("anc_mount_") }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -686,11 +724,19 @@ fun CharacterPreviewCard(uiState: BattleSimState, onSelectMount: (com.example.ga
                             size = uiState.characterSize,
                             hairColor = uiState.hairColor,
                             hairStyle = uiState.hairStyle,
-                            isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS),
-                            isChariot = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT),
-                            isStilts = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS),
-                            isLord = false,
-                            mountHp = if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE)) 80f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT)) 120f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)) 40f else 0f
+                            // Show the mount you actually chose. This used to key off what was
+                            // *unlocked*, so switching mounts changed nothing on the preview.
+                            isMounted = previewMount != null || uiState.isThroneMode,
+                            isChariot = previewMount == com.example.game.Ancillary.CHARIOT,
+                            isStilts = previewMount == com.example.game.Ancillary.STILTS,
+                            isLord = uiState.isThroneMode,
+                            mountHp = when {
+                                uiState.isThroneMode -> 100f
+                                previewMount == com.example.game.Ancillary.WARHORSE -> 80f
+                                previewMount == com.example.game.Ancillary.CHARIOT -> 120f
+                                previewMount == com.example.game.Ancillary.STILTS -> 40f
+                                else -> 0f
+                            }
                         )
                         TapestryRenderer.drawAncillaries(this, uiState.unlockedAncillaries, dummyFighter, scale = 1.35f)
                         TapestryRenderer.drawCharacter(this, dummyFighter, scale = 1.35f, isBattleActive = false)
@@ -702,8 +748,12 @@ fun CharacterPreviewCard(uiState: BattleSimState, onSelectMount: (com.example.ga
         // Mount picklist, directly under the man it changes. The preview box above takes weight(1f),
         // so it simply gives up the height this needs — no squashing anything else on the screen.
         val mounts = uiState.unlockedAncillaries.filter { it.id.startsWith("anc_mount_") }
-        if (mounts.size > 1) {
-            val activeMount = uiState.activeMount ?: mounts.last()
+        // The throne is a mount too, but only once it has actually been taken. hasThroneOption is
+        // just the 20% offer roll at character creation — listing it here put a throne in the
+        // picklist for players who never accepted one.
+        val throneAvailable = uiState.hasTakenThrone
+        if (mounts.size + (if (throneAvailable) 1 else 0) > 1) {
+            val activeMount = previewMount
             Text(
                 text = "MOUNT",
                 fontSize = 8.sp,
@@ -715,8 +765,38 @@ fun CharacterPreviewCard(uiState: BattleSimState, onSelectMount: (com.example.ga
                 textAlign = TextAlign.Center
             )
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (throneAvailable) {
+                    val isSelected = uiState.isThroneMode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .background(
+                                if (isSelected) TapestryMustard.copy(alpha = 0.35f) else Color.Transparent,
+                                RoundedCornerShape(3.dp)
+                            )
+                            .border(
+                                if (isSelected) 1.5.dp else 1.dp,
+                                if (isSelected) TapestryRed else TapestryDark.copy(alpha = 0.35f),
+                                RoundedCornerShape(3.dp)
+                            )
+                            .clickable { onSelectThrone() }
+                            .padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(if (isSelected) "▸" else " ", fontSize = 9.sp, color = TapestryRed, modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "The Throne",
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Normal,
+                            color = TapestryDark,
+                            maxLines = 1
+                        )
+                    }
+                }
                 mounts.forEach { mount ->
-                    val isSelected = mount == activeMount
+                    val isSelected = mount == activeMount && !uiState.isThroneMode
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1550,21 +1630,10 @@ fun BattlefieldScene(
         val latinHeadline = remember(uiState.level) { FlavourText.latinHeadline(MedievalHarpPlayer.gameSeed, uiState.level) }
         val borderSeed = remember(uiState.level) { MedievalHarpPlayer.gameSeed * 7L + uiState.level }
         val weatherFlash by viewModel.weatherFlash.collectAsState()
-        val heldWeathers = uiState.divineWeathers
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("bayeux_tapestry_canvas")
-                .pointerInput(heldWeathers) {
-                    detectTapGestures { tap ->
-                        heldWeathers.forEachIndexed { i, weather ->
-                            val c = weatherIconCenter(i, size.width.toFloat())
-                            if ((tap - c).getDistance() <= WEATHER_ICON_TAP_R) {
-                                viewModel.triggerWeather(weather.id)
-                            }
-                        }
-                    }
-                }
         ) {
             // Force redraw on tick
             val currentTick = tick
@@ -1635,6 +1704,17 @@ fun BattlefieldScene(
                     com.example.game.drawBackgroundObject(this, bg, scaledBgX, scaleFactor)
                 }
             
+                // The great decoy is enormous. Draw it before the player so it stands behind him
+                // instead of hiding him completely.
+                enemies.filter { it.id == "trojan_horse" }.forEach { th ->
+                    TapestryRenderer.drawCharacter(
+                        this,
+                        th.copy(posX = th.posX * playerScaleX),
+                        scale = scaleFactor,
+                        isBattleActive = true
+                    )
+                }
+
                 // 3. Draw Players and Enemies
                 if (playerFighter != null) {
 
@@ -1655,8 +1735,8 @@ fun BattlefieldScene(
                 drawHealthBar(this, px, py, playerFighter.hp, playerFighter.ghostHp, playerFighter.maxHp)
                 drawStatusEffects(this, px, py - 10f, playerFighter)
 
-                // Draw Enemies
-                enemies.forEach { enemy ->
+                // Draw Enemies (the trojan horse already went in behind the player)
+                enemies.filter { it.id != "trojan_horse" }.forEach { enemy ->
                     val scaledEnemy = enemy.copy(
                         posX = enemy.posX * playerScaleX
                     )
@@ -1812,7 +1892,7 @@ fun BattlefieldScene(
                             size = Size(poolWidth, poolHeight)
                         )
                     } else {
-                        val baseRadius = if (part.isSmoke) 6f + (part.age * 5f) else 2.5f + (Math.random() * 2f).toFloat()
+                        val baseRadius = if (part.isSmoke) 6f + (part.age * 5f) else part.radius
                         drawCircle(
                             color = part.color.copy(alpha = (1f - (part.age / part.maxAge)).coerceIn(0f, 1f)),
                             radius = baseRadius,
@@ -1829,17 +1909,13 @@ fun BattlefieldScene(
                 }
             }
 
-            // Divine weather sits outside the camera transform: the flourish washes the whole
-            // field, and the icons live in the border where the tap handler looks for them.
+            // Divine weather sits outside the camera transform, so the flourish washes the whole
+            // field. The charges themselves are buttons in the header bar, not on the map.
             weatherFlash?.let { (weather, firedAt) ->
                 val elapsed = (System.currentTimeMillis() - firedAt) / 1000f
                 if (elapsed <= WEATHER_FLOURISH_SECS) {
                     drawWeatherFlourish(this, weather, elapsed / WEATHER_FLOURISH_SECS)
                 }
-            }
-            heldWeathers.forEachIndexed { i, weather ->
-                val cooldown = uiState.weatherCooldowns[weather.id] ?: 0f
-                drawWeatherIcon(this, weather, weatherIconCenter(i, size.width), cooldown / WEATHER_COOLDOWN_SECS)
             }
         }
     }
@@ -2079,24 +2155,49 @@ private fun drawComicTextBubble(
     scope.drawContext.canvas.nativeCanvas.drawText(text, x, y, textPaint)
 }
 
-// --- Divine weather: border icons and battle flourishes ---
+// --- Divine weather: header medallions and battle flourishes ---
 
-private const val WEATHER_ICON_TAP_R = 30f
-private const val WEATHER_FLOURISH_SECS = 0.8f
+private const val WEATHER_FLOURISH_SECS = 1.2f
 private const val WEATHER_COOLDOWN_SECS = GameViewModel.WEATHER_COOLDOWN
 
-/**
- * Where a held weather's icon sits in the top border. Shared by the renderer and the tap handler —
- * if these two ever disagree the icons become untappable, so there is exactly one of them.
- */
-private fun weatherIconCenter(index: Int, canvasWidth: Float): Offset =
-    Offset(canvasWidth - 55f - index * 68f, 20f)
+/** The motif is drawn in a 44x44 design space and scaled to whatever box it lands in. */
+internal const val WEATHER_ICON_BOX = 44f
 
 /**
- * A weather charge, embroidered into the border bestiary. [cooldownFraction] 1 = just spent,
- * 0 = ready: a spent charge is drawn pale and refills from the bottom as it recharges.
+ * A held divine weather, as a tappable medallion in the header bar. Ready charges sit in full
+ * colour and answer a tap; a spent one goes pale while a red thread re-stitches itself around
+ * the rim, and ignores taps until the stitch closes.
  */
-private fun drawWeatherIcon(
+@Composable
+internal fun WeatherCharge(
+    weather: DivineWeather,
+    cooldownFraction: Float,
+    onTrigger: () -> Unit
+) {
+    val ready = cooldownFraction <= 0f
+    Canvas(
+        modifier = Modifier
+            .size(26.dp)
+            .clickable(enabled = ready, onClick = onTrigger)
+            .testTag("weather_charge_${weather.id}")
+    ) {
+        val s = size.minDimension / WEATHER_ICON_BOX
+        withTransform({ scale(s, s, pivot = Offset.Zero) }) {
+            drawWeatherIcon(
+                this,
+                weather,
+                Offset(WEATHER_ICON_BOX / 2f, WEATHER_ICON_BOX / 2f),
+                cooldownFraction
+            )
+        }
+    }
+}
+
+/**
+ * A weather charge, embroidered as a border roundel. [cooldownFraction] 1 = just spent,
+ * 0 = ready: a spent charge is drawn pale, with a thread arc closing around the rim as it recharges.
+ */
+internal fun drawWeatherIcon(
     scope: androidx.compose.ui.graphics.drawscope.DrawScope,
     weather: DivineWeather,
     center: Offset,
@@ -2167,20 +2268,23 @@ private fun drawWeatherIcon(
     }
 
     if (!ready) {
-        // The charge refills from the bottom: a rising bar of thread across the roundel
+        // The charge re-stitches itself: a red thread closing clockwise around the rim
         val fill = (1f - cooldownFraction).coerceIn(0f, 1f)
-        scope.drawLine(
-            TapestryRed.copy(alpha = 0.8f),
-            Offset(cx - 15f, cy + 20f),
-            Offset(cx - 15f + 30f * fill, cy + 20f),
-            strokeWidth = 3f,
-            cap = StrokeCap.Round
+        val r = 20f
+        scope.drawArc(
+            color = TapestryRed.copy(alpha = 0.85f),
+            startAngle = -90f,
+            sweepAngle = 360f * fill,
+            useCenter = false,
+            topLeft = Offset(cx - r, cy - r),
+            size = Size(r * 2f, r * 2f),
+            style = Stroke(width = 3f, cap = StrokeCap.Round)
         )
     }
 }
 
 /** A single-pass flourish across the whole field. [progress] runs 0 -> 1 and then it is gone. */
-private fun drawWeatherFlourish(
+internal fun drawWeatherFlourish(
     scope: androidx.compose.ui.graphics.drawscope.DrawScope,
     weather: DivineWeather,
     progress: Float
@@ -2213,8 +2317,14 @@ private fun drawWeatherFlourish(
                 lineTo(edge + 40f, h)
                 close()
             }
-            scope.drawPath(band, TapestryBlue.copy(alpha = fade * 0.55f))
-            scope.drawPath(band, TapestryDark.copy(alpha = fade * 0.5f), style = Stroke(width = 3f))
+            scope.drawPath(band, TapestryBlue.copy(alpha = fade * 0.8f))
+            scope.drawPath(band, TapestryDark.copy(alpha = fade * 0.6f), style = Stroke(width = 3f))
+            // Foam on the leading crest, so the band reads as water rather than a grey slab
+            val crest = Path().apply {
+                moveTo(edge - 120f, 40f)
+                quadraticBezierTo(edge - 40f, h * 0.25f, edge, 40f)
+            }
+            scope.drawPath(crest, Color.White.copy(alpha = fade * 0.85f), style = Stroke(width = 5f, cap = StrokeCap.Round))
         }
         DivineWeather.HAIL -> {
             // Falling white stitches, seeded so they do not jitter between frames
@@ -2233,7 +2343,7 @@ private fun drawWeatherFlourish(
         DivineWeather.FROST -> {
             // Pale blue rime creeping over the ground
             scope.drawRect(
-                TapestryBlue.copy(alpha = fade * 0.3f),
+                TapestryBlue.copy(alpha = fade * 0.45f),
                 topLeft = Offset(0f, h * 0.55f),
                 size = Size(w, h * 0.45f - 40f)
             )
@@ -2450,18 +2560,35 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
     }
     androidCanvas.drawText("${uiState.totalKills} kills", width / 2f, 720f, killsPaint)
 
-    // Ancillary labels
-    val ancNames = player.extraAttachments.take(4).mapIndexed { i, g -> g.itemName }
+    val subPaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.parseColor("#3B291A")
+        textSize = 22f
+        isAntiAlias = true
+        typeface = android.graphics.Typeface.SERIF
+        textAlign = android.graphics.Paint.Align.CENTER
+        alpha = 180
+    }
+
+    // Weapon attachments
+    val attachNames = player.extraAttachments.take(4).map { it.itemName }
+    if (attachNames.isNotEmpty()) {
+        androidCanvas.drawText("Attachments: " + attachNames.joinToString(", "), width / 2f, 770f, subPaint)
+    }
+
+    // The retinue and relics he rode out with — the ancillaries, which the tale was missing
+    val ancNames = uiState.unlockedAncillaries.map { it.ancillaryName } +
+        uiState.divineWeathers.map { it.label }
     if (ancNames.isNotEmpty()) {
-        val ancPaint = android.graphics.Paint().apply {
-            color = android.graphics.Color.parseColor("#3B291A")
-            textSize = 22f
-            isAntiAlias = true
-            typeface = android.graphics.Typeface.SERIF
-            textAlign = android.graphics.Paint.Align.CENTER
-            alpha = 180
-        }
-        androidCanvas.drawText("Attachments: " + ancNames.joinToString(", "), width / 2f, 770f, ancPaint)
+        val ancLayout = android.text.StaticLayout.Builder.obtain(
+            "Retinue: " + ancNames.joinToString(", "),
+            0, "Retinue: ".length + ancNames.joinToString(", ").length,
+            android.text.TextPaint(subPaint).apply { textAlign = android.graphics.Paint.Align.LEFT },
+            width - 80
+        ).setAlignment(android.text.Layout.Alignment.ALIGN_CENTER).build()
+        androidCanvas.save()
+        androidCanvas.translate(40f, 800f)
+        ancLayout.draw(androidCanvas)
+        androidCanvas.restore()
     }
 
     // Save to cache

@@ -43,7 +43,14 @@ class MainActivityTest {
         )
         
         try {
-            val result: Uri? = generateShareImage(context, player, com.example.game.BattleSimState(score = 10), false)
+            // Carry a retinue and a weather charge: the share image renders both, so this exercises
+            // the StaticLayout wrap rather than skipping straight past an empty list.
+            val state = com.example.game.BattleSimState(
+                score = 10,
+                unlockedAncillaries = setOf(com.example.game.Ancillary.MONK, com.example.game.Ancillary.WARHORSE),
+                divineWeathers = listOf(com.example.game.DivineWeather.LIGHTNING)
+            )
+            val result: Uri? = generateShareImage(context, player, state, false)
             // It might return null in a plain test environment if FileProvider paths aren't fully configured
             // but the important part is that the drawing code (StaticLayout, Canvas, etc) executes without throwing.
         } catch (e: Exception) {

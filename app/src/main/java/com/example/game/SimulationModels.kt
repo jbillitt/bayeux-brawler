@@ -583,7 +583,10 @@ class BloodParticle(
     var age: Float = 0f,
     val maxAge: Float = 4.0f + Random.nextFloat() * 4.0f, // linger longer on the ground!
     val color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color(0xFF9E3624),
-    val isSmoke: Boolean = false
+    val isSmoke: Boolean = false,
+    // Rolled once at spawn. The renderer used to re-roll this every frame, which cost an RNG call
+    // per particle per frame and made each droplet shimmer.
+    val radius: Float = 2.5f + Random.nextFloat() * 2f
 )
 
 // Main Game State
@@ -616,7 +619,12 @@ data class BattleSimState(
     val faceBiteShape: Int = (0..3).random(),
     val faceForehead: Int = (0..2).random(),
     val faceMustache: Int = (0..3).random(),
-    val playerName: String = "Syr William",
+    // The name is stored as its parts, never as one string that gets re-parsed. The old code kept
+    // only the display string and recovered the given name with split(" ").first() — so the default
+    // "Syr William" yielded a given name of "Syr", and the real name was lost on the first rename.
+    val honorific: String = "", // may be blank: not every man is a "Syr"
+    val givenName: String = "William",
+    val byname: String = "the Bastard",
     val unlockedGearIds: Set<String> = emptySet(),
     val unlockedAncillaries: Set<com.example.game.Ancillary> = emptySet(),
     val activeMount: Ancillary? = null,
@@ -639,6 +647,9 @@ data class BattleSimState(
     val bandagesCount: Int = 0,
     val hasThroneOption: Boolean = false,
     val isThroneMode: Boolean = false,
+    // Whether the throne was ever actually taken this run. hasThroneOption is only the offer roll,
+    // so gating the mount picklist on it listed a throne the player never accepted.
+    val hasTakenThrone: Boolean = false,
     
     // Level Up Choice State
     val pendingLevelUpChoices: List<LevelUpChoice> = emptyList(),
@@ -653,6 +664,10 @@ data class BattleSimState(
     val pendingSkipBonus: Int = 0, // score to award on next dismiss of level-up screen when skipped
     val performanceScore: Float = 0.5f // dynamic difficulty: 0=struggling, 1=dominating
 ) {
+    /** The name as it is written on the tapestry. Derived, so it can never drift from its parts. */
+    val playerName: String
+        get() = listOf(honorific, givenName, byname).filter { it.isNotBlank() }.joinToString(" ")
+
     val totalHpBoost: Float
         get() = unlockedAncillaries.sumOf { it.hpBoost.toDouble() }.toFloat()
 

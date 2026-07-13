@@ -6,9 +6,51 @@ enum class Perf { FLAWLESS, STANDARD, PYRRHIC }
 enum class BarkKind { VICTORY, DEFEAT, LEVEL_UP }
 
 object FlavourText {
-    internal val ADJ = listOf("Muddy", "Lamentable", "Glorious", "Soggy", "Thunderous", "Ignoble", "Spirited", "Grievous", "Merry", "Dreadful", "Unseemly", "Valiant")
-    internal val NOUN = listOf("Kerfuffle", "Scuffle", "Fracas", "Melee", "Tussle", "Affray", "Reckoning", "Set-To", "Rumpus", "Donnybrook")
-    internal val PLACE = listOf("Pevensey Marsh", "Hastings Field", "Senlac Ridge", "the Old Mill", "Caldbec Hill", "the Salt Fen", "Bulverhythe", "the Orchard", "Telham Down", "the Fish Market")
+    internal val ADJ = listOf(
+        "Muddy", "Lamentable", "Glorious", "Soggy", "Thunderous", "Ignoble", "Spirited", "Grievous",
+        "Merry", "Dreadful", "Unseemly", "Valiant", "Wretched", "Bloody-Minded", "Ill-Advised",
+        "Damp", "Peevish", "Boisterous", "Calamitous", "Reckless", "Undignified", "Hasty",
+        "Stubborn", "Woeful", "Rowdy", "Bruising", "Graceless", "Frantic", "Sullen", "Gallant",
+        "Ruinous", "Unholy", "Ferocious", "Squalid", "Pitiless", "Ragged", "Drunken", "Solemn"
+    )
+    internal val NOUN = listOf(
+        "Kerfuffle", "Scuffle", "Fracas", "Melee", "Tussle", "Affray", "Reckoning", "Set-To",
+        "Rumpus", "Donnybrook", "Barney", "Ruckus", "Brawl", "Skirmish", "Altercation", "Punch-Up",
+        "Contretemps", "Disagreement", "Bother", "Shambles", "Squabble", "Rout", "Stramash",
+        "Misunderstanding", "Dust-Up", "Bust-Up", "Hullabaloo", "Argy-Bargy", "Business", "Debacle",
+        "Unpleasantness", "To-Do", "Carry-On", "Free-For-All", "Slaughter", "Contest"
+    )
+    internal val PLACE = listOf(
+        "Pevensey Marsh", "Hastings Field", "Senlac Ridge", "the Old Mill", "Caldbec Hill",
+        "the Salt Fen", "Bulverhythe", "the Orchard", "Telham Down", "the Fish Market",
+        "the Duck Pond", "Crowhurst", "the Turnip Field", "Ninfield", "the Tanner's Yard",
+        "Whatlington", "the Sheep Fold", "Battle Abbey", "the Pig Pen", "Netherfield",
+        "the Ford", "Winchelsea", "the Millpond", "Ashburnham", "the Goose Green",
+        "the Bishop's Vineyard", "Herstmonceux", "the Charcoal Burn", "the Broken Bridge",
+        "the Abbot's Cabbages", "Icklesham", "the Wash-House", "Fairlight", "the Hollow Way"
+    )
+
+    /** Half the places are "the Old Mill" — they need a capital when they open the sentence. */
+    private fun cap(s: String) = s.replaceFirstChar { it.uppercase() }
+
+    /** "An Unholy Bust-Up", not "A Unholy Bust-Up". */
+    private fun an(word: String) = if (word.first().lowercaseChar() in "aeiou") "An" else "A"
+
+    /**
+     * Sentence patterns, not just words. The vocabulary was already large; every battle still read
+     * "The X Y at Z", which is what made them feel the same.
+     */
+    private val NAME_PATTERNS: List<(String, String, String) -> String> = listOf(
+        { adj, noun, place -> "The $adj $noun at $place" },
+        { _, noun, place -> "The $noun of ${place.removePrefix("the ")}" },
+        { adj, noun, place -> "${cap(place)}: ${an(adj)} $adj $noun" },
+        { adj, noun, place -> "The $adj $noun of ${place.removePrefix("the ")}" },
+        { adj, _, place -> "That $adj Business at $place" },
+        { adj, noun, place -> "A Most $adj $noun near $place" }, // "A Most" always: the article agrees with "Most"
+        { _, noun, place -> "The $noun at $place, As Sung By Monks" },
+        { adj, noun, _ -> "The $adj $noun (Location Disputed)" },
+        { adj, noun, place -> "$noun at $place, Widely Called $adj" }
+    )
     private val L_VERB = listOf("PERCUSSIT", "TUMULTUAVIT", "CLAMAVIT", "BRAWLAVIT", "SMASHIVIT", "WALLOPAVIT")
     private val L_PLACE = listOf("HASTINGAM", "PEVENSAE", "SENLACUM", "MOLENDINUM", "COLLEM CALDBEC", "FORUM PISCIUM")
     private val L_HERO = listOf("WILLELMUS", "MILES NOSTER", "EQUES PARVUS", "BRAWLERUS")
@@ -17,7 +59,10 @@ object FlavourText {
 
     fun battleName(seed: Long, level: Int): String {
         val r = rng(seed, level)
-        return "The ${ADJ[r.nextInt(ADJ.size)]} ${NOUN[r.nextInt(NOUN.size)]} at ${PLACE[r.nextInt(PLACE.size)]}"
+        val adj = ADJ[r.nextInt(ADJ.size)]
+        val noun = NOUN[r.nextInt(NOUN.size)]
+        val place = PLACE[r.nextInt(PLACE.size)]
+        return NAME_PATTERNS[r.nextInt(NAME_PATTERNS.size)](adj, noun, place)
     }
 
     fun latinHeadline(seed: Long, level: Int): String {

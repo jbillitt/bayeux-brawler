@@ -62,6 +62,10 @@ class GameViewModel : ViewModel() {
     private val _screenshake = MutableStateFlow(0f)
     val screenshake: StateFlow<Float> = _screenshake.asStateFlow()
 
+    // Which weather just fired, and when — the renderer draws a brief flourish, then it lapses
+    private val _weatherFlash = MutableStateFlow<Pair<DivineWeather, Long>?>(null)
+    val weatherFlash: StateFlow<Pair<DivineWeather, Long>?> = _weatherFlash.asStateFlow()
+
     private var gameLoopJob: Job? = null
     private var pendingReinforcements = 0
 
@@ -69,12 +73,14 @@ class GameViewModel : ViewModel() {
     // per-hit list copies were the biggest allocation churn in the loop
     private val particleBuffer = mutableListOf<BloodParticle>()
     // 20kg: chainmail (12) + coif (2) rides fine; scale (16) + gauntlets/boots/coif (5.5) does not
-    private companion object {
-        const val MAX_PARTICLES = 250
-        const val ARMOR_WEIGHT_LIMIT = 20f
+    companion object {
+        private const val MAX_PARTICLES = 250
+        private const val ARMOR_WEIGHT_LIMIT = 20f
+        private const val WEATHER_UNLOCK_LEVEL = 12
+        private const val MAX_WEATHERS_HELD = 2
+
+        /** Seconds before a spent weather charge is ready again. The border icons dim against it. */
         const val WEATHER_COOLDOWN = 60f
-        const val WEATHER_UNLOCK_LEVEL = 12
-        const val MAX_WEATHERS_HELD = 2
     }
 
     /**
@@ -128,6 +134,7 @@ class GameViewModel : ViewModel() {
                 addPopup("KILLING FROST!", (_playerState.value?.posX ?: 0f) + 200f, 110f, Color(0xFF8FC1D4))
             }
         }
+        _weatherFlash.value = weather to System.currentTimeMillis()
         _uiState.update { it.copy(weatherCooldowns = it.weatherCooldowns + (id to WEATHER_COOLDOWN)) }
     }
 

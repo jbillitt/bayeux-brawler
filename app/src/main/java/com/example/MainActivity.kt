@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -1528,7 +1530,23 @@ fun BattlefieldScene(
         // Render Tapestry Canvas
         val latinHeadline = remember(uiState.level) { FlavourText.latinHeadline(MedievalHarpPlayer.gameSeed, uiState.level) }
         val borderSeed = remember(uiState.level) { MedievalHarpPlayer.gameSeed * 7L + uiState.level }
-        Canvas(modifier = Modifier.fillMaxSize().testTag("bayeux_tapestry_canvas")) {
+        val weatherFlash by viewModel.weatherFlash.collectAsState()
+        val heldWeathers = uiState.divineWeathers
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("bayeux_tapestry_canvas")
+                .pointerInput(heldWeathers) {
+                    detectTapGestures { tap ->
+                        heldWeathers.forEachIndexed { i, weather ->
+                            val c = weatherIconCenter(i, size.width.toFloat())
+                            if ((tap - c).getDistance() <= WEATHER_ICON_TAP_R) {
+                                viewModel.triggerWeather(weather.id)
+                            }
+                        }
+                    }
+                }
+        ) {
             // Force redraw on tick
             val currentTick = tick
             val playerFighter = viewModel.playerState.value
@@ -1782,6 +1800,19 @@ fun BattlefieldScene(
                     drawComicTextBubble(this, pop.text, sx, sy, pop.color, pop.age)
                 }
             }
+
+            // Divine weather sits outside the camera transform: the flourish washes the whole
+            // field, and the icons live in the border where the tap handler looks for them.
+            weatherFlash?.let { (weather, firedAt) ->
+                val elapsed = (System.currentTimeMillis() - firedAt) / 1000f
+                if (elapsed <= WEATHER_FLOURISH_SECS) {
+                    drawWeatherFlourish(this, weather, elapsed / WEATHER_FLOURISH_SECS)
+                }
+            }
+            heldWeathers.forEachIndexed { i, weather ->
+                val cooldown = uiState.weatherCooldowns[weather.id] ?: 0f
+                drawWeatherIcon(this, weather, weatherIconCenter(i, size.width), cooldown / WEATHER_COOLDOWN_SECS)
+            }
         }
     }
 
@@ -2018,6 +2049,178 @@ private fun drawComicTextBubble(
 
     scope.drawContext.canvas.nativeCanvas.drawText(text, x, y, outlinePaint)
     scope.drawContext.canvas.nativeCanvas.drawText(text, x, y, textPaint)
+}
+
+// --- Divine weather: border icons and battle flourishes ---
+
+private const val WEATHER_ICON_TAP_R = 30f
+private const val WEATHER_FLOURISH_SECS = 0.8f
+private const val WEATHER_COOLDOWN_SECS = GameViewModel.WEATHER_COOLDOWN
+
+/**
+ * Where a held weather's icon sits in the top border. Shared by the renderer and the tap handler —
+ * if these two ever disagree the icons become untappable, so there is exactly one of them.
+ */
+private fun weatherIconCenter(index: Int, canvasWidth: Float): Offset =
+    Offset(canvasWidth - 55f - index * 68f, 20f)
+
+/**
+ * A weather charge, embroidered into the border bestiary. [cooldownFraction] 1 = just spent,
+ * 0 = ready: a spent charge is drawn pale and refills from the bottom as it recharges.
+ */
+private fun drawWeatherIcon(
+    scope: androidx.compose.ui.graphics.drawscope.DrawScope,
+    weather: DivineWeather,
+    center: Offset,
+    cooldownFraction: Float
+) {
+    val ready = cooldownFraction <= 0f
+    val alpha = if (ready) 1f else 0.3f
+    val cx = center.x
+    val cy = center.y
+
+    // Roundel of linen to sit the motif on, so it reads as part of the border
+    scope.drawCircle(TapestryLinenBg.copy(alpha = 0.9f), radius = 17f, center = center)
+    scope.drawCircle(TapestryDark.copy(alpha = alpha), radius = 17f, center = center, style = Stroke(width = 2f))
+
+    when (weather) {
+        DivineWeather.LIGHTNING -> { // jagged gold bolt
+            val bolt = Path().apply {
+                moveTo(cx + 4f, cy - 11f)
+                lineTo(cx - 5f, cy + 1f)
+                lineTo(cx + 1f, cy + 1f)
+                lineTo(cx - 3f, cy + 11f)
+                lineTo(cx + 7f, cy - 2f)
+                lineTo(cx + 1f, cy - 2f)
+                close()
+            }
+            scope.drawPath(bolt, TapestryMustard.copy(alpha = alpha))
+            scope.drawPath(bolt, TapestryDark.copy(alpha = alpha), style = Stroke(width = 1.5f))
+        }
+        DivineWeather.FLOOD -> { // curling wave crest
+            val wave = Path().apply {
+                moveTo(cx - 11f, cy + 6f)
+                quadraticBezierTo(cx - 5f, cy - 9f, cx + 3f, cy - 1f)
+                quadraticBezierTo(cx + 7f, cy + 3f, cx + 11f, cy - 4f)
+            }
+            scope.drawPath(wave, TapestryBlue.copy(alpha = alpha), style = Stroke(width = 3f, cap = StrokeCap.Round))
+            scope.drawLine(
+                TapestryBlue.copy(alpha = alpha * 0.7f),
+                Offset(cx - 10f, cy + 11f), Offset(cx + 10f, cy + 11f),
+                strokeWidth = 2.5f, cap = StrokeCap.Round
+            )
+        }
+        DivineWeather.HAIL -> { // cluster of falling stones
+            listOf(
+                Triple(-6f, -6f, 4.5f), Triple(5f, -8f, 3.5f), Triple(0f, 2f, 5f),
+                Triple(-7f, 7f, 3f), Triple(7f, 5f, 4f)
+            ).forEach { (dx, dy, r) ->
+                scope.drawCircle(Color.White.copy(alpha = alpha), radius = r, center = Offset(cx + dx, cy + dy))
+                scope.drawCircle(TapestryDark.copy(alpha = alpha), radius = r, center = Offset(cx + dx, cy + dy), style = Stroke(width = 1.2f))
+            }
+        }
+        DivineWeather.FROST -> { // six-armed frost crystal
+            repeat(6) { i ->
+                val a = (Math.PI / 3.0 * i).toFloat()
+                val ex = cx + kotlin.math.cos(a) * 11f
+                val ey = cy + kotlin.math.sin(a) * 11f
+                scope.drawLine(TapestryBlue.copy(alpha = alpha), center, Offset(ex, ey), strokeWidth = 2f, cap = StrokeCap.Round)
+                // little barbs, so it reads as ice rather than a wheel
+                val bx = cx + kotlin.math.cos(a) * 6.5f
+                val by = cy + kotlin.math.sin(a) * 6.5f
+                scope.drawLine(
+                    TapestryBlue.copy(alpha = alpha * 0.8f),
+                    Offset(bx, by),
+                    Offset(bx + kotlin.math.cos(a + 0.9f) * 4.5f, by + kotlin.math.sin(a + 0.9f) * 4.5f),
+                    strokeWidth = 1.5f
+                )
+            }
+        }
+    }
+
+    if (!ready) {
+        // The charge refills from the bottom: a rising bar of thread across the roundel
+        val fill = (1f - cooldownFraction).coerceIn(0f, 1f)
+        scope.drawLine(
+            TapestryRed.copy(alpha = 0.8f),
+            Offset(cx - 15f, cy + 20f),
+            Offset(cx - 15f + 30f * fill, cy + 20f),
+            strokeWidth = 3f,
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+/** A single-pass flourish across the whole field. [progress] runs 0 -> 1 and then it is gone. */
+private fun drawWeatherFlourish(
+    scope: androidx.compose.ui.graphics.drawscope.DrawScope,
+    weather: DivineWeather,
+    progress: Float
+) {
+    val w = scope.size.width
+    val h = scope.size.height
+    val fade = 1f - progress
+
+    when (weather) {
+        DivineWeather.LIGHTNING -> {
+            // A gold-thread bolt stitched from the top border down into the host
+            val strikeX = w * 0.62f
+            val bolt = Path().apply {
+                moveTo(strikeX, 40f)
+                lineTo(strikeX - 28f, h * 0.42f)
+                lineTo(strikeX + 10f, h * 0.42f)
+                lineTo(strikeX - 18f, h * 0.78f)
+            }
+            scope.drawPath(bolt, TapestryMustard.copy(alpha = fade), style = Stroke(width = 9f, cap = StrokeCap.Round))
+            scope.drawPath(bolt, TapestryDark.copy(alpha = fade * 0.9f), style = Stroke(width = 3f, cap = StrokeCap.Round))
+            scope.drawRect(Color.White.copy(alpha = fade * 0.22f), size = scope.size)
+        }
+        DivineWeather.FLOOD -> {
+            // A stitched wave band sweeping across the field
+            val edge = w * (progress * 1.4f - 0.2f)
+            val band = Path().apply {
+                moveTo(edge - 160f, h)
+                lineTo(edge - 120f, 40f)
+                quadraticBezierTo(edge - 40f, h * 0.25f, edge, 40f)
+                lineTo(edge + 40f, h)
+                close()
+            }
+            scope.drawPath(band, TapestryBlue.copy(alpha = fade * 0.55f))
+            scope.drawPath(band, TapestryDark.copy(alpha = fade * 0.5f), style = Stroke(width = 3f))
+        }
+        DivineWeather.HAIL -> {
+            // Falling white stitches, seeded so they do not jitter between frames
+            val rng = kotlin.random.Random(1066L)
+            repeat(70) {
+                val x = rng.nextFloat() * w
+                val startY = rng.nextFloat() * h
+                val y = 40f + (startY + progress * h * 1.5f) % (h - 80f)
+                scope.drawLine(
+                    Color.White.copy(alpha = fade * 0.85f),
+                    Offset(x, y), Offset(x - 4f, y + 12f),
+                    strokeWidth = 3f, cap = StrokeCap.Round
+                )
+            }
+        }
+        DivineWeather.FROST -> {
+            // Pale blue rime creeping over the ground
+            scope.drawRect(
+                TapestryBlue.copy(alpha = fade * 0.3f),
+                topLeft = Offset(0f, h * 0.55f),
+                size = Size(w, h * 0.45f - 40f)
+            )
+            val rng = kotlin.random.Random(1067L)
+            repeat(40) {
+                val x = rng.nextFloat() * w
+                val y = h * 0.6f + rng.nextFloat() * (h * 0.35f)
+                scope.drawLine(
+                    Color.White.copy(alpha = fade * 0.7f),
+                    Offset(x - 6f, y), Offset(x + 6f, y),
+                    strokeWidth = 2f, cap = StrokeCap.Round
+                )
+            }
+        }
+    }
 }
 
 private fun drawTapestryBorder(

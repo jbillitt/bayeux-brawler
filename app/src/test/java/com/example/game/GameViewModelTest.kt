@@ -97,9 +97,11 @@ class GameViewModelTest {
 
     @Test
     fun `toggleDualWield changes state correctly`() {
+        viewModel.selectGear(com.example.game.GameData.WEAPON_HEADS.first { it.id == "head_sword" })
         val initialState = viewModel.uiState.value.isDualWielding
         viewModel.toggleDualWield()
         val newState = viewModel.uiState.value.isDualWielding
         assertEquals(!initialState, newState)
     }
 }
+

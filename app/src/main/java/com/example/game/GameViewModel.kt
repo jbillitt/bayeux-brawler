@@ -771,9 +771,10 @@ class GameViewModel : ViewModel() {
                     id = "xbow__",
                     isPlayerOwned = true, posX = spawnX, posY = 230f,
                     velocityX = dir * (600f + Random.nextFloat() * 50f), velocityY = -5f,
-                    damage = 25f, pierce = 20f, blunt = 10f, type = ProjectileType.ARROW,
-                    sizeMultiplier = 1f, hasSpikes = false, launchedWeaponId = null,
-                    isSplash = false, isPoisonous = false, isBallista = true
+                    damage = 25f, pierce = 20f, blunt = 10f, type = ProjectileType.BOLT,
+                    sizeMultiplier = 1f, 
+                    hasSpikes = false, launchedWeaponId = null,
+                    isSplash = false, isPoisonous = false, isBallista = false
                 ))
                 MedievalAudioSynth.playSound(SoundType.THWACK)
             }
@@ -1152,3 +1153,4 @@ class GameViewModel : ViewModel() {
         super.onCleared()
     }
 }
+

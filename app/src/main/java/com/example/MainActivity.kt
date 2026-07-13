@@ -1655,12 +1655,13 @@ fun BattlefieldScene(
                         // Some leather bindings
                         drawLine(TapestryDark, Offset(sx - (4f * arrowDir), sy - 3f), Offset(sx - (4f * arrowDir), sy + 3f), strokeWidth = 3f)
                         drawLine(TapestryDark, Offset(sx - (8f * arrowDir), sy - 3f), Offset(sx - (8f * arrowDir), sy + 3f), strokeWidth = 3f)
-                    } else if (proj.type == com.example.game.ProjectileType.ARROW) {
+                    } else if (proj.type == com.example.game.ProjectileType.ARROW || proj.type == com.example.game.ProjectileType.BOLT) {
                         // Draw flying arrow line with feathers
                         val shaftColor = if (proj.isBallista) Color(0xFF8A7156) else TapestryDark
                         // Match embedded arrows, which inherit the fighter transform's scaleFactor
-                        val strokeW = (if (proj.isBallista) 10f else 5f * proj.sizeMultiplier) * scaleFactor
-                        val length = 55f * proj.sizeMultiplier * scaleFactor
+                        val isBolt = proj.type == com.example.game.ProjectileType.BOLT
+                        val strokeW = (if (proj.isBallista) 10f else if (isBolt) 4f else 5f * proj.sizeMultiplier) * scaleFactor
+                        val length = (if (isBolt) 35f else 55f) * proj.sizeMultiplier * scaleFactor
                         
                         // Arrow Shaft
                         drawLine(
@@ -2268,3 +2269,4 @@ fun MusicDecisionScreen(
         }
     }
 }
+

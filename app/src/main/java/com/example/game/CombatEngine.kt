@@ -570,7 +570,8 @@ class CombatEngine(private val ctx: BattleContext) {
         // Stats based on weapon head
         val isSlingshot = attacker.weaponHead.id == "head_slingshot"
         val isJavelin = attacker.weaponHead.id == "head_javelin"
-        var projType = if (isSlingshot) ProjectileType.STONE else if (isJavelin) ProjectileType.JAVELIN else ProjectileType.ARROW
+        val isCrossbow = attacker.weaponHead.id == "head_crossbow"
+        var projType = if (isSlingshot) ProjectileType.STONE else if (isJavelin) ProjectileType.JAVELIN else if (isCrossbow) ProjectileType.BOLT else ProjectileType.ARROW
 
         var sizeMult = 1f
         var spikes = false
@@ -832,3 +833,4 @@ class CombatEngine(private val ctx: BattleContext) {
         }
     }
 }
+

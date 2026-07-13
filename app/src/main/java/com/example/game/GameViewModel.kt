@@ -620,7 +620,10 @@ class GameViewModel : ViewModel() {
                         BackgroundObjectType.FORT_TOWER, BackgroundObjectType.FORT_MOTTE
                     ).random()
                 } else {
-                    if (Random.nextBoolean()) BackgroundObjectType.BUILDING_BOSHAM else BackgroundObjectType.BUILDING_MANOR
+                    listOf(
+                        BackgroundObjectType.BUILDING_BOSHAM, BackgroundObjectType.BUILDING_MANOR,
+                        BackgroundObjectType.BUILDING_BAYEUX, BackgroundObjectType.TOWER_SPIRAL
+                    ).random()
                 }
                 val hp = if (type in listOf(BackgroundObjectType.FORT_DINAN, BackgroundObjectType.FORT_PALACE, BackgroundObjectType.FORT_TOWER, BackgroundObjectType.FORT_MOTTE)) 1000f else 300f
                 bgObjects.add(BackgroundObject("bg_$i", type, bx, 0f, 300f, hp, hp))

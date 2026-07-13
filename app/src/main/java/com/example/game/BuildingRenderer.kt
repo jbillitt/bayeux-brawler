@@ -69,6 +69,8 @@ internal fun renderBackgroundObject(scope: DrawScope, bg: BackgroundObject, cx: 
             BackgroundObjectType.BUILDING_MANOR -> drawBuildingManor(scope, cx, cy, bg)
             BackgroundObjectType.FORT_TOWER -> drawFortTower(scope, cx, cy, bg)
             BackgroundObjectType.FORT_MOTTE -> drawFortMotte(scope, cx, cy, bg)
+            BackgroundObjectType.BUILDING_BAYEUX -> drawBayeuxBuilding(scope, cx, cy, bg)
+            BackgroundObjectType.TOWER_SPIRAL -> drawSpiralTower(scope, cx, cy, bg)
             BackgroundObjectType.BROKEN_CHARIOT -> {
                 scope.withTransform({
                     translate(cx, cy)
@@ -400,6 +402,194 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
         drawStitchedFill(scope, roofPath, Color(0xFF9E3624))
         scope.drawPath(roofPath, ThreadColor, style = StitchedStroke)
     }
+
+/** The tapestry's building palette — every procedural structure picks its walls from these. */
+private val BAYEUX_WALLS = listOf(
+    Color(0xFFEFE6D4), // plaster
+    Color(0xFFE0CFA8), // ochre wash
+    Color(0xFFD8C3A5), // pale clay
+    Color(0xFFC9B48E)  // sand
+)
+private val BAYEUX_ROOFS = listOf(
+    Color(0xFF636A6E), // slate
+    Color(0xFF8C4A3A), // red tile
+    Color(0xFF5D666B), // dark slate
+    Color(0xFF7A6A4F)  // thatch-brown
+)
+
+/**
+ * A Bayeux hall: arcade of arches on pillars, a pillared upper storey, and a roof of overlapping
+ * scallop rows. Every dimension comes off bg.seed, so no two are the same building.
+ */
+internal fun drawBayeuxBuilding(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+    val rng = Random(bg.seed)
+    val wall = BAYEUX_WALLS[rng.nextInt(BAYEUX_WALLS.size)]
+    val roofCol = BAYEUX_ROOFS[rng.nextInt(BAYEUX_ROOFS.size)]
+    val pillarCol = Color(0xFF7D838A)
+
+    val halfW = 60f + rng.nextFloat() * 30f      // 60..90
+    val bodyTop = cy - (100f + rng.nextFloat() * 40f) // -100..-140
+    val arches = 2 + rng.nextInt(3)             // 2..4 openings
+
+    // Body
+    val body = Path().apply {
+        addRect(androidx.compose.ui.geometry.Rect(cx - halfW, bodyTop, cx + halfW, cy + 20f))
+    }
+    drawStitchedFill(scope, body, wall)
+    scope.drawPath(body, ThreadColor, style = StitchedStroke)
+
+    // Ground-floor arcade: slim round-headed openings with plenty of wall between them, so the
+    // arcade reads as arches rather than a row of dark tombstones
+    val bay = (halfW * 2f - 20f) / arches
+    for (i in 0 until arches) {
+        val archSpan = bay * 0.5f
+        val ax = cx - halfW + 10f + i * bay + (bay - archSpan) / 2f
+        val archTop = cy - 14f - rng.nextFloat() * 10f
+        val opening = Path().apply {
+            moveTo(ax, cy + 20f)
+            lineTo(ax, archTop)
+            quadraticTo(ax + archSpan / 2f, archTop - archSpan * 0.8f, ax + archSpan, archTop)
+            lineTo(ax + archSpan, cy + 20f)
+            close()
+        }
+        drawStitchedFill(scope, opening, Color(0xFF6B5B48)) // shadowed, not black
+        scope.drawPath(opening, ThreadColor, style = StitchedStroke)
+
+        // The arch ring, picked out over the shadow
+        val ring = Path().apply {
+            moveTo(ax, archTop)
+            quadraticTo(ax + archSpan / 2f, archTop - archSpan * 0.8f, ax + archSpan, archTop)
+        }
+        scope.drawPath(ring, ThreadColor, style = Stroke(width = 2.5f))
+
+        // Squat pillar flanking the opening
+        val pPath = Path().apply {
+            addRect(androidx.compose.ui.geometry.Rect(ax - 7f, cy - 6f, ax - 1f, cy + 20f))
+        }
+        drawStitchedFill(scope, pPath, pillarCol)
+        scope.drawPath(pPath, ThreadColor, style = StitchedStroke)
+    }
+
+    // Upper storey: a colonnade of slim pillars under the eaves
+    val upperCount = arches + 1
+    val upperGap = (halfW * 2f - 16f) / upperCount
+    for (i in 0 until upperCount) {
+        val px = cx - halfW + 8f + i * upperGap
+        val col = Path().apply {
+            addRect(androidx.compose.ui.geometry.Rect(px, bodyTop + 12f, px + 8f, cy - 42f))
+        }
+        drawStitchedFill(scope, col, pillarCol)
+        scope.drawPath(col, ThreadColor, style = StitchedStroke)
+        // Little round-headed arch over each
+        val arc = Path().apply {
+            moveTo(px - 4f, bodyTop + 12f)
+            quadraticTo(px + 4f, bodyTop - 6f, px + 12f, bodyTop + 12f)
+        }
+        scope.drawPath(arc, ThreadColor, style = Stroke(width = 2.5f))
+    }
+
+    // Pitched roof of scallop rows
+    val ridge = bodyTop - (55f + rng.nextFloat() * 30f)
+    val eaveW = halfW + 16f
+    val roof = Path().apply {
+        moveTo(cx - eaveW, bodyTop)
+        lineTo(cx, ridge)
+        lineTo(cx + eaveW, bodyTop)
+        close()
+    }
+    drawStitchedFill(scope, roof, roofCol)
+    scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+
+    val rows = ((bodyTop - ridge) / 15f).toInt().coerceIn(2, 6)
+    for (r in 0 until rows) {
+        val ry = ridge + 12f + r * 15f
+        val spanAtY = (ry - ridge) / (bodyTop - ridge) * eaveW
+        var sx = -spanAtY + (if (r % 2 == 0) 0f else 9f) // offset alternate rows so tiles overlap
+        while (sx < spanAtY) {
+            scope.drawCircle(roofCol.copy(alpha = 0.55f), radius = 7f, center = Offset(cx + sx, ry))
+            scope.drawCircle(ThreadColor, radius = 7f, center = Offset(cx + sx, ry), style = Stroke(width = 1.4f))
+            sx += 18f
+        }
+    }
+}
+
+/**
+ * The tapestry's Rapunzel tower: tall and narrow, tiled bands spiralling up it, arched windows and
+ * a conical cap with a pennant.
+ */
+internal fun drawSpiralTower(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+    val rng = Random(bg.seed)
+    val wall = BAYEUX_WALLS[rng.nextInt(BAYEUX_WALLS.size)]
+    val roofCol = BAYEUX_ROOFS[rng.nextInt(BAYEUX_ROOFS.size)]
+
+    val halfW = 26f + rng.nextFloat() * 10f
+    val topY = cy - (200f + rng.nextFloat() * 90f) // 2-3x a building's height
+    val taper = halfW * 0.75f                      // narrows toward the top
+
+    val shaft = Path().apply {
+        moveTo(cx - halfW, cy + 20f)
+        lineTo(cx - taper, topY)
+        lineTo(cx + taper, topY)
+        lineTo(cx + halfW, cy + 20f)
+        close()
+    }
+    drawStitchedFill(scope, shaft, wall)
+    scope.drawPath(shaft, ThreadColor, style = StitchedStroke)
+
+    // Tiled bands, each row's scallops shifted so they read as a spiral climbing the tower
+    val bandStep = 22f
+    var by = cy + 6f
+    var row = 0
+    val phase = rng.nextFloat() * 10f
+    while (by > topY + 12f) {
+        val t = (by - topY) / (cy + 20f - topY)
+        val w = taper + (halfW - taper) * t
+        var sx = -w + ((row * 7f + phase) % 14f) // phase shift per row = the spiral
+        while (sx < w - 3f) {
+            scope.drawCircle(roofCol.copy(alpha = 0.5f), radius = 5.5f, center = Offset(cx + sx, by))
+            scope.drawCircle(ThreadColor.copy(alpha = 0.7f), radius = 5.5f, center = Offset(cx + sx, by), style = Stroke(width = 1.2f))
+            sx += 14f
+        }
+        by -= bandStep
+        row++
+    }
+
+    // Arched windows up the shaft
+    val windows = 2 + rng.nextInt(2)
+    for (i in 0 until windows) {
+        val wy = topY + 40f + i * ((cy - topY) / (windows + 1f))
+        val win = Path().apply {
+            moveTo(cx - 6f, wy)
+            lineTo(cx - 6f, wy - 10f)
+            quadraticTo(cx, wy - 20f, cx + 6f, wy - 10f)
+            lineTo(cx + 6f, wy)
+            close()
+        }
+        drawStitchedFill(scope, win, Color(0xFF3B332A))
+        scope.drawPath(win, ThreadColor, style = StitchedStroke)
+    }
+
+    // Conical cap
+    val cap = Path().apply {
+        moveTo(cx - taper - 8f, topY)
+        lineTo(cx, topY - 46f)
+        lineTo(cx + taper + 8f, topY)
+        close()
+    }
+    drawStitchedFill(scope, cap, roofCol)
+    scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+
+    // Pennant
+    scope.drawLine(ThreadColor, Offset(cx, topY - 46f), Offset(cx, topY - 74f), strokeWidth = 2.5f)
+    val flag = Path().apply {
+        moveTo(cx, topY - 74f)
+        lineTo(cx + 26f, topY - 67f)
+        lineTo(cx, topY - 58f)
+        close()
+    }
+    drawStitchedFill(scope, flag, Color(0xFF9E3624))
+    scope.drawPath(flag, ThreadColor, style = StitchedStroke)
+}
 
 internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
         // Pillared Hall (Bosham church style)

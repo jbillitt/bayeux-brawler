@@ -41,14 +41,36 @@ class ArtScreenshotTest {
 
     private val linen = Color(0xFFF1E6CC)
 
-    private fun bgObject(type: BackgroundObjectType) = BackgroundObject(
-        id = "shot_${type.name}",
+    private fun bgObject(type: BackgroundObjectType, seed: Int = 1) = BackgroundObject(
+        id = "shot_${type.name}_$seed",
         type = type,
         posX = 0f,
         width = 300f,
         hp = 500f,
-        maxHp = 500f
+        maxHp = 500f,
+        seed = seed
     )
+
+    /** The procedural pair, several seeds each — "no two identical" is the actual requirement. */
+    @Test
+    fun proceduralBuildings() {
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                listOf(BackgroundObjectType.BUILDING_BAYEUX, BackgroundObjectType.TOWER_SPIRAL).forEach { type ->
+                    listOf(listOf(11, 29), listOf(404, 1066)).forEach { seedRow ->
+                        Row {
+                            seedRow.forEach { seed ->
+                                Canvas(modifier = Modifier.width(206.dp).height(200.dp)) {
+                                    drawBackgroundObject(this, bgObject(type, seed), size.width / 2f, 0.45f)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/procedural.png")
+    }
 
     @Test
     fun buildings() {

@@ -315,8 +315,8 @@ class GameViewModel : ViewModel() {
         val currentMount = state.activeMount ?: state.unlockedAncillaries.lastOrNull { it.id.startsWith("anc_mount_") }
         val chariotCollapses = currentMount == com.example.game.Ancillary.CHARIOT && totalArmorMass > ARMOR_WEIGHT_LIMIT && !state.hasSilkenGarments
         val baseHp = 100f + state.totalHpBoost
-        // Soften the size-HP penalty so small builds stay viable (0.8 size → ~0.95x HP, not 0.8x)
-        val totalPlayerMaxHp = baseHp * (0.75f + 0.25f * state.characterSize)
+        // Soften the size-HP penalty and give an extra evasion-HP buff so small builds stay viable
+        val totalPlayerMaxHp = baseHp * (0.75f + 0.25f * state.characterSize) * (1f + (1f - state.characterSize).coerceAtLeast(0f) * 0.6f)
         val player = FighterState(
             id = "player_knight",
             name = state.playerName,

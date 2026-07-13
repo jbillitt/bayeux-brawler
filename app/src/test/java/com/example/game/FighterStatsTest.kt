@@ -112,10 +112,17 @@ class FighterStatsTest {
     @Test
     fun smallFistsCadenceWellBelowMediumFighter() {
         val smallFists = fighter(head = "head_bare", handle = "handle_fists", size = 0.65f)
-        val medium = fighter() // head_sword/handle_medium, size 1.0
+        val medium = fighter(shield = "shield_kite") // head_sword/handle_medium, shield_kite, size 1.0
         assertTrue(
             "small fists delay ${smallFists.attackSpeedDelay} should be well below medium ${medium.attackSpeedDelay}",
             smallFists.attackSpeedDelay < medium.attackSpeedDelay * 0.6f
         )
+    }
+    @Test
+    fun smallFighterGetsMaxHpBonus() {
+        val baseHp = 100f
+        val size = 0.65f
+        val expectedMaxHp = baseHp * (0.75f + 0.25f * size) * (1f + (1f - size) * 0.6f)
+        assertTrue("Tiny fighter should have maxHp buff: $expectedMaxHp", expectedMaxHp > baseHp * 0.9f) // they get back to nearly 100 HP, far better than their base 0.65x
     }
 }

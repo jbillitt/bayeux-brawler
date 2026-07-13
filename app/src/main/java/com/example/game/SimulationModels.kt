@@ -18,8 +18,8 @@ data class SizePreset(
 )
 
 val SIZE_PRESETS = listOf(
-    SizePreset("tiny",   "Wee Runt",        0.65f, "Fastest. Fragile as wet parchment. Damage: ×0.42"),
-    SizePreset("small",  "Nimble Scout",     0.80f, "Quick and evasive. Damage: ×0.64"),
+    SizePreset("tiny",   "Wee Runt",        0.65f, "Fastest. Surprising survivability. Damage: ×0.42"),
+    SizePreset("small",  "Nimble Scout",     0.80f, "Quick, evasive, and scrappy. Damage: ×0.64"),
     SizePreset("medium", "Average Norman",   1.00f, "Balanced. The default Hastings experience."),
     SizePreset("large",  "Burly Knight",     1.20f, "Slow but hits hard. Damage: ×1.44. Tankier."),
     SizePreset("huge",   "ABSOLUTE UNIT",    1.45f, "Glacial. Damage: ×2.10. Walking siege tower.")
@@ -462,7 +462,7 @@ data class FighterState(
                 0.75f // Flails are fast and unpredictable
             } else 1.1f
             // Weight slows you down slightly, but being little makes you attack much faster
-            val sizeScale = if (isRanged) (0.2f + size * 0.8f) else (0.4f + size * 0.6f)
+            val sizeScale = if (isRanged) (0.2f + size * 0.8f) else (0.25f + size * 0.75f)
             val weightFactor = (1f + (totalMass * 0.01f)) * sizeScale // vastly reduced mass penalty
             // Two-handing (no shield) doubles weapon speed! Missing an arm means you can't two-hand.
             val shieldFactor = if (missingArm) 1.0f else if (shield.id == "shield_none" && !isDualWielding) 0.5f else if (isDualWielding) 0.6f else 1.0f

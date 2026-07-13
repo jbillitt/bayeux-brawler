@@ -142,7 +142,7 @@
 
 ---
 
-### Task 8: Diseased peasant — behaviour, contagion, reward card — [sonnet/medium]
+### Task 8: Diseased peasant — behaviour, contagion, reward card — [opus/low]
 
 **Files:**
 - Modify: `app/src/main/java/com/example/game/SimulationModels.kt` (Ancillary enum + FighterState fields)
@@ -352,7 +352,7 @@ enum class DivineWeather(val id: String, val label: String, val description: Str
 
 ---
 
-### Task 19: Final verification + version bump — [sonnet/low]
+### Task 19: Final verification + version bump — [opus/low]
 
 - [ ] **Step 1:** `gradle testDebugUnitTest` — full suite PASS.
 - [ ] **Step 2:** `gradle installDebug` — playtest checklist on device: fists battle (no hilt, reach, interrupts), chariot melee, overweight collapse + silk card, peasant contagion + green + catch text on card, each weather event via border icon, mount swap, palisade/buildings/barechested/woad eyeball.

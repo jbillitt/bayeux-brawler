@@ -153,16 +153,67 @@ function locateRegion(content, anchorRegex) {
     return { bodyStart: openIdx + 1, bodyEnd: closeIdx };
 }
 
-// Registry of known non-CUSTOM regions. `anchor` must match uniquely (or first-match is fine,
-// e.g. functions only appear once as a `private fun` declaration).
-const BUILDING_FNS = ['drawShip', 'drawFortPalace', 'drawFortDinan', 'drawFortTower', 'drawFortMotte', 'drawBuildingBosham', 'drawBuildingManor'];
-const CREATURE_FNS = ['drawHorse', 'drawChariot', 'drawStilts', 'drawTrojanHorse', 'drawWardog', 'drawRaven'];
-
-// Ancillary "held item" branches live inside the specific `when (anc) {` that follows this
-// comment (there are two earlier `when (anc)` switches for tunic color / arm angle that we
-// do NOT want to touch — anchoring on the comment picks the right one).
 const ANCILLARY_WHEN_ANCHOR = /Draw Back Arm holding something[\s\S]*?when \(anc\) \{/;
-const ANCILLARY_IDS = ['SQUIRE', 'HERALD', 'TRUMPETER', 'CROSSBOWMAN', 'ARCHER', 'CUPBEARER', 'MONK'];
+
+const EXCLUDED_FNS = new Set([
+    'drawCharacter', 'drawLegs', 'drawTorso', 'drawHead', 'drawWeaponHead', 
+    'drawWeapon', 'drawFrontArmAndWeapon', 'drawBackArmAndShield', 
+    'drawAncillaries', 'drawStitchedFill', 'drawStitchedStrap', 
+    'drawDamageDecals', 'drawDamageFlurry', 'drawBackgroundObject'
+]);
+
+function discoverAssets() {
+    const assets = [];
+    const discoveredIds = new Set();
+    const tapestryContent = fs.existsSync(TAPESTRY_RENDERER_PATH) ? fs.readFileSync(TAPESTRY_RENDERER_PATH, 'utf-8') : '';
+
+    for (const file of RENDERER_FILES) {
+        const fullPath = path.join(RENDERER_DIR, file);
+        if (!fs.existsSync(fullPath)) continue;
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        
+        const re = /(?:private |internal )?fun (draw[A-Z]\w*)\(/g;
+        let m;
+        while ((m = re.exec(content)) !== null) {
+            const fnName = m[1];
+            if (EXCLUDED_FNS.has(fnName) || fnName.endsWith('Texture')) continue;
+            if (discoveredIds.has(fnName)) continue;
+            
+            const region = findFunctionRegion(content, fnName);
+            if (region) {
+                const type = file.includes('MountRenderer') || file.includes('Stilts') ? 'creature' : 'building';
+                assets.push({ type, id: fnName, label: fnName.replace('draw', ''), source: content.slice(region.bodyStart, region.bodyEnd) });
+                discoveredIds.add(fnName);
+            }
+        }
+    }
+    
+    if (tapestryContent) {
+        const whenAnchor = ANCILLARY_WHEN_ANCHOR.exec(tapestryContent);
+        if (whenAnchor) {
+            const whenStart = whenAnchor.index;
+            const rest = tapestryContent.slice(whenStart);
+            const ancRe = /com\.example\.game\.Ancillary\.(\w+) ->/g;
+            let m;
+            while ((m = ancRe.exec(rest)) !== null) {
+                const ancId = m[1];
+                if (discoveredIds.has(ancId)) continue;
+                const r = findAncillaryRegion(tapestryContent, ancId);
+                if (r) {
+                    assets.push({ type: 'ancillary', id: ancId, label: ancId, source: tapestryContent.slice(r.bodyStart, r.bodyEnd) });
+                    discoveredIds.add(ancId);
+                }
+            }
+        }
+
+        for (const c of findCustomRegions(tapestryContent)) {
+            assets.push({ type: 'custom', id: c.id, label: c.id, source: c.body });
+            discoveredIds.add(c.id);
+        }
+    }
+
+    return { assets, discoveredIds };
+}
 
 function findFunctionRegion(content, fnName) {
     return locateRegion(content, new RegExp(`(?:private |internal )?fun ${fnName}\\([^)]*\\)\\s*\\{`));
@@ -206,25 +257,7 @@ function findCustomRegions(content) {
 
 app.get('/api/assets', (req, res) => {
     try {
-        const content = fs.readFileSync(TAPESTRY_RENDERER_PATH, 'utf-8');
-        const assets = [];
-
-        for (const fn of BUILDING_FNS) {
-            const hit = findFunctionRegionAcrossFiles(fn);
-            if (hit) assets.push({ type: 'building', id: fn, label: fn.replace('draw', ''), source: hit.content.slice(hit.region.bodyStart, hit.region.bodyEnd) });
-        }
-        for (const fn of CREATURE_FNS) {
-            const hit = findFunctionRegionAcrossFiles(fn);
-            if (hit) assets.push({ type: 'creature', id: fn, label: fn.replace('draw', ''), source: hit.content.slice(hit.region.bodyStart, hit.region.bodyEnd) });
-        }
-        for (const anc of ANCILLARY_IDS) {
-            const r = findAncillaryRegion(content, anc);
-            if (r) assets.push({ type: 'ancillary', id: anc, label: anc, source: content.slice(r.bodyStart, r.bodyEnd) });
-        }
-        for (const c of findCustomRegions(content)) {
-            assets.push({ type: 'custom', id: c.id, label: c.id, source: c.body });
-        }
-
+        const { assets } = discoverAssets();
         res.json({ success: true, assets });
     } catch (err) {
         console.error(err);
@@ -235,9 +268,10 @@ app.get('/api/assets', (req, res) => {
 app.post('/api/asset/save', (req, res) => {
     try {
         const { type, id, source } = req.body;
+        const { discoveredIds } = discoverAssets();
 
         if (type === 'building' || type === 'creature') {
-            if (!BUILDING_FNS.includes(id) && !CREATURE_FNS.includes(id)) throw new Error(`Unknown asset id "${id}"`);
+            if (!discoveredIds.has(id)) throw new Error(`Unknown asset id "${id}"`);
             const hit = findFunctionRegionAcrossFiles(id);
             if (!hit) throw new Error(`Could not re-locate "${id}" in any renderer file (has the surrounding code changed?)`);
             const newContent = hit.content.slice(0, hit.region.bodyStart) + source + hit.content.slice(hit.region.bodyEnd);
@@ -250,7 +284,7 @@ app.post('/api/asset/save', (req, res) => {
         let region;
 
         if (type === 'ancillary') {
-            if (!ANCILLARY_IDS.includes(id)) throw new Error(`Unknown ancillary id "${id}"`);
+            if (!discoveredIds.has(id)) throw new Error(`Unknown ancillary id "${id}"`);
             region = findAncillaryRegion(content, id);
         } else if (type === 'custom') {
             const markerStart = `// --- CUSTOM ${id} ---\n`;
@@ -281,4 +315,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { findMatchingBrace, locateRegion, findFunctionRegion, findFunctionRegionAcrossFiles, findAncillaryRegion, findCustomRegions, BUILDING_FNS, CREATURE_FNS, ANCILLARY_IDS };
+module.exports = { findMatchingBrace, locateRegion, findFunctionRegion, findFunctionRegionAcrossFiles, findAncillaryRegion, findCustomRegions, discoverAssets };

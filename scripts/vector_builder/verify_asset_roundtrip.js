@@ -8,7 +8,7 @@ const assert = require('assert');
 
 const TAPESTRY = path.join(__dirname, '..', '..', 'app', 'src', 'main', 'java', 'com', 'example', 'game', 'TapestryRenderer.kt');
 
-const { findFunctionRegionAcrossFiles, findAncillaryRegion, findCustomRegions, BUILDING_FNS, CREATURE_FNS, ANCILLARY_IDS } = require('./server.js');
+const { findFunctionRegionAcrossFiles, findAncillaryRegion, findCustomRegions, discoverAssets } = require('./server.js');
 
 let checked = 0;
 
@@ -26,15 +26,27 @@ function roundTrip(content, region, label) {
     checked++;
 }
 
-for (const fn of [...BUILDING_FNS, ...CREATURE_FNS]) {
-    const hit = findFunctionRegionAcrossFiles(fn);
-    assert(hit, `${fn}: not found in any renderer file`);
-    roundTrip(hit.content, hit.region, `${fn} (${path.basename(hit.file)})`);
+const { assets, discoveredIds } = discoverAssets();
+
+assert(discoveredIds.has('drawThrone'), 'discovery failed to find drawThrone');
+// assert(discoveredIds.has('PLAGUE_PEASANT'), 'discovery failed to find PLAGUE_PEASANT'); // TODO: enable after Task 9
+
+for (const asset of assets) {
+    if (asset.type === 'building' || asset.type === 'creature') {
+        const hit = findFunctionRegionAcrossFiles(asset.id);
+        assert(hit, `: not found in any renderer file`);
+        roundTrip(hit.content, hit.region, ` ()`);
+    }
 }
 
 const tapestryContent = fs.readFileSync(TAPESTRY, 'utf-8');
-for (const anc of ANCILLARY_IDS) roundTrip(tapestryContent, findAncillaryRegion(tapestryContent, anc), `ancillary:${anc}`);
+for (const asset of assets) {
+    if (asset.type === 'ancillary') {
+        roundTrip(tapestryContent, findAncillaryRegion(tapestryContent, asset.id), `ancillary:`);
+    }
+}
 
 const customs = findCustomRegions(tapestryContent);
 console.log(`Found ${customs.length} pre-existing CUSTOM block(s).`);
 console.log(`OK — ${checked} asset regions extracted and round-tripped cleanly (no corruption, no bleed into neighboring code).`);
+

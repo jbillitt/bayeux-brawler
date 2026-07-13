@@ -58,6 +58,44 @@ class GameViewModelTest {
     }
 
     @Test
+    fun `fists preselected never equip a hilt at battle start`() {
+        val bareHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
+        viewModel.selectGear(bareHead)
+
+        viewModel.startBattle()
+
+        val player = viewModel.playerState.value!!
+        assertEquals("head_bare", player.weaponHead.id)
+        assertEquals("handle_fists", player.weaponHandle.id)
+    }
+
+    // Reflection helper: the endBattle(won) that flags a run as lost is private, and the
+    // random new-attempt loadout (the bug's actual home, ~GameViewModel.kt:1117) only runs
+    // from dismissBattleResult() once battleLost is true. There's no public way to lose a
+    // battle deterministically, so we invoke the private method directly.
+    private fun loseBattle() {
+        val method = GameViewModel::class.java.getDeclaredMethod("endBattle", Boolean::class.javaPrimitiveType)
+        method.isAccessible = true
+        method.invoke(viewModel, false)
+    }
+
+    @Test
+    fun `random loadout after losing never equips a hilt with bare fists`() {
+        // The next-attempt gear randomiser picks weaponHead and weaponHandle independently
+        // and can roll head_bare with a non-fists handle. Repeat to reliably surface it.
+        repeat(50) {
+            viewModel.startBattle()
+            loseBattle()
+            viewModel.dismissBattleResult()
+
+            val state = viewModel.uiState.value
+            if (state.weaponHead.id == "head_bare") {
+                assertEquals("handle_fists", state.weaponHandle.id)
+            }
+        }
+    }
+
+    @Test
     fun `toggleDualWield changes state correctly`() {
         val initialState = viewModel.uiState.value.isDualWielding
         viewModel.toggleDualWield()

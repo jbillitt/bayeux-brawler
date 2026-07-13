@@ -1082,6 +1082,13 @@ class GameViewModel : ViewModel() {
                 val newName = "$firstName $lastName"
 
                 // Completely random starter gear for the next attempt (each attempt starts fresh and unique!)
+                // Invariant: head_bare (fists) must always pair with handle_fists — never a hilt.
+                val newHead = GameData.WEAPON_HEADS.filter { it.id in initialGear }.random()
+                val newHandle = if (newHead.id == "head_bare") {
+                    GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }
+                } else {
+                    GameData.WEAPON_HANDLES.filter { it.id in initialGear && it.id != "handle_fists" }.randomOrNull() ?: GameData.WEAPON_HANDLES[1]
+                }
                 state.copy(
                     isBattleActive = false,
                     battleWon = false,
@@ -1113,8 +1120,8 @@ class GameViewModel : ViewModel() {
                     isThroneMode = false,
                     unlockedAncillaries = emptySet(),
                     bandagesCount = 0, // bandages are veterancy marks earned within a run, never at level 1
-                    weaponHead = GameData.WEAPON_HEADS.filter { it.id in initialGear }.random(),
-                    weaponHandle = GameData.WEAPON_HANDLES.filter { it.id in initialGear && it.id != "handle_fists" }.randomOrNull() ?: GameData.WEAPON_HANDLES[1],
+                    weaponHead = newHead,
+                    weaponHandle = newHandle,
                     shield = GameData.SHIELDS.filter { it.id in initialGear }.random(),
                     armor = GameData.ARMOR_PIECES.filter { it.id in initialGear }.random(),
                     headgear = GameData.HEADGEAR_PIECES.filter { it.id in initialGear }.random()

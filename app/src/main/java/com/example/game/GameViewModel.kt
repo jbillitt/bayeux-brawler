@@ -68,7 +68,7 @@ class GameViewModel : ViewModel() {
     // New particles collect here and flush to the StateFlow once per tick —
     // per-hit list copies were the biggest allocation churn in the loop
     private val particleBuffer = mutableListOf<BloodParticle>()
-    private companion object { const val MAX_PARTICLES = 250 }
+    private companion object { const val MAX_PARTICLES = 250; const val ARMOR_WEIGHT_LIMIT = 22f }
 
     // Combat rules live in CombatEngine; this context is its window into the battle state
     private val engine = CombatEngine(object : BattleContext {
@@ -134,6 +134,7 @@ class GameViewModel : ViewModel() {
             val newRangedUpgrades = if (choice.type == "ranged_upgrade") state.rangedUpgrades + choice.itemId else state.rangedUpgrades
             val newShieldUpgrades = if (choice.type == "shield_upgrade") state.shieldUpgrades + choice.itemId else state.shieldUpgrades
             val newBrawlerUpgrades = if (choice.type == "brawler_upgrade") state.brawlerUpgrades + choice.itemId else state.brawlerUpgrades
+            val newHasSilkenGarments = state.hasSilkenGarments || choice.id == "silken_garments"
             
             var newHeadgear = state.headgear
             if (choice.itemId == "armor_jester") {
@@ -150,6 +151,7 @@ class GameViewModel : ViewModel() {
                 rangedUpgrades = newRangedUpgrades,
                 shieldUpgrades = newShieldUpgrades,
                 brawlerUpgrades = newBrawlerUpgrades,
+                    hasSilkenGarments = newHasSilkenGarments,
                 showLevelUpScreen = false,
                 pendingLevelUpChoices = emptyList()
             )
@@ -165,6 +167,13 @@ class GameViewModel : ViewModel() {
                 appliedMusicMoods = applied,
                 showLevelUpScreen = true // proceed to reward after music choice
             )
+        }
+    }
+
+    fun selectMount(a: Ancillary) {
+        if (_uiState.value.isBattleActive) return
+        _uiState.update { state ->
+            state.copy(activeMount = a)
         }
     }
 
@@ -302,6 +311,9 @@ class GameViewModel : ViewModel() {
         if (state.isBattleActive) return
 
         // Create player state with complete roguelike upgrade state
+        val totalArmorMass = state.armor.mass + state.headgear.mass + state.extraArmors.sumOf { id -> com.example.game.GameData.ARMOR_PIECES.find { it.id == id }?.mass?.toDouble() ?: 0.0 }.toFloat()
+        val currentMount = state.activeMount ?: state.unlockedAncillaries.lastOrNull { it.id.startsWith("anc_mount_") }
+        val chariotCollapses = currentMount == com.example.game.Ancillary.CHARIOT && totalArmorMass > ARMOR_WEIGHT_LIMIT && !state.hasSilkenGarments
         val baseHp = 100f + state.totalHpBoost
         // Soften the size-HP penalty so small builds stay viable (0.8 size → ~0.95x HP, not 0.8x)
         val totalPlayerMaxHp = baseHp * (0.75f + 0.25f * state.characterSize)
@@ -337,10 +349,10 @@ class GameViewModel : ViewModel() {
             shieldUpgrades = state.shieldUpgrades,
             brawlerUpgrades = state.brawlerUpgrades,
             shieldHp = state.shield.defense * 2f + if (state.shieldUpgrades.contains("oak_reinforcing")) 50f else 0f + if (state.shieldUpgrades.contains("iron_plating")) 100f else 0f + if (state.shieldUpgrades.contains("shield_helmet")) 40f else 0f,
-            isMounted = state.unlockedAncillaries.contains(Ancillary.WARHORSE) || state.unlockedAncillaries.contains(Ancillary.CHARIOT) || state.unlockedAncillaries.contains(Ancillary.STILTS) || state.isThroneMode,
-            mountHp = if (state.isThroneMode) 100f else if (state.unlockedAncillaries.contains(Ancillary.STILTS)) 40f else if (state.unlockedAncillaries.contains(Ancillary.CHARIOT)) 100f else if (state.unlockedAncillaries.contains(Ancillary.WARHORSE)) 80f else 0f,
-            isChariot = state.unlockedAncillaries.contains(Ancillary.CHARIOT),
-            isStilts = !state.isThroneMode && state.unlockedAncillaries.contains(Ancillary.STILTS),
+            isMounted = currentMount == Ancillary.WARHORSE || (currentMount == Ancillary.CHARIOT && !chariotCollapses) || currentMount == Ancillary.STILTS || state.isThroneMode,
+            mountHp = if (state.isThroneMode) 100f else if (currentMount == Ancillary.STILTS) 40f else if (currentMount == Ancillary.CHARIOT && !chariotCollapses) 100f else if (currentMount == Ancillary.WARHORSE) 80f else 0f,
+            isChariot = currentMount == Ancillary.CHARIOT && !chariotCollapses,
+            isStilts = !state.isThroneMode && currentMount == Ancillary.STILTS,
             isLord = state.isThroneMode,
             bandagesCount = state.bandagesCount
         )
@@ -472,9 +484,12 @@ class GameViewModel : ViewModel() {
         val levelWidth = if (state.level == 1) 1500f else if (state.level >= 5) 2500f else 1000f + (Random.nextFloat() * 500f)
         val bgObjects = mutableListOf<BackgroundObject>()
         
+        if (chariotCollapses) {
+            bgObjects.add(BackgroundObject("broken_chariot", BackgroundObjectType.BROKEN_CHARIOT, 150f, 0f, 150f, 100f, 100f))
+            addPopup("THE CHARIOT COLLAPSES!", 150f, 110f, androidx.compose.ui.graphics.Color.Red)
+        }
+
         if (state.level == 1) {
-            // Level 1: Ship at spawn
-            // Boat hugs the bottom-left edge (hull draws ~±190 around posX); player lands on the beach beside it
             bgObjects.add(BackgroundObject("ship_0", BackgroundObjectType.SHIP, -40f, 0f, 400f, 500f, 500f))
             player.posX = 220f
             player.targetX = 220f
@@ -960,29 +975,40 @@ class GameViewModel : ViewModel() {
                     if (rndVal < 0.66f && state.shield.id != "shield_none" && availableShieldUpgrades.isNotEmpty()) {
                         pendingChoices.add(availableShieldUpgrades.random())
                     } else {
-                        val baseArmorOptions = GameData.ARMOR_PIECES.filter { it.id != "armor_bare" && it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }
-                        val highLevelArmorOptions = GameData.ARMOR_PIECES.filter { it.id in listOf("armor_gauntlets", "armor_boots", "armor_coif") }
+                        val totalArmorMass = state.armor.mass + state.headgear.mass + state.extraArmors.sumOf { id -> com.example.game.GameData.ARMOR_PIECES.find { it.id == id }?.mass?.toDouble() ?: 0.0 }.toFloat()
+                        if (totalArmorMass > ARMOR_WEIGHT_LIMIT && !state.hasSilkenGarments) {
+                            pendingChoices.add(LevelUpChoice(
+                                id = "silken_garments",
+                                title = "Equip: Silken Garments",
+                                description = "Lightens your armour below chariot weight while preserving armour level!",
+                                type = "armor",
+                                itemId = "silken_garments"
+                            ))
+                        } else {
+                            val baseArmorOptions = GameData.ARMOR_PIECES.filter { it.id != "armor_bare" && it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }
+                            val highLevelArmorOptions = GameData.ARMOR_PIECES.filter { it.id in listOf("armor_gauntlets", "armor_boots", "armor_coif") }
 
-                        val armorOptions = mutableListOf<GearItem>()
-                        armorOptions.addAll(baseArmorOptions)
-                        if (state.level > 10) {
-                            armorOptions.addAll(highLevelArmorOptions)
-                        }
-                        if (state.level > 3) {
-                            armorOptions.add(GameData.ARMOR_PIECES.first { it.id == "armor_jester" })
-                        }
+                            val armorOptions = mutableListOf<GearItem>()
+                            armorOptions.addAll(baseArmorOptions)
+                            if (state.level > 10) {
+                                armorOptions.addAll(highLevelArmorOptions)
+                            }
+                            if (state.level > 3) {
+                                armorOptions.add(GameData.ARMOR_PIECES.first { it.id == "armor_jester" })
+                            }
 
-                        val armorPiece = armorOptions.random()
-                        val isComedy = armorPiece.id == "armor_jester"
-                        val typeCat = if (isComedy) "comedy" else "armor"
-                        val titlePrefix = if (isComedy) "Joke Item" else if (armorPiece.id in listOf("armor_gauntlets", "armor_boots", "armor_coif")) "Equip" else "Layer Armor"
-                        pendingChoices.add(LevelUpChoice(
-                            id = "armor_${armorPiece.id}",
-                            title = "$titlePrefix: ${armorPiece.itemName}",
-                            description = if (isComedy) "A joke item! Removes all armor protection but gives a massive score multiplier." else "Add ${armorPiece.itemName} to your loadout, gaining +${armorPiece.defense.toInt()} Defense!",
-                            type = typeCat,
-                            itemId = armorPiece.id
-                        ))
+                            val armorPiece = armorOptions.random()
+                            val isComedy = armorPiece.id == "armor_jester"
+                            val typeCat = if (isComedy) "comedy" else "armor"
+                            val titlePrefix = if (isComedy) "Joke Item" else if (armorPiece.id in listOf("armor_gauntlets", "armor_boots", "armor_coif")) "Equip" else "Layer Armor"
+                            pendingChoices.add(LevelUpChoice(
+                                id = "armor_${armorPiece.id}",
+                                title = "$titlePrefix: ${armorPiece.itemName}",
+                                description = if (isComedy) "A joke item! Removes all armor protection but gives a massive score multiplier." else "Add ${armorPiece.itemName} to your loadout, gaining +${armorPiece.defense.toInt()} Defense!",
+                                type = typeCat,
+                                itemId = armorPiece.id
+                            ))
+                        }
                     }
                 }
 
@@ -1153,4 +1179,9 @@ class GameViewModel : ViewModel() {
         super.onCleared()
     }
 }
+
+
+
+
+
 

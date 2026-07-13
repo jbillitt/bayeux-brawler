@@ -103,5 +103,73 @@ class GameViewModelTest {
         val newState = viewModel.uiState.value.isDualWielding
         assertEquals(!initialState, newState)
     }
-}
 
+    private fun mutateState(mutator: (BattleSimState) -> BattleSimState) {
+        val field = GameViewModel::class.java.getDeclaredField("_uiState")
+        field.isAccessible = true
+        val flow = field.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<BattleSimState>
+        flow.value = mutator(flow.value)
+    }
+
+    @Test
+    fun `chariot collapses if armor is too heavy`() {
+        mutateState { it.copy(
+            unlockedAncillaries = setOf(Ancillary.CHARIOT),
+            armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
+            extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif")
+        )}
+        viewModel.startBattle()
+        val player = viewModel.playerState.value!!
+        assertFalse(player.isChariot)
+        val bgObjects = viewModel.uiState.value.backgroundObjects
+        assertTrue(bgObjects.any { it.type == BackgroundObjectType.BROKEN_CHARIOT })
+    }
+
+    @Test
+    fun `silken garments prevents chariot collapse`() {
+        mutateState { it.copy(
+            unlockedAncillaries = setOf(Ancillary.CHARIOT),
+            armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
+            extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif"),
+            hasSilkenGarments = true
+        )}
+        viewModel.startBattle()
+        val player = viewModel.playerState.value!!
+        assertTrue(player.isChariot)
+    }
+
+    @Test
+    fun `silken_garments appears in level up choices if over limit`() {
+        mutateState { it.copy(
+            armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
+            extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif"),
+            level = 5
+        )}
+        val method = GameViewModel::class.java.getDeclaredMethod("endBattle", Boolean::class.javaPrimitiveType)
+        method.isAccessible = true
+        var found = false
+        repeat(50) {
+            method.invoke(viewModel, true)
+            println("CHOICES: " + viewModel.uiState.value.pendingLevelUpChoices.map { it.id })
+            val choices = viewModel.uiState.value.pendingLevelUpChoices
+            if (choices.any { it.id == "silken_garments" }) {
+                found = true
+            }
+            viewModel.selectLevelUpChoice(choices.first().id)
+        }
+        assertTrue(found)
+    }
+
+    @Test
+    fun `battle starts with selected mount when multiple mounts unlocked`() {
+        mutateState { it.copy(
+            unlockedAncillaries = setOf(Ancillary.CHARIOT, Ancillary.WARHORSE),
+            activeMount = Ancillary.WARHORSE
+        )}
+        viewModel.startBattle()
+        val player = viewModel.playerState.value!!
+        assertFalse(player.isChariot)
+        assertTrue(player.isMounted)
+        assertEquals(80f, player.mountHp)
+    }
+}

@@ -263,7 +263,7 @@ data class EmbeddedProjectile(
 )
 
 enum class BackgroundObjectType {
-    SHIP, FORT_PALACE, FORT_DINAN, BUILDING_BOSHAM, BUILDING_MANOR, FORT_TOWER, FORT_MOTTE
+    SHIP, FORT_PALACE, FORT_DINAN, BUILDING_BOSHAM, BUILDING_MANOR, FORT_TOWER, FORT_MOTTE, BROKEN_CHARIOT
 }
 
 data class BackgroundObject(
@@ -585,7 +585,9 @@ data class BattleSimState(
     val playerName: String = "Syr William",
     val unlockedGearIds: Set<String> = emptySet(),
     val unlockedAncillaries: Set<com.example.game.Ancillary> = emptySet(),
+    val activeMount: Ancillary? = null,
     val isDualWielding: Boolean = false,
+    val hasSilkenGarments: Boolean = false,
     
     // Roguelike level upgrades persistent state
     val extraAttachments: List<String> = emptyList(), // stores GearItem IDs of extra blades/heads
@@ -664,3 +666,5 @@ object LatinShouts {
         }
     }
 }
+
+

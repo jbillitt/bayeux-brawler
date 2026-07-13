@@ -323,6 +323,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                             LevelUpScreen(
                                 uiState = uiState,
                                 onSelectChoice = { viewModel.selectLevelUpChoice(it) },
+                                onSelectMount = { viewModel.selectMount(it) },
                                 onStartBattle = { viewModel.startBattle() },
                                 onSkipReward = { viewModel.selectLevelUpChoice("") },
                                 onClearSkipBonus = { viewModel.clearSkipBonus() }
@@ -701,6 +702,7 @@ fun CharacterPreviewCard(uiState: BattleSimState) {
 fun LevelUpScreen(
     uiState: BattleSimState,
     onSelectChoice: (String) -> Unit,
+    onSelectMount: (com.example.game.Ancillary) -> Unit = {},
     onStartBattle: () -> Unit = {},
     onSkipReward: () -> Unit = {},
     onClearSkipBonus: () -> Unit = {}
@@ -927,6 +929,45 @@ fun LevelUpScreen(
                             fontSize = 18.sp,
                             color = TapestryLight
                         )
+                    }
+                }
+            }
+        }
+
+        // --- MOUNT SELECTOR ---
+        val mounts = uiState.unlockedAncillaries.filter { it.id.startsWith("anc_mount_") }
+        if (mounts.size > 1) {
+            val activeMount = uiState.activeMount ?: mounts.last()
+            Text("Select Active Mount:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TapestryDark, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                mounts.forEach { mount ->
+                    val isSelected = mount == activeMount
+                    val bgColor = if (isSelected) TapestryMustard.copy(alpha = 0.3f) else Color.Transparent
+                    val borderColor = if (isSelected) TapestryRed else TapestryDark.copy(alpha = 0.5f)
+                    val dummy = remember(uiState) { com.example.game.FighterState(id="m", name="", isPlayer=true, maxHp=1f, hp=1f, weaponHead=uiState.weaponHead, weaponHandle=uiState.weaponHandle, shield=uiState.shield, armor=uiState.armor, headgear=uiState.headgear, posX=0f, targetX=0f) }
+                    Card(
+                        modifier = Modifier.size(80.dp).clickable { onSelectMount(mount) }.border(2.dp, borderColor, RoundedCornerShape(8.dp)),
+                        colors = CardDefaults.cardColors(containerColor = bgColor)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
+                            Canvas(modifier = Modifier.size(50.dp)) {
+                                withTransform({
+                                    translate(left = size.width / 2, top = size.height / 2 + 20f)
+                                    scale(0.35f, 0.35f)
+                                }) {
+                                    when (mount) {
+                                        com.example.game.Ancillary.WARHORSE -> com.example.game.drawHorse(this, 0f, 0f, dummy)
+                                        com.example.game.Ancillary.CHARIOT -> com.example.game.drawChariot(this, 0f, 0f, dummy)
+                                        com.example.game.Ancillary.STILTS -> com.example.game.drawStilts(this, 0f, 0f, dummy)
+                                        else -> {}
+                                    }
+                                }
+                            }
+                            Text(mount.ancillaryName, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
+                        }
                     }
                 }
             }

@@ -17,7 +17,11 @@
 **Sallying Lords:** These forts act as enemy spawner hubs. Approaching a fort causes elite units and Lords (wearing crowns) to spawn and charge out.
 **Organic Destructibility:** Buildings and Forts have hidden health pools and hitboxes. Stray heavy weapon strikes and projectiles deal damage. Upon depletion, the building collapses into a "ruined" frayed state, removing range cover.
 
-## 3. The Woven Aesthetic (Tapestry Renderer 2.0)
+## 3. The Woven Aesthetic & Rendering Constraints (Tapestry Renderer 2.0)
+**STRICT ANTI-LAZY GEOMETRY & HISTORICAL ACCURACY:** 
+- **The Ship:** Must have a wide, gently curving transport hull with a dragon prow, striped sail, and overlapping shields on the gunwale. The water path MUST be drawn *in front* of the hull's bottom to provide proper submerged perspective.
+- **The Forts (Palaces & Keeps):** Will be heavily stylized. "Palace" style forts must feature slender Romanesque pillars, arched balconies, and curving, elaborate "fairy-tale/Disney" style cupolas/roofs (authentic to the tapestry). "Dinan" style Motte-and-Baileys must have colored horizontal stripes on the earthen mound, with the wooden tower sitting completely flush against the mound (NO massive gaps).
+- **The Buildings:** Will use the "Bosham Pillared Hall" and "Timber Manor" styles as inspiration for dozens of variants. They must feature slender pillars holding up arches, clean timber walls with carved crossing gables (dragon heads), and multi-colored scalloped shingles for roofs. No basic/lazy rectangles or dirty cross-hatching.
 **Satin Stitch Fills:** Large colored paths (tunics, roofs, large shields) will be filled with directional, tightly packed zigzag lines instead of flat vectors to mimic authentic Bayeux embroidery.
 **Fraying & Wear (VFX):** As characters take damage or buildings collapse, the game spawns loose thread particles and draws trailing frayed yarn on the sprites. 
 **Dynamic Fabric Lighting:** A subtle ambient lighting/bump-map overlay will be applied across the coarse linen grid, reacting to the scrolling camera to simulate museum lighting moving across physical threads.

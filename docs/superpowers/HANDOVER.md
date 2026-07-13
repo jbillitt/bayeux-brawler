@@ -1,60 +1,70 @@
-# Handover Document (2026-07-13, plague/weather/polish batch — mid-execution)
+# Handover (2026-07-13) — plague/weather/polish batch COMPLETE
 
-## Context
-Brainstormed, specced, and planned a 20-task batch, then executed roughly half of it via a
-mixed workflow: Claude subagents (until session limits bit) and Gemini/antigravity (worktree
-branches, merged back). **9 of 20 tasks are done and on main. Main compiles and the full
-unit suite is green** (`gradle testDebugUnitTest` exit 0 at commit 2607954).
+**All 20 tasks are done and on main. v0.4.0 Northumbria.** Unit suite green, `gradle compileDebugKotlin`
+clean, `node scripts/vector_builder/verify_asset_roundtrip.js` passes (25 regions).
 
-## Governing documents (read these first)
-- Spec: `docs/superpowers/specs/2026-07-13-plague-weather-and-polish-design.md`
-- Plan (per-task briefs, model annotations, sequencing): `docs/superpowers/plans/2026-07-13-plague-weather-and-polish.md`
-- Progress ledger (source of truth for what's done): `.superpowers/sdd/progress.md`
-- Extracted per-task briefs + implementer reports: `.superpowers/sdd/task-N-brief.md` / `task-N-report.md`
+## What shipped this session (tasks 8-19)
+- **8** Plague peasant (4aa4251) — `Ancillary.PLAGUE_PEASANT`, contagion radius, DoT, player catch roll.
+- **9** Peasant art + disease tint (381a862) — one `skinTone()` for all flesh; he renders through the
+  normal character pipeline, *not* `drawAncillaries` (that would draw a decorative second peasant).
+- **10** Divine weather (8139937) — `DivineWeather`, `triggerWeather()`, cooldowns, level-12 gating.
+- **11** Weather border icons + flourishes (a69da94) — one `weatherIconCenter()` shared by renderer
+  and tap handler so they cannot drift apart.
+- **13** Curve counters (63eb15e) — shield-walls (L12), brutes (L15), war-priest (L18); Shieldbreaker
+  and Armour-Piercing outs; `seenCounters` drives the light guidance.
+- **14** Barechested (afa29f5) — root cause was six hardcoded sleeve sites, not the torso.
+- **15** Woad + cosmetic variance (e9796f2) — enemy faces were rolling from FighterState defaults, not
+  the factory rng, which is why waves looked samey.
+- **16** Palisade (4cbff1f) — shared `drawPalisadeRun()`; Dinan's cone flattened too.
+- **17** Procedural buildings (478ff9f) — `drawBayeuxBuilding`, `drawSpiralTower`, seeded.
+- **18b** Data-driven art (0c1177a) + workbench (9452c18) — see below.
+- **19** v0.4.0 Northumbria.
 
-## DONE (on main, reviewed)
-- Task 1 fists never equip hilt (02a80cb) — root cause was the post-defeat gear reroll.
-- Task 2 fists reach ground+throne, melee no longer backpedals, fist interrupt 25% (904bf30).
-  Constants: `CombatEngine.FIST_INTERRUPT_CHANCE`, `MELEE_VS_RANGED_CHASE_MULT`.
-- Task 3 small-fighter HP buff + steeper melee attack-speed size scale (8cbcf50).
-- Task 4 chariot closes to melee range — approach subtracts mount reach (bb917ae).
-- Task 5 crossbow bolts: new `ProjectileType.BOLT`, smaller flying + embedded (e6ed854, 85bd18a).
-- Task 6 dagger hilt 15f draw length; short-reach (<1.2f) weapons approach to 0.6x boundary (e8a409e).
-- Task 7 armour weight: `ARMOR_WEIGHT_LIMIT = 22f` in GameViewModel; chariot collapse at battle
-  start spawns a BROKEN_CHARIOT background object + popup; `silken_garments` card gates recovery
-  (merged in 6d45064/5b8123b; collapsed-wreck art ported as 2607954 — drawChariot now takes
-  `fighter: FighterState?, isCollapsed: Boolean`).
-- Task 12 mount selector on reward screen; `BattleSimState.activeMount`, `selectMount()` (6d45064).
-- Task 18 vector builder auto-discovery (274a786): `discoverAssets()` scans renderer files for
-  `fun drawX(` (minus EXCLUDED_FNS) + ancillary branches; verify script confirms 22 regions
-  roundtrip clean.
+## The two things worth knowing next session
 
-## NOT DONE (11 tasks, all in main session's queue)
-Tasks 8, 9 (plague peasant behaviour then art), 10, 11 (weather core then icons), 13 (curve
-counters), 14 (barechested), 15 (woad), 16 (palisade), 17 (procedural buildings), 18b (JSON
-art port — must run AFTER 16 & 17), 19 (final verification, playtest checklist, bump to
-v0.3.1, final whole-branch review vs merge-base dae44d1^..). Briefs for 8-17 not yet
-extracted (`scripts/task-brief` in the subagent-driven-development skill dir does it).
+**1. There is now a way to SEE the art without a device.**
+`app/src/test/java/com/example/game/ArtScreenshotTest.kt` renders the real draw functions to PNGs via
+the Roborazzi/Robolectric NATIVE graphics setup that was already in the project.
 
-## Known minor findings (feed to Task 19's final review)
-Recorded in `.superpowers/sdd/progress.md`: EOF blank-line cruft in 4 files; indentation slip
-at the `hasSilkenGarments` copy() in GameViewModel; `totalArmorMass` computed twice
-(startBattle + reward gen); ballista stuck-shaft factor changed 1.0→0.4 / cap 1.8→1.2 —
-**eyeball ballista spears on device**; mount thumbnail dummy FighterState per recompose.
+    gradle testDebugUnitTest --tests "*ArtScreenshotTest*" -Proborazzi.test.record=true --rerun
 
-## Process facts worth knowing
-- User has Gemini/antigravity CLI for outsourcing; handover statement pattern worked but
-  Gemini's "all merged" claim was false for 2 of 8 tasks — ALWAYS audit `git log` + worktrees
-  after an external agent reports. Its stranded work sat on branches; salvaged by cherry-pick
-  (task 18) and file-scoped diff apply (task 7 art).
-- Four stale Gemini-internal worktrees remain registered (under `C:/Users/Josh/.gemini/...brain...`);
-  left alone deliberately — `git worktree prune` after deleting those dirs if the user agrees.
-- Untracked cruft: `test_out.txt` (Gemini's), `tapestry_options.html`, `logcat*.txt` — user
-  wants to be asked before deletion.
-- Uncommitted pre-existing edit: `docs/superpowers/specs/2026-07-12-environment-and-vector-builder-design.md`.
-- User preference: no more Claude subagents this run (credit burn) — execute remaining tasks
-  inline. Remaining tasks were re-annotated opus/low-medium in the plan.
-- Build: global gradle (`gradle compileDebugKotlin` / `gradle testDebugUnitTest`), no wrapper.
-  adb at `$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe`. Never add assets under `app/build/`.
-- Art direction rule for all remaining visual tasks: distinct at a glance, but tapestry
-  vocabulary only (drawStitchedFill, period palette, Bayeux linework).
+Writes `app/src/test/screenshots/{buildings,fighters,procedural}.png`. These are NOT golden-image
+assertions — nothing fails on a pixel diff. They exist to be looked at. This caught two real bugs that
+would otherwise have shipped blind (the termite-mound palisade, and an arcade that drew as black blobs).
+
+The vector builder cannot do this job: its Kotlin parser only understands literal `moveTo`/`lineTo`,
+so it renders *nothing* for any procedural art.
+
+**2. Building art is data-driven now, and assets are DISCOVERED, not registered.**
+`app/src/main/assets/art/*.json` — any asset with a `"spawn"` block joins the level-gen pool on next
+launch, drawn through the generic `BackgroundObjectType.VECTOR`. A new building needs **no Kotlin at
+all**: no enum value, no when-branch, no pool edit. Parsed with the platform `org.json` — deliberately
+no serialization dependency.
+
+Procedural art (the seeded palisade) stays code but reads its position from a named **anchor** in the
+asset, so editing the hill in the builder moves the wall with it. No layer needs a do-not-touch marker.
+
+Workbench: `cd scripts/vector_builder && node server.js` → http://localhost:3000/art.html
+
+Only `building_manor` is ported so far. The rest (ship, palace, tower, bosham, forts, trojan horse) are
+still Kotlin — port them the same way: transcribe, check in the screenshot harness, then delete the
+Kotlin body. Do not port the seeded parts.
+
+## Known issues (unfixed, deliberate)
+- **`CombatEngineTest.throneModeFistsPlayerReachesAdjacentEnemy` is flaky** (~1 run in 8). Pre-existing
+  from Task 2; depends on random attack rolls. Failed once in ~10 full-suite runs, 0/6 in isolation.
+- **Poison and bleed are ~15x weaker than they were.** `applyFlatDamage` clamps every hit to a minimum
+  of 1 point, so per-tick DoT was landing a full point *per frame* — a nominal 4/sec poison dealt ~60/sec.
+  Fixed at the root (`applyDotDamage` accrues sub-point damage). The constants now mean what they say.
+  **This needs a playtest** — the Hag especially may now feel feeble. Constants: `CombatEngine.POISON_DPS`,
+  `BLEED_DPS`.
+- `ARMOR_WEIGHT_LIMIT` 22 → 20, because scale+extras (21.5kg) did not exceed 22 and so never collapsed the
+  chariot, contradicting its own spec. The armour-weight tests were also flaky: they pinned the armour but
+  not the helmet, and `BattleSimState` defaults headgear to a **random** piece (0-6kg).
+- Skipped deliberately: the peasant's hunched posture, and forearm hair on bare-chested fighters.
+
+## Process
+- Untracked cruft still present, never touched: `test_out.txt`, `tapestry_options.html`, logcats.
+- Four stale Gemini worktrees still registered under `C:/Users/Josh/.gemini/...`; `git worktree prune`
+  after deleting those dirs if wanted.
+- Gemini's subscription has expired; it is no longer available for outsourcing.

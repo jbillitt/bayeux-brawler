@@ -25,6 +25,13 @@ interface BattleContext {
  */
 class CombatEngine(private val ctx: BattleContext) {
 
+    companion object {
+        // Fists hit fast enough to occasionally stagger a mid-swing defender.
+        const val FIST_INTERRUPT_CHANCE = 0.25f
+        // Melee pursuers tighten up on a kiting (ranged) target instead of stalling at their full reach.
+        private const val MELEE_VS_RANGED_CHASE_MULT = 0.8f
+    }
+
     // Delayed follow-up swings/shots (dual-wield 2nd hit, double-ended pole hits, multishot).
     // Ticked by the game loop so nothing fires after the battle ends.
     private class QueuedAction(var delay: Float, val run: () -> Unit)
@@ -209,7 +216,14 @@ class CombatEngine(private val ctx: BattleContext) {
             val dist = abs(fighter.posX - target.posX)
             val reachPixels = fighter.reach * 40f + 40f // generous hitbox
             val rangeMult = if (!fighter.isPlayer && fighter.level > 5) 0.8f + (fighter.level - 5) * 0.05f else 0.8f
-            val optimalDistance = if (fighter.isRanged) reachPixels * rangeMult else reachPixels
+            // Only ranged fighters kite to keep their distance; melee (including fists) holds ground
+            // and stands to trade blows once in range, so a fists player is never stalled just outside
+            // reach by an enemy backpedaling from a weapon it doesn't have.
+            val optimalDistance = when {
+                fighter.isRanged -> reachPixels * rangeMult
+                target.isRanged -> reachPixels * MELEE_VS_RANGED_CHASE_MULT // tighten up chasing a kiting target
+                else -> reachPixels
+            }
             val isShieldWall = !fighter.isPlayer && fighter.shield.id == "shield_tower"
 
             fighter.facingRight = target.posX > fighter.posX
@@ -221,14 +235,13 @@ class CombatEngine(private val ctx: BattleContext) {
                 fighter.posX += direction * fighter.moveSpeed * moveMult * dt
                 // Desync animations slightly based on maxHp to avoid identical marching
                 fighter.animFrame = fighter.animFrame + dt * (9f + (fighter.maxHp % 3f))
-            } else if (dist < optimalDistance * 0.7f && fighter.moveSpeed > 0f) {
-                // Step back to keep them at the tip of our longer weapon!
+            } else if (fighter.isRanged && dist < optimalDistance * 0.7f && fighter.moveSpeed > 0f) {
+                // Ranged only: step back to keep the target at missile range
                 val direction = if (target.posX > fighter.posX) -1f else 1f
-                val retreatSpeed = if (fighter.isRanged) fighter.moveSpeed else (fighter.moveSpeed * 0.45f)
-                fighter.posX += direction * retreatSpeed * dt
+                fighter.posX += direction * fighter.moveSpeed * dt
                 fighter.animFrame = fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))
 
-                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) {
+                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && (!fighter.isLord || fighter.isFists)) {
                     triggerAttack(fighter)
                 }
             } else {
@@ -237,7 +250,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 val piF = Math.PI.toFloat()
                 val nearestRest = kotlin.math.round(fighter.animFrame / piF) * piF
                 fighter.animFrame += (nearestRest - fighter.animFrame).coerceIn(-8f * dt, 8f * dt)
-                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) {
+                // A lord normally lets his retinue fight — but a bare-fisted lord leans off the
+                // throne and swings himself (throne mode strips the player to fists).
+                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && (!fighter.isLord || fighter.isFists)) {
                     triggerAttack(fighter)
                 }
             }
@@ -475,6 +490,14 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
 
                 applyFlatDamage(totalDamage, currTarget, attacker.isPlayer)
+
+                // Fists connect fast enough to stagger the defender out of their attack rhythm
+                if (attacker.isFists && Random.nextFloat() < FIST_INTERRUPT_CHANCE) {
+                    currTarget.swingProgress = 0f
+                    currTarget.isAttacking = false
+                    currTarget.attackCooldown = currTarget.attackCooldown.coerceAtLeast(0.4f)
+                    ctx.popup("INTERRUPTUS!", currTarget.posX, 150f, Color.Yellow)
+                }
 
                 // Knock off helmet randomly!
                 if (Random.nextFloat() < 0.10f && currTarget.headgear.id != "helm_none") {

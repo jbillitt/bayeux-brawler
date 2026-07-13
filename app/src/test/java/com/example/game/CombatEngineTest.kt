@@ -1,6 +1,7 @@
 package com.example.game
 
 import androidx.compose.ui.graphics.Color
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -131,5 +132,76 @@ class CombatEngineTest {
         horse.posX = 600f
         engine.updateFighter(horse, foe, 0.033f)
         assertTrue("horse should burst once behind all foes", horse.isDying)
+    }
+
+    @Test
+    fun fistsPlayerClosesOnMeleeEnemyOnGround() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val player = fighter(head = "head_bare", handle = "handle_fists", isPlayer = true, posX = 200f)
+        // Small, quick, long-reach melee enemy: its kiting retreat outruns the player's
+        // approach, so a fists player can never close unless melee enemies hold ground.
+        val enemy = fighter(head = "head_spear", handle = "handle_pike_long", posX = 300f, size = 0.5f)
+            .copy(speedBoost = 1.0f)
+        ctx.player = player
+        ctx.enemies = listOf(enemy)
+        // Drive both fighters at each other for a few simulated seconds, like the real battle loop.
+        // Track the closest they get: combat knockback can bump them apart again after contact,
+        // so what matters is whether the pursuer ever reaches melee range at all.
+        val reachPixels = player.reach * 40f + 40f
+        var minDist = abs(player.posX - enemy.posX)
+        repeat(120) {
+            engine.updateFighter(player, enemy, 0.033f)
+            engine.updateFighter(enemy, player, 0.033f)
+            minDist = minOf(minDist, abs(player.posX - enemy.posX))
+        }
+        assertTrue("fists player should have closed to melee reach ($reachPixels) but nearest was $minDist", minDist <= reachPixels)
+    }
+
+    @Test
+    fun throneModeFistsPlayerReachesAdjacentEnemy() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+        val player = fighter(head = "head_bare", handle = "handle_fists", isPlayer = true, posX = 0f).apply {
+            isLord = true
+            isMounted = true
+            mountHp = 100f
+        }
+        val enemy = fighter(head = "head_sword", handle = "handle_medium", posX = 300f)
+        ctx.player = player
+        ctx.enemies = listOf(enemy)
+        repeat(180) {
+            engine.updateFighter(player, enemy, 0.033f)
+            engine.updateFighter(enemy, player, 0.033f)
+        }
+        val reachPixels = player.reach * 40f + 40f
+        val dist = abs(player.posX - enemy.posX)
+        assertTrue("throne-mode lord should have closed to melee reach ($reachPixels) but dist=$dist", dist <= reachPixels)
+        assertTrue("throne-mode fists lord should have landed punches", enemy.hp < enemy.maxHp || enemy.isDying)
+    }
+
+    @Test
+    fun fistsHitHasAChanceToInterruptDefenderSwing() {
+        var interrupted = false
+        repeat(300) {
+            val ctx = FakeContext()
+            val engine = CombatEngine(ctx)
+            val attacker = fighter(head = "head_bare", handle = "handle_fists", isPlayer = true, posX = 0f)
+            val defender = fighter(posX = 10f).apply {
+                isAttacking = true
+                swingProgress = 0.4f
+            }
+            ctx.player = attacker
+            ctx.enemies = listOf(defender)
+            engine.triggerAttack(attacker)
+            if (attacker.activeWrestlingMove == null) { // only the plain punch path lands via meleeSweep
+                attacker.swingProgress = 0.99f
+                engine.updateFighter(attacker, defender, 0.5f) // big dt: guarantees crossing the strike threshold
+                if (!defender.isAttacking && defender.swingProgress == 0f && defender.attackCooldown >= 0.4f) {
+                    interrupted = true
+                }
+            }
+        }
+        assertTrue("fists never interrupted a defender's swing across many attempts", interrupted)
     }
 }

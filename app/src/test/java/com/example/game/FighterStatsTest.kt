@@ -108,4 +108,14 @@ class FighterStatsTest {
         assertTrue(down.attackSpeedDelay > up.attackSpeedDelay)
         assertTrue(down.moveSpeed < up.moveSpeed)
     }
+
+    @Test
+    fun smallFistsCadenceWellBelowMediumFighter() {
+        val smallFists = fighter(head = "head_bare", handle = "handle_fists", size = 0.65f)
+        val medium = fighter() // head_sword/handle_medium, size 1.0
+        assertTrue(
+            "small fists delay ${smallFists.attackSpeedDelay} should be well below medium ${medium.attackSpeedDelay}",
+            smallFists.attackSpeedDelay < medium.attackSpeedDelay * 0.6f
+        )
+    }
 }

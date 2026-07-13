@@ -394,6 +394,9 @@ data class FighterState(
     val isBrawler: Boolean
         get() = weaponHead == GameData.WeaponHead.BARE && weaponHandle == GameData.WeaponHandle.FISTS
 
+    val isFists: Boolean
+        get() = weaponHead.id == "head_bare"
+
     val reach: Float
         get() {
             if (missingArm) return 0.2f * size + if (isMounted) 1.5f else 0f

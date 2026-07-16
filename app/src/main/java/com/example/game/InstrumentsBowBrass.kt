@@ -8,7 +8,9 @@ internal fun renderBowBrass(voice: Voice, midi: Int, durSec: Float, velocity: Fl
     Voice.FIDDLE2 -> bowed(midi, durSec, sr, rng, bodyHz = floatArrayOf(320f, 740f, 1550f), vibHz = 5.6f, detuneCents = 4f, attack = 0.08f)
     Voice.SHAWM   -> shawm(midi, durSec, sr, rng)
     Voice.SACKBUT -> brass(midi, durSec, sr, rng, brightness = 1.2f, attack = 0.07f)
-    Voice.HORN    -> trompette(midi, durSec, sr, rng)
+    // Horn plays sustained pads and fanfares — the trompette buzz (60% noise) belongs to the
+    // gurdy's chien, not to a horn. Mellow brass, slower speak.
+    Voice.HORN    -> brass(midi, durSec, sr, rng, brightness = 0.95f, attack = 0.05f)
     Voice.GURDY   -> if (durSec < 0.15f) trompette(midi, durSec, sr, rng) else wheelDrone(midi, durSec, sr, rng)
     Voice.ORGAN   -> organ(midi, durSec, sr, rng)
     else -> FloatArray((sr * durSec).toInt())
@@ -76,19 +78,29 @@ private fun brass(midi: Int, durSec: Float, sr: Int, rng: Random, brightness: Fl
     return out
 }
 
-/** Hurdy-gurdy wheel: root + fifth, slightly detuned saws through a lowpass. */
+/** Hurdy-gurdy wheel: root + fifth, slightly detuned saws through a lowpass.
+ *  What sells "gurdy" over "string pad": the crank's once-around flutter (pitch + pressure wobble
+ *  at ~1.7 Hz) and the nasal formant resonances of the boxy body. */
 private fun wheelDrone(midi: Int, durSec: Float, sr: Int, rng: Random): FloatArray {
     val n = (sr * durSec).toInt(); val out = FloatArray(n); if (n == 0) return out
     val f1 = midiHz(midi); val f2 = f1 * 1.5 * Math.pow(2.0, 3.0 / 1200.0)
     val dt = 1.0 / sr; var p1 = 0.0; var p2 = 0.0
-    val lp = OnePoleLP(sr, 1800f)
+    val lp = OnePoleLP(sr, 2200f)
+    val nasal1 = Biquad.bandpass(sr, 1100f, 4f)
+    val nasal2 = Biquad.bandpass(sr, 1700f, 5f)
     for (i in 0 until n) {
-        p1 += 2.0 * Math.PI * f1 * dt; p2 += 2.0 * Math.PI * f2 * dt
+        val t = i * dt
+        val wob = Math.sin(2.0 * Math.PI * 1.7 * t)
+        val fm = 1.0 + 0.004 * wob                       // ±7 cents, integrated so it can't run away
+        p1 += 2.0 * Math.PI * f1 * fm * dt; p2 += 2.0 * Math.PI * f2 * fm * dt
         var s = 0.0
         for (h in 1..8) { s += Math.sin(p1 * h) / h; s += 0.6 * Math.sin(p2 * h) / h }
-        out[i] = lp.process((s * 0.22).toFloat())
+        val raw = (s * 0.22).toFloat()
+        var v = lp.process(raw) + (nasal1.process(raw) + nasal2.process(raw)) * 0.5f
+        v *= 1f + 0.12f * wob.toFloat()                  // crank pressure wobble
+        out[i] = v
     }
-    applyAR(out, sr, 0.3f, 0.3f)
+    applyAR(out, sr, 0.15f, 0.25f)
     normalise(out, 0.85f)
     return out
 }

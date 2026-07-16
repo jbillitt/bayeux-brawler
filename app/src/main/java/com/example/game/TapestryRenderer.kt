@@ -47,9 +47,9 @@ object TapestryRenderer {
             scale(hFlip * scale, scale, pivot = Offset(fighter.posX, 200f))
             // Size scales from the feet so everyone stands on the ground — except the raven,
             // which pivots at shoulder height so it flies instead of shrinking into the floor
-            val sizePivotY = if (fighter.id == "raven") 240f else 358f
+            val sizePivotY = if (fighter.isKind("raven")) 240f else 358f
             // The raven's sim size is tiny for balance; render it at proper raven size
-            val renderSize = if (fighter.id == "raven") effectiveSize.coerceAtLeast(0.85f) else effectiveSize
+            val renderSize = if (fighter.isKind("raven")) effectiveSize.coerceAtLeast(0.85f) else effectiveSize
             scale(renderSize, renderSize, pivot = Offset(fighter.posX, sizePivotY))
         }) {
             val cx = fighter.posX
@@ -218,9 +218,9 @@ object TapestryRenderer {
                 withTransform({ translate(0f, adjustedMountOffsetY) }) {
                     if (fighter.id == "trojan_horse") {
                         drawTrojanHorse(this, cx, cy, fighter)
-                    } else if (fighter.id == "wardog") {
+                    } else if (fighter.isKind("wardog")) {
                         drawWardog(this, cx, cy, fighter)
-                    } else if (fighter.id == "raven") {
+                    } else if (fighter.isKind("raven")) {
                         drawRaven(this, cx, cy, fighter)
                     } else {
                         if (!fighter.isChariot) {
@@ -354,6 +354,7 @@ object TapestryRenderer {
             fighter.id == "hag" -> Color(0xFF3E3A2E) // dodgy ragged cloak
             fighter.id == "fanatic_boris" -> Color(0xFF7A1F1F) // blood-red madman's rags, not a clean white shirt
             fighter.id == "plague_peasant" -> PlagueRags // filthy undyed homespun
+            fighter.id == "greaser" -> Color(0xFF7A6A3A) // fat-stained apron, greasy through
             fighter.isWarPriest -> MonkBrown
             isBarechested(fighter) -> skinTone(fighter) // bare means bare: skin, not a white shirt
             else -> fighter.armor.color
@@ -421,13 +422,21 @@ object TapestryRenderer {
                 Offset(staffX, cy - 55f), Offset(staffX, cy + 95f),
                 strokeWidth = 5f, cap = StrokeCap.Round
             )
-            scope.drawCircle(Color(0xFFD6A420), radius = 7f, center = Offset(staffX, cy - 58f))
-            scope.drawCircle(ThreadColor, radius = 7f, center = Offset(staffX, cy - 58f), style = Stroke(width = 1.5f))
+            // A gold cross finial, not a plain disc — reads as clergy at a glance, which is the
+            // whole point: he's the man to kill first and players weren't spotting him.
+            scope.drawCircle(Color(0xFFD6A420), radius = 8f, center = Offset(staffX, cy - 58f))
+            scope.drawCircle(ThreadColor, radius = 8f, center = Offset(staffX, cy - 58f), style = Stroke(width = 1.5f))
+            scope.drawLine(Color(0xFFD6A420), Offset(staffX, cy - 74f), Offset(staffX, cy - 46f), strokeWidth = 4f, cap = StrokeCap.Round)
+            scope.drawLine(Color(0xFFD6A420), Offset(staffX - 9f, cy - 66f), Offset(staffX + 9f, cy - 66f), strokeWidth = 4f, cap = StrokeCap.Round)
+            // Rope girdle
             scope.drawLine(
                 Color(0xFFD6C48A),
                 Offset(cx - 26f, cy + 62f), Offset(cx + 26f, cy + 62f),
                 strokeWidth = 3f
             )
+            // Pectoral cross on the robe
+            scope.drawLine(Color(0xFFD6A420), Offset(cx, cy + 8f), Offset(cx, cy + 34f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+            scope.drawLine(Color(0xFFD6A420), Offset(cx - 9f, cy + 17f), Offset(cx + 9f, cy + 17f), strokeWidth = 3.5f, cap = StrokeCap.Round)
         }
 
         // Champion Belt brawler upgrade — big gold wrestling belt at the waist
@@ -2331,7 +2340,8 @@ object TapestryRenderer {
             com.example.game.Ancillary.TROJAN_HORSE,
             // Spawns his own body on the field (GameViewModel newBattle); without this he was ALSO
             // drawn as a generic grey entourage follower trailing the player.
-            com.example.game.Ancillary.PLAGUE_PEASANT
+            com.example.game.Ancillary.PLAGUE_PEASANT,
+            com.example.game.Ancillary.GREASER // also spawns his own body — same grey-twin trap
         )
         val sortedAncs = unlockedAncillaries.toList().filter { it !in excludedAncillaries }.sortedBy { it.name }
         if (sortedAncs.isEmpty()) return

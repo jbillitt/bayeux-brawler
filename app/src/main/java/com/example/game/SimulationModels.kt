@@ -58,7 +58,8 @@ enum class Ancillary(
     SURGEON("anc_surgeon", "Sawbones Silas", "Surgeon", "Spawns behind you, applies passive slow HP regen.", hpBoost = 10f, speedBoost = 0f, color = Color(0xFF801A1A)),
     RAVEN("anc_raven", "Munin", "Raven", "Rests on your off-hand, flies out to peck enemy eyes, blinding them.", hpBoost = 0f, speedBoost = 0f, color = Color.Black),
     WARDOG("anc_wardog", "Buster", "Wardog", "Charges fast, bites enemies, hard to hit, sometimes trips them.", hpBoost = 25f, speedBoost = 0.2f, color = Color(0xFF452E1B)),
-    PLAGUE_PEASANT("anc_plague_peasant", "Wretched Aldwin", "Plague-Bearer", "A dying peasant who sprints at the foe. His pestilence spreads to ALL who come near — there is a small chance YOU catch it too.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF6B7D4A))
+    PLAGUE_PEASANT("anc_plague_peasant", "Wretched Aldwin", "Plague-Bearer", "A dying peasant who sprints at the foe. His pestilence spreads to ALL who come near — there is a small chance YOU catch it too.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF6B7D4A)),
+    GREASER("anc_greaser", "Slippery Sam", "Greaser", "Lobs pots of rendered fat from your backline. Foes skid over and flounder in the muck.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD9C77A))
 }
 
 /** Divine intervention, called down from the tapestry border once per battle-ish. */
@@ -357,7 +358,7 @@ data class FighterState(
 
     // Roguelike attachments and layers (Level Up Upgrades)
     val extraAttachments: List<GearItem> = emptyList(),
-    val extraArmors: List<GearItem> = emptyList(),
+    var extraArmors: List<GearItem> = emptyList(), // var: the retinue panoply reward layers gauntlets on at spawn
     val handleExtensionCount: Int = 0,
     val rangedUpgrades: List<String> = emptyList(),
     val shieldUpgrades: List<String> = emptyList(),
@@ -543,6 +544,31 @@ data class FighterState(
         }
 }
 
+/**
+ * The hair palette, in one place.
+ *
+ * It used to be hard-coded in three (start-screen swatches, newRun preselect, newGame randomiser).
+ * They drifted, so the preselected colour matched no swatch and read as "nothing selected". Every
+ * site reads this list now — add a colour here and it appears everywhere at once.
+ */
+val HAIR_COLORS: List<Color> = listOf(
+    Color(0xFF888888), // grey
+    Color(0xFFC08030), // ginger
+    Color(0xFF5A442E), // brown
+    Color(0xFF2C2219), // near-black
+    Color(0xFFE8D9A0), // flaxen blond
+    Color(0xFF8B2500)  // rust red
+)
+
+/**
+ * True if this fighter is of the given kind, whether he's the only one or one of a pack.
+ *
+ * Stackable followers spawn as "wardog#0", "wardog#1"… because ids must stay unique, but the
+ * renderer and combat rules key off the kind ("wardog" draws a dog, not a man). Always ask with
+ * this rather than `id == "wardog"`, or the second dog renders as a human with no bite.
+ */
+fun FighterState.isKind(kind: String): Boolean = id == kind || id.startsWith("$kind#")
+
 // Grapples a bare-fisted brawler can roll on attack
 enum class WrestlingMove { CHOKE_SLAM, BODY_THROW, SUPLEX }
 
@@ -636,6 +662,8 @@ data class BattleSimState(
     val activeMount: Ancillary? = null,
     val isDualWielding: Boolean = false,
     val hasSilkenGarments: Boolean = false,
+    /** Retinue panoply reward: every body-on-field follower gets helm, mail and gauntlets. */
+    val hasRetinuePanoply: Boolean = false,
     val divineWeathers: List<DivineWeather> = emptyList(),
     val weatherCooldowns: Map<String, Float> = emptyMap(), // id -> seconds remaining; charged at battle start
     val hasShieldbreaker: Boolean = false,
@@ -666,6 +694,9 @@ data class BattleSimState(
     val showMusicDecision: Boolean = false,
     val pendingMusicOptions: List<String> = emptyList(),
     val appliedMusicMoods: List<String> = emptyList(), // accumulated player music choices
+    // Sticky for the run: set when any battle starts with fists selected, cleared on run failure.
+    // Drives the medieval-speed-metal music variant ("Brawl" mood).
+    val brawlMode: Boolean = false,
 
     val pendingSkipBonus: Int = 0, // score to award on next dismiss of level-up screen when skipped
     val performanceScore: Float = 0.5f // dynamic difficulty: 0=struggling, 1=dominating

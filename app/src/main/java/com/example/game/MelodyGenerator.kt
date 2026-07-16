@@ -165,7 +165,12 @@ private fun counterLine(spec: SongSpec, melody: List<NoteEvent>): List<NoteEvent
                        val deg = nearestDegreeFor(spec, n.midi) - 2
                        degreeToMidi(spec, deg)
                    }
-        NoteEvent(n.startBeat, n.durBeats, midi.coerceIn(52, 80), n.velocity * 0.8f)
+        // Fold into register by octaves — a hard clamp landed on literal MIDI 52/80, which is
+        // out of key for most finals and rang as a wrong-note drone under everything.
+        var m = midi
+        while (m < 52) m += 12
+        while (m > 80) m -= 12
+        NoteEvent(n.startBeat, n.durBeats, m, n.velocity * 0.8f)
     }
 }
 

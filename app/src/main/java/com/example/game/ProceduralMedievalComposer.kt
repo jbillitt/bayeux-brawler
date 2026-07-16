@@ -14,20 +14,21 @@ object ProceduralMedievalComposer {
     fun midiToFreq(midi: Float): Float = (440.0 * Math.pow(2.0, (midi - 69.0) / 12.0)).toFloat()
 
     fun compose(seed: Long, level: Int, hasTrumpeter: Boolean, sampleRate: Int, moods: List<String> = emptyList()): ShortArray {
-        // Fold chosen moods into the seed: a mood pick yields an audibly new piece,
-        // not just a tempo/mode tweak of the same melody.
-        val moodSeed = seed + moods.hashCode() * 1000003L
-        val spec = resolveSongSpec(moodSeed, moods)
+        // Moods re-flavour the run's own theme — they must NOT reseed it. Folding moods into the
+        // seed regenerated the melody from scratch, so picking a mood on the reward screen swapped
+        // your song for an unrelated one. Everything random stays keyed to the run seed; `moods`
+        // reaches the music only through resolveSongSpec (mode/tempo/key) and `wilder` below.
+        val spec = resolveSongSpec(seed, moods)
         currentRootMidi = spec.finalMidi.toFloat()
         currentThirdOffset = spec.mode.steps[2].toFloat()
-        val song = generateSong(spec, melodyRng(moodSeed))
-        val plan = planOrchestration(spec, hasTrumpeter, orchRng(moodSeed))
+        val song = generateSong(spec, melodyRng(seed))
+        val plan = planOrchestration(spec, hasTrumpeter, orchRng(seed))
         val active = activeAssignments(plan, level)
         val duck = duckFactor(active.size)
         val totalSamples = (spec.totalBars * spec.beatsPerBar * spec.secondsPerBeat * sampleRate).toInt()
         val bus = MixBus(sampleRate, totalSamples)
         val hrng = humaniseRng(seed)
-        val wilder = "Wilder" in moods
+        val wilder = "Wilder" in moods || "Brawl" in moods
 
         for (assign in active) {
             when (assign.line) {
@@ -82,7 +83,10 @@ object ProceduralMedievalComposer {
             val offs = ((e.startBeat * spec.secondsPerBeat) * sr).toInt() + ((hrng.nextFloat() * 2f - 1f) * jitterMs / 1000f * sr).toInt()
             val durSec = (e.durBeats * spec.secondsPerBeat).coerceAtLeast(0.05f)
             val vel = (e.velocity * (1f + (hrng.nextFloat() * 2f - 1f) * 0.1f)).coerceIn(0.2f, 1f)
-            val note = renderNote(a.voice, e.midi, durSec + releaseTail(a.voice), vel, sr, hrng)
+            // Tails are wall-clock; at wound-up tempos a 0.8s harp ring spans the next chord and
+            // the harmony smears. Scale them down with the beat so releases die before the change.
+            val tail = releaseTail(a.voice) * (spec.secondsPerBeat * 2f).coerceIn(0.35f, 1f)
+            val note = renderNote(a.voice, e.midi, durSec + tail, vel, sr, hrng)
             bus.add(note, offs, a.gain * duck, a.pan, reverbSendFor(a.voice))
         }
     }

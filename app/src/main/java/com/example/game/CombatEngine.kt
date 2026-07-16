@@ -66,6 +66,9 @@ class CombatEngine(private val ctx: BattleContext) {
         const val LONG_MELEE_REACH = 2.0f
         /** Foes inside this fraction of a long weapon's pixel reach are "point-blank" — back off to the tip. */
         const val LONG_MELEE_DEADZONE = 0.5f
+        /** Damage a long weapon does to someone already inside its dead zone. Tunable; the highest
+         *  balance risk in the ranged/spacing pass, so it starts gentle. */
+        const val POINT_BLANK_DMG_MULT = 0.6f
         /** A severed arm bleeds — the stump keeps costing HP after the limb is gone. Tunable. */
         const val ARM_BLEED_SECONDS = 5.0f
 
@@ -87,6 +90,10 @@ class CombatEngine(private val ctx: BattleContext) {
         const val CORPSE_CONTAGION_SECS = 4f
         const val DEATH_PLAGUE_BURST_PX = 130f // his dying gift — wider than the passive miasma
         const val TROJAN_ROLL_MULT = 1.9f // must outpace the player to reach the enemy rear first
+        // Greaser (all tunable). He's crowd control, not damage — the trip is the whole point.
+        const val GREASE_SLOW_SECS = 4.0f
+        const val GREASE_TRIP_CHANCE = 0.5f
+        const val GREASE_TRIP_SECS = 1.8f
     }
 
     // Delayed follow-up swings/shots (dual-wield 2nd hit, double-ended pole hits, multishot).
@@ -454,6 +461,8 @@ class CombatEngine(private val ctx: BattleContext) {
                     fighter.isDualWielding && rand < 0.25f -> WrestlingMove.CHOKE_SLAM
                     fighter.isDualWielding && rand < 0.4f -> WrestlingMove.BODY_THROW
                     !fighter.isDualWielding && fighter.brawlerUpgrades.contains("champion_belt") && rand < 0.35f -> WrestlingMove.SUPLEX
+                    // The belt also teaches the throw: hurl a man into his mates and scatter them.
+                    !fighter.isDualWielding && fighter.brawlerUpgrades.contains("champion_belt") && rand < 0.55f -> WrestlingMove.BODY_THROW
                     // One free hand is enough to grab a throat — shield-and-fist builds slam too, just rarer
                     !fighter.isDualWielding && rand < 0.12f -> WrestlingMove.CHOKE_SLAM
                     !fighter.isDualWielding && rand < 0.2f -> WrestlingMove.BODY_THROW
@@ -560,18 +569,31 @@ class CombatEngine(private val ctx: BattleContext) {
                 } else if (attacker.activeWrestlingMove == WrestlingMove.BODY_THROW) {
                     // Hurl the grabbed enemy down the line — if he lands on a mate, both go down
                     val dir = if (attacker.facingRight) 1f else -1f
-                    applyFlatDamage(45f, target, attacker.isPlayer)
+                    // A belted champion throws harder and further, and everyone in the skittle
+                    // lane goes down — not just the first man he lands on.
+                    val belted = attacker.brawlerUpgrades.contains("champion_belt")
+                    val hurlDist = if (belted) 220f else 140f
+                    val bowlRadius = if (belted) 110f else 60f
+                    applyFlatDamage(if (belted) 65f else 45f, target, attacker.isPlayer)
                     if (!target.isPlayer) {
                         target.crumpleDuration = 3f
-                        target.posX += dir * 140f
+                        target.posX += dir * hurlDist
                         target.targetX = target.posX
+                        target.deathType = DeathType.KNOCKED_FLYING
                     }
-                    val second = targets.drop(1).firstOrNull { abs(it.posX - target.posX) < 60f }
-                    if (second != null) {
+                    val skittles = targets.drop(1).filter { abs(it.posX - target.posX) < bowlRadius }
+                    val struck = if (belted) skittles else listOfNotNull(skittles.firstOrNull())
+                    struck.forEach { second ->
                         applyFlatDamage(30f, second, attacker.isPlayer)
-                        if (!second.isPlayer) second.crumpleDuration = 3f
+                        if (!second.isPlayer) {
+                            second.crumpleDuration = 3f
+                            // Bowled off their feet, scattered along the throw
+                            second.posX += dir * 40f
+                            second.targetX = second.posX
+                        }
                         ctx.popup("BOWLED OVER!", second.posX, 120f, Color.Red)
                     }
+                    if (belted && struck.isNotEmpty()) ctx.screenshake(18f)
                     ctx.popup("HURLED!", target.posX, 120f, Color.Red)
                     ctx.sound(SoundType.CRUNCH)
                     return
@@ -605,6 +627,15 @@ class CombatEngine(private val ctx: BattleContext) {
 
         for (currTarget in targets) {
             if (currTarget.isDead || currTarget.isDying) continue
+
+            // Point-blank falloff: a pike is murder at its tip and useless against a man already
+            // inside the shaft. Pairs with the polearm spacing above — a spear build wants to keep
+            // its distance, and a brute who closes the gap earns his kill. Reuses the existing
+            // falloff so it flows into every damage type. Long weapons only; a fist has no dead zone.
+            val attackerReachPx = attacker.reach * 40f + 40f // same hitbox formula the melee block uses
+            val pointBlankMult = if (!attacker.isRanged && attacker.reach > LONG_MELEE_REACH &&
+                abs(attacker.posX - currTarget.posX) < attackerReachPx * LONG_MELEE_DEADZONE
+            ) POINT_BLANK_DMG_MULT else 1f
 
             // Stilts hold you above the fight. A man on the ground mostly hits wood.
             if (currTarget.isStilts && !attacker.isStilts && !attacker.isMounted && Random.nextFloat() < STILTS_EVASION) {
@@ -643,9 +674,9 @@ class CombatEngine(private val ctx: BattleContext) {
             val attachPierce = attacker.extraAttachments.sumOf { it.pierce.toDouble() * 0.5 }.toFloat()
             val attachBlunt = attacker.extraAttachments.sumOf { it.blunt.toDouble() * 0.5 }.toFloat()
             val scaleLvl = if (attacker.isPlayer) 1.0f + (attacker.level - 1) * 0.12f else 1.0f
-            val slash = ((attacker.damageSlash - attachSlash * scaleLvl) + attachSlash * scaleLvl * attachmentDmgMultiplier) * damageFalloff
-            val pierce = ((attacker.damagePierce - attachPierce * scaleLvl) + attachPierce * scaleLvl * attachmentDmgMultiplier) * damageFalloff
-            val blunt = ((attacker.damageBlunt - attachBlunt * scaleLvl) + attachBlunt * scaleLvl * attachmentDmgMultiplier) * damageFalloff
+            val slash = ((attacker.damageSlash - attachSlash * scaleLvl) + attachSlash * scaleLvl * attachmentDmgMultiplier) * damageFalloff * pointBlankMult
+            val pierce = ((attacker.damagePierce - attachPierce * scaleLvl) + attachPierce * scaleLvl * attachmentDmgMultiplier) * damageFalloff * pointBlankMult
+            val blunt = ((attacker.damageBlunt - attachBlunt * scaleLvl) + attachBlunt * scaleLvl * attachmentDmgMultiplier) * damageFalloff * pointBlankMult
             val baseArmorFactor = (1f - (currTarget.totalArmor / 100f)).coerceIn(0.1f, 1f)
             // Armour-Piercing Stitch: a third of the damage the armour would have eaten gets through
             val armorFactor = if (attacker.isPlayer && ctx.hasArmorPiercing) {
@@ -752,14 +783,14 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
 
                 // Crumple mechanic! (heavy blunt) - enemies can't knock the player down, only the reverse
-                if (blunt > 18f && attacker.id != "raven" && Random.nextFloat() < 0.25f && currTarget.crumpleDuration <= 0f && !currTarget.isPlayer) {
+                if (blunt > 18f && !attacker.isKind("raven") && Random.nextFloat() < 0.25f && currTarget.crumpleDuration <= 0f && !currTarget.isPlayer) {
                     currTarget.crumpleDuration = 2.5f
                     ctx.sound(SoundType.CRUNCH)
                     ctx.popup("-CRUMPLED-", currTarget.posX, 160f, Color.DarkGray)
                 }
 
                 // Wardog trip mechanic!
-                if (attacker.id == "wardog" && Random.nextFloat() < 0.25f && currTarget.crumpleDuration <= 0f && !currTarget.isPlayer) {
+                if (attacker.isKind("wardog") && Random.nextFloat() < 0.25f && currTarget.crumpleDuration <= 0f && !currTarget.isPlayer) {
                     currTarget.crumpleDuration = 2f
                     ctx.sound(SoundType.CRUNCH)
                 }
@@ -882,6 +913,13 @@ class CombatEngine(private val ctx: BattleContext) {
         }
 
         var projId = "proj_${System.currentTimeMillis()}_${Random.nextInt(100)}"
+        if (attacker.id == "greaser") {
+            // A pot of rendered fat: it barely hurts, it makes them fall over.
+            projId = "grease_pot_${System.currentTimeMillis()}_${Random.nextInt(100)}"
+            finalDmg = 2f
+            splash = true
+            projType = ProjectileType.ROCK
+        }
         if (attacker.id == "hag") {
             projId = "hag_mud_${System.currentTimeMillis()}_${Random.nextInt(100)}"
             finalDmg = 5f
@@ -962,6 +1000,16 @@ class CombatEngine(private val ctx: BattleContext) {
                 defender.slowDuration = 3.0f
                 defender.poisonDuration = 3.0f
                 ctx.popup("SLIMED!", defender.posX, 140f, Color(0xFF384033))
+            }
+
+            // Grease pot: skid over and flounder. Mounted foes keep their feet — a rider doesn't
+            // slip, same rule as the kiting stumble.
+            if (proj.id.startsWith("grease_pot_")) {
+                defender.slowDuration = GREASE_SLOW_SECS
+                if (!defender.isMounted && Random.nextFloat() < GREASE_TRIP_CHANCE) {
+                    defender.isCrumpled = true
+                    defender.crumpleDuration = GREASE_TRIP_SECS
+                }
             }
 
             // Apply Spikes Bleed

@@ -32,26 +32,30 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     val wildCount = moods.count { it == "Wilder" }
     val noblerCount = moods.count { it == "Nobler" }
 
-    val wilder = wildCount > 0
+    val brawl = "Brawl" in moods
+    val wilder = wildCount > 0 || brawl   // brawl borrows the wilder double-hit drum patterns
     val merrier = merrierCount > 0
     val nobler = noblerCount > 0
     val solemn = solemnCount > 0
 
     // Role gains (fixed budget - the mix bus is never normalised)
     val gMel = 0.50f; val gAcc = 0.20f; val gSecond = 0.28f; val gBass = 0.34f
-    val gPerc1 = 0.30f * (1f - solemnCount * 0.15f).coerceAtLeast(0.1f)
+    // Perc gains run hotter than sustained voices: a drum's energy is one transient, so at equal
+    // gain it reads much quieter than a held string.
+    val gPerc1 = 0.38f * (1f - solemnCount * 0.15f).coerceAtLeast(0.1f)
     var gDrone = 0.16f * (1f + wildCount * 1.5f)
     val gThird = 0.22f; var gPads = 0.14f * (1f + noblerCount * 0.5f) * (1f + solemnCount * 0.5f)
-    val gPerc2 = 0.18f * (1f - solemnCount * 0.15f).coerceAtLeast(0.1f)
+    val gPerc2 = 0.22f * (1f - solemnCount * 0.15f).coerceAtLeast(0.1f)
     val gWaits = 0.26f; val gSparkle = 0.16f
     var gBells = 0.22f * (1f + solemnCount * 0.5f)
-    val gTimp = 0.30f
+    val gTimp = 0.36f
 
     // L1 soloist: family-biased {harp, lute}; self-accompanies until the bass arrives at L3
     val soloist = weightedPick(rng, when (spec.family) {
         Family.GREENSLEEVES -> listOf(Voice.HARP to 0.7f, Voice.LUTE to 0.3f)
         Family.MINUET -> listOf(Voice.LUTE to 0.6f, Voice.HARP to 0.4f)
         Family.TINTAGEL -> listOf(Voice.HARP to 0.6f, Voice.LUTE to 0.4f)
+        Family.ESTAMPIE -> listOf(Voice.LUTE to 0.7f, Voice.HARP to 0.3f)   // dance wants the pluck
     })
     used += soloist
     a += VoiceAssignment(soloist, LineRef.MELODY, 1, 3, gMel, 0f)
@@ -63,6 +67,7 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
         Family.TINTAGEL -> listOf(Voice.VIELLE to 0.6f, Voice.RECORDER to 0.25f, Voice.PANPIPES to 0.15f)
         Family.MINUET -> listOf(Voice.RECORDER to 0.5f, Voice.VIELLE to 0.3f, Voice.PANPIPES to 0.2f)
         Family.GREENSLEEVES -> listOf(Voice.RECORDER to 0.4f, Voice.VIELLE to 0.4f, Voice.PANPIPES to 0.2f)
+        Family.ESTAMPIE -> listOf(Voice.PANPIPES to 0.4f, Voice.RECORDER to 0.35f, Voice.VIELLE to 0.25f)
     })
     used += second
     a += VoiceAssignment(second, LineRef.COUNTER, 2, 99, gSecond, 0.35f)
@@ -74,15 +79,19 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     a += VoiceAssignment(bass, LineRef.BASS, 3, 99, gBass, -0.25f)
 
     // L4 percussion I
+    // Brawl mode is speed metal: drums and the drone power-fifth are there from the first bell.
+    val percLevel = if (brawl) 1 else 4
     val perc1 = weightedPick(rng, listOf(Voice.BODHRAN to 0.6f, Voice.TABOR to 0.4f))
-    a += VoiceAssignment(perc1, LineRef.PERC, 4, 99, gPerc1, -0.5f)
-    if (spec.family == Family.TINTAGEL) a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, 4, 99, gPerc1 * 0.7f, 0.5f)
+    a += VoiceAssignment(perc1, LineRef.PERC, percLevel, 99, gPerc1 * (if (brawl) 1.3f else 1f), -0.5f)
+    if (spec.family == Family.TINTAGEL || spec.family == Family.ESTAMPIE || brawl) a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, percLevel, 99, gPerc1 * 0.7f, 0.5f)
 
     // L5 drone bed
     val drone = weightedPick(rng, listOf(Voice.GURDY to 0.45f, Voice.ORGAN to 0.3f, Voice.VIOLA to 0.25f).filter { it.first != bass }
         .ifEmpty { listOf(Voice.GURDY to 1f) })
-    a += VoiceAssignment(drone, LineRef.DRONE, 5, 99, gDrone, -0.7f)
-    if (drone == Voice.GURDY) a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, 5, 99, gDrone * 1.2f, -0.7f)
+    val droneLevel = if (brawl) 1 else 5
+    if (brawl) gDrone *= 1.5f   // the root+fifth drone IS the power chord
+    a += VoiceAssignment(drone, LineRef.DRONE, droneLevel, 99, gDrone, -0.7f)
+    if (drone == Voice.GURDY) a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, droneLevel, 99, gDrone * 1.6f, -0.7f)
     // NOTE: gurdy buzz accents ride the SPARKLE slot pan; the facade maps GURDY+SPARKLE to gurdyBuzzEvents.
 
     // L6 third voice: divisions on the repeats
@@ -105,7 +114,7 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     a += VoiceAssignment(Voice.TAMBOURINE, LineRef.PERC, tambLevel, 99, gPerc2, 0.65f)
 
     // L9 waits band
-    val shawmLevel = if (wilder) 7 else 9
+    val shawmLevel = if (brawl) 2 else if (wilder) 7 else 9
     a += VoiceAssignment(Voice.SHAWM, LineRef.MELODY, shawmLevel, 99, gWaits, -0.35f)
     if (bass != Voice.SACKBUT) a += VoiceAssignment(Voice.SACKBUT, LineRef.BASS, 9, 99, gBass * 0.6f, -0.3f, octave = 0)
 
@@ -190,7 +199,7 @@ fun gurdyBuzzEvents(spec: SongSpec): List<NoteEvent> {
     val out = mutableListOf<NoteEvent>()
     val bpb = spec.beatsPerBar.toFloat()
     val strong: List<Float> = when (spec.beatsPerBar) { 6 -> listOf(0f, 3f); 4 -> listOf(0f, 2f); else -> listOf(0f) }
-    for (bar in 0 until spec.totalBars) for (s in strong) out += NoteEvent(bar * bpb + s, 0.07f, spec.finalMidi, 0.9f)
+    for (bar in 0 until spec.totalBars) for (s in strong) out += NoteEvent(bar * bpb + s, 0.09f, spec.finalMidi, 0.9f)
     return out
 }
 
@@ -245,7 +254,8 @@ fun destinyFanfareEvents(spec: SongSpec): List<NoteEvent> {
     var bar = 7
     while (bar < spec.totalBars) {
         val base = bar * bpb
-        val triad = intArrayOf(0, 4, 7, 12)
+        // Third comes from the mode — a hardcoded major third clashed in dorian/aeolian pieces.
+        val triad = intArrayOf(0, spec.mode.steps[2], 7, 12)
         for ((i, t) in triad.withIndex()) out += NoteEvent(base + i * 0.25f, 0.8f, spec.finalMidi + 12 + t, 0.95f)
         bar += 8
     }

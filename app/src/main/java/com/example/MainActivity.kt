@@ -965,6 +965,21 @@ fun LevelUpScreen(
                                     textAlign = TextAlign.Center,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                // What this actually does to the build, in the same numbers the
+                                // simulation uses. Jesse: "doesnt show what the total effect to
+                                // build will do".
+                                val impact = buildImpactFor(choice)
+                                if (impact.isNotEmpty()) {
+                                    Text(
+                                        impact,
+                                        fontSize = 10.sp,
+                                        lineHeight = 12.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        color = titleColor,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
@@ -1219,7 +1234,7 @@ fun GearSelectionTabs(
                         Text("HAIR COLOR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val colors = listOf(Color(0xFF888888), Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF2C2219))
+                            val colors = com.example.game.HAIR_COLORS
                             colors.forEach { colorVal ->
                                 val isSelected = uiState.hairColor == colorVal
                                 Box(
@@ -2337,6 +2352,55 @@ internal fun drawWeatherIcon(
 }
 
 /** A single-pass flourish across the whole field. [progress] runs 0 -> 1 and then it is gone. */
+/**
+ * The concrete stat delta a reward card applies, for the card's impact line.
+ *
+ * Read straight off the same GameData the simulation uses, so the card can't drift from what you
+ * actually get. Empty string means "no numbers worth showing" — the flavour text already says it.
+ */
+private fun buildImpactFor(choice: com.example.game.LevelUpChoice): String {
+    fun gearStats(item: com.example.game.GearItem): String = buildList {
+        if (item.pierce > 0f) add("+${item.pierce.toInt()} pierce")
+        if (item.slash > 0f) add("+${item.slash.toInt()} slash")
+        if (item.blunt > 0f) add("+${item.blunt.toInt()} blunt")
+        if (item.defense > 0f) add("+${item.defense.toInt()} armor")
+        if (item.mass > 0f) add("+${"%.1f".format(item.mass)}kg")
+        if (item.speedPenalty > 0f) add("-${(item.speedPenalty * 100).toInt()}% speed")
+    }.joinToString("  ")
+
+    return when (choice.type) {
+        "attachment" -> com.example.game.GameData.WEAPON_HEADS.find { it.id == choice.itemId }
+            ?.let { att ->
+                // An attachment contributes half its damage on top of the main head (CombatEngine).
+                val half = com.example.game.GameData.WEAPON_HEADS.first { it.id == choice.itemId }
+                buildList {
+                    if (half.pierce > 0f) add("+${(half.pierce * 0.5f).toInt()} pierce")
+                    if (half.slash > 0f) add("+${(half.slash * 0.5f).toInt()} slash")
+                    if (half.blunt > 0f) add("+${(half.blunt * 0.5f).toInt()} blunt")
+                    add("+${"%.1f".format(att.mass)}kg")
+                }.joinToString("  ")
+            } ?: ""
+        "armor", "comedy" -> com.example.game.GameData.ARMOR_PIECES.find { it.id == choice.itemId }
+            ?.let { gearStats(it) } ?: ""
+        "extension" -> "+0.5 reach on every melee weapon  +0.5kg"
+        "follower" -> com.example.game.GameData.ANCILLARIES.find { it.id == choice.itemId }?.let { a ->
+            buildList {
+                if (a.hpBoost != 0f) add("${if (a.hpBoost > 0) "+" else ""}${a.hpBoost.toInt()} max HP")
+                if (a.speedBoost != 0f) add("${if (a.speedBoost > 0) "+" else ""}${(a.speedBoost * 100).toInt()}% speed")
+            }.joinToString("  ")
+        } ?: ""
+        "follower_multiply" -> com.example.game.GameData.ANCILLARIES.find { it.id == choice.itemId }?.let { a ->
+            buildList {
+                if (a.hpBoost != 0f) add("+${(a.hpBoost * 2).toInt()} max HP")
+                if (a.speedBoost != 0f) add("+${(a.speedBoost * 200).toInt()}% speed")
+            }.joinToString("  ").ifEmpty { "Triples his effect" }
+        } ?: ""
+        "panoply" -> "Retinue: +45 helm  +${com.example.game.GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" }.defense.toInt()} mail  +15 gauntlets"
+        "weather" -> "One divine charge per battle"
+        else -> ""
+    }
+}
+
 internal fun drawWeatherFlourish(
     scope: androidx.compose.ui.graphics.drawscope.DrawScope,
     weather: DivineWeather,

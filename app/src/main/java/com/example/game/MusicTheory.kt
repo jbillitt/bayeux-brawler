@@ -2,7 +2,7 @@ package com.example.game
 
 import kotlin.random.Random
 
-enum class Family { GREENSLEEVES, MINUET, TINTAGEL }
+enum class Family { GREENSLEEVES, MINUET, TINTAGEL, ESTAMPIE }
 
 enum class Mode(val steps: IntArray) {
     DORIAN(intArrayOf(0, 2, 3, 5, 7, 9, 10)),
@@ -34,20 +34,27 @@ fun humaniseRng(seed: Long) = Random(seed xor 0x2545F4914F6CDD1DL)
 
 private val GREENSLEEVES_GROUNDS = listOf(
     listOf(0, 6, 0, 4, 0, 6, 4, 0),   // romanesca
-    listOf(0, 6, 0, 4, 5, 6, 4, 0)    // romanesca with VI colour
+    listOf(0, 6, 0, 4, 5, 6, 4, 0),   // romanesca with VI colour
+    listOf(0, 6, 0, 4, 2, 6, 4, 0)    // passamezzo antico (i VII i V III VII V i)
 )
 private val MINUET_GROUNDS = listOf(
     listOf(0, 4, 0, 4, 0, 3, 4, 0),   // I V I V / I IV V I
-    listOf(0, 4, 5, 4, 0, 3, 4, 0)    // vi-colour variant
+    listOf(0, 4, 5, 4, 0, 3, 4, 0),   // vi-colour variant
+    listOf(0, 3, 0, 4, 5, 3, 4, 0)    // plagal-lean variant with vi colour
 )
 private val TINTAGEL_GROUNDS = listOf(
     listOf(0, 0, 5, 6, 0, 5, 6, 0),   // broad i i VI VII
-    listOf(0, 5, 0, 6, 0, 5, 6, 0)
+    listOf(0, 5, 0, 6, 0, 5, 6, 0),
+    listOf(0, 4, 0, 6, 2, 6, 4, 0)    // folia-shaped (i V i VII III VII V i)
+)
+private val ESTAMPIE_GROUNDS = listOf(
+    listOf(0, 6, 0, 6, 0, 5, 6, 0),   // double-tonic i VII, VI colour at the turn
+    listOf(0, 6, 5, 6, 0, 6, 5, 0)
 )
 
 fun resolveSongSpec(seed: Long, moods: List<String>): SongSpec {
     val rng = Random(seed * 31L + 7L)   // spec stream, separate from melody/orch
-    val family = Family.values()[rng.nextInt(3)]
+    val family = Family.values()[rng.nextInt(Family.values().size)]
 
     var mode: Mode
     var bpm: Int
@@ -73,10 +80,17 @@ fun resolveSongSpec(seed: Long, moods: List<String>): SongSpec {
             beatsPerBar = 4; totalBars = 16
             groundDegrees = TINTAGEL_GROUNDS[rng.nextInt(TINTAGEL_GROUNDS.size)]
         }
+        Family.ESTAMPIE -> {                     // fast duple dance — the consort's up-tempo leg
+            mode = if (rng.nextBoolean()) Mode.DORIAN else Mode.MIXOLYDIAN
+            bpm = 112 + rng.nextInt(25)          // 112-136
+            beatsPerBar = 4; totalBars = 32
+            groundDegrees = ESTAMPIE_GROUNDS[rng.nextInt(ESTAMPIE_GROUNDS.size)]
+        }
     }
     var finalMidi = 45 + rng.nextInt(8)          // A2-G#3
     var ornament = when (family) {
         Family.MINUET -> 0.6f; Family.GREENSLEEVES -> 0.4f; Family.TINTAGEL -> 0.25f
+        Family.ESTAMPIE -> 0.5f
     }
 
     // Mood deltas (applied in list order, stackable)
@@ -85,8 +99,15 @@ fun resolveSongSpec(seed: Long, moods: List<String>): SongSpec {
         "Merrier"     -> { mode = brighten(mode); ornament = (ornament + 0.35f).coerceAtMost(1.5f) }
         "More Solemn" -> { mode = darken(mode); bpm = (bpm * 0.85).toInt(); ornament = (ornament - 0.2f).coerceAtLeast(0.05f) }
         "Nobler"      -> { bpm = (bpm * 0.90).toInt(); finalMidi -= 3 }
-        "Wilder"      -> { bpm = (bpm * 1.10).toInt(); ornament = (ornament + 0.4f).coerceAtMost(2.0f) } 
+        "Wilder"      -> { bpm = (bpm * 1.10).toInt(); ornament = (ornament + 0.4f).coerceAtMost(2.0f) }
+        // Fists-only run: the consort turns medieval speed metal. Minor mode, driving tempo.
+        "Brawl"       -> { mode = Mode.AEOLIAN; bpm = maxOf((bpm * 1.5).toInt(), if (beatsPerBar == 6) 76 else 132) }
     }
+    // Stacked tempo moods multiply without bound; past these caps the note tails smear across
+    // chord changes and everything reads as discord. Nobler stacks -3 each pick; below MIDI 39
+    // the counter-voice falls out of its playable register.
+    bpm = bpm.coerceIn(40, if (beatsPerBar == 6) 84 else 150)
+    finalMidi = finalMidi.coerceIn(39, 52)
 
     val spb = if (beatsPerBar == 6) 60f / bpm / 3f else 60f / bpm
     return SongSpec(

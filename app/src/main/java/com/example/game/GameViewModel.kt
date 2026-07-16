@@ -75,6 +75,13 @@ class GameViewModel : ViewModel() {
     private var incenseTick = 0
     // 20kg: chainmail (12) + coif (2) rides fine; scale (16) + gauntlets/boots/coif (5.5) does not
     companion object {
+        /**
+         * Followers you may rally more than once, fielding one body per copy. Pets only — a pack of
+         * Busters is funny, two Trojan Horses or a second mount is not. Uniques, mounts, the throne
+         * and the one-shot bodies (fanatic, trojan, plague peasant) stay out.
+         */
+        val STACKABLE_ANCILLARIES = setOf(Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.LIL_GUY)
+
         // Every live particle is a draw call per frame, so this is a frame-budget number, not a
         // taste one. 120 still reads as a gout of blood; 250 was costing frames on mid devices.
         private const val MAX_PARTICLES = 120
@@ -186,7 +193,7 @@ class GameViewModel : ViewModel() {
         val sizes = listOf(0.85f, 1.0f, 1.15f)
         // Must match the start-screen hair swatches exactly, or the preselected colour highlights no
         // swatch and reads as "nothing selected". Same four as MainActivity + the newRun preselect.
-        val hairColors = listOf(Color(0xFF888888), Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF2C2219))
+        val hairColors = HAIR_COLORS
         val styles = listOf("short", "long", "bald")
         val startSize = sizes.random()
         val rng = kotlin.random.Random.Default
@@ -233,6 +240,7 @@ class GameViewModel : ViewModel() {
             val newShieldUpgrades = if (choice.type == "shield_upgrade") state.shieldUpgrades + choice.itemId else state.shieldUpgrades
             val newBrawlerUpgrades = if (choice.type == "brawler_upgrade") state.brawlerUpgrades + choice.itemId else state.brawlerUpgrades
             val newHasSilkenGarments = state.hasSilkenGarments || choice.id == "silken_garments"
+            val newHasRetinuePanoply = state.hasRetinuePanoply || choice.type == "panoply"
             val newHasShieldbreaker = state.hasShieldbreaker || choice.itemId == "counter_shieldbreaker"
             val newHasArmorPiercing = state.hasArmorPiercing || choice.itemId == "counter_armor_piercing"
             
@@ -252,6 +260,7 @@ class GameViewModel : ViewModel() {
                 shieldUpgrades = newShieldUpgrades,
                 brawlerUpgrades = newBrawlerUpgrades,
                 hasSilkenGarments = newHasSilkenGarments,
+                hasRetinuePanoply = newHasRetinuePanoply,
                 divineWeathers = newWeathers,
                 hasShieldbreaker = newHasShieldbreaker,
                 hasArmorPiercing = newHasArmorPiercing,
@@ -359,6 +368,8 @@ class GameViewModel : ViewModel() {
                 Color(0xFF888888) -> listOf("the Grey", "the Hoary", "Silver-hair", "the Elder").random(rng)
                 Color(0xFFC08030) -> listOf("the Red", "Fire-top", "the Bloody", "Rufus").random(rng)
                 Color(0xFF2C2219) -> listOf("the Dark", "the Black", "Night-haired", "the Grim").random(rng)
+                Color(0xFFE8D9A0) -> listOf("the Fair", "Flaxen-head", "the Golden", "Sun-mane").random(rng)
+                Color(0xFF8B2500) -> listOf("Rust-pate", "the Foxy", "Ember-head", "the Copper").random(rng)
                 else -> listOf("the Brown", "the Muddy", "Earth-born", "the Common").random(rng)
             }
         }
@@ -563,6 +574,21 @@ class GameViewModel : ViewModel() {
             ))
         }
 
+        if (state.unlockedAncillaries.contains(Ancillary.GREASER)) {
+            enemies.add(FighterState(
+                // Same trick as the hag: head_slingshot marks him isRanged, so the AI holds the
+                // backline and lobs instead of charging in. His pots trip rather than wound.
+                id = "greaser", name = "Slippery Sam", isPlayer = true, maxHp = 35f, hp = 35f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 40f, targetX = 40f, facingRight = true, size = 0.85f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFF6B4A1F), hairStyle = "short", isDualWielding = false
+            ))
+        }
+
         if (state.unlockedAncillaries.contains(Ancillary.HAG)) {
             enemies.add(FighterState(
                 // head_slingshot makes her isRanged, so the AI kites at range and lobs mud instead of rushing to melee
@@ -589,28 +615,31 @@ class GameViewModel : ViewModel() {
             ))
         }
         
-        if (state.unlockedAncillaries.contains(Ancillary.WARDOG)) {
+        // Pets stack: rally Buster twice and you get two dogs. Ids stay unique ("wardog#0") and
+        // everything that cares asks isKind("wardog"), so each one still renders as a dog and bites.
+        // posX is jittered per copy or the pack spawns exactly on top of itself.
+        repeat(state.unlockedAncillaries.count { it == Ancillary.WARDOG }) { i ->
             enemies.add(FighterState(
-                id = "wardog", name = "Buster", isPlayer = true, maxHp = 75f, hp = 75f,
+                id = "wardog#$i", name = "Buster", isPlayer = true, maxHp = 75f, hp = 75f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
-                posX = 70f, targetX = 70f, facingRight = true, size = 1.1f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = true,
+                posX = 70f + i * 26f, targetX = 70f + i * 26f, facingRight = true, size = 1.1f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = true,
                 speedBoost = 1.0f
             ))
         }
 
-        if (state.unlockedAncillaries.contains(Ancillary.RAVEN)) {
+        repeat(state.unlockedAncillaries.count { it == Ancillary.RAVEN }) { i ->
             enemies.add(FighterState(
-                id = "raven", name = "Munin", isPlayer = true, maxHp = 20f, hp = 20f,
+                id = "raven#$i", name = "Munin", isPlayer = true, maxHp = 20f, hp = 20f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
-                posX = 50f, targetX = 50f, facingRight = true, size = 0.35f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = true,
+                posX = 50f + i * 18f, targetX = 50f + i * 18f, facingRight = true, size = 0.35f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = true,
                 speedBoost = 1.2f
             ))
         }
@@ -647,6 +676,20 @@ class GameViewModel : ViewModel() {
             if (allyHpBonus > 0f) enemies.filter { it.isPlayer }.forEach { ally ->
                 ally.maxHp += allyHpBonus
                 ally.hp += allyHpBonus
+            }
+        }
+
+        // Retinue panoply: kit the whole retinue out in one pass, after every spawn block has run,
+        // rather than threading gear through each one. Beasts and the decoy can't wear mail, and
+        // the pallbearers already inherit the lord's kit.
+        if (state.hasRetinuePanoply) {
+            enemies.filter {
+                it.isPlayer && !it.isKind("wardog") && !it.isKind("raven") &&
+                    it.id != "trojan_horse" && !it.id.startsWith("pallbearer_")
+            }.forEach { ally ->
+                ally.headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_spangen" }
+                ally.armor = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" }
+                ally.extraArmors = ally.extraArmors + GameData.ARMOR_PIECES.first { it.id == "armor_gauntlets" }
             }
         }
 
@@ -1021,7 +1064,7 @@ class GameViewModel : ViewModel() {
                 .filter {
                     !it.id.startsWith("anc_mount_") &&
                         it !in listOf(Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG,
-                            Ancillary.TROJAN_HORSE, Ancillary.PLAGUE_PEASANT)
+                            Ancillary.TROJAN_HORSE, Ancillary.PLAGUE_PEASANT, Ancillary.GREASER)
                 }
                 .sortedBy { it.name }
             val archerIdx = sortedAncs.indexOf(Ancillary.ARCHER)
@@ -1078,7 +1121,7 @@ class GameViewModel : ViewModel() {
         }
 
         // Buster barks every now and then mid-battle (rare, for comedy)
-        if (enemies.any { it.id == "wardog" && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.2f) {
+        if (enemies.any { it.isKind("wardog") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.2f) {
             MedievalAudioSynth.playDogBark()
         }
 
@@ -1087,8 +1130,9 @@ class GameViewModel : ViewModel() {
             MedievalAudioSynth.playHagCackle()
         }
 
-        val hasLilGuy = _uiState.value.unlockedAncillaries.contains(Ancillary.LIL_GUY)
-        if (hasLilGuy && !player.isDead && Random.nextFloat() < dt * 0.7f) {
+        // One throw rate per Lil Guy on your back — three of them sling three times as often.
+        val lilGuyCount = _uiState.value.unlockedAncillaries.count { it == Ancillary.LIL_GUY }
+        if (lilGuyCount > 0 && !player.isDead && Random.nextFloat() < dt * 0.7f * lilGuyCount) {
             val dir = if (player.facingRight) 1f else -1f
             // Spawn ahead of the carrier's leading edge (scaled by body size). Player-owned bolts
             // already spare the player and allies (livingEnemies excludes both), but the old
@@ -1191,20 +1235,44 @@ class GameViewModel : ViewModel() {
                     ))
                 }
 
-                // 1. Follower option
-                val availableAncs = GameData.ANCILLARIES.filter { it !in state.unlockedAncillaries }
-                if (availableAncs.isNotEmpty()) {
-                    val anc = availableAncs.random()
-                    val isObject = anc in listOf(com.example.game.Ancillary.WARHORSE, com.example.game.Ancillary.CHARIOT, com.example.game.Ancillary.STILTS, com.example.game.Ancillary.TROJAN_HORSE)
-                    val titlePrefix = if (isObject) "Acquire" else "Rally"
-                    val titleSuffix = if (isObject) "" else " the ${anc.role}"
+                // 1b. Retinue panoply: arm the whole retinue. Only worth offering once you have
+                // bodies on the field to equip, and only once.
+                val panoplyWorthy = state.unlockedAncillaries.any {
+                    it in listOf(Ancillary.HAG, Ancillary.FANATIC, Ancillary.GREASER, Ancillary.PLAGUE_PEASANT)
+                }
+                if (!state.hasRetinuePanoply && panoplyWorthy && state.level >= 5) {
                     pendingChoices.add(LevelUpChoice(
-                        id = "follower_${anc.id}",
-                        title = "$titlePrefix: ${anc.ancillaryName}$titleSuffix",
-                        description = "${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)",
-                        type = "follower",
-                        itemId = anc.id
+                        id = "retinue_panoply",
+                        title = "Panoply: Arm the Retinue",
+                        description = "Spangenhelms, mail and iron gauntlets for every follower who walks the field. They kit up exactly as you do — and live a good deal longer for it.",
+                        type = "panoply",
+                        itemId = "retinue_panoply"
                     ))
+                }
+
+                // 1. Follower option. Stackable pets stay in the pool even once owned, so you can
+                // keep rallying dogs/ravens and field a whole pack; everyone else dedups as before.
+                val availableAncs = GameData.ANCILLARIES.filter {
+                    it !in state.unlockedAncillaries || it in STACKABLE_ANCILLARIES
+                }
+                // Two distinct follower offers instead of one — the extra card per battle. Shuffle
+                // and take 2 so they never duplicate each other.
+                val followerOffers = availableAncs.shuffled().take(2)
+                if (followerOffers.isNotEmpty()) {
+                    followerOffers.forEach { anc ->
+                        val isObject = anc in listOf(com.example.game.Ancillary.WARHORSE, com.example.game.Ancillary.CHARIOT, com.example.game.Ancillary.STILTS, com.example.game.Ancillary.TROJAN_HORSE)
+                        val owned = state.unlockedAncillaries.count { it == anc }
+                        val titlePrefix = if (isObject) "Acquire" else if (owned > 0) "Another" else "Rally"
+                        val titleSuffix = if (isObject) "" else " the ${anc.role}"
+                        val packNote = if (owned > 0) " You already have $owned — they stack." else ""
+                        pendingChoices.add(LevelUpChoice(
+                            id = "follower_${anc.id}",
+                            title = "$titlePrefix: ${anc.ancillaryName}$titleSuffix",
+                            description = "${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)$packNote",
+                            type = "follower",
+                            itemId = anc.id
+                        ))
+                    }
                 } else {
                     // Fallback boost if all followers are hired
                     pendingChoices.add(LevelUpChoice(
@@ -1447,12 +1515,7 @@ class GameViewModel : ViewModel() {
                     faceForehead = (0..2).random(rng),
                     faceMustache = (0..3).random(rng),
                     // Preselect hair like gear — always one of the start-screen palette options
-                    hairColor = listOf(
-                        androidx.compose.ui.graphics.Color(0xFF888888),
-                        androidx.compose.ui.graphics.Color(0xFFC08030),
-                        androidx.compose.ui.graphics.Color(0xFF5A442E),
-                        androidx.compose.ui.graphics.Color(0xFF2C2219)
-                    ).random(rng),
+                    hairColor = HAIR_COLORS.random(rng),
                     hairStyle = listOf("short", "long", "bald").random(rng),
                     unlockedGearIds = initialGear,
                     extraAttachments = emptyList(),

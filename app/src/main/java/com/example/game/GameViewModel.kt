@@ -104,7 +104,6 @@ class GameViewModel : ViewModel() {
             DivineWeather.LIGHTNING -> {
                 // Buffed: forks to the two toughest foes and hits harder.
                 foes.sortedByDescending { it.hp }.take(2).forEach { biggest ->
-                    addPopup("SMITTEN!", biggest.posX, 110f, Color(0xFFF2C14E))
                     engine.applyFlatDamage(190f, biggest, isPlayerSource = true)
                 }
                 _screenshake.value = 36f
@@ -118,7 +117,6 @@ class GameViewModel : ViewModel() {
                     swept.deathType = DeathType.KNOCKED_FLYING
                     swept.velocityX = 900f + Random.nextFloat() * 300f
                 }
-                addPopup("THE DELUGE!", (_playerState.value?.posX ?: 0f) + 200f, 110f, Color(0xFF3A6EA5))
                 _screenshake.value = 25f
             }
             DivineWeather.HAIL -> {
@@ -128,7 +126,6 @@ class GameViewModel : ViewModel() {
                     it.crumpleDuration = 3.5f
                     engine.applyFlatDamage(25f, it, isPlayerSource = true)
                 }
-                addPopup("HAILSTORM!", (_playerState.value?.posX ?: 0f) + 200f, 110f, Color(0xFFDCE6EC))
                 _screenshake.value = 22f
             }
             DivineWeather.FROST -> {
@@ -140,7 +137,6 @@ class GameViewModel : ViewModel() {
                         it.crumpleDuration = 1.6f
                     }
                 }
-                addPopup("KILLING FROST!", (_playerState.value?.posX ?: 0f) + 200f, 110f, Color(0xFF8FC1D4))
             }
         }
         _weatherFlash.value = weather to System.currentTimeMillis()
@@ -739,6 +735,9 @@ class GameViewModel : ViewModel() {
                 isBattleActive = true,
                 battleWon = false,
                 battleLost = false,
+                // Starting a battle bare-fisted flips the music to the brawl (speed-metal) variant
+                // for the rest of the run. Throne mode doesn't count — the lord isn't punching.
+                brawlMode = it.brawlMode || (!it.isThroneMode && it.weaponHead.id == "head_bare"),
                 playerHp = player.hp,
                 playerMaxHp = player.maxHp,
                 levelWidth = levelWidth,
@@ -968,7 +967,11 @@ class GameViewModel : ViewModel() {
                 hit = true
                 bgHit.hp -= proj.damage
                 if (proj.type.isArrowLike) {
-                    if (proj.velocityX > 0) bgHit.stuckArrowsFromLeft++ else bgHit.stuckArrowsFromRight++
+                    // Capped: the renderer draws one arrow per count, so an uncapped counter grew
+                    // the per-building draw cost for the whole battle. 20 a side already reads as
+                    // a pincushion.
+                    if (proj.velocityX > 0) bgHit.stuckArrowsFromLeft = (bgHit.stuckArrowsFromLeft + 1).coerceAtMost(20)
+                    else bgHit.stuckArrowsFromRight = (bgHit.stuckArrowsFromRight + 1).coerceAtMost(20)
                 }
                 if (bgHit.hp <= 0) bgHit.isDestroyed = true
             }
@@ -1471,6 +1474,12 @@ class GameViewModel : ViewModel() {
                     hasShieldbreaker = false,
                     hasArmorPiercing = false,
                     seenCounters = emptySet(),
+                    // Music state is per-run: moods were surviving the reset and stacking across
+                    // runs (uncapped tempo, key drift) until every track came out discordant.
+                    appliedMusicMoods = emptyList(),
+                    showMusicDecision = false,
+                    pendingMusicOptions = emptyList(),
+                    brawlMode = false,
                     bandagesCount = 0, // bandages are veterancy marks earned within a run, never at level 1
                     weaponHead = newHead,
                     weaponHandle = newHandle,

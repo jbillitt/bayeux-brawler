@@ -106,7 +106,9 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
     var musicOn by rememberSaveable { mutableStateOf(true) }
     val uiState by viewModel.uiState.collectAsState()
     val hasTrumpeter = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.TRUMPETER)
-    val appliedMusicMoods = uiState.appliedMusicMoods
+    // Brawl rides the existing moods pipe: the LaunchedEffect keys on this list, so flipping
+    // brawlMode recomposes the same run-seed tune as its speed-metal variant (in-phase crossfade).
+    val appliedMusicMoods = if (uiState.brawlMode) uiState.appliedMusicMoods + "Brawl" else uiState.appliedMusicMoods
 
     LaunchedEffect(musicOn, uiState.level, hasTrumpeter, appliedMusicMoods, uiState.gameCount) {
         if (musicOn) {
@@ -1728,6 +1730,9 @@ fun BattlefieldScene(
                 // 2.5 Draw Background Environment Objects
                 uiState.backgroundObjects.forEach { bg ->
                     val scaledBgX = bg.posX * playerScaleX
+                    // Buildings span the whole level; only draw the ones on camera. Wide margin —
+                    // forts and ships are much broader than a fighter.
+                    if (scaledBgX + offsetX < -600f || scaledBgX + offsetX > size.width + 600f) return@forEach
                     com.example.game.drawBackgroundObject(this, bg, scaledBgX, scaleFactor)
                 }
             
@@ -1763,7 +1768,14 @@ fun BattlefieldScene(
                 drawStatusEffects(this, px, py - 10f, playerFighter)
 
                 // Draw Enemies (the trojan horse already went in behind the player)
+                // Cull anything the camera can't see BEFORE the copy: drawCharacter allocates ~80
+                // Paths per fighter per frame, and FighterState.copy() clones a fat data class 30
+                // times a second each. Off-screen draws are invisible by definition, so skipping
+                // them changes nothing on screen — it just stops paying for it. The margin is
+                // generous so mounts/tall sprites never pop at the edges.
                 enemies.filter { it.id != "trojan_horse" }.forEach { enemy ->
+                    val screenX = (enemy.posX * playerScaleX) + offsetX
+                    if (screenX < -300f || screenX > size.width + 300f) return@forEach
                     val scaledEnemy = enemy.copy(
                         posX = enemy.posX * playerScaleX
                     )
@@ -2322,17 +2334,40 @@ internal fun drawWeatherFlourish(
 
     when (weather) {
         DivineWeather.LIGHTNING -> {
-            // A gold-thread bolt stitched from the top border down into the host
-            val strikeX = w * 0.62f
-            val bolt = Path().apply {
-                moveTo(strikeX, 40f)
-                lineTo(strikeX - 28f, h * 0.42f)
-                lineTo(strikeX + 10f, h * 0.42f)
-                lineTo(strikeX - 18f, h * 0.78f)
+            // Two forked bolts — one per foe the smite actually picks (GameViewModel takes the two
+            // toughest). The white flash snaps on hard and dies fast; the gold thread lingers.
+            val flash = (1f - progress * 4f).coerceAtLeast(0f)
+            scope.drawRect(Color.White.copy(alpha = flash * 0.75f), size = scope.size)
+            listOf(w * 0.52f, w * 0.72f).forEachIndexed { i, strikeX ->
+                val rng = kotlin.random.Random(1066L + i)
+                val groundY = h * 0.78f
+                // Jagged descent: each segment stutters sideways, like couched thread.
+                val bolt = Path().apply {
+                    moveTo(strikeX, 40f)
+                    var y = 40f
+                    var x = strikeX
+                    while (y < groundY) {
+                        y += (groundY - 40f) / 6f
+                        x = strikeX + (rng.nextFloat() * 2f - 1f) * 34f
+                        lineTo(x, y)
+                    }
+                }
+                scope.drawPath(bolt, Color.White.copy(alpha = fade * 0.9f), style = Stroke(width = 14f, cap = StrokeCap.Round))
+                scope.drawPath(bolt, TapestryMustard.copy(alpha = fade), style = Stroke(width = 8f, cap = StrokeCap.Round))
+                scope.drawPath(bolt, TapestryDark.copy(alpha = fade * 0.9f), style = Stroke(width = 2.5f, cap = StrokeCap.Round))
+                // Strike burst at the earth, expanding as it fades
+                val burst = 18f + progress * 70f
+                scope.drawCircle(TapestryMustard.copy(alpha = fade * 0.5f), radius = burst, center = Offset(strikeX, groundY))
+                repeat(7) {
+                    val a = rng.nextFloat() * 6.283f
+                    scope.drawLine(
+                        TapestryMustard.copy(alpha = fade * 0.8f),
+                        Offset(strikeX, groundY),
+                        Offset(strikeX + kotlin.math.cos(a) * burst * 1.3f, groundY + kotlin.math.sin(a) * burst * 0.5f),
+                        strokeWidth = 3f, cap = StrokeCap.Round
+                    )
+                }
             }
-            scope.drawPath(bolt, TapestryMustard.copy(alpha = fade), style = Stroke(width = 9f, cap = StrokeCap.Round))
-            scope.drawPath(bolt, TapestryDark.copy(alpha = fade * 0.9f), style = Stroke(width = 3f, cap = StrokeCap.Round))
-            scope.drawRect(Color.White.copy(alpha = fade * 0.22f), size = scope.size)
         }
         DivineWeather.FLOOD -> {
             // A stitched wave band sweeping across the field
@@ -2352,37 +2387,80 @@ internal fun drawWeatherFlourish(
                 quadraticTo(edge - 40f, h * 0.25f, edge, 40f)
             }
             scope.drawPath(crest, Color.White.copy(alpha = fade * 0.85f), style = Stroke(width = 5f, cap = StrokeCap.Round))
-        }
-        DivineWeather.HAIL -> {
-            // Falling white stitches, seeded so they do not jitter between frames
-            val rng = kotlin.random.Random(1066L)
-            repeat(70) {
-                val x = rng.nextFloat() * w
-                val startY = rng.nextFloat() * h
-                val y = 40f + (startY + progress * h * 1.5f) % (h - 80f)
-                scope.drawLine(
-                    Color.White.copy(alpha = fade * 0.85f),
-                    Offset(x, y), Offset(x - 4f, y + 12f),
-                    strokeWidth = 3f, cap = StrokeCap.Round
+            // Spray thrown off the crest, so the deluge reads as violent water
+            val rng = kotlin.random.Random(1068L)
+            repeat(26) {
+                val sy = 40f + rng.nextFloat() * (h - 80f)
+                val sx = edge - 30f + rng.nextFloat() * 90f
+                scope.drawCircle(
+                    Color.White.copy(alpha = fade * (0.4f + rng.nextFloat() * 0.5f)),
+                    radius = 2f + rng.nextFloat() * 5f,
+                    center = Offset(sx, sy)
                 )
             }
         }
+        DivineWeather.HAIL -> {
+            // Falling white stitches, seeded so they do not jitter between frames. Denser and
+            // faster than before, with stones that shatter on the earth — hail you can feel.
+            val rng = kotlin.random.Random(1066L)
+            val groundY = h * 0.8f
+            scope.drawRect(TapestryBlue.copy(alpha = fade * 0.18f), size = scope.size)
+            repeat(150) {
+                val x = rng.nextFloat() * w
+                val startY = rng.nextFloat() * h
+                val y = 40f + (startY + progress * h * 2.6f) % (h - 80f)
+                val len = 10f + rng.nextFloat() * 10f
+                scope.drawLine(
+                    Color.White.copy(alpha = fade * 0.9f),
+                    Offset(x, y), Offset(x - len * 0.35f, y + len),
+                    strokeWidth = 3.5f, cap = StrokeCap.Round
+                )
+            }
+            // Shatter marks where the stones land
+            val srng = kotlin.random.Random(2066L)
+            repeat(22) {
+                val x = srng.nextFloat() * w
+                val hitAt = srng.nextFloat()
+                val since = progress - hitAt
+                if (since in 0f..0.35f) {
+                    val r = since / 0.35f
+                    scope.drawCircle(
+                        Color.White.copy(alpha = (1f - r) * fade * 0.8f),
+                        radius = 4f + r * 16f,
+                        center = Offset(x, groundY + srng.nextFloat() * 30f),
+                        style = Stroke(width = 2f)
+                    )
+                }
+            }
+        }
         DivineWeather.FROST -> {
-            // Pale blue rime creeping over the ground
+            // Rime that creeps out from the ground rather than snapping on as a slab: the frozen
+            // band grows with progress, and six-armed frost crystals bloom across it.
+            val creep = (progress * 2.5f).coerceAtMost(1f)
+            val bandTop = h * 0.55f
+            scope.drawRect(TapestryBlue.copy(alpha = fade * 0.30f), size = scope.size)
             scope.drawRect(
-                TapestryBlue.copy(alpha = fade * 0.45f),
-                topLeft = Offset(0f, h * 0.55f),
-                size = Size(w, h * 0.45f - 40f)
+                TapestryBlue.copy(alpha = fade * 0.5f),
+                topLeft = Offset(0f, bandTop),
+                size = Size(w, (h * 0.45f - 40f) * creep)
             )
             val rng = kotlin.random.Random(1067L)
-            repeat(40) {
+            repeat(34) {
                 val x = rng.nextFloat() * w
                 val y = h * 0.6f + rng.nextFloat() * (h * 0.35f)
-                scope.drawLine(
-                    Color.White.copy(alpha = fade * 0.7f),
-                    Offset(x - 6f, y), Offset(x + 6f, y),
-                    strokeWidth = 2f, cap = StrokeCap.Round
-                )
+                val bloomAt = rng.nextFloat() * 0.5f
+                if (progress < bloomAt) return@repeat
+                val r = (6f + ((progress - bloomAt) * 34f)).coerceAtMost(15f)
+                repeat(3) { arm ->
+                    val a = arm * (Math.PI.toFloat() / 3f)
+                    val dx = kotlin.math.cos(a) * r
+                    val dy = kotlin.math.sin(a) * r * 0.5f
+                    scope.drawLine(
+                        Color.White.copy(alpha = fade * 0.8f),
+                        Offset(x - dx, y - dy), Offset(x + dx, y + dy),
+                        strokeWidth = 2f, cap = StrokeCap.Round
+                    )
+                }
             }
         }
     }

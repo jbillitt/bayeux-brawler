@@ -86,6 +86,7 @@ class CombatEngine(private val ctx: BattleContext) {
         const val PLAYER_CATCH_CHANCE_PER_SEC = 0.001f
         const val CORPSE_CONTAGION_SECS = 4f
         const val DEATH_PLAGUE_BURST_PX = 130f // his dying gift — wider than the passive miasma
+        const val TROJAN_ROLL_MULT = 1.9f // must outpace the player to reach the enemy rear first
     }
 
     // Delayed follow-up swings/shots (dual-wield 2nd hit, double-ended pole hits, multishot).
@@ -152,7 +153,9 @@ class CombatEngine(private val ctx: BattleContext) {
         if (fighter.id == "trojan_horse") {
             val foes = ctx.enemies.filter { !it.isDead && !it.isDying && !it.isPlayer }
             if (foes.any { it.posX > fighter.posX - 60f } && fighter.posX < ctx.levelWidth - 80f) {
-                fighter.posX += fighter.moveSpeed * 0.7f * dt
+                // Was 0.7 — slower than the player, who routinely charged past and killed the line
+                // before the decoy ever reached its spot. It must lead the advance, not trail it.
+                fighter.posX += fighter.moveSpeed * TROJAN_ROLL_MULT * dt
                 fighter.animFrame += dt * 6f
                 fighter.facingRight = true
             } else {

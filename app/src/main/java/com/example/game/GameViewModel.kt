@@ -578,7 +578,8 @@ class GameViewModel : ViewModel() {
 
         if (state.unlockedAncillaries.contains(Ancillary.TROJAN_HORSE)) {
             enemies.add(FighterState(
-                id = "trojan_horse", name = "Trojan Horse", isPlayer = true, maxHp = 200f, hp = 200f,
+                // 200hp died to the enemy line long before it mattered; it exists to soak.
+                id = "trojan_horse", name = "Trojan Horse", isPlayer = true, maxHp = 450f, hp = 450f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },

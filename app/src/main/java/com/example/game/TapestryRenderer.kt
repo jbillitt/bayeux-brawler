@@ -16,8 +16,11 @@ import kotlin.random.Random
 object TapestryRenderer {
 
     /** Plague palette: the pallor of the sick, and Aldwin's mud-coloured rags. */
-    private val PlagueFlesh = Color(0xFF7A9B4E)
-    private val PlagueRags = Color(0xFF6B7D4A)
+    // Jaundiced yellow, NOT green: the hag's poison owns green, and the two statuses were
+    // indistinguishable on the field. Disease is yellow everywhere — flesh, rags and status icon.
+    private val PlagueFlesh = Color(0xFFC9B03C)
+    private val PlagueRags = Color(0xFFA8912F)
+    private val PlagueBubo = Color(0xFF6B4A1F) // dark swollen lumps against the yellow
 
     /** The war-priest's habit — monk's undyed wool, so he reads as a churchman among soldiers. */
     private val MonkBrown = Color(0xFF5E4B3C)
@@ -810,6 +813,19 @@ object TapestryRenderer {
             val wy = hy + 8f + faceRng.nextFloat() * 12f
             scope.drawCircle(Color(0xFF4A5C3D), radius = 1.5f + faceRng.nextFloat() * 1f, center = Offset(wx, wy))
             scope.drawCircle(Color(0xFF1C2B11), radius = 0.5f, center = Offset(wx, wy)) // wart core
+        }
+
+        // Buboes: the swellings that make the plague read as bubonic rather than "man painted
+        // yellow". Anyone carrying it gets them — the peasant from spawn, his victims once infected.
+        if (fighter.diseaseDuration > 0f || fighter.isContagious) {
+            val boRng = kotlin.random.Random(fighter.id.hashCode().toLong() xor 0x8UL.toLong())
+            repeat(5) {
+                val bx = hx - 4f + boRng.nextFloat() * 16f
+                val by = hy + 2f + boRng.nextFloat() * 18f
+                val r = 1.8f + boRng.nextFloat() * 1.6f
+                scope.drawCircle(PlagueBubo.copy(alpha = 0.75f), radius = r + 0.8f, center = Offset(bx, by))
+                scope.drawCircle(PlagueBubo, radius = r, center = Offset(bx, by))
+            }
         }
 
         // Persistent Blood Decals

@@ -85,6 +85,7 @@ class CombatEngine(private val ctx: BattleContext) {
         const val DISEASE_RADIUS_PX = 70f
         const val PLAYER_CATCH_CHANCE_PER_SEC = 0.001f
         const val CORPSE_CONTAGION_SECS = 4f
+        const val DEATH_PLAGUE_BURST_PX = 130f // his dying gift — wider than the passive miasma
     }
 
     // Delayed follow-up swings/shots (dual-wield 2nd hit, double-ended pole hits, multishot).
@@ -1059,6 +1060,18 @@ class CombatEngine(private val ctx: BattleContext) {
                     thief.weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
                     thief.weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }
                     thief.stolenWeaponOwnerId = null
+                }
+            }
+            // A plague carrier bursts when he falls. The passive carrierNear() miasma needed a foe
+            // parked within 70px on the exact tick the corpse was still warm, which the melee shoving
+            // made unreliable — so his death now deliberately infects everyone in a wider radius.
+            // This is his whole purpose; it shouldn't hinge on where the scrum happened to drift.
+            if (defender.isContagious) {
+                ctx.enemies.filter {
+                    !it.isPlayer && !it.isDead && abs(it.posX - defender.posX) <= DEATH_PLAGUE_BURST_PX
+                }.forEach { victim ->
+                    victim.diseaseDuration = DISEASE_DURATION
+                    victim.isContagious = true // it spreads on from here — that's a plague
                 }
             }
             ctx.sound(SoundType.OUCH)

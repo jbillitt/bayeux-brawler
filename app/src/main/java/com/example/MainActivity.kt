@@ -2120,6 +2120,20 @@ private fun drawStatusEffects(scope: androidx.compose.ui.graphics.drawscope.Draw
         scope.drawPath(path, color = Color(0xFFA62B2B))
         offsetX += 12f
     }
+    if (fighter.diseaseDuration > 0f || fighter.isContagious) {
+        // Disease had no icon at all, and its tint was green — indistinguishable from the hag's
+        // poison. Own symbol now: a yellow swelling ringed by three dark buboes.
+        scope.drawCircle(color = Color(0xFFC9B03C), radius = iconRadius, center = Offset(offsetX, y))
+        repeat(3) { i ->
+            val a = i * 2.094f - 1.57f
+            scope.drawCircle(
+                color = Color(0xFF6B4A1F),
+                radius = 1.6f,
+                center = Offset(offsetX + kotlin.math.cos(a) * iconRadius, y + kotlin.math.sin(a) * iconRadius)
+            )
+        }
+        offsetX += 12f
+    }
 }
 
 private fun drawHealthBar(scope: androidx.compose.ui.graphics.drawscope.DrawScope, x: Float, y: Float, hp: Float, ghostHp: Float, maxHp: Float) {

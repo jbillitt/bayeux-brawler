@@ -2312,7 +2312,10 @@ object TapestryRenderer {
             com.example.game.Ancillary.RAVEN,
             com.example.game.Ancillary.FANATIC,
             com.example.game.Ancillary.HAG,
-            com.example.game.Ancillary.TROJAN_HORSE
+            com.example.game.Ancillary.TROJAN_HORSE,
+            // Spawns his own body on the field (GameViewModel newBattle); without this he was ALSO
+            // drawn as a generic grey entourage follower trailing the player.
+            com.example.game.Ancillary.PLAGUE_PEASANT
         )
         val sortedAncs = unlockedAncillaries.toList().filter { it !in excludedAncillaries }.sortedBy { it.name }
         if (sortedAncs.isEmpty()) return

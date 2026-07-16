@@ -216,7 +216,21 @@ class GameViewModel : ViewModel() {
             
             val newAttachments = if (choice.type == "attachment") state.extraAttachments + choice.itemId else state.extraAttachments
             val newArmors = if (choice.type == "armor" || choice.type == "comedy") state.extraArmors + choice.itemId else state.extraArmors
-            val newAncs = if (choice.type == "follower") state.unlockedAncillaries + GameData.ANCILLARIES.first { it.id == choice.itemId } else state.unlockedAncillaries
+            // Followers stack: duplicates in the list sum their hpBoost/speedBoost. A plain rally
+            // occasionally turns up a surprise second body ("twins!"); the Thrice-Blessed card takes
+            // one you already have to three.
+            val newAncs = when (choice.type) {
+                "follower" -> {
+                    val anc = GameData.ANCILLARIES.first { it.id == choice.itemId }
+                    val twins = Random.nextFloat() < 0.15f
+                    state.unlockedAncillaries + List(if (twins) 2 else 1) { anc }
+                }
+                "follower_multiply" -> {
+                    val anc = GameData.ANCILLARIES.first { it.id == choice.itemId }
+                    state.unlockedAncillaries + List(2) { anc } // already own one → three total
+                }
+                else -> state.unlockedAncillaries
+            }
             val newWeathers = if (choice.type == "weather") state.divineWeathers + DivineWeather.values().first { it.id == choice.itemId } else state.divineWeathers
             val newExtensions = if (choice.type == "extension") state.handleExtensionCount + 1 else state.handleExtensionCount
             val newRangedUpgrades = if (choice.type == "ranged_upgrade") state.rangedUpgrades + choice.itemId else state.rangedUpgrades
@@ -1002,7 +1016,8 @@ class GameViewModel : ViewModel() {
             val sortedAncs = _uiState.value.unlockedAncillaries
                 .filter {
                     !it.id.startsWith("anc_mount_") &&
-                        it !in listOf(Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG, Ancillary.TROJAN_HORSE)
+                        it !in listOf(Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG,
+                            Ancillary.TROJAN_HORSE, Ancillary.PLAGUE_PEASANT)
                 }
                 .sortedBy { it.name }
             val archerIdx = sortedAncs.indexOf(Ancillary.ARCHER)
@@ -1081,7 +1096,9 @@ class GameViewModel : ViewModel() {
                 id = "lilguy_${System.currentTimeMillis()}_${Random.nextInt(100)}",
                 isPlayerOwned = true, posX = spawnX, posY = 150f,
                 velocityX = dir * (300f + Random.nextFloat() * 80f), velocityY = -25f,
-                damage = 4f, pierce = 2f, blunt = 1f, type = ProjectileType.ROCK,
+                // 4/2/1 was effectively nothing once armour, the deflect roll and shield blocks ate
+                // it — "he didn't do anything" (Jesse). Chip damage now, still well under the archer.
+                damage = 14f, pierce = 8f, blunt = 4f, type = ProjectileType.ROCK,
                 sizeMultiplier = 0.5f, hasSpikes = false, launchedWeaponId = null,
                 isSplash = false, isPoisonous = false, isBallista = false
             ))
@@ -1155,6 +1172,21 @@ class GameViewModel : ViewModel() {
                 newPerf = (hpRatio * 0.6f + killRate * 0.4f).coerceIn(0f, 1f)
 
                 val triggerMusicDecision = (state.level % 5 == 0)
+
+                // 1a. Late-run "triple a follower" card. Level 8+ (a floor, not an exact match) and
+                // only once you actually have someone to triple. Duplicates already stack their
+                // hpBoost/speedBoost (SimulationModels totalHpBoost/totalSpeedBoost sum the list).
+                if (state.level >= 8 && state.unlockedAncillaries.isNotEmpty() && Random.nextFloat() < 0.5f) {
+                    val lucky = state.unlockedAncillaries.random()
+                    pendingChoices.add(LevelUpChoice(
+                        id = "triple_${lucky.id}",
+                        title = "Thrice-Blessed: ${lucky.ancillaryName}",
+                        description = "Some say the Almighty works in threes. ${lucky.ancillaryName}'s effect is TRIPLED (Max HP +${(lucky.hpBoost * 2).toInt()}, speed +${(lucky.speedBoost * 200).toInt()}%).",
+                        type = "follower_multiply",
+                        itemId = lucky.id
+                    ))
+                }
+
                 // 1. Follower option
                 val availableAncs = GameData.ANCILLARIES.filter { it !in state.unlockedAncillaries }
                 if (availableAncs.isNotEmpty()) {
@@ -1259,7 +1291,7 @@ class GameViewModel : ViewModel() {
                             pendingChoices.add(LevelUpChoice(
                                 id = "armor_${armorPiece.id}",
                                 title = "$titlePrefix: ${armorPiece.itemName}",
-                                description = if (isComedy) "A joke item! Removes all armor protection but gives a massive score multiplier." else "Add ${armorPiece.itemName} to your loadout, gaining +${armorPiece.defense.toInt()} Defense!",
+                                description = if (isComedy) "A joke item! Removes all armor protection but gives a massive score multiplier." else "Add ${armorPiece.itemName} to your loadout, gaining +${armorPiece.defense.toInt()} Armor!",
                                 type = typeCat,
                                 itemId = armorPiece.id
                             ))

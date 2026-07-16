@@ -751,7 +751,8 @@ fun CharacterPreviewCard(
 
         // Mount picklist, directly under the man it changes. The preview box above takes weight(1f),
         // so it simply gives up the height this needs — no squashing anything else on the screen.
-        val mounts = uiState.unlockedAncillaries.filter { it.id.startsWith("anc_mount_") }
+        // distinct(): a Thrice-Blessed mount stacks stats, but one Blanche is one picklist row.
+        val mounts = uiState.unlockedAncillaries.filter { it.id.startsWith("anc_mount_") }.distinct()
         // The throne is a mount too, but only once it has actually been taken. hasThroneOption is
         // just the 20% offer roll at character creation — listing it here put a throne in the
         // picklist for players who never accepted one.
@@ -2393,7 +2394,7 @@ private fun buildImpactFor(choice: com.example.game.LevelUpChoice): String {
             buildList {
                 if (a.hpBoost != 0f) add("+${(a.hpBoost * 2).toInt()} max HP")
                 if (a.speedBoost != 0f) add("+${(a.speedBoost * 200).toInt()}% speed")
-            }.joinToString("  ").ifEmpty { "Triples his effect" }
+            }.joinToString("  ").ifEmpty { "Three bodies take the field" }
         } ?: ""
         "panoply" -> "Retinue: +45 helm  +${com.example.game.GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" }.defense.toInt()} mail  +15 gauntlets"
         "weather" -> "One divine charge per battle"

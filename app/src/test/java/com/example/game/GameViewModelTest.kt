@@ -195,12 +195,16 @@ class GameViewModelTest {
         viewModel.triggerWeather("weather_hail")
         assertTrue("no cooldown after use", viewModel.uiState.value.weatherCooldowns["weather_hail"]!! > 0f)
 
-        // Second call must be a no-op: everyone gets back up, and hail does not re-crumple them
-        val foe = foes().first()
-        foe.isCrumpled = false
-        foe.crumpleDuration = 0f
-        viewModel.triggerWeather("weather_hail")
-        assertFalse("hail fired while still cooling down", foe.isCrumpled)
+        // Second call must be a no-op: everyone gets back up, and hail does not re-crumple them.
+        // Hail also deals damage now, so a low-level host may be entirely dead — only a survivor
+        // can demonstrate the no-op.
+        val foe = foes().firstOrNull()
+        if (foe != null) {
+            foe.isCrumpled = false
+            foe.crumpleDuration = 0f
+            viewModel.triggerWeather("weather_hail")
+            assertFalse("hail fired while still cooling down", foe.isCrumpled)
+        }
 
         // Next battle: the charge is full again (startBattle no-ops while one is still running)
         mutateState { it.copy(isBattleActive = false) }
@@ -292,7 +296,7 @@ class GameViewModelTest {
         // headgear must be pinned: BattleSimState defaults it to a *random* piece (0-6kg),
         // which silently decided whether this loadout crossed the weight limit
         mutateState { it.copy(
-            unlockedAncillaries = setOf(Ancillary.CHARIOT),
+            unlockedAncillaries = listOf(Ancillary.CHARIOT),
             armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
             headgear = GameData.HEADGEAR_PIECES.first { h -> h.id == "helm_none" },
             extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif")
@@ -307,7 +311,7 @@ class GameViewModelTest {
     @Test
     fun `silken garments prevents chariot collapse`() {
         mutateState { it.copy(
-            unlockedAncillaries = setOf(Ancillary.CHARIOT),
+            unlockedAncillaries = listOf(Ancillary.CHARIOT),
             armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
             headgear = GameData.HEADGEAR_PIECES.first { h -> h.id == "helm_none" },
             extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif"),
@@ -344,7 +348,7 @@ class GameViewModelTest {
     @Test
     fun `battle starts with selected mount when multiple mounts unlocked`() {
         mutateState { it.copy(
-            unlockedAncillaries = setOf(Ancillary.CHARIOT, Ancillary.WARHORSE),
+            unlockedAncillaries = listOf(Ancillary.CHARIOT, Ancillary.WARHORSE),
             activeMount = Ancillary.WARHORSE
         )}
         viewModel.startBattle()

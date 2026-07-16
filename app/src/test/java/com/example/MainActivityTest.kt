@@ -47,7 +47,7 @@ class MainActivityTest {
             // the StaticLayout wrap rather than skipping straight past an empty list.
             val state = com.example.game.BattleSimState(
                 score = 10,
-                unlockedAncillaries = setOf(com.example.game.Ancillary.MONK, com.example.game.Ancillary.WARHORSE),
+                unlockedAncillaries = listOf(com.example.game.Ancillary.MONK, com.example.game.Ancillary.WARHORSE),
                 divineWeathers = listOf(com.example.game.DivineWeather.LIGHTNING)
             )
             val result: Uri? = generateShareImage(context, player, state, false)

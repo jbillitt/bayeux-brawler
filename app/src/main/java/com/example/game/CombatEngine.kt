@@ -10,7 +10,7 @@ interface BattleContext {
     val player: FighterState?
     val enemies: List<FighterState>
     val levelWidth: Float
-    val unlockedAncillaries: Set<Ancillary>
+    val unlockedAncillaries: List<Ancillary>
     /** Player's "out" cards against the late-game counters. */
     val hasShieldbreaker: Boolean get() = false
     val hasArmorPiercing: Boolean get() = false
@@ -913,14 +913,14 @@ class CombatEngine(private val ctx: BattleContext) {
         }
 
         var projId = "proj_${System.currentTimeMillis()}_${Random.nextInt(100)}"
-        if (attacker.id == "greaser") {
+        if (attacker.isKind("greaser")) {
             // A pot of rendered fat: it barely hurts, it makes them fall over.
             projId = "grease_pot_${System.currentTimeMillis()}_${Random.nextInt(100)}"
             finalDmg = 2f
             splash = true
             projType = ProjectileType.ROCK
         }
-        if (attacker.id == "hag") {
+        if (attacker.isKind("hag")) {
             projId = "hag_mud_${System.currentTimeMillis()}_${Random.nextInt(100)}"
             finalDmg = 5f
             splash = true

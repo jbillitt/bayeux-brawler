@@ -14,7 +14,7 @@ class CombatEngineTest {
         override var player: FighterState? = null
         override var enemies: List<FighterState> = emptyList()
         override val levelWidth = 1500f
-        override val unlockedAncillaries = emptySet<Ancillary>()
+        override val unlockedAncillaries = emptyList<Ancillary>()
         override var hasShieldbreaker: Boolean = false
         override var hasArmorPiercing: Boolean = false
         val projectiles = mutableListOf<Projectile>()

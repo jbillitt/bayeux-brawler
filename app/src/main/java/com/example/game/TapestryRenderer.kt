@@ -338,7 +338,7 @@ object TapestryRenderer {
     private fun isBarechested(fighter: FighterState): Boolean =
         fighter.armor.id == "armor_bare" &&
             !fighter.isWarPriest &&
-            fighter.id !in setOf("hag", "fanatic_boris", "plague_peasant")
+            !fighter.isKind("hag") && !fighter.isKind("fanatic_boris") && !fighter.isKind("plague_peasant")
 
     private fun drawTorso(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val tunicPath = Path().apply {
@@ -351,10 +351,10 @@ object TapestryRenderer {
 
         // Color theme derived directly from the armor's designated color
         val fillCol = when {
-            fighter.id == "hag" -> Color(0xFF3E3A2E) // dodgy ragged cloak
-            fighter.id == "fanatic_boris" -> Color(0xFF7A1F1F) // blood-red madman's rags, not a clean white shirt
-            fighter.id == "plague_peasant" -> PlagueRags // filthy undyed homespun
-            fighter.id == "greaser" -> Color(0xFF7A6A3A) // fat-stained apron, greasy through
+            fighter.isKind("hag") -> Color(0xFF3E3A2E) // dodgy ragged cloak
+            fighter.isKind("fanatic_boris") -> Color(0xFF7A1F1F) // blood-red madman's rags, not a clean white shirt
+            fighter.isKind("plague_peasant") -> PlagueRags // filthy undyed homespun
+            fighter.isKind("greaser") -> Color(0xFF7A6A3A) // fat-stained apron, greasy through
             fighter.isWarPriest -> MonkBrown
             isBarechested(fighter) -> skinTone(fighter) // bare means bare: skin, not a white shirt
             else -> fighter.armor.color
@@ -392,7 +392,7 @@ object TapestryRenderer {
             }
         }
 
-        if (fighter.id == "hag") {
+        if (fighter.isKind("hag")) {
             // A proper hag: humped back and a long trailing gown over the ragged cloak
             val gown = Path().apply {
                 moveTo(cx - 30f, cy + 60f)
@@ -447,7 +447,7 @@ object TapestryRenderer {
             scope.drawCircle(ThreadColor, radius = 8f, center = Offset(cx, cy + 73f), style = Stroke(width = 1.5f))
         }
 
-        if (fighter.id == "plague_peasant") {
+        if (fighter.isKind("plague_peasant")) {
             // No embroidery for a dying man: the hem is torn into a row of ragged teeth
             val ragPath = Path().apply {
                 moveTo(cx - 30f, cy + 82f)
@@ -723,7 +723,7 @@ object TapestryRenderer {
             )
         }
 
-        if (fighter.id == "hag") {
+        if (fighter.isKind("hag")) {
             val hagNose = Path().apply {
                 moveTo(hx + 10f, hy + 2f)
                 lineTo(hx + 35f, hy + 8f) // long pointy
@@ -918,7 +918,7 @@ object TapestryRenderer {
             scope.drawPath(hairPath, ThreadColor, style = StitchedStroke)
 
             // Hag's dodgy crooked witch hat
-            if (fighter.id == "hag") {
+            if (fighter.isKind("hag")) {
                 val hatColor = Color(0xFF2B2A22)
                 val hatPath = Path().apply {
                     moveTo(hx - 16f, hy - 6f)
@@ -2325,7 +2325,7 @@ object TapestryRenderer {
      */
     fun drawAncillaries(
         drawScope: DrawScope,
-        unlockedAncillaries: Set<com.example.game.Ancillary>,
+        unlockedAncillaries: List<com.example.game.Ancillary>,
         playerFighter: FighterState,
         scale: Float = 1.0f
     ) {

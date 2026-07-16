@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bayeux Brawler: Tapestry Structures (Final Attempt)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2C2219; color: #EFE6D4; margin: 0; padding: 20px;
+        }
+        h1, h2 { text-align: center; color: #D6C39F; }
+        .category {
+            margin-bottom: 50px; padding: 20px;
+            background-color: #3B2F2F; border-radius: 8px; border: 2px solid #5A442E;
+        }
+        .options-container { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; }
+        .option-card {
+            background-color: #D6C39F; border-radius: 4px; padding: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5); text-align: center; color: #2C2219;
+        }
+        .option-title { font-weight: bold; font-size: 1.2rem; border-bottom: 2px dashed #2C2219; margin-bottom: 5px; padding-bottom: 5px; }
+        .option-desc { font-size: 0.9rem; margin-bottom: 10px; max-width: 400px; }
+        canvas {
+            border: 4px solid #2C2219; border-radius: 2px; background-color: #E5D3B3;
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(56, 47, 34, 0.05) 3px, rgba(56, 47, 34, 0.05) 4px),
+                              repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(56, 47, 34, 0.03) 3px, rgba(56, 47, 34, 0.03) 4px);
+        }
+    </style>
+</head>
+<body>
+    <h1>Bayeux Brawler: Authentic Tapestry Details</h1>
+    <p style="text-align: center;">Focusing on stylized Disney-esque twisting towers, distinct pillars, arches, and proper historical shapes.</p>
+    
+    <div class="category">
+        <h2>1. The Landing Ship</h2>
+        <div class="options-container">
+            <div class="option-card">
+                <div class="option-title">Refined Landing Ship</div>
+                <div class="option-desc">Curved transport hull, dragon prow, overlapping shields along the gunwale, and the striped billowing sail. (Unchanged from your approval)</div>
+                <canvas id="shipFinal" width="400" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="category">
+        <h2>2. Sallying Forts (Palaces & Castles)</h2>
+        <div class="options-container">
+            <div class="option-card">
+                <div class="option-title">Option A: Stylized "Disney" Tapestry Keep</div>
+                <div class="option-desc">Multi-tiered structure with elaborate pillars, multiple arched balconies, and a stylized, curving ornate roof/cupola often seen in the tapestry's depictions of palaces.</div>
+                <canvas id="fortA" width="400" height="250"></canvas>
+            </div>
+            <div class="option-card">
+                <div class="option-title">Option B: Dinan Motte-and-Bailey (Accurate)</div>
+                <div class="option-desc">A tall earthen mound with horizontal distinct color bands. A tall, stylized wooden tower on top with a domed roof and an arched sally-port at the bottom.</div>
+                <canvas id="fortB" width="400" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="category">
+        <h2>3. Range Cover Buildings</h2>
+        <div class="options-container">
+            <div class="option-card">
+                <div class="option-title">Option A: Pillared Hall (Bosham Style)</div>
+                <div class="option-desc">A long hall supported by stylized, slender Romanesque pillars holding up arches. Colored scalloped tiles on the roof. No weird cross-hatching.</div>
+                <canvas id="buildingA" width="400" height="250"></canvas>
+            </div>
+            <div class="option-card">
+                <div class="option-title">Option B: Clean Timber Manor</div>
+                <div class="option-desc">A return to the cleaner wooden walls, featuring ornate carved roof gables (dragon heads) and a simple but elegant arched doorway.</div>
+                <canvas id="buildingB" width="400" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+<script>
+const THREAD_COLOR = "#2C2219";
+
+function applyStitchedStroke(ctx) {
+    ctx.strokeStyle = THREAD_COLOR;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 3]);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+}
+
+function drawStitchedPath(ctx, path, fillColor) {
+    if (fillColor) {
+        ctx.fillStyle = fillColor;
+        ctx.fill(path);
+        
+        ctx.save();
+        ctx.clip(path);
+        ctx.strokeStyle = "rgba(0,0,0,0.15)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        for(let i=0; i<600; i+=3) {
+            ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(400, i-40); ctx.stroke();
+        }
+        ctx.restore();
+    }
+    applyStitchedStroke(ctx);
+    ctx.stroke(path);
+    ctx.setLineDash([]);
+}
+
+function drawWater(ctx) {
+    let water = new Path2D();
+    water.moveTo(0, 220);
+    for(let i=0; i<=400; i+=20) { water.lineTo(i, 220 + Math.sin(i*0.2)*4); }
+    water.lineTo(400, 250); water.lineTo(0, 250);
+    drawStitchedPath(ctx, water, "#4C613D");
+}
+
+function drawGround(ctx) {
+    let ground = new Path2D();
+    ground.rect(0, 230, 400, 20);
+    drawStitchedPath(ctx, ground, "#5E4B3C");
+}
+
+function drawShipFinal() {
+    const ctx = document.getElementById('shipFinal').getContext('2d');
+    drawWater(ctx);
+    let hull = new Path2D();
+    hull.moveTo(30, 110);
+    hull.quadraticCurveTo(80, 240, 200, 240); 
+    hull.quadraticCurveTo(320, 240, 360, 110);
+    hull.quadraticCurveTo(340, 140, 300, 150);
+    hull.lineTo(90, 150);
+    hull.quadraticCurveTo(50, 140, 30, 110);
+    drawStitchedPath(ctx, hull, "#5D4831");
+
+    let prow = new Path2D();
+    prow.moveTo(360, 110);
+    prow.quadraticCurveTo(380, 90, 385, 70);
+    prow.quadraticCurveTo(400, 60, 395, 80);
+    prow.quadraticCurveTo(380, 95, 360, 110);
+    drawStitchedPath(ctx, prow, "#8C6F47");
+    
+    applyStitchedStroke(ctx);
+    ctx.beginPath();
+    ctx.moveTo(40, 160); ctx.quadraticCurveTo(200, 190, 350, 160);
+    ctx.moveTo(50, 180); ctx.quadraticCurveTo(200, 210, 340, 180);
+    ctx.moveTo(60, 200); ctx.quadraticCurveTo(200, 230, 320, 200);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    let mast = new Path2D(); mast.rect(195, 30, 10, 150);
+    drawStitchedPath(ctx, mast, "#382F22");
+
+    let sail = new Path2D();
+    sail.moveTo(100, 40);
+    sail.quadraticCurveTo(200, 20, 300, 40); 
+    sail.lineTo(280, 140);
+    sail.quadraticCurveTo(200, 160, 120, 140);
+    sail.closePath();
+    drawStitchedPath(ctx, sail, "#9E3624");
+    
+    ctx.save();
+    ctx.clip(sail);
+    let stripe = new Path2D(); stripe.rect(140, 0, 30, 200); stripe.rect(230, 0, 30, 200);
+    drawStitchedPath(ctx, stripe, "#D6A420");
+    ctx.restore();
+    applyStitchedStroke(ctx); ctx.stroke(sail); ctx.setLineDash([]);
+
+    for(let i=0; i<10; i++) {
+        let sx = 80 + i*26;
+        let sy = 145 + Math.sin(i*0.3)*12;
+        let shield = new Path2D(); shield.arc(sx, sy, 14, 0, Math.PI*2);
+        drawStitchedPath(ctx, shield, i%2===0 ? "#D6A420" : "#9E3624");
+        let boss = new Path2D(); boss.arc(sx, sy, 4, 0, Math.PI*2);
+        drawStitchedPath(ctx, boss, "#9EA3A8");
+    }
+}
+
+// --- OPTION A: STYLIZED DISNEY TAPESTRY PALACE ---
+function drawFortA() {
+    const ctx = document.getElementById('fortA').getContext('2d');
+    drawGround(ctx);
+
+    // Multi-tiered stylized keep base
+    let base = new Path2D(); base.rect(120, 140, 160, 90);
+    drawStitchedPath(ctx, base, "#D6C39F"); // plaster white
+    
+    // Slender Pillars on the base
+    applyStitchedStroke(ctx);
+    for(let i=0; i<=4; i++) {
+        let px = 120 + i*40;
+        ctx.beginPath(); ctx.moveTo(px, 140); ctx.lineTo(px, 230); ctx.stroke();
+        // Capital decoration
+        ctx.beginPath(); ctx.arc(px, 150, 8, 0, Math.PI); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Arches between pillars
+    applyStitchedStroke(ctx);
+    for(let i=0; i<4; i++) {
+        let px = 120 + i*40;
+        ctx.beginPath(); ctx.arc(px+20, 150, 20, Math.PI, 0); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Second Tier (narrower)
+    let tier2 = new Path2D(); tier2.rect(140, 70, 120, 70);
+    drawStitchedPath(ctx, tier2, "#8C969E");
+    // Windows on tier 2
+    let win1 = new Path2D(); win1.moveTo(160, 120); win1.arc(170, 100, 10, Math.PI, 0); win1.lineTo(180, 120);
+    let win2 = new Path2D(); win2.moveTo(220, 120); win2.arc(230, 100, 10, Math.PI, 0); win2.lineTo(240, 120);
+    drawStitchedPath(ctx, win1, "#2C2219"); drawStitchedPath(ctx, win2, "#2C2219");
+
+    // The Twisting / Curving Roof (Fairy-tale stylized)
+    let roof = new Path2D();
+    roof.moveTo(130, 70);
+    roof.quadraticCurveTo(170, 30, 200, 10);
+    roof.quadraticCurveTo(230, 30, 270, 70);
+    drawStitchedPath(ctx, roof, "#9E3624");
+    
+    // Scalloped tiles on the twisting roof
+    ctx.save();
+    ctx.clip(roof);
+    for(let y=10; y<=70; y+=10) {
+        for(let x=120; x<=280; x+=15) {
+            let offset = (y/10)%2 === 0 ? 7 : 0;
+            let tile = new Path2D(); tile.arc(x+offset, y, 8, 0, Math.PI);
+            ctx.fillStyle = (x+y)%3 === 0 ? "#D6A420" : ((x+y)%2 === 0 ? "#4C613D" : "#9E3624");
+            ctx.fill(tile);
+            applyStitchedStroke(ctx); ctx.stroke(tile);
+        }
+    }
+    ctx.restore();
+    applyStitchedStroke(ctx); ctx.stroke(roof); // Outline
+    
+    // Finial (Weather Vane/Cross) on top
+    applyStitchedStroke(ctx);
+    ctx.beginPath(); ctx.moveTo(200, 10); ctx.lineTo(200, -10); ctx.moveTo(190, 0); ctx.lineTo(210, 0); ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+// --- OPTION B: DINAN MOTTE-AND-BAILEY ---
+function drawFortB() {
+    const ctx = document.getElementById('fortB').getContext('2d');
+    
+    // Mound with distinct colored horizontal bands (often seen in the tapestry)
+    let mound = new Path2D();
+    mound.moveTo(60, 250);
+    mound.quadraticCurveTo(200, 80, 340, 250);
+    
+    // Draw the bands manually
+    ctx.save();
+    ctx.clip(mound);
+    let band1 = new Path2D(); band1.rect(0, 80, 400, 40); drawStitchedPath(ctx, band1, "#4C613D");
+    let band2 = new Path2D(); band2.rect(0, 120, 400, 40); drawStitchedPath(ctx, band2, "#C4AD6C");
+    let band3 = new Path2D(); band3.rect(0, 160, 400, 40); drawStitchedPath(ctx, band3, "#8A7156");
+    let band4 = new Path2D(); band4.rect(0, 200, 400, 50); drawStitchedPath(ctx, band4, "#4C613D");
+    ctx.restore();
+    applyStitchedStroke(ctx); ctx.stroke(mound);
+
+    // Archway tunnel at the base of the mound
+    let tunnel = new Path2D();
+    tunnel.moveTo(170, 250);
+    tunnel.lineTo(170, 220);
+    tunnel.arc(200, 220, 30, Math.PI, 0);
+    tunnel.lineTo(230, 250);
+    drawStitchedPath(ctx, tunnel, "#2C2219");
+
+    // Tall stylized wooden tower on top
+    let tower = new Path2D();
+    tower.moveTo(175, 95);
+    tower.lineTo(175, 40);
+    tower.lineTo(225, 40);
+    tower.lineTo(225, 95);
+    drawStitchedPath(ctx, tower, "#8C6F47");
+    
+    // Timber frame lines on tower
+    applyStitchedStroke(ctx);
+    ctx.beginPath();
+    ctx.moveTo(175, 70); ctx.lineTo(225, 70);
+    ctx.moveTo(200, 40); ctx.lineTo(200, 95);
+    ctx.stroke();
+    
+    // Steep conical roof
+    let roof = new Path2D();
+    roof.moveTo(165, 40);
+    roof.lineTo(200, 0);
+    roof.lineTo(235, 40);
+    drawStitchedPath(ctx, roof, "#9E3624");
+}
+
+// --- OPTION A: PILLARED HALL (BOSHAM STYLE) ---
+function drawBuildingA() {
+    const ctx = document.getElementById('buildingA').getContext('2d');
+    drawGround(ctx);
+
+    // The interior wall
+    let wall = new Path2D();
+    wall.rect(80, 120, 240, 110);
+    drawStitchedPath(ctx, wall, "#EFE6D4");
+    
+    // Stylized slender Romanesque Pillars
+    applyStitchedStroke(ctx);
+    for(let i=0; i<=4; i++) {
+        let px = 80 + i*60;
+        
+        // Pillar base
+        ctx.beginPath(); ctx.moveTo(px-10, 230); ctx.lineTo(px+10, 230); ctx.stroke();
+        // Pillar shaft
+        ctx.beginPath(); ctx.moveTo(px, 230); ctx.lineTo(px, 120); ctx.stroke();
+        // Ornate capital
+        let cap = new Path2D(); cap.arc(px, 125, 8, 0, Math.PI*2);
+        drawStitchedPath(ctx, cap, "#D6A420");
+    }
+    
+    // Arches between pillars
+    for(let i=0; i<4; i++) {
+        let px = 80 + i*60;
+        ctx.beginPath(); ctx.arc(px+30, 125, 30, Math.PI, 0); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Scalloped Tapestry Roof
+    let roof = new Path2D();
+    roof.moveTo(60, 120);
+    roof.lineTo(80, 60);
+    roof.lineTo(320, 60);
+    roof.lineTo(340, 120);
+    drawStitchedPath(ctx, roof, "#5E4B3C");
+    
+    ctx.save();
+    ctx.clip(roof);
+    for(let y=60; y<120; y+=15) {
+        for(let x=60; x<340; x+=20) {
+            let tile = new Path2D();
+            let offset = (y/15)%2 === 0 ? 10 : 0;
+            tile.arc(x+offset, y, 10, 0, Math.PI);
+            ctx.fillStyle = (x+y)%3 === 0 ? "#D6A420" : ((x+y)%2 === 0 ? "#4C613D" : "#9E3624");
+            ctx.fill(tile);
+            applyStitchedStroke(ctx); ctx.stroke(tile);
+        }
+    }
+    ctx.restore();
+    applyStitchedStroke(ctx); ctx.stroke(roof);
+}
+
+// --- OPTION B: CLEAN TIMBER MANOR ---
+function drawBuildingB() {
+    const ctx = document.getElementById('buildingB').getContext('2d');
+    drawGround(ctx);
+
+    let wall = new Path2D();
+    wall.moveTo(100, 230);
+    wall.lineTo(100, 100);
+    wall.lineTo(200, 50);
+    wall.lineTo(300, 100);
+    wall.lineTo(300, 230);
+    drawStitchedPath(ctx, wall, "#8C6F47"); // clean wood
+
+    // Clean overlapping timber planks
+    applyStitchedStroke(ctx);
+    ctx.lineWidth = 2;
+    for(let i=115; i<300; i+=15) {
+        ctx.beginPath();
+        ctx.moveTo(i, 230);
+        let topY = i < 200 ? 100 - (i-100)*0.5 : 100 - (300-i)*0.5;
+        ctx.lineTo(i, topY);
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Very stylized carved gables crossing at top
+    let gable1 = new Path2D();
+    gable1.moveTo(80, 110); gable1.lineTo(220, 40); gable1.lineTo(215, 30); gable1.lineTo(75, 100);
+    drawStitchedPath(ctx, gable1, "#382F22");
+    
+    let gable2 = new Path2D();
+    gable2.moveTo(320, 110); gable2.lineTo(180, 40); gable2.lineTo(185, 30); gable2.lineTo(325, 100);
+    drawStitchedPath(ctx, gable2, "#382F22");
+    
+    // Dragon heads carved at the ends of the gables
+    let d1 = new Path2D(); d1.arc(220, 35, 8, 0, Math.PI*2); drawStitchedPath(ctx, d1, "#382F22");
+    let d2 = new Path2D(); d2.arc(180, 35, 8, 0, Math.PI*2); drawStitchedPath(ctx, d2, "#382F22");
+
+    // Simple Arched Doorway
+    let door = new Path2D();
+    door.moveTo(170, 230);
+    door.lineTo(170, 170);
+    door.arc(200, 170, 30, Math.PI, 0);
+    door.lineTo(230, 230);
+    drawStitchedPath(ctx, door, "#2C2219");
+}
+
+window.onload = function() {
+    drawShipFinal();
+    drawFortA();
+    drawFortB();
+    drawBuildingA();
+    drawBuildingB();
+};
+</script>
+</body>
+</html>

@@ -76,11 +76,15 @@ class GameViewModel : ViewModel() {
     // 20kg: chainmail (12) + coif (2) rides fine; scale (16) + gauntlets/boots/coif (5.5) does not
     companion object {
         /**
-         * Followers you may rally more than once, fielding one body per copy. Pets only — a pack of
-         * Busters is funny, two Trojan Horses or a second mount is not. Uniques, mounts, the throne
-         * and the one-shot bodies (fanatic, trojan, plague peasant) stay out.
+         * Followers you may rally more than once, fielding one body per copy: pets AND the on-field
+         * retinue (hag, fanatic, greaser, plague peasant) — three Mad Borises is three madmen on the
+         * field, not a stat line. Uniques, mounts, the throne and the trojan horse stay out (two
+         * Trojan Horses or a second mount is not funny).
          */
-        val STACKABLE_ANCILLARIES = setOf(Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.LIL_GUY)
+        val STACKABLE_ANCILLARIES = setOf(
+            Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.LIL_GUY,
+            Ancillary.HAG, Ancillary.FANATIC, Ancillary.GREASER, Ancillary.PLAGUE_PEASANT
+        )
 
         // Every live particle is a draw call per frame, so this is a frame-budget number, not a
         // taste one. 120 still reads as a gout of blood; 250 was costing frames on mid devices.
@@ -512,9 +516,11 @@ class GameViewModel : ViewModel() {
             EnemyFactory.randomSaxon(index, state.level)
         }.toMutableList()
 
-        if (state.unlockedAncillaries.contains(Ancillary.FANATIC)) {
+        // Retinue bodies spawn one per copy (Twins/Thrice-Blessed) — ids get "#i" and everything
+        // that cares matches via isKind(). posX jittered per copy or they stand inside each other.
+        repeat(state.unlockedAncillaries.count { it == Ancillary.FANATIC }) { i ->
             enemies.add(FighterState(
-                id = "fanatic_boris",
+                id = "fanatic_boris#$i",
                 name = "Mad Boris",
                 isPlayer = true,
                 maxHp = 150f,
@@ -524,8 +530,8 @@ class GameViewModel : ViewModel() {
                 shield = GameData.SHIELDS.first { it == GameData.Shield.NONE },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
-                posX = 80f,
-                targetX = 80f,
+                posX = 80f + i * 30f,
+                targetX = 80f + i * 30f,
                 facingRight = true,
                 size = 1.05f,
                 hairColor = androidx.compose.ui.graphics.Color(0xFFC02020),
@@ -550,10 +556,10 @@ class GameViewModel : ViewModel() {
             metCounters.add(EnemyFactory.COUNTER_WAR_PRIEST)
         }
 
-        if (state.unlockedAncillaries.contains(Ancillary.PLAGUE_PEASANT)) {
+        repeat(state.unlockedAncillaries.count { it == Ancillary.PLAGUE_PEASANT }) { i ->
             enemies.add(FighterState(
                 // Dying already, so he simply runs at the foe and breathes on them until one of them drops
-                id = "plague_peasant",
+                id = "plague_peasant#$i",
                 name = "Wretched Aldwin",
                 isPlayer = true,
                 maxHp = 15f,
@@ -563,8 +569,8 @@ class GameViewModel : ViewModel() {
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
-                posX = 60f,
-                targetX = 60f,
+                posX = 60f + i * 24f,
+                targetX = 60f + i * 24f,
                 facingRight = true,
                 size = 0.9f,
                 speedBoost = 0.5f,
@@ -574,31 +580,31 @@ class GameViewModel : ViewModel() {
             ))
         }
 
-        if (state.unlockedAncillaries.contains(Ancillary.GREASER)) {
+        repeat(state.unlockedAncillaries.count { it == Ancillary.GREASER }) { i ->
             enemies.add(FighterState(
                 // Same trick as the hag: head_slingshot marks him isRanged, so the AI holds the
                 // backline and lobs instead of charging in. His pots trip rather than wound.
-                id = "greaser", name = "Slippery Sam", isPlayer = true, maxHp = 35f, hp = 35f,
+                id = "greaser#$i", name = "Slippery Sam", isPlayer = true, maxHp = 35f, hp = 35f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
-                posX = 40f, targetX = 40f, facingRight = true, size = 0.85f,
+                posX = 40f + i * 22f, targetX = 40f + i * 22f, facingRight = true, size = 0.85f,
                 hairColor = androidx.compose.ui.graphics.Color(0xFF6B4A1F), hairStyle = "short", isDualWielding = false
             ))
         }
 
-        if (state.unlockedAncillaries.contains(Ancillary.HAG)) {
+        repeat(state.unlockedAncillaries.count { it == Ancillary.HAG }) { i ->
             enemies.add(FighterState(
                 // head_slingshot makes her isRanged, so the AI kites at range and lobs mud instead of rushing to melee
-                id = "hag", name = "Local Hag", isPlayer = true, maxHp = 40f, hp = 40f,
+                id = "hag#$i", name = "Local Hag", isPlayer = true, maxHp = 40f, hp = 40f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
-                posX = 20f, targetX = 20f, facingRight = true, size = 0.8f, hairColor = androidx.compose.ui.graphics.Color(0xFFAAAAAA), hairStyle = "long", isDualWielding = false
+                posX = 20f + i * 20f, targetX = 20f + i * 20f, facingRight = true, size = 0.8f, hairColor = androidx.compose.ui.graphics.Color(0xFFAAAAAA), hairStyle = "long", isDualWielding = false
             ))
         }
 
@@ -1126,7 +1132,7 @@ class GameViewModel : ViewModel() {
         }
 
         // Old Maud cackles now and then (assets/hag; silent until clips are added)
-        if (enemies.any { it.id == "hag" && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.15f) {
+        if (enemies.any { it.isKind("hag") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.15f) {
             MedievalAudioSynth.playHagCackle()
         }
 
@@ -1229,7 +1235,10 @@ class GameViewModel : ViewModel() {
                     pendingChoices.add(LevelUpChoice(
                         id = "triple_${lucky.id}",
                         title = "Thrice-Blessed: ${lucky.ancillaryName}",
-                        description = "Some say the Almighty works in threes. ${lucky.ancillaryName}'s effect is TRIPLED (Max HP +${(lucky.hpBoost * 2).toInt()}, speed +${(lucky.speedBoost * 200).toInt()}%).",
+                        description = if (lucky in STACKABLE_ANCILLARIES)
+                            "Some say the Almighty works in threes. THREE of ${lucky.ancillaryName} take the field."
+                        else
+                            "Some say the Almighty works in threes. ${lucky.ancillaryName}'s effect is TRIPLED (Max HP +${(lucky.hpBoost * 2).toInt()}, speed +${(lucky.speedBoost * 200).toInt()}%).",
                         type = "follower_multiply",
                         itemId = lucky.id
                     ))
@@ -1527,12 +1536,15 @@ class GameViewModel : ViewModel() {
                     hasThroneOption = kotlin.random.Random.nextFloat() < 0.2f,
                     isThroneMode = false,
                     hasTakenThrone = false,
-                    unlockedAncillaries = emptySet(),
+                    unlockedAncillaries = emptyList(),
                     // A new man starts with nothing. activeMount was surviving the reset, so the
                     // next run began already riding the last one's chariot.
                     activeMount = null,
                     isDualWielding = false,
                     hasSilkenGarments = false,
+                    // Same leak class as activeMount and the music moods: without this the next
+                    // run's retinue spawns pre-armoured and the panoply card never reappears.
+                    hasRetinuePanoply = false,
                     divineWeathers = emptyList(),
                     weatherCooldowns = emptyMap(),
                     hasShieldbreaker = false,

@@ -658,7 +658,9 @@ data class BattleSimState(
     val givenName: String = "William",
     val byname: String = "the Bastard",
     val unlockedGearIds: Set<String> = emptySet(),
-    val unlockedAncillaries: Set<com.example.game.Ancillary> = emptySet(),
+    // A List, not a Set: duplicates ARE the feature — Twins/Thrice-Blessed add repeat copies,
+    // which a Set silently deduped (stacking did nothing at the type level).
+    val unlockedAncillaries: List<com.example.game.Ancillary> = emptyList(),
     val activeMount: Ancillary? = null,
     val isDualWielding: Boolean = false,
     val hasSilkenGarments: Boolean = false,

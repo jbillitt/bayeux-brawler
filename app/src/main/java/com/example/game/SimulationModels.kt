@@ -374,8 +374,10 @@ data class FighterState(
     var isChariot: Boolean = false,
     var isStilts: Boolean = false,
     var isLord: Boolean = false,
+    var hasSilkenGarments: Boolean = false, // lightens armour weight without losing protection
     val isWarPriest: Boolean = false, // never attacks; heals the worst-hurt foe near him
     var grapplerId: String? = null,
+    var stolenWeaponOwnerId: String? = null, // a brawler holding a foe's stolen weapon; dropped when that foe dies
     var activeWrestlingMove: WrestlingMove? = null,
     var crumpleDuration: Float = 0f,
     var visualOffsetY: Float = 0f,
@@ -390,15 +392,19 @@ data class FighterState(
     // Simulated Base Stats
     val totalMass: Float
         get() {
-            val base = (weaponHead.mass + weaponHandle.mass + shield.mass + armor.mass + headgear.mass) * size
+            // Silken Garments genuinely lighten armour (same protection), so the reduced kg flows into
+            // move speed, the weight readout, and the chariot check. Tunable factor.
+            val silkFactor = if (hasSilkenGarments) 0.45f else 1f
+            val gearBase = (weaponHead.mass + weaponHandle.mass + shield.mass) * size
+            val armourBase = (armor.mass + headgear.mass) * size * silkFactor
             val attachmentsMass = extraAttachments.sumOf { it.mass.toDouble() }.toFloat()
-            val armorsMass = extraArmors.sumOf { it.mass.toDouble() }.toFloat()
+            val armorsMass = extraArmors.sumOf { it.mass.toDouble() }.toFloat() * silkFactor
             val extensionMass = handleExtensionCount * 0.5f
             var shieldUpgradesMass = 0f
             if (shieldUpgrades.contains("oak_reinforcing")) shieldUpgradesMass += 2.5f
             if (shieldUpgrades.contains("iron_plating")) shieldUpgradesMass += 5.0f
             if (shieldUpgrades.contains("shield_helmet")) shieldUpgradesMass += 3.0f
-            return base + attachmentsMass + armorsMass + extensionMass + shieldUpgradesMass
+            return gearBase + armourBase + attachmentsMass + armorsMass + extensionMass + shieldUpgradesMass
         }
 
     val totalArmor: Float

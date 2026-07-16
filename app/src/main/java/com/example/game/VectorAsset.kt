@@ -181,7 +181,7 @@ internal fun DrawScope.drawVectorAsset(
             when (cmd.op) {
                 "M" -> path.moveTo(cx + a[0], cy + a[1])
                 "L" -> path.lineTo(cx + a[0], cy + a[1])
-                "Q" -> path.quadraticBezierTo(cx + a[0], cy + a[1], cx + a[2], cy + a[3])
+                "Q" -> path.quadraticTo(cx + a[0], cy + a[1], cx + a[2], cy + a[3])
                 "C" -> path.cubicTo(cx + a[0], cy + a[1], cx + a[2], cy + a[3], cx + a[4], cy + a[5])
                 "Z" -> path.close()
                 "RECT" -> path.addRect(Rect(cx + a[0], cy + a[1], cx + a[2], cy + a[3]))

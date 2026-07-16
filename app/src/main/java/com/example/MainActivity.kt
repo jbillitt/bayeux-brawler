@@ -130,17 +130,18 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
-    fun playRandomVoiceClip() {
+    fun playRandomVoiceClip(folder: String = "victory") {
+        if (!com.example.game.MedievalAudioSynth.sfxEnabled) return
         if (currentVoicePlayer?.isPlaying == true) return
         try {
             val am = context.assets
-            val files = am.list("victory")
+            val files = am.list(folder)
             if (files != null && files.isNotEmpty()) {
                 val audioFiles = files.filter { it.endsWith(".wav") || it.endsWith(".ogg") || it.endsWith(".mp3") }
                 if (audioFiles.isNotEmpty()) {
                     MedievalHarpPlayer.setVolume(0.2f)
                     val randomFile = audioFiles.random()
-                    val afd = am.openFd("victory/$randomFile")
+                    val afd = am.openFd("$folder/$randomFile")
                     currentVoicePlayer = android.media.MediaPlayer()
                     currentVoicePlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                     afd.close()
@@ -165,7 +166,7 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
         if (uiState.battleWon) playRandomVoiceClip()
     }
     LaunchedEffect(uiState.battleLost) {
-        // Voice clips are victory-only
+        if (uiState.battleLost) playRandomVoiceClip("defeat")
     }
     LaunchedEffect(uiState.showLevelUpScreen) {
         // Voice clips are victory-only
@@ -679,7 +680,7 @@ fun CharacterPreviewCard(
                             headgear = uiState.headgear,
                             isDualWielding = uiState.isDualWielding,
                             hairColor = uiState.hairColor, hairStyle = uiState.hairStyle,
-                            faceNoseShape = uiState.faceNoseShape, faceBiteShape = uiState.faceBiteShape, faceForehead = uiState.faceForehead
+                            faceNoseShape = uiState.faceNoseShape, faceBiteShape = uiState.faceBiteShape, faceForehead = uiState.faceForehead, faceMustache = uiState.faceMustache
                         )
                         val back = front.copy(id = "back", name = "Back", posX = centerX - 45f, targetX = centerX - 45f)
                         val king = com.example.game.FighterState(
@@ -694,7 +695,7 @@ fun CharacterPreviewCard(
                             headgear = com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_crown" },
                             isDualWielding = false,
                             hairColor = uiState.hairColor, hairStyle = uiState.hairStyle,
-                            faceNoseShape = uiState.faceNoseShape, faceBiteShape = uiState.faceBiteShape, faceForehead = uiState.faceForehead
+                            faceNoseShape = uiState.faceNoseShape, faceBiteShape = uiState.faceBiteShape, faceForehead = uiState.faceForehead, faceMustache = uiState.faceMustache
                         )
                         TapestryRenderer.drawAncillaries(this, uiState.unlockedAncillaries, king, scale = 1.35f)
                         TapestryRenderer.drawCharacter(this, back, scale = 1.35f, isBattleActive = true)
@@ -709,6 +710,7 @@ fun CharacterPreviewCard(
                             faceNoseShape = uiState.faceNoseShape,
                             faceBiteShape = uiState.faceBiteShape,
                             faceForehead = uiState.faceForehead,
+                            faceMustache = uiState.faceMustache,
                             maxHp = 100f,
                             hp = 100f,
                             weaponHead = uiState.weaponHead,
@@ -1201,7 +1203,10 @@ fun GearSelectionTabs(
                                         .padding(8.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(label, color = if (isSelected) TapestryLight else TapestryDark, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(label, color = if (isSelected) TapestryLight else TapestryDark, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                        Text(preset.description, color = if (isSelected) TapestryLight.copy(alpha = 0.85f) else TapestryDark.copy(alpha = 0.7f), fontSize = 8.sp, lineHeight = 9.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    }
                                 }
                             }
                         }
@@ -1416,9 +1421,29 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit) {
                 lineHeight = 9.sp,
                 fontFamily = FontFamily.Serif,
                 color = TapestryDark.copy(alpha = 0.8f),
-                maxLines = 3,
+                maxLines = 2,
                 modifier = Modifier.weight(1f)
             )
+
+            // Combat stats so you can see what a piece actually does, not just its flavour.
+            val stats = buildList {
+                if (item.pierce > 0f) add("P${item.pierce.toInt()}")
+                if (item.slash > 0f) add("S${item.slash.toInt()}")
+                if (item.blunt > 0f) add("B${item.blunt.toInt()}")
+                if (item.defense > 0f) add("DEF${item.defense.toInt()}")
+                if (!item.isRanged && item.reach > 0f) add("RCH${"%.1f".format(item.reach)}")
+                if (item.isRanged) add("RANGED")
+            }.joinToString("  ")
+            if (stats.isNotEmpty()) {
+                Text(
+                    text = stats,
+                    fontSize = 7.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = TapestryRed,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -1445,13 +1470,15 @@ fun StatsAndLaunchPanel(
             weaponHandle = if (uiState.isThroneMode) com.example.game.GameData.WEAPON_HANDLES.first { it.id == "handle_fists" } else uiState.weaponHandle,
             shield = if (uiState.isThroneMode) com.example.game.GameData.SHIELDS.first { it.id == "shield_none" } else uiState.shield,
             armor = uiState.armor,
+            extraArmors = uiState.extraArmors.mapNotNull { id -> com.example.game.GameData.ARMOR_PIECES.find { it.id == id } },
             headgear = if (uiState.isThroneMode) com.example.game.GameData.HEADGEAR_PIECES.first { it.id == "helm_crown" } else uiState.headgear,
             isDualWielding = uiState.isDualWielding,
             posX = 0f, targetX = 0f,
             isMounted = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT) || uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS) || uiState.isThroneMode,
             mountHp = if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE)) 80f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT)) 120f else if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.STILTS)) 40f else 0f,
             isChariot = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.CHARIOT),
-            isLord = uiState.isThroneMode
+            isLord = uiState.isThroneMode,
+            hasSilkenGarments = uiState.hasSilkenGarments
         )
     }
 
@@ -2229,8 +2256,8 @@ internal fun drawWeatherIcon(
         DivineWeather.FLOOD -> { // curling wave crest
             val wave = Path().apply {
                 moveTo(cx - 11f, cy + 6f)
-                quadraticBezierTo(cx - 5f, cy - 9f, cx + 3f, cy - 1f)
-                quadraticBezierTo(cx + 7f, cy + 3f, cx + 11f, cy - 4f)
+                quadraticTo(cx - 5f, cy - 9f, cx + 3f, cy - 1f)
+                quadraticTo(cx + 7f, cy + 3f, cx + 11f, cy - 4f)
             }
             scope.drawPath(wave, TapestryBlue.copy(alpha = alpha), style = Stroke(width = 3f, cap = StrokeCap.Round))
             scope.drawLine(
@@ -2313,7 +2340,7 @@ internal fun drawWeatherFlourish(
             val band = Path().apply {
                 moveTo(edge - 160f, h)
                 lineTo(edge - 120f, 40f)
-                quadraticBezierTo(edge - 40f, h * 0.25f, edge, 40f)
+                quadraticTo(edge - 40f, h * 0.25f, edge, 40f)
                 lineTo(edge + 40f, h)
                 close()
             }
@@ -2322,7 +2349,7 @@ internal fun drawWeatherFlourish(
             // Foam on the leading crest, so the band reads as water rather than a grey slab
             val crest = Path().apply {
                 moveTo(edge - 120f, 40f)
-                quadraticBezierTo(edge - 40f, h * 0.25f, edge, 40f)
+                quadraticTo(edge - 40f, h * 0.25f, edge, 40f)
             }
             scope.drawPath(crest, Color.White.copy(alpha = fade * 0.85f), style = Stroke(width = 5f, cap = StrokeCap.Round))
         }
@@ -2534,7 +2561,9 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
                 isDying = false,
                 facingRight = true, // Force face rendering to point correctly in portrait box
                 size = 1f, // portrait zoom targets a fixed head position; a runt/giant body would slide the face out of the crop
-                isMounted = false, isChariot = false, isStilts = false, isLord = false // mounts shift the rider up and out of the crop
+                isMounted = false, isChariot = false, isStilts = false, isLord = false, // mounts shift the rider up and out of the crop
+                // Clean portrait: just the man's face, no wounds/blood/bandages on the share image.
+                hp = player.maxHp, missingArm = false, bleedDuration = 0f, poisonDuration = 0f, diseaseDuration = 0f, bandagesCount = 0
             )
             com.example.game.TapestryRenderer.drawCharacter(this, dummy, scale = 1f, isBattleActive = false)
         }

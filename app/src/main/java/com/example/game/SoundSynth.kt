@@ -59,6 +59,12 @@ object MedievalAudioSynth {
         playFromAssetFolder("dog")
     }
 
+    /** Occasional hag cackle from the assets/hag folder (empty folder plays nothing). */
+    fun playHagCackle() {
+        if (!sfxEnabled) return
+        playFromAssetFolder("hag")
+    }
+
     fun playSound(type: SoundType) {
         if (!sfxEnabled) return
         if (type == SoundType.DRUM_ROLL) {

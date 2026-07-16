@@ -367,7 +367,7 @@ object TapestryRenderer {
                 val hy = cy + 26f + hairRng.nextFloat() * 44f
                 val curl = Path().apply {
                     moveTo(hx, hy)
-                    quadraticBezierTo(hx + 2f, hy + 3f, hx - 1f + hairRng.nextFloat() * 3f, hy + 6f)
+                    quadraticTo(hx + 2f, hy + 3f, hx - 1f + hairRng.nextFloat() * 3f, hy + 6f)
                 }
                 scope.drawPath(curl, fighter.hairColor.copy(alpha = 0.75f), style = Stroke(width = 1.6f, cap = StrokeCap.Round))
             }
@@ -1581,15 +1581,16 @@ object TapestryRenderer {
                 val midX = (hx - 25f + shaftEnd.x) / 2
                 val midY = (hy + 12f + shaftEnd.y) / 2
                 val wheelCenter = androidx.compose.ui.geometry.Offset(midX, midY)
-                scope.drawCircle(fighter.weaponHandle.color, radius = 22f, center = wheelCenter)
-                scope.drawCircle(ThreadColor, radius = 22f, center = wheelCenter, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
-                scope.drawCircle(androidx.compose.ui.graphics.Color(0xFFE4D6B6), radius = 18f, center = wheelCenter)
-                for (i in 0 until 4) {
-                    val angle = (i * Math.PI / 4).toFloat()
-                    val p1 = androidx.compose.ui.geometry.Offset(wheelCenter.x + kotlin.math.cos(angle)*18f, wheelCenter.y + kotlin.math.sin(angle)*18f)
-                    val p2 = androidx.compose.ui.geometry.Offset(wheelCenter.x - kotlin.math.cos(angle)*18f, wheelCenter.y - kotlin.math.sin(angle)*18f)
+                scope.drawCircle(fighter.weaponHandle.color, radius = 34f, center = wheelCenter)
+                scope.drawCircle(ThreadColor, radius = 34f, center = wheelCenter, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
+                scope.drawCircle(androidx.compose.ui.graphics.Color(0xFFE4D6B6), radius = 28f, center = wheelCenter)
+                for (i in 0 until 6) {
+                    val angle = (i * Math.PI / 6).toFloat()
+                    val p1 = androidx.compose.ui.geometry.Offset(wheelCenter.x + kotlin.math.cos(angle)*28f, wheelCenter.y + kotlin.math.sin(angle)*28f)
+                    val p2 = androidx.compose.ui.geometry.Offset(wheelCenter.x - kotlin.math.cos(angle)*28f, wheelCenter.y - kotlin.math.sin(angle)*28f)
                     scope.drawLine(fighter.weaponHandle.color, p1, p2, strokeWidth = 3f)
                 }
+                scope.drawCircle(fighter.weaponHandle.color, radius = 6f, center = wheelCenter) // hub
             } else if (fighter.weaponHandle.id == "handle_stump") {
                 val logW = 45f
                 val logL = handleLen + 40f
@@ -1949,7 +1950,7 @@ object TapestryRenderer {
                 rotate(armAngle, pivot = Offset(cx - 23f, cy + 25f))
             }) {
                 val sleeveColor = sleeveTone(fighter, back = false)
-                drawStitchedStrap(this, Offset(cx - 23f, cy + 25f), Offset(cx + 4f, cy + 28f), sleeveColor)
+                drawStitchedStrap(this, Offset(cx - 23f, cy + 25f), Offset(cx + 4f, cy + 28f), sleeveColor, stitched = sleeveColor != skinTone(fighter))
                 scope.drawCircle(Color(0xFF9E3624), radius = 8f, center = Offset(cx + 4f, cy + 28f))
                 scope.drawCircle(Color(0xFFBF2A2A), radius = 4f, center = Offset(cx + 4f, cy + 28f))
             }
@@ -1963,7 +1964,7 @@ object TapestryRenderer {
         }) {
             // Sleeve/Arm
             val sleeveColor = sleeveTone(fighter, back = false)
-            drawStitchedStrap(this, Offset(cx - 23f, cy + 25f), Offset(cx + 25f, cy + 30f), sleeveColor)
+            drawStitchedStrap(this, Offset(cx - 23f, cy + 25f), Offset(cx + 25f, cy + 30f), sleeveColor, stitched = sleeveColor != skinTone(fighter))
             
             // Hand
             val hasGauntlets = fighter.extraArmors.any { it.id == "armor_gauntlets" }
@@ -2006,7 +2007,7 @@ object TapestryRenderer {
         if (fighter.missingArm) {
             scope.withTransform({ rotate(shieldArmAngle, pivot = Offset(cx + 23f, cy + 25f)) }) {
                 val sleeveColor = sleeveTone(fighter, back = true)
-                drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(cx + 20f, cy + 35f), sleeveColor)
+                drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(cx + 20f, cy + 35f), sleeveColor, stitched = sleeveColor != skinTone(fighter))
                 scope.drawCircle(Color(0xFF9E3624), radius = 7f, center = Offset(cx + 20f, cy + 35f))
                 scope.drawCircle(Color(0xFFBF2A2A), radius = 3.5f, center = Offset(cx + 20f, cy + 35f))
             }
@@ -2016,6 +2017,7 @@ object TapestryRenderer {
         val sColor = fighter.shield.color
         val hasKite = fighter.shield.id == "shield_kite"
         val hasTower = fighter.shield.id == "shield_tower"
+        val hasHeater = fighter.shield.id == "shield_heater" // big round shield; the small oval is the buckler
 
         if (fighter.shield.id == "shield_none") {
             if (fighter.isDualWielding) {
@@ -2049,7 +2051,7 @@ object TapestryRenderer {
                     val hx = cx + 35f
                     val hy = cy + 40f
                     val sleeveColor = sleeveTone(fighter, back = true)
-                    drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor)
+                    drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor, stitched = sleeveColor != skinTone(fighter))
                     scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
                     if (fighter.brawlerUpgrades.contains("brass_knuckles")) {
@@ -2132,7 +2134,7 @@ object TapestryRenderer {
                     val hy = frontHandY - handleLen * 0.4f * gripFraction
                     
                     val sleeveColor = sleeveTone(fighter, back = true)
-                    drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor)
+                    drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor, stitched = sleeveColor != skinTone(fighter))
                     scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
                 }
@@ -2146,7 +2148,7 @@ object TapestryRenderer {
             val hx = cx + 18f
             val hy = cy + 45f
             val sleeveColor = sleeveTone(fighter, back = true)
-            drawStitchedStrap(this, Offset(cx + 15f, cy + 25f), Offset(hx, hy), sleeveColor)
+            drawStitchedStrap(this, Offset(cx + 15f, cy + 25f), Offset(hx, hy), sleeveColor, stitched = sleeveColor != skinTone(fighter))
             scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
             scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
         }
@@ -2175,6 +2177,9 @@ object TapestryRenderer {
                 lineTo(shx + 25f, shy + 45f)
                 lineTo(shx - 25f, shy + 45f)
                 close()
+            } else if (hasHeater) {
+                // Big round shield — a proper cavalry heater, not a tiny buckler.
+                addOval(androidx.compose.ui.geometry.Rect(shx - 30f, shy - 32f, shx + 30f, shy + 34f))
             } else {
                 addOval(androidx.compose.ui.geometry.Rect(shx - 18f, shy - 18f, shx + 18f, shy + 18f))
             }
@@ -2202,6 +2207,16 @@ object TapestryRenderer {
                     drawLine(ThreadColor, Offset(shx - 25f, shy + 45f), Offset(shx + 25f, shy + 45f), strokeWidth = 4f)
                     drawLine(ThreadColor, Offset(shx - 25f, shy - 45f), Offset(shx - 25f, shy + 45f), strokeWidth = 4f)
                     drawLine(ThreadColor, Offset(shx + 25f, shy - 45f), Offset(shx + 25f, shy + 45f), strokeWidth = 4f)
+                } else if (hasHeater) {
+                    // Big round: iron rim, central boss, and radial spokes.
+                    drawCircle(Color(0xFF727A80), radius = 30f, center = Offset(shx, shy), style = Stroke(width = 4f))
+                    for (i in 0 until 8) {
+                        val a = i * Math.PI.toFloat() / 4f
+                        drawLine(ThreadColor.copy(alpha = 0.35f), Offset(shx, shy),
+                            Offset(shx + cos(a) * 30f, shy + sin(a) * 32f), strokeWidth = 1.5f)
+                    }
+                    drawCircle(Color(0xFF6B7882), radius = 9f, center = Offset(shx, shy))
+                    drawCircle(ThreadColor, radius = 9f, center = Offset(shx, shy), style = StitchedStroke)
                 } else {
                     drawCircle(Color(0xFF6B7882), radius = 6f, center = Offset(shx, shy))
                     drawCircle(ThreadColor, radius = 6f, center = Offset(shx, shy), style = StitchedStroke)

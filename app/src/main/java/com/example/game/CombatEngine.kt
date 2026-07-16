@@ -54,6 +54,21 @@ class CombatEngine(private val ctx: BattleContext) {
         // Melee pursuers tighten up on a kiting (ranged) target instead of stalling at their full reach.
         private const val MELEE_VS_RANGED_CHASE_MULT = 0.8f
 
+        // Ranged/backpedal balance (all tunable — kept gentle so ranged stays a real threat).
+        /** Retreating (kiting) is slower than advancing, so a melee chaser can eventually close. */
+        const val KITE_RETREAT_MULT = 0.6f
+        /** Per-second chance an unmounted kiter stumbles on rough ground: brief slow + lost shot. */
+        const val KITE_STUMBLE_CHANCE_PER_SEC = 0.6f
+        /** Early-game enemy ranged fire is slower (level <= EARLY_RANGED_LEVEL). */
+        const val EARLY_RANGED_SLOW = 1.4f
+        const val EARLY_RANGED_LEVEL = 3
+        /** A melee weapon this long (head+handle reach) earns polearm spacing: it keeps foes at its tip. */
+        const val LONG_MELEE_REACH = 2.0f
+        /** Foes inside this fraction of a long weapon's pixel reach are "point-blank" — back off to the tip. */
+        const val LONG_MELEE_DEADZONE = 0.5f
+        /** A severed arm bleeds — the stump keeps costing HP after the limb is gone. Tunable. */
+        const val ARM_BLEED_SECONDS = 5.0f
+
         // Damage-over-time rates, in points per second (see applyDotDamage).
         const val POISON_DPS = 14f
         const val BLEED_DPS = 10f
@@ -372,12 +387,30 @@ class CombatEngine(private val ctx: BattleContext) {
                 // Desync animations slightly based on maxHp to avoid identical marching
                 fighter.animFrame = fighter.animFrame + dt * (9f + (fighter.maxHp % 3f))
             } else if (fighter.isRanged && dist < optimalDistance * 0.7f && fighter.moveSpeed > 0f) {
-                // Ranged only: step back to keep the target at missile range
-                val direction = if (target.posX > fighter.posX) -1f else 1f
-                fighter.posX += direction * fighter.moveSpeed * dt
-                fighter.animFrame = fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))
+                // Ranged only: step back to keep the target at missile range. Retreat is slower than
+                // advancing (KITE_RETREAT_MULT) so a chaser can close, and an unmounted kiter can
+                // trip on rough ground — a brief slow that costs this frame's shot. Riders never slip.
+                if (!fighter.isMounted && fighter.slowDuration <= 0f &&
+                    Random.nextFloat() < KITE_STUMBLE_CHANCE_PER_SEC * dt) {
+                    fighter.slowDuration = 0.8f // stumbled — legs slow, no shot this beat
+                } else {
+                    val direction = if (target.posX > fighter.posX) -1f else 1f
+                    fighter.posX += direction * fighter.moveSpeed * KITE_RETREAT_MULT * dt
+                    fighter.animFrame = fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))
 
-                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) { // enthroned lords let the retinue fight until the throne falls
+                    if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) { // enthroned lords let the retinue fight until the throne falls
+                        triggerAttack(fighter)
+                    }
+                }
+            } else if (!fighter.isRanged && fighter.reach > LONG_MELEE_REACH &&
+                       dist < reachPixels * LONG_MELEE_DEADZONE && fighter.moveSpeed > 0f) {
+                // Polearm spacing: a foe has crowded inside the point of a long weapon, where a pike is
+                // useless. Shuffle back to keep him at the tip — but keep swinging, and retreat is slow
+                // (KITE_RETREAT_MULT) so a brute who commits can still close inside and win the trade.
+                val direction = if (target.posX > fighter.posX) -1f else 1f
+                fighter.posX += direction * fighter.moveSpeed * KITE_RETREAT_MULT * dt
+                fighter.animFrame = fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))
+                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) {
                     triggerAttack(fighter)
                 }
             } else {
@@ -428,6 +461,9 @@ class CombatEngine(private val ctx: BattleContext) {
         var cooldown = fighter.attackSpeedDelay
         if (!fighter.isPlayer && fighter.isRanged && fighter.level > 15) {
             cooldown *= 0.7f // Ranged Escalation: Faster attack speed
+        }
+        if (!fighter.isPlayer && fighter.isRanged && fighter.level <= EARLY_RANGED_LEVEL) {
+            cooldown *= EARLY_RANGED_SLOW // early rounds: ranged foes fire slower so range isn't dominant at the start
         }
         fighter.attackCooldown = cooldown
 
@@ -500,6 +536,7 @@ class CombatEngine(private val ctx: BattleContext) {
                     attacker.weaponHead = target.weaponHead
                     attacker.weaponHandle = target.weaponHandle
                     attacker.isDualWielding = false
+                    attacker.stolenWeaponOwnerId = target.id // drop it back to fists once this owner is dead
 
                     target.weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
                     target.weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }
@@ -695,6 +732,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 val canLoseArm = !currTarget.isPlayer || (currTarget.hp / currTarget.maxHp < 0.10f)
                 if (slash > 18f && Random.nextFloat() < 0.2f && !currTarget.missingArm && canLoseArm) {
                     currTarget.missingArm = true
+                    currTarget.bleedDuration = ARM_BLEED_SECONDS // the stump bleeds out
                     // Disarm off-hand/shield logically
                     if (currTarget.isDualWielding || currTarget.shield.id != "shield_none") {
                         currTarget.isDualWielding = false
@@ -1015,6 +1053,14 @@ class CombatEngine(private val ctx: BattleContext) {
             // Killed while already crumpled on the ground → die where they lie, no standing back up
             defender.deathType = if (defender.crumpleDuration > 0f) DeathType.CRUMPLED_IN_PLACE else DeathType.randomAny()
             defender.deathTime = System.currentTimeMillis()
+            // A brawler who stole this man's weapon drops it now that its owner is dead — back to fists.
+            (listOfNotNull(ctx.player) + ctx.enemies).forEach { thief ->
+                if (thief.stolenWeaponOwnerId == defender.id) {
+                    thief.weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
+                    thief.weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }
+                    thief.stolenWeaponOwnerId = null
+                }
+            }
             ctx.sound(SoundType.OUCH)
             val deathShout = if (defender.isPlayer) "VÆ MIHI MORTIS!" else "AARRGGHH!"
             ctx.popup(deathShout, defender.posX, 130f, Color.DarkGray)

@@ -115,10 +115,12 @@ object EnemyFactory {
         val r = rng.nextFloat()
 
         val arch = if (level == 1) {
-            // Level 1 is the landing beach — greenest rabble only
-            if (r < 0.55f) EnemyArchetype.PEASANT else if (r < 0.9f) EnemyArchetype.FYRD_LEVY else EnemyArchetype.SLINGER
+            // Level 1 is the landing beach — greenest rabble only, and NO ranged: a backpedaling
+            // slinger cheeses the opening rounds. Ranged foes return from round 3 (level <= 4).
+            if (r < 0.6f) EnemyArchetype.PEASANT else EnemyArchetype.FYRD_LEVY
         } else if (level <= 2) {
-            if (r < 0.3f) EnemyArchetype.PEASANT else if (r < 0.6f) EnemyArchetype.FYRD_LEVY else if (r < 0.8f) EnemyArchetype.SLINGER else EnemyArchetype.HOUSECARL
+            // Still no slings/bows this round — melee rabble only.
+            if (r < 0.4f) EnemyArchetype.PEASANT else if (r < 0.75f) EnemyArchetype.FYRD_LEVY else EnemyArchetype.HOUSECARL
         } else if (level <= 4) {
             if (r < 0.2f) EnemyArchetype.PEASANT else if (r < 0.35f) EnemyArchetype.JAVELINEER else if (r < 0.5f) EnemyArchetype.MACEMAN else if (r < 0.65f) EnemyArchetype.ARCHER else if (r < 0.85f) EnemyArchetype.HOUSECARL else EnemyArchetype.SHIELD_WALL
         } else if (level <= 6) {

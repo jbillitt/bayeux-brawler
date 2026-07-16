@@ -102,15 +102,16 @@ class GameViewModel : ViewModel() {
         val foes = _enemiesState.value.filter { !it.isPlayer && !it.isDead && !it.isDying }
         when (weather) {
             DivineWeather.LIGHTNING -> {
-                foes.maxByOrNull { it.hp }?.let { biggest ->
+                // Buffed: forks to the two toughest foes and hits harder.
+                foes.sortedByDescending { it.hp }.take(2).forEach { biggest ->
                     addPopup("SMITTEN!", biggest.posX, 110f, Color(0xFFF2C14E))
-                    engine.applyFlatDamage(150f, biggest, isPlayerSource = true)
-                    _screenshake.value = 30f
+                    engine.applyFlatDamage(190f, biggest, isPlayerSource = true)
                 }
+                _screenshake.value = 36f
             }
             DivineWeather.FLOOD -> {
                 // The 2-3 furthest downfield get taken by the water, horse and all
-                foes.sortedByDescending { it.posX }.take(Random.nextInt(2, 4)).forEach { swept ->
+                foes.sortedByDescending { it.posX }.take(Random.nextInt(3, 6)).forEach { swept ->
                     swept.isMounted = false
                     swept.mountHp = 0f
                     engine.applyFlatDamage(9999f, swept, isPlayerSource = true)
@@ -121,19 +122,22 @@ class GameViewModel : ViewModel() {
                 _screenshake.value = 25f
             }
             DivineWeather.HAIL -> {
+                // Buffed: hail now bruises as well as knocks down, and holds them longer.
                 foes.forEach {
                     it.isCrumpled = true
-                    it.crumpleDuration = 2.5f
+                    it.crumpleDuration = 3.5f
+                    engine.applyFlatDamage(25f, it, isPlayerSource = true)
                 }
                 addPopup("HAILSTORM!", (_playerState.value?.posX ?: 0f) + 200f, 110f, Color(0xFFDCE6EC))
-                _screenshake.value = 18f
+                _screenshake.value = 22f
             }
             DivineWeather.FROST -> {
+                // Buffed: longer freeze and more of them go down.
                 foes.forEach {
-                    it.slowDuration = 6f
-                    if (Random.nextFloat() < 0.5f) {
+                    it.slowDuration = 8f
+                    if (Random.nextFloat() < 0.65f) {
                         it.isCrumpled = true
-                        it.crumpleDuration = 1.2f
+                        it.crumpleDuration = 1.6f
                     }
                 }
                 addPopup("KILLING FROST!", (_playerState.value?.posX ?: 0f) + 200f, 110f, Color(0xFF8FC1D4))
@@ -184,7 +188,9 @@ class GameViewModel : ViewModel() {
         randomizeGear()
         
         val sizes = listOf(0.85f, 1.0f, 1.15f)
-        val hairColors = listOf(Color(0xFFE5C09F), Color(0xFFC08030), Color(0xFF2C2219), Color(0xFF5A442E))
+        // Must match the start-screen hair swatches exactly, or the preselected colour highlights no
+        // swatch and reads as "nothing selected". Same four as MainActivity + the newRun preselect.
+        val hairColors = listOf(Color(0xFF888888), Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF2C2219))
         val styles = listOf("short", "long", "bald")
         val startSize = sizes.random()
         val rng = kotlin.random.Random.Default
@@ -463,6 +469,7 @@ class GameViewModel : ViewModel() {
             isChariot = currentMount == Ancillary.CHARIOT && !chariotCollapses,
             isStilts = !state.isThroneMode && currentMount == Ancillary.STILTS,
             isLord = state.isThroneMode,
+            hasSilkenGarments = state.hasSilkenGarments,
             bandagesCount = state.bandagesCount
         )
         
@@ -620,6 +627,15 @@ class GameViewModel : ViewModel() {
                     isDualWielding = false,
                     pallbearerIndex = i
                 ))
+            }
+        }
+
+        // Keep the retinue alive deeper into a run: on-field allies gain a little HP per level.
+        run {
+            val allyHpBonus = (state.level - 1) * 6f
+            if (allyHpBonus > 0f) enemies.filter { it.isPlayer }.forEach { ally ->
+                ally.maxHp += allyHpBonus
+                ally.hp += allyHpBonus
             }
         }
 
@@ -921,10 +937,20 @@ class GameViewModel : ViewModel() {
             proj.velocityY += (130f * proj.gravityMult) * dt // Gravity pulling it downwards!
 
             var hit = false
-            // Check building collisions
-            // Ship is pure background scenery — it never blocks projectiles
-            val bgHit = bgObjects.firstOrNull { !it.isDestroyed && it.type != BackgroundObjectType.SHIP && proj.posX in (it.posX - 100f)..(it.posX + 100f) && proj.posY > 100f }
-            if (bgHit != null && proj.posY < 350f) {
+            // Buildings are only *cover* when a living target is actually sheltering just behind
+            // them (further along the shot's path than the building). Otherwise the shot flies past,
+            // so a background house no longer eats your arrows when nobody is hiding behind it.
+            // Ship is pure background scenery — it never blocks.
+            val coverTargets = if (proj.isPlayerOwned) livingEnemies else listOfNotNull(player.takeIf { !it.isDead })
+            val bgHit = bgObjects.firstOrNull { bg ->
+                !bg.isDestroyed && bg.type != BackgroundObjectType.SHIP &&
+                proj.posX in (bg.posX - 100f)..(bg.posX + 100f) && proj.posY in 100f..350f &&
+                coverTargets.any { t ->
+                    val behindBuilding = if (proj.velocityX >= 0f) t.posX > bg.posX else t.posX < bg.posX
+                    behindBuilding && abs(t.posX - bg.posX) < 130f
+                }
+            }
+            if (bgHit != null) {
                 hit = true
                 bgHit.hp -= proj.damage
                 if (proj.type.isArrowLike) {
@@ -945,9 +971,14 @@ class GameViewModel : ViewModel() {
                     }
                 }
             } else {
-                // Hit test against player
-                if (!player.isDead && abs(proj.posX - player.posX) < 30f && proj.posY in 100f..350f) {
-                    engine.applyProjectileDamage(proj, player)
+                // Hit test against the player AND his on-field ancillaries (hag, fanatic, peasant —
+                // isPlayer=true bodies in the enemies list). Whoever is nearer the incoming shot soaks
+                // it, so an ancillary standing in front of you takes the arrow meant for you.
+                val friendly = (listOf(player) + enemies.filter { it.isPlayer && !it.isDead && !it.isDying })
+                    .filter { !it.isDead && abs(proj.posX - it.posX) < 30f }
+                    .minByOrNull { abs(proj.posX - it.posX) }
+                if (friendly != null && proj.posY in 100f..350f) {
+                    engine.applyProjectileDamage(proj, friendly)
                     hit = true
                 }
             }
@@ -1032,10 +1063,20 @@ class GameViewModel : ViewModel() {
             MedievalAudioSynth.playDogBark()
         }
 
+        // Old Maud cackles now and then (assets/hag; silent until clips are added)
+        if (enemies.any { it.id == "hag" && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.15f) {
+            MedievalAudioSynth.playHagCackle()
+        }
+
         val hasLilGuy = _uiState.value.unlockedAncillaries.contains(Ancillary.LIL_GUY)
         if (hasLilGuy && !player.isDead && Random.nextFloat() < dt * 0.7f) {
             val dir = if (player.facingRight) 1f else -1f
-            val spawnX = player.posX - (15f * dir) // shoot from player's back
+            // Spawn ahead of the carrier's leading edge (scaled by body size). Player-owned bolts
+            // already spare the player and allies (livingEnemies excludes both), but the old
+            // posX-15 origin materialised the shot *inside* a big "absolute unit", so it struck an
+            // enemy pressed against the player and the enemy's blood rendered on the carrier —
+            // reading as friendly fire. Launch it past the body so it clearly flies at the foe.
+            val spawnX = player.posX + dir * (35f + 30f * player.size)
             remainingProjectiles.add(Projectile(
                 id = "lilguy_${System.currentTimeMillis()}_${Random.nextInt(100)}",
                 isPlayerOwned = true, posX = spawnX, posY = 150f,
@@ -1168,7 +1209,8 @@ class GameViewModel : ViewModel() {
 
                 // 3. Handle Extension or Layered Armor or Shield Upgrade option
                 val rndVal = Random.nextFloat()
-                if (rndVal < 0.33f && !isUnarmed) {
+                // No haft extension on ranged weapons — a longer shaft does nothing for a bow/sling.
+                if (rndVal < 0.33f && !isUnarmed && !state.weaponHead.isRanged) {
                     pendingChoices.add(LevelUpChoice(
                         id = "extension",
                         title = "Haft Upgrade: Handle Extension",

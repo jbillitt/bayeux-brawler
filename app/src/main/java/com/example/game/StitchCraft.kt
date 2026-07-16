@@ -84,7 +84,15 @@ internal fun drawStitchedFill(scope: DrawScope, path: Path, color: Color) {
         }
     }
 
-internal fun drawStitchedStrap(scope: DrawScope, from: Offset, to: Offset, color: Color) {
+internal fun drawStitchedStrap(scope: DrawScope, from: Offset, to: Offset, color: Color, stitched: Boolean = true) {
+        if (!stitched) {
+            // Bare limb (skin-coloured sleeve): a plain fleshy arm with a soft edge, no clothing
+            // thread outline or embroidery — a naked man's arm isn't hemmed like a sleeve.
+            scope.drawLine(color = androidx.compose.ui.graphics.lerp(color, androidx.compose.ui.graphics.Color.Black, 0.22f),
+                start = from, end = to, strokeWidth = 15f, cap = StrokeCap.Round)
+            scope.drawLine(color = color, start = from, end = to, strokeWidth = 12f, cap = StrokeCap.Round)
+            return
+        }
         // Draw outline underneath
         scope.drawLine(color = ThreadColor, start = from, end = to, strokeWidth = 17f, cap = StrokeCap.Round)
         // Draw fill on top

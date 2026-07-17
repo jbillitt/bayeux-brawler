@@ -81,6 +81,27 @@ class SoundTest {
     }
 
     @Test
+    fun brawlPlanIsAllInByLevelOne() {
+        val spec = resolveSongSpec(7L, emptyList(), brawl = true)
+        val plan = planOrchestration(spec, hasTrumpeter = false, rng = orchRng(7L))
+        val voices = plan.assignments.map { it.voice }.toSet()
+        assertTrue("no harp in the pit", Voice.HARP !in voices)
+        assertTrue("no sparkle bells/psaltery", plan.assignments.none { (it.voice == Voice.BELLS || it.voice == Voice.PSALTERY) })
+        assertTrue("no destiny fanfare", !plan.destinyFanfare)
+        val l1 = activeAssignments(plan, 1).map { it.voice }
+        assertTrue("drums+lead from the first bell: $l1",
+            Voice.NAKERS in l1 && Voice.TABOR in l1 && Voice.SHAWM in l1 && Voice.GURDY in l1)
+    }
+
+    @Test
+    fun brawlNakersGallopEveryBar() {
+        val spec = resolveSongSpec(7L, emptyList(), brawl = true)
+        val events = percussionEvents(spec, Voice.NAKERS, wilder = true)
+        // 8 eighth-note hits per 4/4 bar, every bar — the engine of the theme.
+        assertEquals(8 * spec.totalBars, events.size)
+    }
+
+    @Test
     fun everyVoiceRendersAudibleSound() {
         val rng = kotlin.random.Random(1)
         for (voice in Voice.values()) {

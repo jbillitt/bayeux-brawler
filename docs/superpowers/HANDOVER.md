@@ -1,70 +1,91 @@
-# Handover (2026-07-13) — plague/weather/polish batch COMPLETE
+# Handover (2026-07-17) — build-out of plans A → B → C → D
 
-**All 20 tasks are done and on main. v0.4.0 Northumbria.** Unit suite green, `gradle compileDebugKotlin`
-clean, `node scripts/vector_builder/verify_asset_roundtrip.js` passes (25 regions).
+**Repo:** `C:\Users\Josh\bayeux-brawler` · Windows 11, PowerShell,
+Android/Kotlin, Jetpack Compose custom-canvas game. Use `.\gradlew.bat`.
 
-## What shipped this session (tasks 8-19)
-- **8** Plague peasant (4aa4251) — `Ancillary.PLAGUE_PEASANT`, contagion radius, DoT, player catch roll.
-- **9** Peasant art + disease tint (381a862) — one `skinTone()` for all flesh; he renders through the
-  normal character pipeline, *not* `drawAncillaries` (that would draw a decorative second peasant).
-- **10** Divine weather (8139937) — `DivineWeather`, `triggerWeather()`, cooldowns, level-12 gating.
-- **11** Weather border icons + flourishes (a69da94) — one `weatherIconCenter()` shared by renderer
-  and tap handler so they cannot drift apart.
-- **13** Curve counters (63eb15e) — shield-walls (L12), brutes (L15), war-priest (L18); Shieldbreaker
-  and Armour-Piercing outs; `seenCounters` drives the light guidance.
-- **14** Barechested (afa29f5) — root cause was six hardcoded sleeve sites, not the torso.
-- **15** Woad + cosmetic variance (e9796f2) — enemy faces were rolling from FighterState defaults, not
-  the factory rng, which is why waves looked samey.
-- **16** Palisade (4cbff1f) — shared `drawPalisadeRun()`; Dinan's cone flattened too.
-- **17** Procedural buildings (478ff9f) — `drawBayeuxBuilding`, `drawSpiralTower`, seeded.
-- **18b** Data-driven art (0c1177a) + workbench (9452c18) — see below.
-- **19** v0.4.0 Northumbria.
+## Current state (verify before starting)
 
-## The two things worth knowing next session
+- Working tree clean on `main`. Latest commit: `1e92b40`
+  (`docs: new-content spec + implementation plan`).
+- **A — Music themes (BRAWL/THRONE + choir): IMPLEMENTED & VERIFIED.**
+  TTS system was removed en route (`2d1197b`).
+- **B — Drums/instruments phone-band mix: IMPLEMENTED & VERIFIED.**
+- **C — Battle performance: spec + plan written, NOT implemented.**
+- **D — New content (sieges/bosses/backdrops/weather fix): spec + plan
+  written, NOT implemented.**
 
-**1. There is now a way to SEE the art without a device.**
-`app/src/test/java/com/example/game/ArtScreenshotTest.kt` renders the real draw functions to PNGs via
-the Roborazzi/Robolectric NATIVE graphics setup that was already in the project.
+First action: run `.\gradlew.bat :app:testDebugUnitTest` and confirm green.
+That is your baseline. If A/B tests fail, fix before touching C/D.
 
-    gradle testDebugUnitTest --tests "*ArtScreenshotTest*" -Proborazzi.test.record=true --rerun
+## Execution order
 
-Writes `app/src/test/screenshots/{buildings,fighters,procedural}.png`. These are NOT golden-image
-assertions — nothing fails on a pixel diff. They exist to be looked at. This caught two real bugs that
-would otherwise have shipped blind (the termite-mound palisade, and an arcade that drew as black blobs).
+1. **A, B** — already done; sanity-check only. Do not rebuild.
+2. **C** — plan: `docs/superpowers/plans/2026-07-17-battle-performance-design.md`
+   (spec: `specs/2026-07-17-battle-performance-design.md`). 6 tasks: tick
+   scheduler, backdrop cache, stitch batching, popup/particle hygiene,
+   regression harness, verification.
+3. **D** — plan: `docs/superpowers/plans/2026-07-17-new-content.md`
+   (spec: `specs/2026-07-17-new-content-design.md`). 8 tasks: siege core
+   (7 ladder invariants — test each), siege scheduling, archetypes + IGNITE,
+   1066 bosses, siege backdrop, new battlegrounds, weather full-bleed fix,
+   verification.
+4. **C strictly before D** — D Task 5 (siege backdrop) renders static
+   wall/motte through C's backdrop cache.
 
-The vector builder cannot do this job: its Kotlin parser only understands literal `moveTo`/`lineTo`,
-so it renders *nothing* for any procedural art.
+## Working agreements (from the user, binding)
 
-**2. Building art is data-driven now, and assets are DISCOVERED, not registered.**
-`app/src/main/assets/art/*.json` — any asset with a `"spawn"` block joins the level-gen pool on next
-launch, drawn through the generic `BackgroundObjectType.VECTOR`. A new building needs **no Kotlin at
-all**: no enum value, no when-branch, no pool edit. Parsed with the platform `org.json` — deliberately
-no serialization dependency.
+- Work through tasks continuously; do NOT stop for approval between tasks or
+  plans. Pause only for genuinely ambiguous design questions.
+- TDD per task: failing test → red → implement → green. Scoped run:
+  `.\gradlew.bat :app:testDebugUnitTest --tests "com.example.game.*"`.
+- One conventional commit per task (`feat:`/`fix:`/`test:`/`docs:`), via
+  `git commit --no-gpg-sign`. CRLF warnings on commit are normal; ignore.
+- Keep the task list (TaskCreate/TaskUpdate) in sync with plan tasks.
 
-Procedural art (the seeded palisade) stays code but reads its position from a named **anchor** in the
-asset, so editing the hill in the builder moves the wall with it. No layer needs a do-not-touch marker.
+## Key code landmarks
 
-Workbench: `cd scripts/vector_builder && node server.js` → http://localhost:3000/art.html
+| Area | Location |
+|---|---|
+| Sim/battle loop | `app/src/main/java/com/example/game/GameViewModel.kt` (`updateSimulation`; bgObjects gen ~`:995`) |
+| Combat/status effects | `.../CombatEngine.kt` (mirror `poisonDuration` plumbing for IGNITE) |
+| Enemy kits | `.../EnemyFactory.kt` |
+| Models | `.../SimulationModels.kt` |
+| Rendering + weather | `.../MainActivity.kt` (`drawWeatherFlourish` ~`:2405`), `BuildingRenderer.kt`, `TapestryRenderer.kt` |
+| Music/audio (done — don't break) | `MusicTheory.kt`, `Orchestrator.kt`, `ProceduralMedievalComposer.kt`, `MedievalAudioSynth.kt`, `InstrumentsPluck.kt` |
+| Art screenshot harness | `app/src/test/java/com/example/game/ArtScreenshotTest.kt` — renders real draw fns to PNGs (`-Proborazzi.test.record=true --rerun`). Use it to eyeball new backdrops in D Tasks 5–6. |
 
-Only `building_manor` is ported so far. The rest (ship, palace, tower, bosham, forts, trojan horse) are
-still Kotlin — port them the same way: transcribe, check in the screenshot harness, then delete the
-Kotlin body. Do not port the seeded parts.
+## Gotchas
 
-## Known issues (unfixed, deliberate)
-- **`CombatEngineTest.throneModeFistsPlayerReachesAdjacentEnemy` is flaky** (~1 run in 8). Pre-existing
-  from Task 2; depends on random attack rolls. Failed once in ~10 full-suite runs, 0/6 in isolation.
-- **Poison and bleed are ~15x weaker than they were.** `applyFlatDamage` clamps every hit to a minimum
-  of 1 point, so per-tick DoT was landing a full point *per frame* — a nominal 4/sec poison dealt ~60/sec.
-  Fixed at the root (`applyDotDamage` accrues sub-point damage). The constants now mean what they say.
-  **This needs a playtest** — the Hag especially may now feel feeble. Constants: `CombatEngine.POISON_DPS`,
-  `BLEED_DPS`.
-- `ARMOR_WEIGHT_LIMIT` 22 → 20, because scale+extras (21.5kg) did not exceed 22 and so never collapsed the
-  chariot, contradicting its own spec. The armour-weight tests were also flaky: they pinned the armour but
-  not the helmet, and `BattleSimState` defaults headgear to a **random** piece (0-6kg).
-- Skipped deliberately: the peasant's hunched posture, and forearm hair on bare-chested fighters.
+- BRAWL theme plays ONLY with fists equipped, starting at battle start;
+  THRONE is forced during William boss fights via the `appliedMusicMoods`
+  pipe. D Task 4 hooks into this — do not add a parallel mechanism.
+- All spawns/scenery/siege cadence must be seed-deterministic
+  (`gameSeed + level`); tests assert exact sequences for fixed seeds.
+- Audio is phone-band mixed (300 Hz–4 kHz emphasis) — keep
+  `everyVoiceRendersAudibleSound`-style tests green if touching synth code.
+- After C lands: static scenery goes through the backdrop cache; live actors
+  (gate, parapet fighters) must NOT be cached.
+- Weather fix (D Task 7): extract per-`DivineWeather` geometry to pure
+  functions of an `innerFieldRect`, wrap drawing in `clipRect`; tests assert
+  full-bleed coverage without overflow on phone + tablet aspect ratios.
+- Building art is data-driven (`app/src/main/assets/art/*.json`, discovered
+  not registered, drawn via `BackgroundObjectType.VECTOR`). New static
+  backdrops in D can be JSON assets; seeded/procedural and interactive
+  pieces (gate, damage states) stay Kotlin.
 
-## Process
-- Untracked cruft still present, never touched: `test_out.txt`, `tapestry_options.html`, logcats.
-- Four stale Gemini worktrees still registered under `C:/Users/Josh/.gemini/...`; `git worktree prune`
-  after deleting those dirs if wanted.
-- Gemini's subscription has expired; it is no longer available for outsourcing.
+## Known issues carried forward (pre-existing, deliberate)
+
+- `CombatEngineTest.throneModeFistsPlayerReachesAdjacentEnemy` is flaky
+  (~1 in 8 full-suite runs) — random attack rolls; rerun before assuming
+  your change broke it.
+- Poison/bleed were root-cause rebalanced (`applyDotDamage` accrues
+  sub-point damage); still awaiting a human playtest.
+- Untracked cruft never touched: `test_out.txt`, `tapestry_options.html`,
+  logcats. Stale Gemini worktrees may still need `git worktree prune`.
+
+## Definition of done (whole effort)
+
+`compileDebugKotlin` clean; full `testDebugUnitTest` green; `assembleDebug`
+builds; manual pass per D plan Task 8 (each boss, one full siege with ladder
+up/down + auto-descent, each new backdrop, every weather flourish at full
+bleed); clean conventional commit history, one commit per task.

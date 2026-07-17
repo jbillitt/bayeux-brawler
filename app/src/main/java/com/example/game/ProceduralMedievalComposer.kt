@@ -13,12 +13,12 @@ object ProceduralMedievalComposer {
 
     fun midiToFreq(midi: Float): Float = (440.0 * Math.pow(2.0, (midi - 69.0) / 12.0)).toFloat()
 
-    fun compose(seed: Long, level: Int, hasTrumpeter: Boolean, sampleRate: Int, moods: List<String> = emptyList()): ShortArray {
+    fun compose(seed: Long, level: Int, hasTrumpeter: Boolean, sampleRate: Int, moods: List<String> = emptyList(), brawl: Boolean = false, throne: Boolean = false): ShortArray {
         // Moods re-flavour the run's own theme — they must NOT reseed it. Folding moods into the
         // seed regenerated the melody from scratch, so picking a mood on the reward screen swapped
         // your song for an unrelated one. Everything random stays keyed to the run seed; `moods`
         // reaches the music only through resolveSongSpec (mode/tempo/key) and `wilder` below.
-        val spec = resolveSongSpec(seed, moods)
+        val spec = resolveSongSpec(seed, moods, brawl, throne)
         currentRootMidi = spec.finalMidi.toFloat()
         currentThirdOffset = spec.mode.steps[2].toFloat()
         val song = generateSong(spec, melodyRng(seed))
@@ -28,7 +28,8 @@ object ProceduralMedievalComposer {
         val totalSamples = (spec.totalBars * spec.beatsPerBar * spec.secondsPerBeat * sampleRate).toInt()
         val bus = MixBus(sampleRate, totalSamples)
         val hrng = humaniseRng(seed)
-        val wilder = "Wilder" in moods || "Brawl" in moods
+        // Brawl keeps the wilder double-hit drum floor; it's a family now, not a mood.
+        val wilder = "Wilder" in moods || spec.family == Family.BRAWL
 
         for (assign in active) {
             when (assign.line) {

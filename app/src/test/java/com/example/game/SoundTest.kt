@@ -75,6 +75,12 @@ class SoundTest {
     }
 
     @Test
+    fun brawlComposeIsAudible() {
+        val buf = ProceduralMedievalComposer.compose(7L, 1, false, 22050, emptyList(), brawl = true)
+        assertTrue(buf.any { it != 0.toShort() })
+    }
+
+    @Test
     fun everyVoiceRendersAudibleSound() {
         val rng = kotlin.random.Random(1)
         for (voice in Voice.values()) {

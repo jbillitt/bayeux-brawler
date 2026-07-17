@@ -32,7 +32,7 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     val wildCount = moods.count { it == "Wilder" }
     val noblerCount = moods.count { it == "Nobler" }
 
-    val brawl = "Brawl" in moods
+    val brawl = spec.family == Family.BRAWL
     val wilder = wildCount > 0 || brawl   // brawl borrows the wilder double-hit drum patterns
     val merrier = merrierCount > 0
     val nobler = noblerCount > 0
@@ -56,6 +56,7 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
         Family.MINUET -> listOf(Voice.LUTE to 0.6f, Voice.HARP to 0.4f)
         Family.TINTAGEL -> listOf(Voice.HARP to 0.6f, Voice.LUTE to 0.4f)
         Family.ESTAMPIE -> listOf(Voice.LUTE to 0.7f, Voice.HARP to 0.3f)   // dance wants the pluck
+        else -> listOf(Voice.HARP to 0.6f, Voice.LUTE to 0.4f)   // BRAWL/THRONE take bespoke plans (Tasks 3/5)
     })
     used += soloist
     a += VoiceAssignment(soloist, LineRef.MELODY, 1, 3, gMel, 0f)
@@ -68,6 +69,7 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
         Family.MINUET -> listOf(Voice.RECORDER to 0.5f, Voice.VIELLE to 0.3f, Voice.PANPIPES to 0.2f)
         Family.GREENSLEEVES -> listOf(Voice.RECORDER to 0.4f, Voice.VIELLE to 0.4f, Voice.PANPIPES to 0.2f)
         Family.ESTAMPIE -> listOf(Voice.PANPIPES to 0.4f, Voice.RECORDER to 0.35f, Voice.VIELLE to 0.25f)
+        else -> listOf(Voice.VIELLE to 0.6f, Voice.RECORDER to 0.4f)
     })
     used += second
     a += VoiceAssignment(second, LineRef.COUNTER, 2, 99, gSecond, 0.35f)

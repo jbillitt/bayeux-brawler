@@ -2,13 +2,14 @@ package com.example.game
 
 import kotlin.random.Random
 
-enum class Family { GREENSLEEVES, MINUET, TINTAGEL, ESTAMPIE }
+enum class Family { GREENSLEEVES, MINUET, TINTAGEL, ESTAMPIE, BRAWL, THRONE }
 
 enum class Mode(val steps: IntArray) {
     DORIAN(intArrayOf(0, 2, 3, 5, 7, 9, 10)),
     AEOLIAN(intArrayOf(0, 2, 3, 5, 7, 8, 10)),
     IONIAN(intArrayOf(0, 2, 4, 5, 7, 9, 11)),
-    MIXOLYDIAN(intArrayOf(0, 2, 4, 5, 7, 9, 10))
+    MIXOLYDIAN(intArrayOf(0, 2, 4, 5, 7, 9, 10)),
+    PHRYGIAN(intArrayOf(0, 1, 3, 5, 7, 8, 10))   // the flat-2 sting for BRAWL cadences
 }
 
 data class GroundBar(val bassDegree: Int)
@@ -51,10 +52,27 @@ private val ESTAMPIE_GROUNDS = listOf(
     listOf(0, 6, 0, 6, 0, 5, 6, 0),   // double-tonic i VII, VI colour at the turn
     listOf(0, 6, 5, 6, 0, 6, 5, 0)
 )
+private val BRAWL_GROUNDS = listOf(
+    listOf(0, 6, 0, 4, 0, 6, 0, 4),   // i bVII i V riff, twice round
+    listOf(0, 6, 0, 6, 0, 6, 4, 0),   // double-tonic hammer with a V turn
+    listOf(0, 4, 0, 4, 0, 6, 4, 0)    // i V i V power alternation
+)
+private val THRONE_GROUNDS = listOf(
+    listOf(0, 6, 5, 4, 0, 6, 5, 4),   // descending tetrachord i bVII bVI V (lament bass)
+    listOf(0, 6, 5, 4, 0, 5, 3, 4)    // tetrachord answered by bVI iv V
+)
 
-fun resolveSongSpec(seed: Long, moods: List<String>): SongSpec {
+// Normal rotation only — BRAWL and THRONE are trigger-selected, never rolled.
+private val ROTATION = listOf(Family.GREENSLEEVES, Family.MINUET, Family.TINTAGEL, Family.ESTAMPIE)
+
+fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, throne: Boolean = false): SongSpec {
     val rng = Random(seed * 31L + 7L)   // spec stream, separate from melody/orch
-    val family = Family.values()[rng.nextInt(Family.values().size)]
+    // Throne wins over fists: the lord isn't punching.
+    val family = when {
+        throne -> Family.THRONE
+        brawl -> Family.BRAWL
+        else -> ROTATION[rng.nextInt(ROTATION.size)]
+    }
 
     var mode: Mode
     var bpm: Int
@@ -86,27 +104,48 @@ fun resolveSongSpec(seed: Long, moods: List<String>): SongSpec {
             beatsPerBar = 4; totalBars = 32
             groundDegrees = ESTAMPIE_GROUNDS[rng.nextInt(ESTAMPIE_GROUNDS.size)]
         }
+        Family.BRAWL -> {                        // medieval speed metal — fists only
+            mode = if (rng.nextInt(10) < 3) Mode.PHRYGIAN else Mode.AEOLIAN
+            bpm = 168 + rng.nextInt(17)          // 168-184
+            beatsPerBar = 4; totalBars = 16
+            groundDegrees = BRAWL_GROUNDS[rng.nextInt(BRAWL_GROUNDS.size)]
+        }
+        Family.THRONE -> {                       // epic cinematic thriller — throne mode only
+            mode = if (rng.nextBoolean()) Mode.DORIAN else Mode.AEOLIAN
+            bpm = 66 + rng.nextInt(11)           // 66-76
+            beatsPerBar = 4; totalBars = 16
+            groundDegrees = THRONE_GROUNDS[rng.nextInt(THRONE_GROUNDS.size)]
+        }
     }
     var finalMidi = 45 + rng.nextInt(8)          // A2-G#3
+    if (family == Family.THRONE) finalMidi -= 4  // the court sits deep
     var ornament = when (family) {
         Family.MINUET -> 0.6f; Family.GREENSLEEVES -> 0.4f; Family.TINTAGEL -> 0.25f
         Family.ESTAMPIE -> 0.5f
+        Family.BRAWL -> 0.3f                     // already fast; divisions would smear
+        Family.THRONE -> 0.15f                   // sparse, ominous
     }
 
-    // Mood deltas (applied in list order, stackable)
-    for (m in moods) when (m) {
-        "More Tempo"  -> bpm = (bpm * 1.25).toInt()
-        "Merrier"     -> { mode = brighten(mode); ornament = (ornament + 0.35f).coerceAtMost(1.5f) }
-        "More Solemn" -> { mode = darken(mode); bpm = (bpm * 0.85).toInt(); ornament = (ornament - 0.2f).coerceAtLeast(0.05f) }
-        "Nobler"      -> { bpm = (bpm * 0.90).toInt(); finalMidi -= 3 }
-        "Wilder"      -> { bpm = (bpm * 1.10).toInt(); ornament = (ornament + 0.4f).coerceAtMost(2.0f) }
-        // Fists-only run: the consort turns medieval speed metal. Minor mode, driving tempo.
-        "Brawl"       -> { mode = Mode.AEOLIAN; bpm = maxOf((bpm * 1.5).toInt(), if (beatsPerBar == 6) 76 else 132) }
+    // Mood deltas (applied in list order, stackable). Themed families ignore moods:
+    // BRAWL and THRONE are fixed-character replacements, not flavours of the run tune.
+    if (family != Family.BRAWL && family != Family.THRONE) {
+        for (m in moods) when (m) {
+            "More Tempo"  -> bpm = (bpm * 1.25).toInt()
+            "Merrier"     -> { mode = brighten(mode); ornament = (ornament + 0.35f).coerceAtMost(1.5f) }
+            "More Solemn" -> { mode = darken(mode); bpm = (bpm * 0.85).toInt(); ornament = (ornament - 0.2f).coerceAtLeast(0.05f) }
+            "Nobler"      -> { bpm = (bpm * 0.90).toInt(); finalMidi -= 3 }
+            "Wilder"      -> { bpm = (bpm * 1.10).toInt(); ornament = (ornament + 0.4f).coerceAtMost(2.0f) }
+        }
     }
     // Stacked tempo moods multiply without bound; past these caps the note tails smear across
     // chord changes and everything reads as discord. Nobler stacks -3 each pick; below MIDI 39
     // the counter-voice falls out of its playable register.
-    bpm = bpm.coerceIn(40, if (beatsPerBar == 6) 84 else 150)
+    bpm = bpm.coerceIn(40, when {
+        family == Family.BRAWL -> 184
+        family == Family.THRONE -> 76
+        beatsPerBar == 6 -> 84
+        else -> 150
+    })
     finalMidi = finalMidi.coerceIn(39, 52)
 
     val spb = if (beatsPerBar == 6) 60f / bpm / 3f else 60f / bpm

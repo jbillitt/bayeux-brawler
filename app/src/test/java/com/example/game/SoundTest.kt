@@ -35,16 +35,43 @@ class SoundTest {
     }
 
     @Test
-    fun brawlMoodIsFastMinorAndAudible() {
-        val plain = resolveSongSpec(7L, emptyList())
-        val brawl = resolveSongSpec(7L, listOf("Brawl"))
-        assertEquals(Mode.AEOLIAN, brawl.mode)
-        assertTrue("brawl should be faster", brawl.bpm > plain.bpm)
-        // Same run seed keeps the same family/ground — the tune is metalized, not replaced.
-        assertEquals(plain.family, brawl.family)
-        assertEquals(plain.ground, brawl.ground)
-        val buf = ProceduralMedievalComposer.compose(7L, 1, false, 22050, listOf("Brawl"))
-        assertTrue(buf.any { it != 0.toShort() })
+    fun throneAndBrawlSelectionOrder() {
+        for (seed in 1L..10L) {
+            assertEquals(Family.THRONE, resolveSongSpec(seed, emptyList(), brawl = true, throne = true).family)
+            assertEquals(Family.BRAWL, resolveSongSpec(seed, emptyList(), brawl = true, throne = false).family)
+            val normal = resolveSongSpec(seed, emptyList()).family
+            assertTrue("BRAWL/THRONE must never appear in rotation", normal != Family.BRAWL && normal != Family.THRONE)
+        }
+    }
+
+    @Test
+    fun brawlThemeIsSpeedMetalShaped() {
+        for (seed in 1L..10L) {
+            val spec = resolveSongSpec(seed, emptyList(), brawl = true)
+            assertTrue("brawl bpm ${spec.bpm}", spec.bpm in 168..184)
+            assertEquals(4, spec.beatsPerBar)
+            assertEquals(8, spec.ground.size)
+            assertTrue("minor mode wanted, got ${spec.mode}", spec.mode == Mode.AEOLIAN || spec.mode == Mode.PHRYGIAN)
+        }
+    }
+
+    @Test
+    fun throneThemeIsSlowAndDark() {
+        for (seed in 1L..10L) {
+            val spec = resolveSongSpec(seed, emptyList(), throne = true)
+            assertTrue("throne bpm ${spec.bpm}", spec.bpm in 66..76)
+            assertTrue(spec.mode == Mode.DORIAN || spec.mode == Mode.AEOLIAN)
+            assertEquals(8, spec.ground.size)
+            // Descending tetrachord head: i - bVII - bVI - V
+            assertEquals(listOf(0, 6, 5, 4), spec.ground.take(4).map { it.bassDegree })
+        }
+    }
+
+    @Test
+    fun moodsDoNotBendThemedFamilies() {
+        val spec = resolveSongSpec(7L, listOf("More Tempo", "More Tempo", "Merrier"), brawl = true)
+        assertTrue("moods must not push brawl off 168-184, got ${spec.bpm}", spec.bpm in 168..184)
+        assertTrue(spec.mode == Mode.AEOLIAN || spec.mode == Mode.PHRYGIAN)
     }
 
     @Test

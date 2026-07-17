@@ -165,8 +165,8 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean): Orche
     val a = mutableListOf<VoiceAssignment>()
     a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, 1, 99, 0.46f, 0.4f)
     a += VoiceAssignment(Voice.TABOR, LineRef.PERC, 1, 99, 0.34f, -0.45f)
-    a += VoiceAssignment(Voice.LUTE, LineRef.RIFF, 1, 99, 0.30f, -0.3f)
-    a += VoiceAssignment(Voice.GURDY, LineRef.DRONE, 1, 99, 0.30f, -0.6f)
+    a += VoiceAssignment(Voice.LUTE, LineRef.RIFF, 1, 99, 0.38f, -0.3f)
+    a += VoiceAssignment(Voice.GURDY, LineRef.DRONE, 1, 99, 0.36f, -0.6f)
     a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, 1, 99, 0.36f, -0.6f)
     a += VoiceAssignment(Voice.SHAWM, LineRef.MELODY, 1, 99, 0.40f, 0f)
 

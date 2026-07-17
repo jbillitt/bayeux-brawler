@@ -145,6 +145,9 @@ internal fun renderBackgroundObject(scope: DrawScope, bg: BackgroundObject, cx: 
         BackgroundObjectType.FLEET_CROSSING -> drawFleetCrossing(scope, cx, cy, bg)
         BackgroundObjectType.MONT_SAINT_MICHEL -> drawMontSaintMichel(scope, cx, cy, bg)
         BackgroundObjectType.STAMFORD_BRIDGE -> drawStamfordBridge(scope, cx, cy, bg)
+        BackgroundObjectType.FIELD_TREE -> drawFieldTree(scope, cx, cy, bg)
+        BackgroundObjectType.FIELD_GRASS -> drawFieldGrass(scope, cx, cy, bg)
+        BackgroundObjectType.HILL_SLOPE -> {} // drawn full-width in the render loop, never as a bitmap
         BackgroundObjectType.VECTOR -> {
             bg.artId?.let { id ->
                 VectorAsset.cached(id)?.let { asset ->
@@ -249,13 +252,13 @@ internal fun drawCastleWall(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
         val shadow = Color(0xFF8B7658)
         val wall = Path().apply {
             moveTo(cx - 230f, cy + 20f)
-            lineTo(cx - 230f, cy - 112f)
+            lineTo(cx - 230f, cy - 142f)
             for (i in 0 until 12) {
                 val x = cx - 230f + i * 40f
-                lineTo(x, cy - 132f)
-                lineTo(x + 20f, cy - 132f)
-                lineTo(x + 20f, cy - 112f)
-                lineTo(x + 40f, cy - 112f)
+                lineTo(x, cy - 162f)
+                lineTo(x + 20f, cy - 162f)
+                lineTo(x + 20f, cy - 142f)
+                lineTo(x + 40f, cy - 142f)
             }
             lineTo(cx + 230f, cy + 20f)
             close()
@@ -282,21 +285,21 @@ internal fun drawCastleWall(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             val tx = cx + side * 196f
             val tower = Path().apply {
                 moveTo(tx - 34f, cy + 20f)
-                lineTo(tx - 34f, cy - 148f)
-                lineTo(tx - 18f, cy - 148f)
-                lineTo(tx - 18f, cy - 168f)
-                lineTo(tx + 2f, cy - 168f)
-                lineTo(tx + 2f, cy - 148f)
-                lineTo(tx + 34f, cy - 148f)
+                lineTo(tx - 34f, cy - 178f)
+                lineTo(tx - 18f, cy - 178f)
+                lineTo(tx - 18f, cy - 198f)
+                lineTo(tx + 2f, cy - 198f)
+                lineTo(tx + 2f, cy - 178f)
+                lineTo(tx + 34f, cy - 178f)
                 lineTo(tx + 34f, cy + 20f)
                 close()
             }
             drawStitchedFill(scope, tower, if (side < 0) Color(0xFFD6C49C) else Color(0xFFC1AD83))
             scope.drawPath(tower, ThreadColor, style = StitchedStroke)
-            scope.drawCircle(Color(0xFF4B3A2A), 7f, Offset(tx, cy - 120f))
-            scope.drawLine(Color(0xFFD6A420), Offset(tx, cy - 168f), Offset(tx, cy - 202f), strokeWidth = 2.5f)
+            scope.drawCircle(Color(0xFF4B3A2A), 7f, Offset(tx, cy - 150f))
+            scope.drawLine(Color(0xFFD6A420), Offset(tx, cy - 198f), Offset(tx, cy - 232f), strokeWidth = 2.5f)
             val pennant = Path().apply {
-                moveTo(tx, cy - 202f); lineTo(tx + side * 30f, cy - 193f); lineTo(tx, cy - 184f); close()
+                moveTo(tx, cy - 232f); lineTo(tx + side * 30f, cy - 223f); lineTo(tx, cy - 214f); close()
             }
             drawStitchedFill(scope, pennant, if (side < 0) Color(0xFF9E3624) else Color(0xFF265063))
             scope.drawPath(pennant, ThreadColor, style = Stroke(1.5f))
@@ -463,6 +466,109 @@ internal fun drawFleetCrossing(scope: DrawScope, cx: Float, cy: Float, bg: Backg
         scope.withTransform({ scale(0.38f, 0.38f, Offset(cx + 135f, cy - 44f)) }) {
             drawShip(scope, cx + 135f, cy - 44f, bg.copy(id = "${bg.id}_far", seed = bg.seed + 1))
         }
+}
+
+/**
+ * The hill slope, drawn full-width in the same transformed space as the fighters so its crest sits
+ * exactly under their lifted feet ([HillField.liftAt] drives both). Called from the battle render
+ * loop, not the per-object bitmap path.
+ */
+internal fun drawHillTerrain(
+    scope: DrawScope,
+    hill: HillState,
+    levelWidth: Float,
+    playerScaleX: Float,
+    scaleFactor: Float
+) {
+    val feetY = 200f + 158f * scaleFactor
+    val bottomY = feetY + 600f
+    val steps = 48
+    val slope = Path().apply {
+        moveTo(0f, bottomY)
+        for (i in 0..steps) {
+            val wx = levelWidth * i / steps
+            lineTo(wx * playerScaleX, feetY + HillField.liftAt(wx, hill) * scaleFactor)
+        }
+        lineTo(levelWidth * playerScaleX, bottomY)
+        close()
+    }
+    drawStitchedFill(scope, slope, Color(0xFF6E8A4E))
+    scope.drawPath(slope, ThreadColor, style = StitchedStroke)
+    // A lighter ridge line along the crown for depth
+    val ridge = Path().apply {
+        for (i in 0..steps) {
+            val wx = levelWidth * i / steps
+            val y = feetY + HillField.liftAt(wx, hill) * scaleFactor
+            if (i == 0) moveTo(wx * playerScaleX, y) else lineTo(wx * playerScaleX, y)
+        }
+    }
+    scope.drawPath(ridge, Color(0x55FFF4D0), style = Stroke(3f))
+}
+
+internal fun drawFieldTree(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+    val rng = kotlin.random.Random(bg.seed)
+    val leaf = listOf(Color(0xFF4C613D), Color(0xFF5E7A46), Color(0xFF3F5233), Color(0xFF6E8A4E))[rng.nextInt(4)]
+    val trunkCol = Color(0xFF6B4B2D)
+    fun trunk(topY: Float, halfBase: Float) {
+        val t = Path().apply {
+            moveTo(cx - halfBase, cy + 20f)
+            lineTo(cx - halfBase * 0.55f, topY)
+            lineTo(cx + halfBase * 0.55f, topY)
+            lineTo(cx + halfBase, cy + 20f)
+            close()
+        }
+        drawStitchedFill(scope, t, trunkCol)
+        scope.drawPath(t, ThreadColor, style = StitchedStroke)
+    }
+    when (rng.nextInt(3)) {
+        0 -> {
+            // Round-canopy oak: overlapping lobes
+            trunk(cy - 70f, 10f)
+            val lobes = 5 + rng.nextInt(3)
+            for (i in 0 until lobes) {
+                val a = (i / lobes.toFloat()) * (2f * Math.PI).toFloat()
+                scope.drawCircle(leaf, 42f + rng.nextFloat() * 14f,
+                    Offset(cx + kotlin.math.cos(a) * 34f, cy - 96f + kotlin.math.sin(a) * 30f))
+            }
+            scope.drawCircle(leaf, 52f, Offset(cx, cy - 100f))
+        }
+        1 -> {
+            // Tall conifer: stacked triangles
+            trunk(cy - 40f, 8f)
+            for (tier in 0 until 4) {
+                val ty = cy - 40f - tier * 34f
+                val hw = 56f - tier * 11f
+                val tri = Path().apply {
+                    moveTo(cx - hw, ty); lineTo(cx, ty - 46f); lineTo(cx + hw, ty); close()
+                }
+                drawStitchedFill(scope, tri, leaf)
+                scope.drawPath(tri, ThreadColor, style = StitchedStroke)
+            }
+        }
+        else -> {
+            // Broad bushy pollard: wide low crown
+            trunk(cy - 50f, 12f)
+            listOf(-46f, 0f, 46f).forEachIndexed { i, dx ->
+                scope.drawCircle(leaf, if (i == 1) 56f else 44f, Offset(cx + dx, cy - 78f - if (i == 1) 14f else 0f))
+            }
+        }
+    }
+}
+
+internal fun drawFieldGrass(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+    val rng = kotlin.random.Random(bg.seed)
+    val blades = 6 + rng.nextInt(5)
+    val col = listOf(Color(0xFF5E7A46), Color(0xFF4C613D), Color(0xFF6E8A4E))[rng.nextInt(3)]
+    for (i in 0 until blades) {
+        val bx = cx - 40f + rng.nextFloat() * 80f
+        val h = 26f + rng.nextFloat() * 26f
+        val lean = -10f + rng.nextFloat() * 20f
+        val blade = Path().apply {
+            moveTo(bx, cy + 20f)
+            quadraticTo(bx + lean * 0.5f, cy + 20f - h * 0.6f, bx + lean, cy + 20f - h)
+        }
+        scope.drawPath(blade, col, style = Stroke(3f, cap = StrokeCap.Round))
+    }
 }
 
 internal fun drawStamfordBridge(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
@@ -724,10 +830,11 @@ internal fun drawFortMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
         scope.drawLine(Color(0xFFB09A6C), Offset(cx + 100f, cy + 14f), Offset(cx + 55f, cy - 58f), strokeWidth = 8f)
         // Palisade of individual timbers around the plateau edge
         drawPalisadeRun(scope, cx - 62f, cx + 62f, baseY = cy - 60f, height = 36f, seed = bg.id.hashCode())
-        // Keep
+        // Keep — its base sits on the plateau (cy-62), standing behind the palisade rather than
+        // floating on top of the fence.
         val keep = Path().apply {
-            moveTo(cx - 34f, cy - 84f)
-            lineTo(cx + 34f, cy - 84f)
+            moveTo(cx - 34f, cy - 62f)
+            lineTo(cx + 34f, cy - 62f)
             lineTo(cx + 28f, cy - 150f)
             lineTo(cx - 28f, cy - 150f)
             close()
@@ -744,7 +851,7 @@ internal fun drawFortMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
         drawStitchedFill(scope, roof, Color(0xFF265063))
         scope.drawPath(roof, ThreadColor, style = StitchedStroke)
         // Door + window
-        scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 7f, cy - 108f), size = androidx.compose.ui.geometry.Size(14f, 24f))
+        scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 7f, cy - 86f), size = androidx.compose.ui.geometry.Size(14f, 24f))
         scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 5f, cy - 140f), size = androidx.compose.ui.geometry.Size(10f, 12f))
     }
 

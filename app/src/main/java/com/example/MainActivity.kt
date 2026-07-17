@@ -1684,9 +1684,6 @@ fun BattlefieldScene(
             .border(2.dp, TapestryDark, RoundedCornerShape(6.dp))
     ) {
         // Render Tapestry Canvas
-        val latinHeadline = remember(uiState.level, uiState.bossType) {
-            FlavourText.latinHeadline(MedievalHarpPlayer.gameSeed, uiState.level, uiState.bossType)
-        }
         val borderSeed = remember(uiState.level) { MedievalHarpPlayer.gameSeed * 7L + uiState.level }
         val fixedBackdropCache = remember { TapestryBackdropCache() }
         val worldBackdropCache = remember { TapestryBackdropCache() }
@@ -1750,7 +1747,7 @@ fun BattlefieldScene(
                     )
                     xOffset += 4f
                 }
-                drawTapestryBorder(this, isTop = true, textHeadline = latinHeadline, motifSeed = borderSeed)
+                drawTapestryBorder(this, isTop = true, textHeadline = "", motifSeed = borderSeed)
                 drawTapestryBorder(this, isTop = false, textHeadline = "", motifSeed = borderSeed + 1)
             }
             drawImage(fixedBackdrop)
@@ -1797,6 +1794,10 @@ fun BattlefieldScene(
                 clipRect(top = 40f, bottom = size.height - 40f)
                 translate(left = offsetX, top = offsetY + groundOffsetY)
             }) {
+                // Hill slope sits behind all scenery and fighters, matching their lifted feet.
+                uiState.hillState?.let { hill ->
+                    com.example.game.drawHillTerrain(this, hill, uiState.levelWidth, playerScaleX, scaleFactor)
+                }
                 staticBackgroundObjects.forEach { bg ->
                     com.example.game.drawBackgroundDamageDecals(
                         this,

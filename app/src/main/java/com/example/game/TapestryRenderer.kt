@@ -276,6 +276,41 @@ object TapestryRenderer {
         fighter: FighterState
     ) {
         val boss = fighter.bossType ?: return
+
+        // Per-boss regalia so the 1066 trio each read as their own figure, not one re-tinted model.
+        // Drawn before the body (behind it): a sweeping cloak in the boss's colour, fur-trimmed at
+        // the collar, plus a signature accent.
+        val cloakColor = when (boss) {
+            BossType.HAROLD_GODWINSON -> Color(0xFF2E6B4A)   // Wessex green
+            BossType.HARALD_HARDRADA -> Color(0xFF3A2B5B)    // Norse royal purple
+            BossType.WILLIAM_THE_BASTARD -> Color(0xFF7A1B18) // Norman blood-red
+        }
+        val cloak = Path().apply {
+            moveTo(cx - 26f, cy + 8f)
+            lineTo(cx - 60f, cy + 120f)
+            lineTo(cx + 60f, cy + 120f)
+            lineTo(cx + 26f, cy + 8f)
+            quadraticTo(cx, cy - 2f, cx - 26f, cy + 8f)
+            close()
+        }
+        drawStitchedFill(scope, cloak, cloakColor)
+        scope.drawPath(cloak, ThreadColor, style = StitchedStroke)
+        // Fur collar
+        scope.drawLine(Color(0xFFE7DCC4), Offset(cx - 30f, cy + 6f), Offset(cx + 30f, cy + 6f), strokeWidth = 9f, cap = StrokeCap.Round)
+        when (boss) {
+            BossType.HAROLD_GODWINSON ->
+                // Housecarl's great Dane-axe slung across the back
+                scope.drawLine(Color(0xFF9EA3A8), Offset(cx + 34f, cy - 40f), Offset(cx - 34f, cy + 118f), strokeWidth = 6f, cap = StrokeCap.Round)
+            BossType.HARALD_HARDRADA ->
+                // Twin ravens of the North on the shoulders
+                listOf(-40f, 40f).forEach { dx ->
+                    scope.drawCircle(Color(0xFF23201C), 7f, Offset(cx + dx, cy - 2f))
+                }
+            BossType.WILLIAM_THE_BASTARD ->
+                // Golden hem befitting the would-be king
+                scope.drawLine(Color(0xFFD6A420), Offset(cx - 58f, cy + 116f), Offset(cx + 58f, cy + 116f), strokeWidth = 5f)
+        }
+
         val poleX = cx - 42f
         scope.drawLine(
             Color(0xFF6B4B2D),
@@ -478,21 +513,15 @@ object TapestryRenderer {
                 Offset(staffX, cy - 55f), Offset(staffX, cy + 95f),
                 strokeWidth = 5f, cap = StrokeCap.Round
             )
-            // A gold cross finial, not a plain disc — reads as clergy at a glance, which is the
-            // whole point: he's the man to kill first and players weren't spotting him.
-            scope.drawCircle(Color(0xFFD6A420), radius = 8f, center = Offset(staffX, cy - 58f))
+            // A carved wooden knob on the staff — no religious imagery on the enemy side.
+            scope.drawCircle(Color(0xFF8A6A3E), radius = 8f, center = Offset(staffX, cy - 58f))
             scope.drawCircle(ThreadColor, radius = 8f, center = Offset(staffX, cy - 58f), style = Stroke(width = 1.5f))
-            scope.drawLine(Color(0xFFD6A420), Offset(staffX, cy - 74f), Offset(staffX, cy - 46f), strokeWidth = 4f, cap = StrokeCap.Round)
-            scope.drawLine(Color(0xFFD6A420), Offset(staffX - 9f, cy - 66f), Offset(staffX + 9f, cy - 66f), strokeWidth = 4f, cap = StrokeCap.Round)
             // Rope girdle
             scope.drawLine(
                 Color(0xFFD6C48A),
                 Offset(cx - 26f, cy + 62f), Offset(cx + 26f, cy + 62f),
                 strokeWidth = 3f
             )
-            // Pectoral cross on the robe
-            scope.drawLine(Color(0xFFD6A420), Offset(cx, cy + 8f), Offset(cx, cy + 34f), strokeWidth = 3.5f, cap = StrokeCap.Round)
-            scope.drawLine(Color(0xFFD6A420), Offset(cx - 9f, cy + 17f), Offset(cx + 9f, cy + 17f), strokeWidth = 3.5f, cap = StrokeCap.Round)
         }
 
         // Champion Belt brawler upgrade — big gold wrestling belt at the waist
@@ -2432,9 +2461,14 @@ object TapestryRenderer {
                 dynamicWalkOffset = -60f * offsetSign * kotlin.math.sin(attackAnim * Math.PI).toFloat()
             }
             
+            // On a hill the entourage climbs in a diagonal file — each one a little further left and
+            // lower down the slope than the last, instead of the flat parade line behind the player.
+            val hillClimb = playerFighter.terrainLiftY < -1f
             // Each follower stands behind the player
             val baseOffsetX = if (anc == com.example.game.Ancillary.LIL_GUY) {
                 90f * offsetSign // Piggyback position!
+            } else if (hillClimb) {
+                (index + 1) * 66f * offsetSign + dynamicWalkOffset
             } else {
                 (column + 1) * 110f * offsetSign + dynamicWalkOffset
             }
@@ -2442,6 +2476,10 @@ object TapestryRenderer {
             val mountOffsetY = if (playerFighter.isChariot) -15f else if (playerFighter.isMounted && playerFighter.isLord) -20f else if (playerFighter.isMounted && playerFighter.isStilts) -STILTS_LIFT_PX else if (playerFighter.isMounted) -35f else 0f
             val cy = if (anc == com.example.game.Ancillary.LIL_GUY) {
                 90f + mountOffsetY
+            } else if (hillClimb) {
+                // Just downhill of the player's (lifted) feet: each rank a touch lower, trailing
+                // down-left along the slope.
+                200f + playerFighter.terrainLiftY + (index + 1) * 24f
             } else {
                 200f + row * 70f
             }

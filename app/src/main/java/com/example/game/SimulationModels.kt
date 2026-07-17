@@ -63,6 +63,9 @@ enum class Ancillary(
     GREASER("anc_greaser", "Slippery Sam", "Greaser", "Lobs pots of rendered fat from your backline. Foes skid over and flounder in the muck.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD9C77A))
 }
 
+/** Mounts, by ancillary id. Their hp/speed stats apply only when the mount is actually ridden. */
+val MOUNT_ANCILLARY_IDS = setOf("anc_mount_horse", "anc_mount_chariot", "anc_mount_stilts")
+
 /** Divine intervention, called down from the tapestry border once per battle-ish. */
 enum class DivineWeather(val id: String, val label: String, val description: String) {
     LIGHTNING("weather_lightning", "Divine Bolt", "The heavens smite your mightiest foe."),
@@ -281,6 +284,7 @@ enum class BackgroundObjectType {
     BUILDING_BAYEUX, TOWER_SPIRAL,
     CASTLE_WALL, CASTLE_GATE, MOTTE,
     FEASTING_HALL, FLEET_CROSSING, MONT_SAINT_MICHEL, STAMFORD_BRIDGE,
+    FIELD_TREE, FIELD_GRASS, HILL_SLOPE,
 
     /** Drawn entirely from assets/art/<artId>.json. New art needs no new enum value. */
     VECTOR
@@ -386,6 +390,10 @@ data class FighterState(
     var activeWrestlingMove: WrestlingMove? = null,
     var crumpleDuration: Float = 0f,
     var visualOffsetY: Float = 0f,
+    // Hill terrain: how far this fighter is lifted by the slope under his feet (negative = higher
+    // up the hill). 0 in every non-hill battle, so the high-ground damage bonus and the render
+    // lift can key off it directly and never leak into flat fights.
+    var terrainLiftY: Float = 0f,
     var pallbearerIndex: Int = -1,
     var trampleCooldown: Float = 0f,
     var kills: Int = 0,
@@ -715,6 +723,8 @@ data class BattleSimState(
     // Drives the medieval-speed-metal BRAWL music theme.
     val brawlMode: Boolean = false,
     val siegeState: SiegeState? = null,
+    /** Non-null only on a hill field battle; drives the slope and the high-ground bonus. */
+    val hillState: HillState? = null,
     val bossType: BossType? = null,
     val forceThroneMusic: Boolean = false,
 
@@ -725,11 +735,20 @@ data class BattleSimState(
     val playerName: String
         get() = listOf(honorific, givenName, byname).filter { it.isNotBlank() }.joinToString(" ")
 
+    // A mount's stats only count when you actually ride it. Merely unlocking a warhorse/chariot no
+    // longer buffs a throne run (or a run on a different mount) — that leaked its hp/speed onto
+    // whoever you played. Non-mount followers still all stack as before.
+    val effectiveMount: Ancillary?
+        get() = if (isThroneMode) null
+            else activeMount ?: unlockedAncillaries.lastOrNull { it.id in MOUNT_ANCILLARY_IDS }
+
     val totalHpBoost: Float
-        get() = unlockedAncillaries.sumOf { it.hpBoost.toDouble() }.toFloat()
+        get() = unlockedAncillaries.filter { it.id !in MOUNT_ANCILLARY_IDS }.sumOf { it.hpBoost.toDouble() }.toFloat() +
+            (effectiveMount?.hpBoost ?: 0f)
 
     val totalSpeedBoost: Float
-        get() = unlockedAncillaries.sumOf { it.speedBoost.toDouble() }.toFloat()
+        get() = unlockedAncillaries.filter { it.id !in MOUNT_ANCILLARY_IDS }.sumOf { it.speedBoost.toDouble() }.toFloat() +
+            (effectiveMount?.speedBoost ?: 0f)
 
     val scoreMultiplier: Float
         get() {

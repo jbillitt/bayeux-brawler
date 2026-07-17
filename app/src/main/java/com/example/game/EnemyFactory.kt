@@ -168,8 +168,8 @@ object EnemyFactory {
             BossType.HARALD_HARDRADA -> createArchetype(EnemyArchetype.BERSERKER, 90, level)
             BossType.WILLIAM_THE_BASTARD -> createArchetype(EnemyArchetype.NORMAN_LOYALIST, 90, level)
         }
-        val scaling = 1f + (level - type.level).coerceAtLeast(0) * 0.045f
-        val hp = baseHpFor(level) * 7f * scaling
+        val scaling = 1f + (level - type.level).coerceAtLeast(0) * 0.05f
+        val hp = baseHpFor(level) * 9.5f * scaling
         return base.copy(
             id = "boss_${type.name.lowercase()}",
             name = when (type) {
@@ -194,10 +194,10 @@ object EnemyFactory {
             BossType.HARALD_HARDRADA -> EnemyArchetype.BERSERKER
             BossType.WILLIAM_THE_BASTARD -> EnemyArchetype.NORMAN_LOYALIST
         }
-        val count = if (type == BossType.HARALD_HARDRADA) 6 else 4
+        val count = if (type == BossType.HARALD_HARDRADA) 8 else 5
         val retinue = List(count) { index ->
             val base = createArchetype(retinueType, index, level)
-            val eliteHp = base.maxHp * 1.6f
+            val eliteHp = base.maxHp * 1.9f
             base.copy(
                 id = "boss_retinue_${type.name.lowercase()}_$index",
                 maxHp = eliteHp, hp = eliteHp, isBossRetinue = true,
@@ -218,12 +218,12 @@ object EnemyFactory {
         val r = rng.nextFloat()
 
         val arch = if (level == 1) {
-            // Level 1 is the landing beach — greenest rabble only, and NO ranged: a backpedaling
-            // slinger cheeses the opening rounds. Ranged foes return from round 3 (level <= 4).
-            if (r < 0.6f) EnemyArchetype.PEASANT else EnemyArchetype.FYRD_LEVY
+            // Landing beach: green rabble, plus the odd shepherd slinger. Early ranged fire is
+            // slowed (EARLY_RANGED_LEVEL) and slingers stumble as they kite, so they harry rather
+            // than cheese the opening rounds.
+            if (r < 0.5f) EnemyArchetype.PEASANT else if (r < 0.78f) EnemyArchetype.FYRD_LEVY else EnemyArchetype.SLINGER
         } else if (level <= 2) {
-            // Still no slings/bows this round — melee rabble only.
-            if (r < 0.4f) EnemyArchetype.PEASANT else if (r < 0.75f) EnemyArchetype.FYRD_LEVY else EnemyArchetype.HOUSECARL
+            if (r < 0.35f) EnemyArchetype.PEASANT else if (r < 0.6f) EnemyArchetype.FYRD_LEVY else if (r < 0.8f) EnemyArchetype.HOUSECARL else EnemyArchetype.SLINGER
         } else if (level <= 4) {
             if (r < 0.2f) EnemyArchetype.PEASANT else if (r < 0.35f) EnemyArchetype.JAVELINEER else if (r < 0.5f) EnemyArchetype.MACEMAN else if (r < 0.65f) EnemyArchetype.ARCHER else if (r < 0.85f) EnemyArchetype.HOUSECARL else EnemyArchetype.SHIELD_WALL
         } else if (level <= 6) {
@@ -233,7 +233,6 @@ object EnemyFactory {
                 level >= 30 && r < 0.05f -> EnemyArchetype.NORMAN_LOYALIST
                 r < 0.12f -> EnemyArchetype.ARCHER
                 r < 0.20f -> EnemyArchetype.TORCH_BEARER
-                r < 0.28f -> EnemyArchetype.MONK_MILITIA
                 r < 0.37f -> EnemyArchetype.DANE_AXE_EXECUTIONER
                 r < 0.48f -> EnemyArchetype.SHIELD_WALL
                 r < 0.58f -> EnemyArchetype.BERSERKER

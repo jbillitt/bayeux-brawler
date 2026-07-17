@@ -96,8 +96,8 @@ class CombatEngine(private val ctx: BattleContext) {
         const val DEATH_PLAGUE_BURST_PX = 130f // his dying gift — wider than the passive miasma
         const val TROJAN_ROLL_MULT = 1.9f // must outpace the player to reach the enemy rear first
         // Greaser (all tunable). He's crowd control, not damage — the trip is the whole point.
-        const val GREASE_SLOW_SECS = 4.0f
-        const val GREASE_TRIP_CHANCE = 0.5f
+        const val GREASE_SLOW_SECS = 2.5f
+        const val GREASE_TRIP_CHANCE = 0.3f
         const val GREASE_TRIP_SECS = 1.8f
     }
 
@@ -418,6 +418,19 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
                 return
             }
+        }
+
+        // Elevated wall defenders hold their parapet — they shoot but never walk off the castle
+        // to chase, which was dragging archers left into mid-air off the wall's footprint.
+        if (fighter.elevated && !fighter.isPlayer && target != null && !target.isDead &&
+            fighter.crumpleDuration <= 0f
+        ) {
+            fighter.facingRight = target.posX > fighter.posX
+            if (fighter.attackCooldown <= 0 && !fighter.isAttacking) triggerAttack(fighter)
+            val piF = Math.PI.toFloat()
+            val nearestRest = kotlin.math.round(fighter.animFrame / piF) * piF
+            fighter.animFrame += (nearestRest - fighter.animFrame).coerceIn(-8f * dt, 8f * dt)
+            return
         }
 
         // Decide movement & actions
@@ -797,6 +810,10 @@ class CombatEngine(private val ctx: BattleContext) {
             } else {
                 // Full hit!
                 var totalDamage = ((slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt) * dmgScale
+
+                // High-ground bonus: only ever non-zero on a hill (terrainLiftY is 0 on flat fields),
+                // so a charge downhill hits harder and climbing to the crest neutralises it.
+                if (HillField.hasHighGround(attacker, currTarget)) totalDamage *= HillField.DOWNHILL_MULT
 
                 // Cupbearer strength bonus!
                 if (attacker.isPlayer && ctx.unlockedAncillaries.contains(Ancillary.CUPBEARER)) {

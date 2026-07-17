@@ -18,14 +18,17 @@ object SiegeRules {
     const val CLIMB_SECONDS = 0.75f
     const val DOWNHILL_DAMAGE_MULTIPLIER = 1.25f
     const val GROUND_FEET_OFFSET = 158f
-    const val PARAPET_ELEVATION_OFFSET = -120f
+    const val PARAPET_ELEVATION_OFFSET = -150f
+    /** Cap on a single blow against the gate, so no heavy build one-shots it. */
+    const val MAX_GATE_HIT_FRACTION = 0.34f
 
     fun parapetFeetY(scale: Float): Float =
         200f + (GROUND_FEET_OFFSET + PARAPET_ELEVATION_OFFSET) * scale
 
     fun damageGate(state: SiegeState, damage: Float, fighters: List<FighterState>) {
         if (state.gateBroken) return
-        state.gateHp = (state.gateHp - damage.coerceAtLeast(0f)).coerceAtLeast(0f)
+        val capped = damage.coerceIn(0f, state.gateMaxHp * MAX_GATE_HIT_FRACTION)
+        state.gateHp = (state.gateHp - capped).coerceAtLeast(0f)
         if (state.gateHp <= 0f) breakGate(state, fighters)
     }
 
@@ -101,7 +104,7 @@ object SiegeRules {
         fighters.none { !it.isPlayer && !it.isDead && !it.isDying }
 }
 
-fun elevationVisualOffset(fighter: FighterState): Float = when (fighter.climbState) {
+fun elevationVisualOffset(fighter: FighterState): Float = fighter.terrainLiftY + when (fighter.climbState) {
     ClimbState.CLIMBING_UP ->
         SiegeRules.PARAPET_ELEVATION_OFFSET *
             (1f - fighter.climbTimer / SiegeRules.CLIMB_SECONDS).coerceIn(0f, 1f)

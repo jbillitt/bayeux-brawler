@@ -95,7 +95,8 @@ class SiegeContentTest {
         val wall = fighter("gate_wall", EnemyArchetype.WALL_ARCHER, elevated = true)
         val queued = fighter("gate_queue", EnemyArchetype.HOUSECARL).apply { isCombatInactive = true }
         val gateState = SiegeState(10f, 10f, setOf(wall.id), setOf(queued.id))
-        SiegeRules.damageGate(gateState, 10f, listOf(wall, queued))
+        // No single blow one-shots the gate (per-hit cap), so batter it down over several hits.
+        repeat(5) { SiegeRules.damageGate(gateState, 10f, listOf(wall, queued)) }
         assertTrue(gateState.gateBroken)
         assertFalse(queued.isCombatInactive)
         SiegeRules.tickClimbs(listOf(wall), SiegeRules.CLIMB_SECONDS)

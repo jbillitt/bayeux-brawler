@@ -498,10 +498,10 @@ class GameViewModelTest {
     }
 
     @Test
-    fun `rally produces twins thirty percent of the time`() {
+    fun `rally produces twins fifteen percent of the time`() {
         val random = kotlin.random.Random(99)
         val twinRate = (0 until 1000).count { rollFollowerCopies(random) == 2 } / 1000f
-        assertTrue("twins rate was $twinRate", twinRate in 0.25f..0.35f)
+        assertTrue("twins rate was $twinRate", twinRate in 0.10f..0.20f)
     }
 
     @Test

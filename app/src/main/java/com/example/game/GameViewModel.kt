@@ -60,7 +60,7 @@ internal fun createLilGuyDart(
 }
 
 internal fun rollFollowerCopies(random: Random = Random.Default): Int =
-    if (random.nextFloat() < 0.30f) 2 else 1
+    if (random.nextFloat() < 0.15f) 2 else 1
 
 internal fun pickTripleCandidate(
     followers: List<Ancillary>,
@@ -164,6 +164,8 @@ class GameViewModel : ViewModel() {
         private const val MAX_WEATHERS_HELD = 2
         /** Buildings draw ~300px wide and were spawning on top of each other. */
         private const val MIN_BUILDING_GAP = 340f
+        /** Extra clearance between two obstacle edges (added to their half-widths). */
+        private const val BUILDING_MARGIN = 40f
 
         /** Seconds before a spent weather charge is ready again. The border icons dim against it. */
         const val WEATHER_COOLDOWN = 60f
@@ -594,18 +596,22 @@ class GameViewModel : ViewModel() {
         // Create Saxon enemies based on level
         // Difficulty scales with performance (kill speed + hp remaining)
         val perfBonus = ((state.performanceScore - 0.5f) * 2f).coerceIn(-0.3f, 0.5f)
-        val rawEnemiesCount = (1 + (state.level / 2) + contentRandom.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(1)
+        // Now the renderer is optimised the field can carry more bodies — a fuller host earlier
+        // (was 1 + level/2, which felt thin in the opening rounds).
+        val rawEnemiesCount = (2 + (state.level * 6 / 10) + contentRandom.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(2)
         val enemiesCount = rawEnemiesCount.coerceAtMost(10)
         // Overflow beyond the on-screen cap arrives as reinforcements from the right once
         // the battle scrolls past dead foes — longer battles instead of inflated HP.
         pendingReinforcements =
             if (bossType != null || isSiegeBattle) 0 else (rawEnemiesCount - enemiesCount).coerceIn(0, 8)
         var siegeState: SiegeState? = null
+        var hillState: HillState? = null
         val enemies = when {
             bossType != null -> EnemyFactory.createBossEncounter(bossType, state.level)
             isSiegeBattle -> {
-                val parapetCount = max(2, enemiesCount / 2)
-                val queueCount = max(2, enemiesCount)
+                // Harder siege: a fuller line of archers raining down and a deeper relief column.
+                val parapetCount = max(3, (enemiesCount * 2) / 3)
+                val queueCount = max(3, enemiesCount + 2)
                 val wall = List(parapetCount) { index ->
                     EnemyFactory.createArchetype(EnemyArchetype.WALL_ARCHER, index, state.level).apply {
                         elevated = true
@@ -616,7 +622,7 @@ class GameViewModel : ViewModel() {
                 val queue = List(queueCount) { index ->
                     val type = when {
                         index == 0 -> EnemyArchetype.DANE_AXE_EXECUTIONER
-                        index == 1 -> EnemyArchetype.MONK_MILITIA
+                        index == 1 -> EnemyArchetype.NORMAN_LOYALIST
                         index == 2 -> EnemyArchetype.TORCH_BEARER
                         else -> EnemyArchetype.HOUSECARL
                     }
@@ -626,7 +632,7 @@ class GameViewModel : ViewModel() {
                         isCombatInactive = true
                     }
                 }
-                val gateHp = 220f + state.level * 18f
+                val gateHp = 360f + state.level * 22f
                 siegeState = SiegeState(
                     gateHp = gateHp,
                     gateMaxHp = gateHp,
@@ -887,6 +893,21 @@ class GameViewModel : ViewModel() {
             ))
             player.posX = 220f
             player.targetX = 220f
+        } else if (BattlegroundContent.themeFor(MedievalHarpPlayer.gameSeed, state.level) == BattlegroundTheme.FIELD) {
+            // Open field: trees + long grass (from objectsFor), no forts. Later levels are hilly —
+            // the enemy holds the crest and we fight our way up.
+            bgObjects.addAll(BattlegroundContent.objectsFor(MedievalHarpPlayer.gameSeed, state.level, levelWidth))
+            if (HillField.isHillLevel(MedievalHarpPlayer.gameSeed, state.level)) {
+                val hill = HillField.stateFor(MedievalHarpPlayer.gameSeed, state.level, levelWidth)
+                hillState = hill
+                // The slope itself is drawn full-width in the render loop from hillState, not as a
+                // per-object bitmap. The host holds the crest, clustered near the top.
+                enemies.filter { !it.isPlayer && !it.isBossRetinue }.forEachIndexed { i, e ->
+                    e.posX = (hill.crestX - i * 70f).coerceAtLeast(hill.footX + 200f)
+                    e.targetX = e.posX
+                    e.terrainLiftY = HillField.liftAt(e.posX, hill)
+                }
+            }
         } else {
             bgObjects.addAll(
                 BattlegroundContent.objectsFor(
@@ -907,19 +928,22 @@ class GameViewModel : ViewModel() {
             )
             val assetBuildings = VectorAsset.spawnable().filter { state.level >= (it.spawn?.minLevel ?: 2) }
 
-            // Keep them apart: a random x per building had them growing out of each other
-            val placedX = mutableListOf<Float>()
-            fun placeX(): Float {
+            // Keep them apart: a random x per building had them growing out of each other.
+            // Track each obstacle's half-width so wide pieces (the feast hall / fleet / motte
+            // battleground objects, already in bgObjects) clear by their real footprint — a
+            // fixed gap let buildings spawn inside the 500-wide feast hall.
+            val placed = bgObjects.map { it.posX to it.width / 2f }.toMutableList()
+            fun placeX(halfWidth: Float = 150f): Float {
                 repeat(24) {
                     val candidate = 300f + contentRandom.nextFloat() * (levelWidth - 600f)
-                    if (placedX.none { abs(it - candidate) < MIN_BUILDING_GAP }) {
-                        placedX.add(candidate)
+                    if (placed.none { abs(it.first - candidate) < it.second + halfWidth + BUILDING_MARGIN }) {
+                        placed.add(candidate to halfWidth)
                         return candidate
                     }
                 }
                 // Crowded level: fall back to evenly spaced rather than stacked
-                val fallback = 300f + placedX.size * MIN_BUILDING_GAP
-                placedX.add(fallback)
+                val fallback = 300f + placed.size * MIN_BUILDING_GAP
+                placed.add(fallback to halfWidth)
                 return fallback.coerceAtMost(levelWidth - 300f)
             }
 
@@ -980,6 +1004,7 @@ class GameViewModel : ViewModel() {
                 weatherCooldowns = it.divineWeathers.associate { w -> w.id to 0f },
                 seenCounters = it.seenCounters + metCounters,
                 siegeState = siegeState,
+                hillState = hillState,
                 bossType = bossType,
                 forceThroneMusic = BossSchedule.forcesThroneMusic(bossType)
             )
@@ -1072,6 +1097,14 @@ class GameViewModel : ViewModel() {
             SiegeRules.reconcileParapet(siege, player, enemies)
         }
 
+        // Hill terrain: lift every fighter to the slope under his feet so the high-ground bonus
+        // and the render both key off the same value. Left at 0 on flat fields.
+        val hill = _uiState.value.hillState
+        if (hill != null) {
+            player.terrainLiftY = HillField.liftAt(player.posX, hill)
+            enemies.forEach { it.terrainLiftY = HillField.liftAt(it.posX, hill) }
+        }
+
         // Stamford Bridge feeds Hardrada's guard through the choke two at a time; he joins only
         // after the last of them falls.
         if (_uiState.value.bossType == BossType.HARALD_HARDRADA) {
@@ -1123,6 +1156,9 @@ class GameViewModel : ViewModel() {
             if (distance > 75f) {
                 player.posX += player.moveSpeed * dt
                 player.facingRight = true
+                // updateFighter only cycles the legs when it has a target; drive the walk bob
+                // ourselves or the player moon-walks up to the gate with frozen legs.
+                player.animFrame += dt * 9f
             } else if (player.attackCooldown <= 0f) {
                 SiegeRules.damageGate(siege, player.baseDamage.coerceAtLeast(5f), enemies)
                 player.attackCooldown = player.attackSpeedDelay
@@ -1162,6 +1198,25 @@ class GameViewModel : ViewModel() {
                     }
                 ))
                     .minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
+            }
+            // Allied NPCs no longer loiter at the rear while we alone batter the gate — with no
+            // reachable foe during a siege they march up and help break it down.
+            if (siege != null && !siege.gateBroken && enemy.isPlayer && pTarget == null &&
+                !enemy.isDead && !enemy.isDying && !enemy.elevated &&
+                enemy.climbState == ClimbState.NONE && enemy.pallbearerIndex < 0
+            ) {
+                engine.updateFighter(enemy, null, dt)
+                val gateX = 1800f
+                if (abs(gateX - enemy.posX) > 75f) {
+                    enemy.posX += enemy.moveSpeed * dt
+                    enemy.facingRight = true
+                    enemy.animFrame += dt * 9f
+                } else if (enemy.attackCooldown <= 0f) {
+                    SiegeRules.damageGate(siege, enemy.baseDamage.coerceAtLeast(5f), enemies)
+                    enemy.attackCooldown = enemy.attackSpeedDelay
+                    enemy.isAttacking = true
+                }
+                return@forEach
             }
             engine.updateFighter(enemy, pTarget, dt)
             if (enemy.ghostHp > enemy.hp) {
@@ -1498,7 +1553,7 @@ class GameViewModel : ViewModel() {
                     state.unlockedAncillaries,
                     state.tripledFollowerIds
                 )
-                if (state.level >= 8 && tripleCandidate != null && Random.nextFloat() < 0.2f) {
+                if (state.level >= 8 && tripleCandidate != null && Random.nextFloat() < 0.08f) {
                     val lucky = tripleCandidate
                     pendingChoices.add(LevelUpChoice(
                         id = "triple_${lucky.id}",

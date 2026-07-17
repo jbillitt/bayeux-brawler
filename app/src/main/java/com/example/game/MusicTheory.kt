@@ -116,8 +116,8 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
             groundDegrees = ESTAMPIE_GROUNDS[rng.nextInt(ESTAMPIE_GROUNDS.size)]
         }
         Family.BRAWL -> {                        // medieval speed metal — fists only
-            mode = if (rng.nextInt(10) < 3) Mode.PHRYGIAN else Mode.AEOLIAN
-            bpm = 168 + rng.nextInt(17)          // 168-184
+            mode = if (rng.nextInt(10) < 4) Mode.PHRYGIAN else Mode.AEOLIAN  // more flat-2 sting
+            bpm = 180 + rng.nextInt(21)          // 180-200 — heavier, faster gallop
             beatsPerBar = 4; totalBars = 16
             val grounds = if (mode == Mode.PHRYGIAN) BRAWL_PHRYGIAN_GROUNDS else BRAWL_AEOLIAN_GROUNDS
             groundDegrees = grounds[rng.nextInt(grounds.size)]

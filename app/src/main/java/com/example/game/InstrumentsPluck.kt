@@ -2,9 +2,17 @@ package com.example.game
 
 import kotlin.random.Random
 
-enum class Voice { HARP, LUTE, PSALTERY, VIELLE, VIOLA, FIDDLE2, RECORDER, PANPIPES, SHAWM, SACKBUT, HORN, GURDY, ORGAN, BELLS, NAKERS, TIMPANI, BODHRAN, TABOR, TAMBOURINE }
+enum class Voice { HARP, LUTE, PSALTERY, VIELLE, VIOLA, FIDDLE2, RECORDER, PANPIPES, SHAWM, SACKBUT, HORN, GURDY, ORGAN, CHOIR, BELLS, NAKERS, TIMPANI, BODHRAN, TABOR, TAMBOURINE }
 
-fun renderNote(voice: Voice, midi: Int, durSec: Float, velocity: Float, sr: Int, rng: Random): FloatArray {
+fun renderNote(
+    voice: Voice,
+    midi: Int,
+    durSec: Float,
+    velocity: Float,
+    sr: Int,
+    rng: Random,
+    phraseIndex: Int = 0
+): FloatArray {
     val buf = when (voice) {
         Voice.HARP     -> karplusStrong(midiHz(midi), durSec, sr, t60 = 3.2f, brightness = 8f,  pickPos = 0.30f, rng = rng)
         Voice.LUTE     -> karplusStrong(midiHz(midi), durSec, sr, t60 = 1.6f, brightness = 5f,  pickPos = 0.22f, rng = rng)
@@ -17,8 +25,8 @@ fun renderNote(voice: Voice, midi: Int, durSec: Float, velocity: Float, sr: Int,
         Voice.PANPIPES -> windVoice(midi, durSec, sr, rng, breath = 0.20f, chiffSec = 0.04f, chiffAmp = 0.35f,
                                      harmonics = floatArrayOf(1f, 0.15f, 0.05f), vibCents = 0f, vibHz = 0f, scoop = 0.04f,
                                      breathQ = 6f, attack = 0.05f)
-        Voice.VIELLE, Voice.VIOLA, Voice.FIDDLE2, Voice.SHAWM, Voice.SACKBUT, Voice.HORN, Voice.GURDY, Voice.ORGAN ->
-            renderBowBrass(voice, midi, durSec, velocity, sr, rng)
+        Voice.VIELLE, Voice.VIOLA, Voice.FIDDLE2, Voice.SHAWM, Voice.SACKBUT, Voice.HORN, Voice.GURDY, Voice.ORGAN, Voice.CHOIR ->
+            renderBowBrass(voice, midi, durSec, velocity, sr, rng, phraseIndex)
         Voice.BELLS, Voice.NAKERS, Voice.TIMPANI, Voice.BODHRAN, Voice.TABOR, Voice.TAMBOURINE ->
             renderPerc(voice, midi, durSec, velocity, sr, rng)
     }
@@ -72,4 +80,3 @@ private fun windVoice(
     if (peak > 0.95f) for (i in out.indices) out[i] = out[i] / peak * 0.95f
     return out
 }
-

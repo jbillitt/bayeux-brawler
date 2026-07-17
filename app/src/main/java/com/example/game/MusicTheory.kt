@@ -29,6 +29,12 @@ fun modeOffset(mode: Mode, degree: Int): Int {
 
 fun degreeToMidi(spec: SongSpec, degree: Int): Int = spec.finalMidi + modeOffset(spec.mode, degree)
 
+/** Root, modal fifth, and octave for the ground chord. */
+fun groundChordMidis(spec: SongSpec, groundDegree: Int): List<Int> {
+    val root = degreeToMidi(spec, groundDegree)
+    return listOf(root, degreeToMidi(spec, groundDegree + 4), root + 12)
+}
+
 fun melodyRng(seed: Long) = Random(seed)
 fun orchRng(seed: Long) = Random(seed xor 0x5DEECE66DL)
 fun humaniseRng(seed: Long) = Random(seed xor 0x2545F4914F6CDD1DL)
@@ -52,14 +58,19 @@ private val ESTAMPIE_GROUNDS = listOf(
     listOf(0, 6, 0, 6, 0, 5, 6, 0),   // double-tonic i VII, VI colour at the turn
     listOf(0, 6, 5, 6, 0, 6, 5, 0)
 )
-private val BRAWL_GROUNDS = listOf(
-    listOf(0, 6, 0, 4, 0, 6, 0, 4),   // i bVII i V riff, twice round
-    listOf(0, 6, 0, 6, 0, 6, 4, 0),   // double-tonic hammer with a V turn
-    listOf(0, 4, 0, 4, 0, 6, 4, 0)    // i V i V power alternation
+private val BRAWL_AEOLIAN_GROUNDS = listOf(
+    listOf(0, 6, 0, 4, 0, 6, 4, 0),   // i bVII i v / i bVII v i
+    listOf(0, 6, 0, 6, 0, 4, 6, 0),   // double-tonic hammer with a v turn
+    listOf(0, 4, 0, 4, 0, 6, 4, 0)    // i v alternation, bVII-v-i turnaround
+)
+private val BRAWL_PHRYGIAN_GROUNDS = listOf(
+    listOf(0, 6, 0, 1, 0, 6, 1, 0),   // i bVII i bII — flat-two metal sting
+    listOf(0, 6, 0, 6, 0, 1, 6, 0),
+    listOf(0, 1, 0, 1, 0, 6, 1, 0)
 )
 private val THRONE_GROUNDS = listOf(
-    listOf(0, 6, 5, 4, 0, 6, 5, 4),   // descending tetrachord i bVII bVI V (lament bass)
-    listOf(0, 6, 5, 4, 0, 5, 3, 4)    // tetrachord answered by bVI iv V
+    listOf(0, 6, 5, 4, 0, 6, 4, 0),   // descending tetrachord, then bVII-V-i
+    listOf(0, 6, 5, 4, 0, 5, 4, 0)    // tetrachord answered by VI/bVI-V-i
 )
 
 // Normal rotation only — BRAWL and THRONE are trigger-selected, never rolled.
@@ -108,7 +119,8 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
             mode = if (rng.nextInt(10) < 3) Mode.PHRYGIAN else Mode.AEOLIAN
             bpm = 168 + rng.nextInt(17)          // 168-184
             beatsPerBar = 4; totalBars = 16
-            groundDegrees = BRAWL_GROUNDS[rng.nextInt(BRAWL_GROUNDS.size)]
+            val grounds = if (mode == Mode.PHRYGIAN) BRAWL_PHRYGIAN_GROUNDS else BRAWL_AEOLIAN_GROUNDS
+            groundDegrees = grounds[rng.nextInt(grounds.size)]
         }
         Family.THRONE -> {                       // epic cinematic thriller — throne mode only
             mode = if (rng.nextBoolean()) Mode.DORIAN else Mode.AEOLIAN

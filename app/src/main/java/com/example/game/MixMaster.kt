@@ -43,7 +43,7 @@ class MixBus(val sampleRate: Int, val totalSamples: Int) {
                 var s = 0f
                 for (c in combs) s += c.process(send[i])
                 s *= 0.25f
-                val l = apL.process(s); val r = apR.process(l)
+                val l = apL.process(s); val r = apR.process(s)
                 if (write) { wetL[i] = l; wetR[i] = r }
             }
         }

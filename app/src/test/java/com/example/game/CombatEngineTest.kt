@@ -18,13 +18,14 @@ class CombatEngineTest {
         override var hasShieldbreaker: Boolean = false
         override var hasArmorPiercing: Boolean = false
         val projectiles = mutableListOf<Projectile>()
+        val particles = mutableListOf<BloodParticle>()
         val popups = mutableListOf<String>()
         var kills = 0
         override fun spawnProjectile(p: Projectile) { projectiles.add(p) }
         override fun sound(type: SoundType) {}
         override fun popup(text: String, x: Float, y: Float, color: Color) { popups.add(text) }
         override fun bloodParticles(x: Float, y: Float, count: Int) {}
-        override fun particle(p: BloodParticle) {}
+        override fun particle(p: BloodParticle) { particles.add(p) }
         override fun screenshake(amount: Float) {}
         override fun enemyKilled() { kills++ }
     }
@@ -134,6 +135,141 @@ class CombatEngineTest {
         horse.posX = 600f
         engine.updateFighter(horse, foe, 0.033f)
         assertTrue("horse should burst once behind all foes", horse.isDying)
+    }
+
+    @Test
+    fun followersSprintToCatchThePlayerButPallbearersStayLocked() {
+        val target = fighter(posX = 1300f)
+
+        val farContext = FakeContext()
+        val farPlayer = fighter(isPlayer = true, posX = 700f)
+        val farFollower = fighter(isPlayer = true, posX = 100f)
+        farContext.player = farPlayer
+        farContext.enemies = listOf(target)
+        val farStart = farFollower.posX
+        CombatEngine(farContext).updateFighter(farFollower, target, 0.1f)
+        assertTrue(
+            "far follower did not hustle",
+            farFollower.posX - farStart > farFollower.moveSpeed * 0.1f * 2f
+        )
+
+        val nearContext = FakeContext()
+        val nearPlayer = fighter(isPlayer = true, posX = 200f)
+        val nearFollower = fighter(isPlayer = true, posX = 100f)
+        nearContext.player = nearPlayer
+        nearContext.enemies = listOf(target)
+        val nearStart = nearFollower.posX
+        CombatEngine(nearContext).updateFighter(nearFollower, target, 0.1f)
+        assertEquals(nearFollower.moveSpeed * 0.1f, nearFollower.posX - nearStart, 0.01f)
+
+        val throneContext = FakeContext()
+        val lord = fighter(isPlayer = true, posX = 600f)
+        val bearer = fighter(isPlayer = true, posX = 0f).apply { pallbearerIndex = 0 }
+        throneContext.player = lord
+        throneContext.enemies = listOf(target, bearer)
+        CombatEngine(throneContext).updateFighter(bearer, target, 0.1f)
+        assertEquals(lord.posX + 45f, bearer.posX, 0.01f)
+    }
+
+    @Test
+    fun enemiesStayGroundedWhenSwattingTheRaven() {
+        val context = FakeContext()
+        val attacker = fighter(posX = 100f).apply {
+            isAttacking = true
+            swingProgress = 0.49f
+            visualOffsetY = -60f
+        }
+        val raven = fighter(isPlayer = true, posX = 140f).copy(id = "raven", speedBoost = -1f)
+        context.player = raven
+        context.enemies = listOf(attacker)
+        val hpBefore = raven.hp
+
+        CombatEngine(context).updateFighter(attacker, raven, 0.1f)
+
+        assertTrue("attacker leapt toward the airborne raven", attacker.visualOffsetY >= 0f)
+        assertTrue("raven stopped being a legal melee target", raven.hp < hpBefore)
+    }
+
+    @Test
+    fun hagMudPoisonsAndSplatsGreenOnImpact() {
+        val context = FakeContext()
+        val defender = fighter().copy(speedBoost = -1f)
+        val mud = Projectile(
+            id = "hag_mud_test",
+            isPlayerOwned = true,
+            posX = defender.posX,
+            posY = 140f,
+            velocityX = 100f,
+            velocityY = 0f,
+            damage = 5f,
+            pierce = 0f,
+            blunt = 0f,
+            type = ProjectileType.ROCK
+        )
+
+        CombatEngine(context).applyProjectileDamage(mud, defender)
+
+        assertEquals(3f, defender.poisonDuration, 0f)
+        assertTrue("mud impact had no immediate green splat", context.particles.size >= 6)
+        assertTrue(context.particles.all { it.color == Color(0xFF2E7D32) })
+    }
+
+    @Test
+    fun playerOnlyHaroldEyeCritIsNotConsumedByAnAncillaryArrow() {
+        val context = FakeContext()
+        val player = fighter(head = "head_bow", handle = "handle_fists", isPlayer = true)
+        context.player = player
+        val harold = EnemyFactory.createBoss(BossType.HAROLD_GODWINSON, 10)
+            .copy(speedBoost = -1f).apply {
+            shield = GameData.Shield.NONE
+            shieldHp = 0f
+            arrowEyeCritWindow = 2.5f
+        }
+        context.enemies = listOf(harold)
+        val engine = CombatEngine(context)
+        fun arrow(sourceId: String) = Projectile(
+            id = "arrow_$sourceId",
+            isPlayerOwned = true,
+            posX = harold.posX,
+            posY = 150f,
+            velocityX = 300f,
+            velocityY = 0f,
+            damage = 10f,
+            pierce = 10f,
+            blunt = 0f,
+            type = ProjectileType.ARROW,
+            sourceFighterId = sourceId
+        )
+
+        engine.applyProjectileDamage(arrow(Ancillary.ARCHER.id), harold)
+        assertEquals(2.5f, harold.arrowEyeCritWindow, 0f)
+        engine.applyProjectileDamage(arrow(player.id), harold)
+        assertEquals(0f, harold.arrowEyeCritWindow, 0f)
+    }
+
+    @Test
+    fun heavyMeleeCleaveSkipsWrongElevationQueuedAndClimbingDefenders() {
+        val context = FakeContext()
+        val engine = CombatEngine(context)
+        val attacker = fighter(
+            head = "head_claymore", handle = "handle_iron", isPlayer = true, posX = 0f
+        )
+        val primary = fighter(posX = 30f)
+        val elevated = fighter(posX = 35f).apply { this.elevated = true }
+        val queued = fighter(posX = 40f).apply { isCombatInactive = true }
+        val climbing = fighter(posX = 45f).apply { climbState = ClimbState.CLIMBING_DOWN }
+        context.player = attacker
+        context.enemies = listOf(primary, elevated, queued, climbing)
+        val strike = CombatEngine::class.java.getDeclaredMethod(
+            "performStrike", FighterState::class.java, FighterState::class.java
+        ).apply { isAccessible = true }
+
+        repeat(20) { strike.invoke(engine, attacker, primary) }
+
+        assertTrue(primary.hp < primary.maxHp || primary.isDying)
+        assertEquals(elevated.maxHp, elevated.hp, 0f)
+        assertEquals(queued.maxHp, queued.hp, 0f)
+        assertEquals(climbing.maxHp, climbing.hp, 0f)
     }
 
     @Test

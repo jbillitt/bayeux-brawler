@@ -29,7 +29,8 @@ enum class EnemyArchetype {
     FYRD_LEVY, HOUSECARL, ARCHER, SHIELD_WALL, BERSERKER, CAVALRY, CHAMPION,
     // 10 New archetypes
     PEASANT, SLINGER, JAVELINEER, MACEMAN, PIKEMAN,
-    KNIGHT_DISMOUNTED, CHARIOT_ARCHER, CHARIOT_LANCER, LORD, KING
+    KNIGHT_DISMOUNTED, CHARIOT_ARCHER, CHARIOT_LANCER, LORD, KING,
+    WALL_ARCHER, TORCH_BEARER, DANE_AXE_EXECUTIONER, MONK_MILITIA, NORMAN_LOYALIST
 }
 
 enum class Ancillary(
@@ -278,6 +279,8 @@ data class EmbeddedProjectile(
 enum class BackgroundObjectType {
     SHIP, FORT_PALACE, FORT_DINAN, BUILDING_BOSHAM, BUILDING_MANOR, FORT_TOWER, FORT_MOTTE, BROKEN_CHARIOT,
     BUILDING_BAYEUX, TOWER_SPIRAL,
+    CASTLE_WALL, CASTLE_GATE, MOTTE,
+    FEASTING_HALL, FLEET_CROSSING, MONT_SAINT_MICHEL, STAMFORD_BRIDGE,
 
     /** Drawn entirely from assets/art/<artId>.json. New art needs no new enum value. */
     VECTOR
@@ -365,6 +368,7 @@ data class FighterState(
     val brawlerUpgrades: List<String> = emptyList(),
     var shieldHp: Float = 0f,
     var poisonDuration: Float = 0f,
+    var igniteDuration: Float = 0f,
     var bleedDuration: Float = 0f,
     var slowDuration: Float = 0f,
     var diseaseDuration: Float = 0f,
@@ -388,6 +392,16 @@ data class FighterState(
     var stuckProjectiles: MutableList<StuckProj> = mutableListOf(),
     var lateGameMultiplier: Float = 1f,
     var bandagesCount: Int = 0,
+    val archetype: EnemyArchetype? = null,
+    var elevated: Boolean = false,
+    var climbState: ClimbState = ClimbState.NONE,
+    var climbTimer: Float = 0f,
+    var isCombatInactive: Boolean = false,
+    var armorShred: Float = 0f,
+    val bossType: BossType? = null,
+    val isBossRetinue: Boolean = false,
+    var arrowEyeCritWindow: Float = 0f,
+    var arrowEyeCritCooldown: Float = 4f,
     val bloodDecals: MutableList<Triple<Float, Float, Int>> = mutableListOf()
 ) {
     // Simulated Base Stats
@@ -414,7 +428,7 @@ data class FighterState(
             val extraDef = extraArmors.sumOf { it.defense.toDouble() }.toFloat()
             // Level-up scaling: Player gets tougher with each survived level to face stronger Saxon hosts
             val lvlDef = if (isPlayer) (level - 1) * 3f else 0f
-            return base + extraDef + lvlDef
+            return (base + extraDef + lvlDef - armorShred).coerceAtLeast(0f)
         }
 
     // Compute weapon properties
@@ -574,8 +588,8 @@ enum class WrestlingMove { CHOKE_SLAM, BODY_THROW, SUPLEX }
 
 // What a flying missile is — drives art, stuck-shaft rendering and hit sounds
 enum class ProjectileType {
-    ARROW, BOLT, STONE, JAVELIN, ROCK;
-    val isArrowLike: Boolean get() = this == ARROW || this == BOLT || this == JAVELIN
+    ARROW, BOLT, STONE, JAVELIN, ROCK, DART, TORCH;
+    val isArrowLike: Boolean get() = this == ARROW || this == BOLT || this == JAVELIN || this == DART
 }
 
 // Ragdoll variants. Order matters: the first five are the "tame" deaths used for
@@ -661,6 +675,7 @@ data class BattleSimState(
     // A List, not a Set: duplicates ARE the feature — Twins/Thrice-Blessed add repeat copies,
     // which a Set silently deduped (stacking did nothing at the type level).
     val unlockedAncillaries: List<com.example.game.Ancillary> = emptyList(),
+    val tripledFollowerIds: Set<String> = emptySet(),
     val activeMount: Ancillary? = null,
     val isDualWielding: Boolean = false,
     val hasSilkenGarments: Boolean = false,
@@ -697,8 +712,11 @@ data class BattleSimState(
     val pendingMusicOptions: List<String> = emptyList(),
     val appliedMusicMoods: List<String> = emptyList(), // accumulated player music choices
     // Sticky for the run: set when any battle starts with fists selected, cleared on run failure.
-    // Drives the medieval-speed-metal music variant ("Brawl" mood).
+    // Drives the medieval-speed-metal BRAWL music theme.
     val brawlMode: Boolean = false,
+    val siegeState: SiegeState? = null,
+    val bossType: BossType? = null,
+    val forceThroneMusic: Boolean = false,
 
     val pendingSkipBonus: Int = 0, // score to award on next dismiss of level-up screen when skipped
     val performanceScore: Float = 0.5f // dynamic difficulty: 0=struggling, 1=dominating
@@ -760,5 +778,3 @@ object LatinShouts {
         }
     }
 }
-
-

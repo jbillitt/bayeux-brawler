@@ -14,17 +14,27 @@ data class SongEvents(
 
 private const val FICTA = Int.MIN_VALUE  // marker: leading tone (final - 1 semitone)
 
-private fun rhythmPatterns(beatsPerBar: Int): List<List<Float>> = when (beatsPerBar) {
-    6 -> listOf(  // 6/8, beat = quaver, strong {0,3}
-        listOf(3f, 3f), listOf(2f, 1f, 3f), listOf(3f, 2f, 1f),
-        listOf(1f, 1f, 1f, 3f), listOf(2f, 1f, 2f, 1f)
-    )
-    3 -> listOf(  // 3/4 minuet
-        listOf(1f, 1f, 1f), listOf(1.5f, 0.5f, 1f), listOf(1f, 0.5f, 0.5f, 1f), listOf(2f, 1f)
-    )
-    else -> listOf( // 4/4 broad
-        listOf(2f, 2f), listOf(2f, 1f, 1f), listOf(1f, 1f, 2f), listOf(3f, 1f), listOf(1f, 1f, 1f, 1f)
-    )
+private fun rhythmPatterns(spec: SongSpec): List<List<Float>> {
+    if (spec.family == Family.BRAWL) {
+        return listOf(
+            List(8) { 0.5f },
+            listOf(0.5f, 0.5f, 0.5f, 0.5f, 1f, 1f),
+            listOf(1f, 0.5f, 0.5f, 1f, 0.5f, 0.5f),
+            listOf(0.5f, 1f, 0.5f, 0.5f, 1f, 0.5f)
+        )
+    }
+    return when (spec.beatsPerBar) {
+        6 -> listOf(  // 6/8, beat = quaver, strong {0,3}
+            listOf(3f, 3f), listOf(2f, 1f, 3f), listOf(3f, 2f, 1f),
+            listOf(1f, 1f, 1f, 3f), listOf(2f, 1f, 2f, 1f)
+        )
+        3 -> listOf(  // 3/4 minuet
+            listOf(1f, 1f, 1f), listOf(1.5f, 0.5f, 1f), listOf(1f, 0.5f, 0.5f, 1f), listOf(2f, 1f)
+        )
+        else -> listOf( // 4/4 broad
+            listOf(2f, 2f), listOf(2f, 1f, 1f), listOf(1f, 1f, 2f), listOf(3f, 1f), listOf(1f, 1f, 1f, 1f)
+        )
+    }
 }
 
 private fun strongBeats(beatsPerBar: Int): Set<Float> = when (beatsPerBar) {
@@ -58,7 +68,7 @@ private fun generateStrain(
     spec: SongSpec, rng: Random, startDegree: Int, isB: Boolean
 ): List<Pair<Float, Pair<Float, Int>>> {  // (barOffsetBeat, (dur, degreeOrFICTA))
     val bpb = spec.beatsPerBar.toFloat()
-    val patterns = rhythmPatterns(spec.beatsPerBar)
+    val patterns = rhythmPatterns(spec)
     val motifRhythm = patterns[rng.nextInt(patterns.size)]
     val altRhythm = patterns[rng.nextInt(patterns.size)]
     val out = mutableListOf<Pair<Float, Pair<Float, Int>>>()
@@ -125,7 +135,7 @@ private fun toNotes(spec: SongSpec, raw: List<Pair<Float, Pair<Float, Int>>>, st
 /** Divisions + graces for the repeat statement. */
 private fun ornament(spec: SongSpec, notes: List<NoteEvent>, rng: Random): List<NoteEvent> {
     val out = mutableListOf<NoteEvent>()
-    val wildCount = spec.moods.count { it == "Wilder" }
+    val wildCount = spec.moods.count { it == "Wilder" }.coerceAtMost(2)
     val density = spec.ornamentDensity * (1f + wildCount * 1.5f)
     for ((i, n) in notes.withIndex()) {
         val next = notes.getOrNull(i + 1)
@@ -210,8 +220,7 @@ private fun padLine(spec: SongSpec): List<ChordEvent> {
     val bpb = spec.beatsPerBar.toFloat()
     return (0 until spec.totalBars).map { bar ->
         val g = spec.ground[bar % 8].bassDegree
-        val root = spec.finalMidi + modeOffset(spec.mode, g)
-        ChordEvent(bar * bpb, bpb, listOf(root, root + 7, root + 12))
+        ChordEvent(bar * bpb, bpb, groundChordMidis(spec, g))
     }
 }
 

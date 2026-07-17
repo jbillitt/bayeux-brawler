@@ -9,14 +9,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertTrue
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -96,6 +103,52 @@ class ArtScreenshotTest {
             }
         }
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/buildings.png")
+    }
+
+    @Test
+    fun newContentBackdropsAndGateDamageStates() {
+        val backdrops = listOf(
+            bgObject(BackgroundObjectType.CASTLE_WALL),
+            bgObject(BackgroundObjectType.MOTTE),
+            bgObject(BackgroundObjectType.FEASTING_HALL),
+            bgObject(BackgroundObjectType.FLEET_CROSSING),
+            bgObject(BackgroundObjectType.MONT_SAINT_MICHEL),
+            bgObject(BackgroundObjectType.CASTLE_GATE).copy(hp = 500f, maxHp = 500f),
+            bgObject(BackgroundObjectType.CASTLE_GATE).copy(hp = 250f, maxHp = 500f),
+            bgObject(BackgroundObjectType.CASTLE_GATE).copy(hp = 100f, maxHp = 500f),
+            bgObject(BackgroundObjectType.CASTLE_GATE).copy(hp = 0f, maxHp = 500f)
+        )
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                backdrops.chunked(3).forEach { row ->
+                    Row {
+                        row.forEach { bg ->
+                            Canvas(modifier = Modifier.width(137.dp).height(150.dp)) {
+                                drawBackgroundObject(this, bg, size.width / 2f, 0.42f)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/new_backdrops.png")
+    }
+
+    @Test
+    fun liveSiegeGateAndLadder() {
+        val gate = bgObject(BackgroundObjectType.CASTLE_GATE)
+        composeTestRule.setContent {
+            Row(modifier = Modifier.fillMaxSize().background(linen)) {
+                listOf(500f, 250f, 100f, 0f).forEach { hp ->
+                    Canvas(modifier = Modifier.width(103.dp).height(260.dp)) {
+                        val x = size.width / 2f
+                        drawLiveCastleGate(this, gate, x, 0.55f, hp, 500f)
+                        if (hp == 0f) drawSiegeLadder(this, x, 0.55f)
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/live_siege.png")
     }
 
     /** The mounts, at a small size and a normal one — a little man in a chariot draws a second box. */
@@ -192,5 +245,37 @@ class ArtScreenshotTest {
             }
         }
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/fighters.png")
+    }
+
+    @Test
+    fun productionScaleRendererProducesInk() {
+        val monk = EnemyFactory.createArchetype(EnemyArchetype.MONK_MILITIA, 0, 10)
+            .copy(posX = 260f, targetX = 260f)
+        val hardrada = EnemyFactory.createBoss(BossType.HARALD_HARDRADA, 20)
+            .copy(posX = 720f, targetX = 720f, isCombatInactive = false)
+        val bridge = bgObject(BackgroundObjectType.STAMFORD_BRIDGE)
+
+        val bitmap = ImageBitmap(1000, 350)
+        CanvasDrawScope().draw(
+            density = Density(1f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = androidx.compose.ui.graphics.Canvas(bitmap),
+            size = Size(1000f, 350f)
+        ) {
+            drawRect(linen)
+            val productionScale = size.height / 350f
+            drawStaticBackgroundObject(this, bridge, size.width / 2f, productionScale)
+            TapestryRenderer.drawCharacter(this, monk, productionScale)
+            TapestryRenderer.drawCharacter(this, hardrada, productionScale)
+        }
+
+        val pixels = bitmap.toPixelMap()
+        var inkSamples = 0
+        for (y in 0 until pixels.height step 4) {
+            for (x in 0 until pixels.width step 4) {
+                if (pixels[x, y] != linen) inkSamples++
+            }
+        }
+        assertTrue("production renderer must paint non-linen pixels", inkSamples > 500)
     }
 }

@@ -12,6 +12,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
+internal fun acceptsComposition(expectedGeneration: Int, currentGeneration: Int, isPlaying: Boolean) =
+    isPlaying && expectedGeneration == currentGeneration
+
 /**
  * Streaming stereo music player. Renders are event-aligned across levels
  * (same seed = same tune), so level changes crossfade in-phase over 250 ms
@@ -41,6 +44,8 @@ object MedievalHarpPlayer {
     private var currentLevel = -1
     private var currentTrumpeter = false
     private var currentMoods: List<String> = emptyList()
+    private var currentBrawl = false
+    private var currentThrone = false
     private var audioManager: AudioManager? = null
     private var focusRequest: AudioFocusRequest? = null
 
@@ -61,17 +66,42 @@ object MedievalHarpPlayer {
         currentLevel = -1
     }
 
-    fun startMusic(level: Int = 1, hasTrumpeter: Boolean = false, moods: List<String> = emptyList()) {
-        if (isPlaying && currentLevel == level && currentTrumpeter == hasTrumpeter && currentMoods == moods) return
-        currentLevel = level; currentTrumpeter = hasTrumpeter; currentMoods = moods
+    fun startMusic(
+        level: Int = 1,
+        hasTrumpeter: Boolean = false,
+        moods: List<String> = emptyList(),
+        brawl: Boolean = false,
+        throne: Boolean = false
+    ) {
+        if (
+            isPlaying &&
+            currentLevel == level &&
+            currentTrumpeter == hasTrumpeter &&
+            currentMoods == moods &&
+            currentBrawl == brawl &&
+            currentThrone == throne
+        ) return
+        currentLevel = level
+        currentTrumpeter = hasTrumpeter
+        currentMoods = moods
+        currentBrawl = brawl
+        currentThrone = throne
         val myGen = ++compositionGeneration
         val wasPlaying = isPlaying
         isPlaying = true
         scope.launch {
             try {
-                val buf = ProceduralMedievalComposer.compose(gameSeed, level, hasTrumpeter, SAMPLE_RATE, moods)
+                val buf = ProceduralMedievalComposer.compose(
+                    gameSeed,
+                    level,
+                    hasTrumpeter,
+                    SAMPLE_RATE,
+                    moods,
+                    brawl,
+                    throne
+                )
                 synchronized(this@MedievalHarpPlayer) {
-                    if (compositionGeneration != myGen) return@launch
+                    if (!acceptsComposition(myGen, compositionGeneration, isPlaying)) return@launch
                     if (wasPlaying && current != null && feeder?.isAlive == true) {
                         pending = buf                       // in-phase crossfade in the feeder
                         fadeStartFrame = playheadFrames
@@ -171,6 +201,7 @@ object MedievalHarpPlayer {
     fun stopMusic() {
         if (!isPlaying) return
         isPlaying = false
+        compositionGeneration++
         generation++
         try {
             feeder?.join(500)

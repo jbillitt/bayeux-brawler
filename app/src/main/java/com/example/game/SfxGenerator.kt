@@ -42,15 +42,17 @@ object SfxGenerator {
 
     private fun thwack(sr: Int, rng: Random, pitchMul: Double, decayMul: Double): ShortArray {
         val dur = (0.18f * decayMul).toFloat(); val n = (sr * dur).toInt(); val out = ShortArray(n)
-        var phase = 0.0; val dt = 1.0 / sr
+        var phase = 0.0; var bodyPhase = 0.0; val dt = 1.0 / sr
         for (i in 0 until n) {
             val t = i.toDouble() / sr
             val env = 1.0 - t / dur
             val freq = (160.0 - 100.0 * (t / dur)) * pitchMul     // integrated: no reflected chirp
             phase += 2 * Math.PI * freq * dt
-            val s = Math.sin(phase)
+            bodyPhase += 2 * Math.PI * 520.0 * pitchMul * dt
+            val s = Math.sin(phase) * 0.55
+            val body = Math.sin(bodyPhase) * Math.exp(-18.0 * t) * 0.65
             val noise = (rng.nextDouble() * 2 - 1) * 0.1
-            out[i] = ((s + noise) / 1.1 * env * 30000).toInt().coerceIn(-32768, 32767).toShort()
+            out[i] = ((s + body + noise) / 1.3 * env * 30000).toInt().coerceIn(-32768, 32767).toShort()
         }
         return out
     }
@@ -58,6 +60,8 @@ object SfxGenerator {
     private fun crunch(sr: Int, rng: Random, pitchMul: Double, decayMul: Double): ShortArray {
         val dur = 0.25f; val n = (sr * dur).toInt(); val out = ShortArray(n)
         var phase = 0.0; val dt = 1.0 / sr
+        val crackMid = Biquad.bandpass(sr, 750f, 1.1f)
+        val crackHigh = Biquad.bandpass(sr, 1500f, 1.4f)
         for (i in 0 until n) {
             val t = i.toDouble() / sr
             val env = Math.exp(-15.0 * t / decayMul)
@@ -67,9 +71,11 @@ object SfxGenerator {
             var noise = (rng.nextDouble() * 2 - 1) * 0.6
             noise = 1.5 * noise - 0.5 * noise * noise * noise
             val snap = if (t < 0.05) (rng.nextDouble() * 2 - 1) * 0.4 else 0.0
+            val presence = crackMid.process(noise.toFloat()) * 0.75 +
+                crackHigh.process(noise.toFloat()) * 0.45
             // Soft saturation bounds the onset transient (raw peaks measured ~2x full scale);
             // the tanh drive keeps the aggressive bone-crunch character without hard clipping.
-            val soft = Math.tanh((s + noise + snap) * env * 1.2)
+            val soft = Math.tanh((s * 0.5 + noise * 0.65 + snap + presence) * env * 1.2)
             out[i] = (soft * 30000).toInt().coerceIn(-32768, 32767).toShort()
         }
         return out
@@ -122,9 +128,12 @@ object SfxGenerator {
                        0.5 * Math.sin(4 * Math.PI * currentF * hitT) * Math.exp(-6.0 * hitT) + 
                        0.25 * Math.sin(6 * Math.PI * currentF * hitT) * Math.exp(-12.0 * hitT)
             val noise = (rng.nextDouble() * 2 - 1) * Math.exp(-30.0 * hitT) * 0.15
+            val phoneBodyHz = (f * 5.0).coerceIn(320.0, 520.0)
+            val phoneBody = Math.sin(2 * Math.PI * phoneBodyHz * hitT) * Math.exp(-8.0 * hitT) * 0.7
+            val skin = (rng.nextDouble() * 2 - 1) * Math.exp(-40.0 * hitT) * 0.25
             
             // Beefy war drum / noble timpani
-            out[i] = ((wave + noise) * env * 20000).toInt().coerceIn(-32768, 32767).toShort()
+            out[i] = ((wave * 0.55 + phoneBody + noise + skin) * env * 20000).toInt().coerceIn(-32768, 32767).toShort()
         }
         return out
     }

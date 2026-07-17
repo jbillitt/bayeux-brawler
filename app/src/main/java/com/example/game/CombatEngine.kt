@@ -75,6 +75,11 @@ class CombatEngine(private val ctx: BattleContext) {
         // Damage-over-time rates, in points per second (see applyDotDamage).
         const val POISON_DPS = 14f
         const val BLEED_DPS = 10f
+        const val IGNITE_DPS = 12f
+        const val IGNITE_DURATION = 5f
+        const val ARMOR_SHRED_PER_HIT = 15f
+        const val MONK_AURA_RADIUS_PX = 240f
+        const val MONK_AURA_ATTACK_DELAY_MULT = 0.8f
 
         // Curve counters and their outs.
         const val SHIELDBREAKER_MULT = 3f
@@ -113,6 +118,14 @@ class CombatEngine(private val ctx: BattleContext) {
 
     private fun schedule(delay: Float, action: () -> Unit) {
         queuedActions.add(QueuedAction(delay, action))
+    }
+
+    private fun followerCatchUpMultiplier(fighter: FighterState, direction: Float): Float {
+        val player = ctx.player ?: return 1f
+        if (!fighter.isPlayer || fighter.pallbearerIndex >= 0 || fighter === player) return 1f
+        val deltaToPlayer = player.posX - fighter.posX
+        if (deltaToPlayer == 0f || direction * deltaToPlayer <= 0f) return 1f
+        return 1f + ((abs(deltaToPlayer) - 150f) / 300f).coerceIn(0f, 1.5f)
     }
 
     /**
@@ -155,6 +168,11 @@ class CombatEngine(private val ctx: BattleContext) {
             return
         }
         if (fighter.isDead) return
+        if (fighter.climbState != ClimbState.NONE || fighter.isCombatInactive) {
+            fighter.isAttacking = false
+            fighter.swingProgress = 0f
+            return
+        }
 
         // Trojan horse never fights: it rolls right past the enemy line, then bursts open
         if (fighter.id == "trojan_horse") {
@@ -198,7 +216,38 @@ class CombatEngine(private val ctx: BattleContext) {
                 if (Random.nextFloat() < dt * 1.5f) { // occasionally show green "+POISON+" popup
                     ctx.popup("POISON!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFF2E7D32))
                 }
+                if (Random.nextFloat() < dt) {
+                    ctx.particle(
+                        BloodParticle(
+                            x = fighter.posX + Random.nextInt(-12, 13),
+                            y = 115f + Random.nextInt(0, 30),
+                            vx = Random.nextFloat() * 16f - 8f,
+                            vy = 25f + Random.nextFloat() * 25f,
+                            color = Color(0xFF2E7D32).copy(alpha = 0.55f)
+                        )
+                    )
+                }
                 applyDotDamage(POISON_DPS, dt, fighter)
+            }
+        }
+
+        if (fighter.igniteDuration > 0f) {
+            fighter.igniteDuration = (fighter.igniteDuration - dt).coerceAtLeast(0f)
+            if (fighter.hp > 0f) {
+                if (Random.nextFloat() < dt * 1.5f) {
+                    ctx.popup("ARDENS!", fighter.posX, 130f, Color(0xFFE07020))
+                }
+                applyDotDamage(IGNITE_DPS, dt, fighter)
+            }
+        }
+        if (fighter.arrowEyeCritWindow > 0f) {
+            fighter.arrowEyeCritWindow = (fighter.arrowEyeCritWindow - dt).coerceAtLeast(0f)
+        } else if (fighter.bossType == BossType.HAROLD_GODWINSON) {
+            fighter.arrowEyeCritCooldown -= dt
+            if (fighter.arrowEyeCritCooldown <= 0f) {
+                fighter.arrowEyeCritWindow = 1.5f
+                fighter.arrowEyeCritCooldown = 5f
+                ctx.popup("OCULUS APERTUS!", fighter.posX, 95f, Color.Yellow)
             }
         }
 
@@ -285,7 +334,8 @@ class CombatEngine(private val ctx: BattleContext) {
             if (player != null && !player.isDead) {
                 val gap = fighter.posX - player.posX
                 if (gap > WAR_PRIEST_RADIUS_PX * 0.75f) {
-                    fighter.posX -= fighter.moveSpeed * 0.45f * dt
+                    fighter.posX -= fighter.moveSpeed * 0.45f *
+                        followerCatchUpMultiplier(fighter, -1f) * dt
                     fighter.animFrame += dt * 5f
                 }
                 fighter.facingRight = gap < 0f
@@ -295,6 +345,9 @@ class CombatEngine(private val ctx: BattleContext) {
 
         // Update Swing Progress
         if (fighter.isAttacking) {
+            if (target?.isKind("raven") == true && fighter.visualOffsetY < 0f) {
+                fighter.visualOffsetY = 0f
+            }
             fighter.swingProgress += dt * (1.2f / fighter.attackSpeedDelay)
             val chainDelay = if (fighter.weaponHandle.id == "handle_chain") 0.15f else 0f
             val effectiveSwingProgress = (fighter.swingProgress - chainDelay).coerceAtLeast(0f)
@@ -394,7 +447,8 @@ class CombatEngine(private val ctx: BattleContext) {
                 // Walk closer
                 val direction = if (target.posX > fighter.posX) 1f else -1f
                 val moveMult = if (isShieldWall) 0.6f else 1f
-                fighter.posX += direction * fighter.moveSpeed * moveMult * dt
+                fighter.posX += direction * fighter.moveSpeed * moveMult *
+                    followerCatchUpMultiplier(fighter, direction) * dt
                 // Desync animations slightly based on maxHp to avoid identical marching
                 fighter.animFrame = fighter.animFrame + dt * (9f + (fighter.maxHp % 3f))
             } else if (fighter.isRanged && dist < optimalDistance * 0.7f && fighter.moveSpeed > 0f) {
@@ -406,7 +460,8 @@ class CombatEngine(private val ctx: BattleContext) {
                     fighter.slowDuration = 0.8f // stumbled — legs slow, no shot this beat
                 } else {
                     val direction = if (target.posX > fighter.posX) -1f else 1f
-                    fighter.posX += direction * fighter.moveSpeed * KITE_RETREAT_MULT * dt
+                    fighter.posX += direction * fighter.moveSpeed * KITE_RETREAT_MULT *
+                        followerCatchUpMultiplier(fighter, direction) * dt
                     fighter.animFrame = fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))
 
                     if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) { // enthroned lords let the retinue fight until the throne falls
@@ -419,7 +474,8 @@ class CombatEngine(private val ctx: BattleContext) {
                 // useless. Shuffle back to keep him at the tip — but keep swinging, and retreat is slow
                 // (KITE_RETREAT_MULT) so a brute who commits can still close inside and win the trade.
                 val direction = if (target.posX > fighter.posX) -1f else 1f
-                fighter.posX += direction * fighter.moveSpeed * KITE_RETREAT_MULT * dt
+                fighter.posX += direction * fighter.moveSpeed * KITE_RETREAT_MULT *
+                    followerCatchUpMultiplier(fighter, direction) * dt
                 fighter.animFrame = fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))
                 if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) {
                     triggerAttack(fighter)
@@ -443,6 +499,7 @@ class CombatEngine(private val ctx: BattleContext) {
     }
 
     fun triggerAttack(fighter: FighterState) {
+        if (fighter.climbState != ClimbState.NONE || fighter.isCombatInactive) return
         fighter.isAttacking = true
         fighter.swingProgress = 0f
         // Double-ended whirl: clockwise overhead by default, occasionally reversed. Rolled once here,
@@ -478,6 +535,14 @@ class CombatEngine(private val ctx: BattleContext) {
         if (!fighter.isPlayer && fighter.isRanged && fighter.level <= EARLY_RANGED_LEVEL) {
             cooldown *= EARLY_RANGED_SLOW // early rounds: ranged foes fire slower so range isn't dominant at the start
         }
+        if (!fighter.isPlayer && ctx.enemies.any {
+                it !== fighter && it.archetype == EnemyArchetype.MONK_MILITIA &&
+                    !it.isDead && !it.isDying && !it.isCombatInactive &&
+                    abs(it.posX - fighter.posX) <= MONK_AURA_RADIUS_PX
+            }
+        ) {
+            cooldown *= MONK_AURA_ATTACK_DELAY_MULT
+        }
         fighter.attackCooldown = cooldown
 
         // Play melee/ranged swing swoosh sound at start of attack animation
@@ -485,6 +550,7 @@ class CombatEngine(private val ctx: BattleContext) {
     }
 
     private fun performStrike(attacker: FighterState, defender: FighterState) {
+        if (attacker.climbState != ClimbState.NONE || defender.climbState != ClimbState.NONE) return
         if (attacker.isRanged) {
             val isDualWielding = attacker.isDualWielding && attacker.shield.id == "shield_none"
             var hitCount = if (isDualWielding) 2 else 1
@@ -495,9 +561,14 @@ class CombatEngine(private val ctx: BattleContext) {
 
             for (hitIdx in 0 until hitCount) {
                 if (hitIdx == 0) fireRangedShot(attacker, hitIdx)
-                else schedule(0.16f * hitIdx) { if (!attacker.isDead) fireRangedShot(attacker, hitIdx) }
+                else schedule(0.16f * hitIdx) {
+                    if (!attacker.isDead && attacker.climbState == ClimbState.NONE) {
+                        fireRangedShot(attacker, hitIdx)
+                    }
+                }
             }
         } else {
+            if (attacker.elevated != defender.elevated) return
             // Melee hit
             val reachPixels = attacker.reach * 40f + 40f // generous hitbox
             val isPiercingWeapon = attacker.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd")
@@ -506,17 +577,23 @@ class CombatEngine(private val ctx: BattleContext) {
             val targets = if (attacker.isPlayer && isPiercingWeapon) {
                 val dir = if (attacker.facingRight) 1f else -1f
                 ctx.enemies.filter {
-                    !it.isDead && !it.isDying && it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels &&
+                    !it.isDead && !it.isDying && !it.isCombatInactive &&
+                    it.climbState == ClimbState.NONE && it.elevated == attacker.elevated &&
+                    it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels &&
                     ((dir > 0 && it.posX >= attacker.posX - 30f) || (dir < 0 && it.posX <= attacker.posX + 30f))
                 }.sortedBy { abs(attacker.posX - it.posX) }
             } else if (attacker.isPlayer && attacker.weaponHandle.id == "handle_double_ended") {
                 ctx.enemies.filter {
-                    !it.isDead && !it.isDying && it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels
+                    !it.isDead && !it.isDying && !it.isCombatInactive &&
+                    it.climbState == ClimbState.NONE && it.elevated == attacker.elevated &&
+                    it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels
                 }.sortedBy { abs(attacker.posX - it.posX) }
             } else if (attacker.isPlayer) {
                 val dir = if (attacker.facingRight) 1f else -1f
                 ctx.enemies.filter {
-                    !it.isDead && !it.isDying && it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels &&
+                    !it.isDead && !it.isDying && !it.isCombatInactive &&
+                    it.climbState == ClimbState.NONE && it.elevated == attacker.elevated &&
+                    it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels &&
                     ((dir > 0 && it.posX >= attacker.posX - 30f) || (dir < 0 && it.posX <= attacker.posX + 30f))
                 }.sortedBy { abs(attacker.posX - it.posX) }
             } else {
@@ -608,7 +685,11 @@ class CombatEngine(private val ctx: BattleContext) {
 
             for (hitIdx in 0 until hitCount) {
                 if (hitIdx == 0) meleeSweep(attacker, targets, dmgScale, isPiercingWeapon)
-                else schedule(0.16f * hitIdx) { if (!attacker.isDead) meleeSweep(attacker, targets, dmgScale, isPiercingWeapon) }
+                else schedule(0.16f * hitIdx) {
+                    if (!attacker.isDead && attacker.climbState == ClimbState.NONE) {
+                        meleeSweep(attacker, targets, dmgScale, isPiercingWeapon)
+                    }
+                }
             }
         }
     }
@@ -626,7 +707,9 @@ class CombatEngine(private val ctx: BattleContext) {
         var damageFalloff = 1f
 
         for (currTarget in targets) {
-            if (currTarget.isDead || currTarget.isDying) continue
+            if (currTarget.isDead || currTarget.isDying || currTarget.climbState != ClimbState.NONE ||
+                currTarget.isCombatInactive || currTarget.elevated != attacker.elevated
+            ) continue
 
             // Point-blank falloff: a pike is murder at its tip and useless against a man already
             // inside the shaft. Pairs with the polearm spacing above — a spear build wants to keep
@@ -721,6 +804,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
 
                 applyFlatDamage(totalDamage, currTarget, attacker.isPlayer)
+                if (attacker.archetype == EnemyArchetype.DANE_AXE_EXECUTIONER && totalDamage > 0f) {
+                    applyArmorShred(currTarget)
+                }
 
                 // Fists connect fast enough to stagger the defender out of their attack rhythm
                 if (attacker.isFists && Random.nextFloat() < FIST_INTERRUPT_CHANCE) {
@@ -800,7 +886,11 @@ class CombatEngine(private val ctx: BattleContext) {
                     val splashDmg = (totalDamage * 0.4f).coerceAtLeast(2f)
                     if (attacker.isPlayer) {
                         ctx.enemies.forEach { enemy ->
-                            if (enemy != currTarget && !enemy.isDead && !enemy.isDying && abs(enemy.posX - currTarget.posX) < 100f) {
+                            if (enemy != currTarget && !enemy.isDead && !enemy.isDying &&
+                                !enemy.isCombatInactive && enemy.climbState == ClimbState.NONE &&
+                                enemy.elevated == attacker.elevated &&
+                                abs(enemy.posX - currTarget.posX) < 100f
+                            ) {
                                 applyFlatDamage(splashDmg, enemy, attacker.isPlayer)
                                 ctx.popup("CLEAVE!", enemy.posX, 120f, Color(0xFF9E3624))
                             }
@@ -840,7 +930,8 @@ class CombatEngine(private val ctx: BattleContext) {
         var splash = false
         var poison = false
         var ballista = false
-        var finalDmg = attacker.baseDamage
+        var finalDmg = attacker.baseDamage *
+            if (attacker.elevated && !attacker.isPlayer) SiegeRules.DOWNHILL_DAMAGE_MULTIPLIER else 1f
         var finalPierce = attacker.damagePierce
         var finalBlunt = attacker.damageBlunt
         var velY = -55f // slightly arched trajectory
@@ -926,6 +1017,15 @@ class CombatEngine(private val ctx: BattleContext) {
             splash = true
             projType = ProjectileType.ROCK
         }
+        var igniting = false
+        if (attacker.archetype == EnemyArchetype.TORCH_BEARER) {
+            projId = "torch_${System.currentTimeMillis()}_${Random.nextInt(100)}"
+            projType = ProjectileType.TORCH
+            finalDmg = 4f
+            finalPierce = 0f
+            finalBlunt = 2f
+            igniting = true
+        }
 
         ctx.spawnProjectile(Projectile(
             id = projId,
@@ -943,21 +1043,27 @@ class CombatEngine(private val ctx: BattleContext) {
             launchedWeaponId = launchedWep,
             isSplash = splash,
             isPoisonous = poison,
-            isBallista = ballista
+            isBallista = ballista,
+            isIgniting = igniting,
+            sourceFighterId = attacker.id
         ))
     }
 
     fun applyProjectileDamage(proj: Projectile, defender: FighterState) {
+        if (defender.climbState != ClimbState.NONE) return
+        val eyeCritCandidate = proj.sourceFighterId == ctx.player?.id && proj.type.isArrowLike &&
+            defender.bossType == BossType.HAROLD_GODWINSON && defender.arrowEyeCritWindow > 0f
         // Speed Advantage: Ranged deflection based on speed
         val deflectionChance = (defender.moveSpeed * 0.002f).coerceIn(0f, 0.35f)
-        if (Random.nextFloat() < deflectionChance) {
+        if (!eyeCritCandidate && Random.nextFloat() < deflectionChance) {
             ctx.sound(SoundType.SWOOSH)
             ctx.popup("DEFLECT!", defender.posX, 120f, Color.Gray)
             return
         }
 
         // Ranged hit calculation
-        val isBlocked = defender.shield.id != "shield_none" && Random.nextFloat() < (defender.shield.defense / 110f)
+        val isBlocked = !eyeCritCandidate && defender.shield.id != "shield_none" &&
+            Random.nextFloat() < (defender.shield.defense / 110f)
 
         if (isBlocked) {
             ctx.sound(SoundType.CLANG)
@@ -982,8 +1088,15 @@ class CombatEngine(private val ctx: BattleContext) {
             }
         } else {
             val armorFactor = (1f - (defender.totalArmor / 100f)).coerceIn(0.15f, 1f)
-            val totalDamage = (proj.damage * armorFactor) + (proj.blunt * 0.6f)
+            val eyeCrit = eyeCritCandidate
+            val totalDamage = ((proj.damage * armorFactor) + (proj.blunt * 0.6f)) *
+                if (eyeCrit) 3f else 1f
             applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
+            if (eyeCrit) {
+                defender.arrowEyeCritWindow = 0f
+                defender.arrowEyeCritCooldown = 5f
+                ctx.popup("SAGITTA IN OCULO!", defender.posX, 100f, Color.Yellow)
+            }
 
             if (proj.type.isArrowLike) {
                 defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, false, proj.isBallista))
@@ -994,12 +1107,24 @@ class CombatEngine(private val ctx: BattleContext) {
                 defender.poisonDuration = 5.0f
                 ctx.popup("+POISONED+", defender.posX, 120f, Color(0xFF2E7D32))
             }
+            if (proj.isIgniting) applyIgnite(defender)
 
             // Hag Mud effect
             if (proj.id.startsWith("hag_mud_")) {
                 defender.slowDuration = 3.0f
                 defender.poisonDuration = 3.0f
                 ctx.popup("SLIMED!", defender.posX, 140f, Color(0xFF384033))
+                repeat(8) {
+                    ctx.particle(
+                        BloodParticle(
+                            x = defender.posX + Random.nextInt(-18, 19),
+                            y = 115f + Random.nextInt(-12, 13),
+                            vx = Random.nextFloat() * 120f - 60f,
+                            vy = -80f - Random.nextFloat() * 100f,
+                            color = Color(0xFF2E7D32)
+                        )
+                    )
+                }
             }
 
             // Grease pot: skid over and flounder. Mounted foes keep their feet — a rider doesn't
@@ -1043,11 +1168,12 @@ class CombatEngine(private val ctx: BattleContext) {
 
     /** [quiet] = damage-over-time: no blood spray, no screenshake, no decals. They cost frames. */
     fun applyFlatDamage(dmg: Float, defender: FighterState, isPlayerSource: Boolean = false, quiet: Boolean = false) {
-        if (defender.isDead || defender.isDying) return
+        if (defender.isDead || defender.isDying || defender.climbState != ClimbState.NONE) return
         var finalDmg = dmg
         if (!defender.isPlayer && defender.armor.id == "armor_bare") {
             finalDmg *= 1.5f
         }
+
         val finalDmgInt = finalDmg.coerceAtLeast(1f).toInt().toFloat()
 
         if (defender.isMounted && defender.mountHp > 0f) {
@@ -1135,5 +1261,17 @@ class CombatEngine(private val ctx: BattleContext) {
             ctx.sound(SoundType.OUCH)
         }
     }
-}
 
+    fun applyIgnite(defender: FighterState) {
+        if (defender.igniteDuration > 0f) return
+        defender.igniteDuration = IGNITE_DURATION
+        ctx.popup("IGNIS!", defender.posX, 120f, Color(0xFFE07020))
+    }
+
+    fun applyArmorShred(defender: FighterState) {
+        defender.armorShred = (defender.armorShred + ARMOR_SHRED_PER_HIT)
+            .coerceAtMost(defender.armor.defense + defender.headgear.defense +
+                defender.extraArmors.sumOf { it.defense.toDouble() }.toFloat())
+        ctx.popup("ARMATURA RUPTA!", defender.posX, 145f, Color.LightGray)
+    }
+}

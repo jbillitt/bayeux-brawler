@@ -19,6 +19,21 @@ internal const val BG_BMP_H = 540
 internal const val BG_BMP_CX = 310f // local anchor inside the bitmap
 internal const val BG_BMP_CY = 400f
 
+internal fun BackgroundObjectType.isLiveBackgroundObject(): Boolean =
+    this == BackgroundObjectType.CASTLE_GATE
+
+internal enum class CastleGateDamageState { INTACT, SPLINTERED, SHATTERED, BREACHED }
+
+internal fun castleGateDamageState(hp: Float, maxHp: Float): CastleGateDamageState {
+    if (maxHp <= 0f || hp <= 0f) return CastleGateDamageState.BREACHED
+    val fraction = (hp / maxHp).coerceIn(0f, 1f)
+    return when {
+        fraction > 0.66f -> CastleGateDamageState.INTACT
+        fraction > 0.33f -> CastleGateDamageState.SPLINTERED
+        else -> CastleGateDamageState.SHATTERED
+    }
+}
+
 internal fun drawBackgroundObject(
         scope: DrawScope,
         bg: BackgroundObject,
@@ -31,7 +46,7 @@ internal fun drawBackgroundObject(
         // Anchoring to the same line keeps buildings/ship grounded at any canvas size.
         val cy = 200f + 138f * scaleFactor
 
-        val key = "${bg.type}_${bg.seed}_${bg.hp.toInt()}_${bg.isDestroyed}_${bg.stuckArrowsFromLeft}_${bg.stuckArrowsFromRight}"
+        val key = "${bg.type}_${bg.seed}_${bg.artId}"
         val cached = bgBitmapCache[bg.id]
         val bitmap = if (cached != null && cached.first == key) cached.second else {
             val bmp = androidx.compose.ui.graphics.ImageBitmap(BG_BMP_W, BG_BMP_H)
@@ -50,53 +65,142 @@ internal fun drawBackgroundObject(
 
         // Buildings/forts draw bigger than fighters (they towered under them otherwise) and sit
         // slightly up the canvas for background perspective. The ship stays 1:1 on the ground.
-        val isShip = bg.type == BackgroundObjectType.SHIP
-        val bgScale = if (isShip) 1.25f else 1.7f
-        val lift = if (isShip) 0f else 14f
+        val isLowLandscape = bg.type == BackgroundObjectType.SHIP ||
+            bg.type == BackgroundObjectType.FLEET_CROSSING
+        val isSiegeStructure = bg.type == BackgroundObjectType.CASTLE_WALL ||
+            bg.type == BackgroundObjectType.CASTLE_GATE
+        val bgScale = if (isLowLandscape) 1.25f else 1.7f
+        val verticalScale = if (isSiegeStructure) 1f else bgScale
+        val lift = if (isLowLandscape || isSiegeStructure) 0f else 14f
         scope.withTransform({
-            scale(scaleFactor * bgScale, scaleFactor * bgScale, pivot = Offset(cx, cy))
+            scale(scaleFactor * bgScale, scaleFactor * verticalScale, pivot = Offset(cx, cy))
         }) {
             scope.drawImage(bitmap, topLeft = Offset(cx - BG_BMP_CX, cy - BG_BMP_CY - lift))
+            if (bg.stuckArrowsFromLeft + bg.stuckArrowsFromRight > 0) {
+                drawDamageDecals(scope, cx, cy - lift, bg)
+            }
         }
     }
 
+/** Draws immutable scenery directly into the final-resolution world bitmap. */
+internal fun drawStaticBackgroundObject(
+    scope: DrawScope,
+    bg: BackgroundObject,
+    scaledPosX: Float,
+    scaleFactor: Float
+) {
+    val cy = 200f + 138f * scaleFactor
+    val isLowLandscape = bg.type == BackgroundObjectType.SHIP ||
+        bg.type == BackgroundObjectType.FLEET_CROSSING
+    val isSiegeStructure = bg.type == BackgroundObjectType.CASTLE_WALL ||
+        bg.type == BackgroundObjectType.CASTLE_GATE
+    val bgScale = if (isLowLandscape) 1.25f else 1.7f
+    val verticalScale = if (isSiegeStructure) 1f else bgScale
+    val lift = if (isLowLandscape || isSiegeStructure) 0f else 14f
+    scope.withTransform({
+        scale(scaleFactor * bgScale, scaleFactor * verticalScale, pivot = Offset(scaledPosX, cy))
+    }) {
+        renderBackgroundObject(scope, bg, scaledPosX, cy - lift)
+    }
+}
+
+/** Live arrow damage, deliberately outside the immutable world cache. */
+internal fun drawBackgroundDamageDecals(
+    scope: DrawScope,
+    bg: BackgroundObject,
+    scaledPosX: Float,
+    scaleFactor: Float
+) {
+    if (bg.stuckArrowsFromLeft + bg.stuckArrowsFromRight == 0) return
+    val cy = 200f + 138f * scaleFactor
+    val isLowLandscape = bg.type == BackgroundObjectType.SHIP ||
+        bg.type == BackgroundObjectType.FLEET_CROSSING
+    val isSiegeStructure = bg.type == BackgroundObjectType.CASTLE_WALL ||
+        bg.type == BackgroundObjectType.CASTLE_GATE
+    val bgScale = if (isLowLandscape) 1.25f else 1.7f
+    val verticalScale = if (isSiegeStructure) 1f else bgScale
+    val lift = if (isLowLandscape || isSiegeStructure) 0f else 14f
+    scope.withTransform({
+        scale(scaleFactor * bgScale, scaleFactor * verticalScale, pivot = Offset(scaledPosX, cy))
+    }) {
+        drawDamageDecals(scope, scaledPosX, cy - lift, bg)
+    }
+}
+
 internal fun renderBackgroundObject(scope: DrawScope, bg: BackgroundObject, cx: Float, cy: Float) {
-        when (bg.type) {
-            BackgroundObjectType.SHIP -> drawShip(scope, cx, cy, bg)
-            BackgroundObjectType.FORT_PALACE -> drawFortPalace(scope, cx, cy, bg)
-            BackgroundObjectType.FORT_DINAN -> drawFortDinan(scope, cx, cy, bg)
-            BackgroundObjectType.BUILDING_BOSHAM -> drawBuildingBosham(scope, cx, cy, bg)
-            BackgroundObjectType.BUILDING_MANOR -> drawBuildingManor(scope, cx, cy, bg)
-            BackgroundObjectType.FORT_TOWER -> drawFortTower(scope, cx, cy, bg)
-            BackgroundObjectType.FORT_MOTTE -> drawFortMotte(scope, cx, cy, bg)
-            BackgroundObjectType.BUILDING_BAYEUX -> drawBayeuxBuilding(scope, cx, cy, bg)
-            BackgroundObjectType.TOWER_SPIRAL -> drawSpiralTower(scope, cx, cy, bg)
-            BackgroundObjectType.VECTOR -> {
-                bg.artId?.let { id ->
-                    VectorAsset.cached(id)?.let { asset ->
-                        scope.drawVectorAsset(asset, cx, cy)
-                        // Procedural art hangs off named anchors, so it follows the asset when it is
-                        // edited in the builder instead of floating where the code used to expect it
-                        asset.anchors["palisade"]?.let { a ->
-                            drawPalisadeRun(scope, cx + a.x0, cx + a.x1, cy + a.y, 40f, bg.seed)
-                        }
+    when (bg.type) {
+        BackgroundObjectType.SHIP -> drawShip(scope, cx, cy, bg)
+        BackgroundObjectType.FORT_PALACE -> drawFortPalace(scope, cx, cy, bg)
+        BackgroundObjectType.FORT_DINAN -> drawFortDinan(scope, cx, cy, bg)
+        BackgroundObjectType.BUILDING_BOSHAM -> drawBuildingBosham(scope, cx, cy, bg)
+        BackgroundObjectType.BUILDING_MANOR -> drawBuildingManor(scope, cx, cy, bg)
+        BackgroundObjectType.FORT_TOWER -> drawFortTower(scope, cx, cy, bg)
+        BackgroundObjectType.FORT_MOTTE -> drawFortMotte(scope, cx, cy, bg)
+        BackgroundObjectType.BUILDING_BAYEUX -> drawBayeuxBuilding(scope, cx, cy, bg)
+        BackgroundObjectType.TOWER_SPIRAL -> drawSpiralTower(scope, cx, cy, bg)
+        BackgroundObjectType.CASTLE_WALL -> drawCastleWall(scope, cx, cy, bg)
+        BackgroundObjectType.CASTLE_GATE -> drawCastleGate(scope, cx, cy, bg.hp, bg.maxHp)
+        BackgroundObjectType.MOTTE -> drawSiegeMotte(scope, cx, cy, bg)
+        BackgroundObjectType.FEASTING_HALL -> drawFeastingHall(scope, cx, cy, bg)
+        BackgroundObjectType.FLEET_CROSSING -> drawFleetCrossing(scope, cx, cy, bg)
+        BackgroundObjectType.MONT_SAINT_MICHEL -> drawMontSaintMichel(scope, cx, cy, bg)
+        BackgroundObjectType.STAMFORD_BRIDGE -> drawStamfordBridge(scope, cx, cy, bg)
+        BackgroundObjectType.VECTOR -> {
+            bg.artId?.let { id ->
+                VectorAsset.cached(id)?.let { asset ->
+                    scope.drawVectorAsset(asset, cx, cy)
+                    asset.anchors["palisade"]?.let { a ->
+                        drawPalisadeRun(scope, cx + a.x0, cx + a.x1, cy + a.y, 40f, bg.seed)
                     }
                 }
             }
-            BackgroundObjectType.BROKEN_CHARIOT -> {
-                scope.withTransform({
-                    translate(cx, cy)
-                }) {
-                    drawChariot(this, 0f, 0f, null, isCollapsed = true)
-                }
+        }
+        BackgroundObjectType.BROKEN_CHARIOT -> {
+            scope.withTransform({ translate(cx, cy) }) {
+                drawChariot(this, 0f, 0f, null, isCollapsed = true)
             }
         }
-
-        if (bg.stuckArrowsFromLeft + bg.stuckArrowsFromRight > 0) {
-            drawDamageDecals(scope, cx, cy, bg)
-        }
     }
-    
+
+}
+
+internal fun drawLiveCastleGate(
+    scope: DrawScope,
+    bg: BackgroundObject,
+    scaledPosX: Float,
+    scaleFactor: Float,
+    hp: Float,
+    maxHp: Float
+) {
+    val cy = 200f + 138f * scaleFactor
+    scope.withTransform({
+        scale(scaleFactor * 1.7f, scaleFactor, pivot = Offset(scaledPosX, cy))
+    }) {
+        drawCastleGate(scope, scaledPosX, cy, hp, maxHp)
+    }
+}
+
+internal fun drawSiegeLadder(scope: DrawScope, scaledPosX: Float, scaleFactor: Float) {
+    val ground = 200f + SiegeRules.GROUND_FEET_OFFSET * scaleFactor
+    val top = SiegeRules.parapetFeetY(scaleFactor)
+    val horizontalScale = scaleFactor * 1.7f
+    val leftBottom = scaledPosX - 54f * horizontalScale
+    val rightBottom = scaledPosX - 31f * horizontalScale
+    val leftTop = scaledPosX - 18f * horizontalScale
+    val rightTop = scaledPosX + 5f * horizontalScale
+    scope.drawLine(Color(0xFF6B4B2D), Offset(leftBottom, ground), Offset(leftTop, top), strokeWidth = 6f * scaleFactor)
+    scope.drawLine(Color(0xFF6B4B2D), Offset(rightBottom, ground), Offset(rightTop, top), strokeWidth = 6f * scaleFactor)
+    for (i in 0..7) {
+        val t = i / 7f
+        val lx = leftBottom + (leftTop - leftBottom) * t
+        val rx = rightBottom + (rightTop - rightBottom) * t
+        val y = ground + (top - ground) * t
+        scope.drawLine(ThreadColor, Offset(lx - 4f * scaleFactor, y), Offset(rx + 4f * scaleFactor, y), strokeWidth = 4f * scaleFactor)
+    }
+    scope.drawLine(Color(0xFFD1B878), Offset(leftBottom, ground), Offset(leftTop, top), strokeWidth = 1.2f * scaleFactor)
+    scope.drawLine(Color(0xFFD1B878), Offset(rightBottom, ground), Offset(rightTop, top), strokeWidth = 1.2f * scaleFactor)
+}
+
 internal fun drawDamageDecals(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
 
         val random = kotlin.random.Random(bg.seed)
@@ -137,6 +241,314 @@ internal fun drawShip(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObje
             lineTo(cx - 120f, cy - 60f) // Inner deck
             close()
         }
+        drawShipBody(scope, cx, cy, hullPath)
+    }
+
+internal fun drawCastleWall(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        val stone = Color(0xFFC8B58D)
+        val shadow = Color(0xFF8B7658)
+        val wall = Path().apply {
+            moveTo(cx - 230f, cy + 20f)
+            lineTo(cx - 230f, cy - 112f)
+            for (i in 0 until 12) {
+                val x = cx - 230f + i * 40f
+                lineTo(x, cy - 132f)
+                lineTo(x + 20f, cy - 132f)
+                lineTo(x + 20f, cy - 112f)
+                lineTo(x + 40f, cy - 112f)
+            }
+            lineTo(cx + 230f, cy + 20f)
+            close()
+        }
+        drawStitchedFill(scope, wall, stone)
+        scope.drawPath(wall, ThreadColor, style = StitchedStroke)
+
+        val parapetY = cy + SiegeRules.GROUND_FEET_OFFSET +
+            SiegeRules.PARAPET_ELEVATION_OFFSET - 138f
+        scope.drawRect(shadow, Offset(cx - 230f, parapetY), androidx.compose.ui.geometry.Size(460f, 12f))
+        scope.drawLine(ThreadColor, Offset(cx - 230f, parapetY + 12f), Offset(cx + 230f, parapetY + 12f), strokeWidth = 2.5f)
+        for (row in 0..4) {
+            val y = cy - 75f + row * 23f
+            scope.drawLine(Color(0x55382F22), Offset(cx - 225f, y), Offset(cx + 225f, y), strokeWidth = 1.5f)
+            val offset = if (row % 2 == 0) 0f else 22f
+            var x = cx - 210f + offset
+            while (x < cx + 220f) {
+                scope.drawLine(Color(0x55382F22), Offset(x, y - 22f), Offset(x, y), strokeWidth = 1.2f)
+                x += 44f
+            }
+        }
+
+        for (side in listOf(-1f, 1f)) {
+            val tx = cx + side * 196f
+            val tower = Path().apply {
+                moveTo(tx - 34f, cy + 20f)
+                lineTo(tx - 34f, cy - 148f)
+                lineTo(tx - 18f, cy - 148f)
+                lineTo(tx - 18f, cy - 168f)
+                lineTo(tx + 2f, cy - 168f)
+                lineTo(tx + 2f, cy - 148f)
+                lineTo(tx + 34f, cy - 148f)
+                lineTo(tx + 34f, cy + 20f)
+                close()
+            }
+            drawStitchedFill(scope, tower, if (side < 0) Color(0xFFD6C49C) else Color(0xFFC1AD83))
+            scope.drawPath(tower, ThreadColor, style = StitchedStroke)
+            scope.drawCircle(Color(0xFF4B3A2A), 7f, Offset(tx, cy - 120f))
+            scope.drawLine(Color(0xFFD6A420), Offset(tx, cy - 168f), Offset(tx, cy - 202f), strokeWidth = 2.5f)
+            val pennant = Path().apply {
+                moveTo(tx, cy - 202f); lineTo(tx + side * 30f, cy - 193f); lineTo(tx, cy - 184f); close()
+            }
+            drawStitchedFill(scope, pennant, if (side < 0) Color(0xFF9E3624) else Color(0xFF265063))
+            scope.drawPath(pennant, ThreadColor, style = Stroke(1.5f))
+        }
+}
+
+internal fun drawCastleGate(scope: DrawScope, cx: Float, cy: Float, hp: Float, maxHp: Float) {
+        val state = castleGateDamageState(hp, maxHp)
+        val arch = Path().apply {
+            moveTo(cx - 58f, cy + 20f)
+            lineTo(cx - 58f, cy - 58f)
+            quadraticTo(cx - 58f, cy - 112f, cx, cy - 118f)
+            quadraticTo(cx + 58f, cy - 112f, cx + 58f, cy - 58f)
+            lineTo(cx + 58f, cy + 20f)
+            close()
+        }
+        drawStitchedFill(scope, arch, Color(0xFF6D5941))
+        scope.drawPath(arch, ThreadColor, style = Stroke(5f))
+
+        if (state == CastleGateDamageState.BREACHED) {
+            listOf(-47f, -27f, 31f, 49f).forEachIndexed { index, x ->
+                scope.drawLine(
+                    Color(0xFF5D3D25),
+                    Offset(cx + x, cy + 10f),
+                    Offset(cx + x + if (index % 2 == 0) 7f else -6f, cy - 52f - index * 5f),
+                    strokeWidth = 10f
+                )
+            }
+            for (i in 0..6) {
+                val x = cx - 58f + i * 19f
+                scope.drawLine(Color(0xFF806344), Offset(x, cy + 17f), Offset(x + 13f, cy + 7f), strokeWidth = 7f)
+            }
+            return
+        }
+
+        val timber = if (state == CastleGateDamageState.SHATTERED) Color(0xFF70492D) else Color(0xFF825D37)
+        for (i in 0 until 8) {
+            val x = cx - 49f + i * 14f
+            val top = cy - 73f - (52f - kotlin.math.abs(x - cx)) * 0.62f
+            scope.drawLine(timber, Offset(x, cy + 14f), Offset(x, top), strokeWidth = 11f)
+            scope.drawLine(Color(0xFFB48A55), Offset(x - 2f, cy + 8f), Offset(x - 2f, top + 5f), strokeWidth = 1.4f)
+        }
+        listOf(cy - 25f, cy - 58f).forEach { y ->
+            scope.drawLine(Color(0xFF40362D), Offset(cx - 51f, y), Offset(cx + 51f, y), strokeWidth = 7f)
+        }
+        scope.drawCircle(Color(0xFFC29B3D), 6f, Offset(cx + 17f, cy - 39f))
+
+        val cracks = when (state) {
+            CastleGateDamageState.INTACT -> 0
+            CastleGateDamageState.SPLINTERED -> 3
+            CastleGateDamageState.SHATTERED -> 7
+            CastleGateDamageState.BREACHED -> 0
+        }
+        repeat(cracks) { i ->
+            val x = cx - 40f + (i * 17f) % 77f
+            val y = cy - 18f - (i * 23f) % 70f
+            val crack = Path().apply {
+                moveTo(x, y)
+                lineTo(x + if (i % 2 == 0) 9f else -8f, y + 8f)
+                lineTo(x + if (i % 2 == 0) 3f else -2f, y + 18f)
+            }
+            scope.drawPath(crack, Color(0xFF2F251C), style = Stroke(2.5f))
+        }
+}
+
+internal fun drawSiegeMotte(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        val mound = Path().apply {
+            moveTo(cx - 170f, cy + 24f)
+            quadraticTo(cx - 130f, cy - 34f, cx - 78f, cy - 72f)
+            lineTo(cx + 72f, cy - 72f)
+            quadraticTo(cx + 128f, cy - 32f, cx + 170f, cy + 24f)
+            close()
+        }
+        drawStitchedFill(scope, mound, Color(0xFF74804D))
+        scope.drawPath(mound, ThreadColor, style = StitchedStroke)
+        for (i in 0..5) {
+            val y = cy - 4f - i * 10f
+            scope.drawLine(Color(0x555D4831), Offset(cx - 118f + i * 8f, y), Offset(cx + 120f - i * 10f, y), 1.5f)
+        }
+        drawPalisadeRun(scope, cx - 72f, cx + 72f, cy - 70f, 42f, bg.seed)
+        val keep = Path().apply {
+            moveTo(cx - 42f, cy - 110f); lineTo(cx - 34f, cy - 176f)
+            lineTo(cx + 34f, cy - 176f); lineTo(cx + 42f, cy - 110f); close()
+        }
+        drawStitchedFill(scope, keep, Color(0xFF795B38))
+        scope.drawPath(keep, ThreadColor, style = StitchedStroke)
+        scope.drawLine(ThreadColor, Offset(cx - 38f, cy - 112f), Offset(cx + 32f, cy - 174f), 2f)
+        scope.drawLine(ThreadColor, Offset(cx + 38f, cy - 112f), Offset(cx - 32f, cy - 174f), 2f)
+        val roof = Path().apply {
+            moveTo(cx - 48f, cy - 174f); lineTo(cx, cy - 214f); lineTo(cx + 48f, cy - 174f); close()
+        }
+        drawStitchedFill(scope, roof, Color(0xFF265063))
+        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+}
+
+internal fun drawFeastingHall(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        val rng = Random(bg.seed)
+        val beam = Color(0xFF5C4029)
+        val plaster = Color(0xFFD8C49B)
+        val back = Path().apply {
+            moveTo(cx - 235f, cy + 28f); lineTo(cx - 235f, cy - 145f)
+            lineTo(cx, cy - 214f); lineTo(cx + 235f, cy - 145f); lineTo(cx + 235f, cy + 28f); close()
+        }
+        drawStitchedFill(scope, back, plaster)
+        scope.drawPath(back, ThreadColor, style = StitchedStroke)
+        scope.drawLine(beam, Offset(cx - 230f, cy - 143f), Offset(cx, cy - 208f), 8f)
+        scope.drawLine(beam, Offset(cx, cy - 208f), Offset(cx + 230f, cy - 143f), 8f)
+        scope.drawLine(beam, Offset(cx, cy - 205f), Offset(cx, cy + 20f), 7f)
+        for (i in -2..2) {
+            val sx = cx + i * 75f
+            val shieldColor = if ((i + rng.nextInt(2)) % 2 == 0) Color(0xFF9E3624) else Color(0xFF265063)
+            scope.drawCircle(shieldColor, 22f, Offset(sx, cy - 113f))
+            scope.drawCircle(ThreadColor, 22f, Offset(sx, cy - 113f), style = StitchedStroke)
+            scope.drawCircle(Color(0xFFD6A420), 6f, Offset(sx, cy - 113f))
+        }
+        val table = Path().apply {
+            moveTo(cx - 190f, cy - 27f); lineTo(cx + 190f, cy - 27f)
+            lineTo(cx + 165f, cy + 5f); lineTo(cx - 165f, cy + 5f); close()
+        }
+        drawStitchedFill(scope, table, Color(0xFF8B6037))
+        scope.drawPath(table, ThreadColor, style = StitchedStroke)
+        listOf(-145f, 145f).forEach { x ->
+            scope.drawLine(
+                beam,
+                Offset(cx + x, cy + 2f),
+                Offset(cx + x + if (x < 0f) 10f else -10f, cy + 36f),
+                8f
+            )
+        }
+        for (i in -3..3) {
+            val px = cx + i * 48f
+            scope.drawOval(
+                Color(0xFFC49A43),
+                Offset(px - 13f, cy - 36f),
+                androidx.compose.ui.geometry.Size(26f, 9f)
+            )
+            if (i % 2 == 0) {
+                scope.drawLine(Color(0xFF8F3328), Offset(px, cy - 39f), Offset(px + 8f, cy - 53f), 4f)
+            }
+        }
+}
+
+internal fun drawFleetCrossing(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        val sea = Path().apply {
+            moveTo(cx - 270f, cy - 10f)
+            for (i in 0..18) {
+                val x = cx - 270f + i * 30f
+                lineTo(x, cy - 10f + sin((i + bg.seed % 5) * 1.3f) * 7f)
+            }
+            lineTo(cx + 270f, cy + 78f); lineTo(cx - 270f, cy + 78f); close()
+        }
+        drawStitchedFill(scope, sea, Color(0xFF315F70))
+        scope.drawPath(sea, ThreadColor, style = StitchedStroke)
+        for (row in 0..3) {
+            val y = cy + 8f + row * 17f
+            for (i in 0..8) {
+                val x = cx - 250f + i * 63f + if (row % 2 == 0) 0f else 25f
+                scope.drawLine(Color(0xFFB6D0CB), Offset(x, y), Offset(x + 29f, y + sin(i.toFloat()) * 3f), 2f)
+            }
+        }
+        scope.withTransform({ scale(0.52f, 0.52f, Offset(cx - 105f, cy - 17f)) }) {
+            drawShip(scope, cx - 105f, cy - 17f, bg.copy(id = "${bg.id}_near"))
+        }
+        scope.withTransform({ scale(0.38f, 0.38f, Offset(cx + 135f, cy - 44f)) }) {
+            drawShip(scope, cx + 135f, cy - 44f, bg.copy(id = "${bg.id}_far", seed = bg.seed + 1))
+        }
+}
+
+internal fun drawStamfordBridge(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+    val water = Path().apply {
+        moveTo(cx - 280f, cy + 22f)
+        for (i in 0..14) {
+            val x = cx - 280f + i * 40f
+            lineTo(x, cy + 22f + sin((i + bg.seed % 7) * 1.2f) * 6f)
+        }
+        lineTo(cx + 280f, cy + 78f)
+        lineTo(cx - 280f, cy + 78f)
+        close()
+    }
+    drawStitchedFill(scope, water, Color(0xFF315F70))
+    scope.drawPath(water, ThreadColor, style = StitchedStroke)
+
+    val bridge = Path().apply {
+        moveTo(cx - 270f, cy - 12f)
+        lineTo(cx + 270f, cy - 12f)
+        lineTo(cx + 245f, cy + 24f)
+        lineTo(cx - 245f, cy + 24f)
+        close()
+    }
+    drawStitchedFill(scope, bridge, Color(0xFF8B6037))
+    scope.drawPath(bridge, ThreadColor, style = StitchedStroke)
+    for (i in -5..5) {
+        val x = cx + i * 46f
+        scope.drawLine(Color(0xFF5C4029), Offset(x, cy - 9f), Offset(x - 4f, cy + 18f), 4f)
+    }
+    listOf(-210f, 210f).forEach { x ->
+        scope.drawLine(Color(0xFF5C4029), Offset(cx + x, cy + 18f), Offset(cx + x, cy + 70f), 10f)
+    }
+}
+
+internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+        val sand = Path().apply {
+            moveTo(cx - 270f, cy + 2f)
+            for (i in 0..18) {
+                val x = cx - 270f + i * 30f
+                lineTo(x, cy + 2f + sin((i + bg.seed % 7) * 0.9f) * 5f)
+            }
+            lineTo(cx + 270f, cy + 72f); lineTo(cx - 270f, cy + 72f); close()
+        }
+        drawStitchedFill(scope, sand, Color(0xFFB39B68))
+        scope.drawPath(sand, ThreadColor, style = StitchedStroke)
+        for (i in 0..8) {
+            val x = cx - 235f + i * 58f
+            val y = cy + 20f + (i % 3) * 12f
+            val swirl = Path().apply {
+                moveTo(x - 18f, y)
+                quadraticTo(x, y - 9f, x + 18f, y)
+                quadraticTo(x, y + 8f, x - 10f, y + 2f)
+            }
+            scope.drawPath(swirl, Color(0xFF6E7454), style = Stroke(2.2f))
+        }
+        val mount = Path().apply {
+            moveTo(cx - 170f, cy + 4f)
+            quadraticTo(cx - 130f, cy - 50f, cx - 78f, cy - 85f)
+            quadraticTo(cx - 35f, cy - 132f, cx, cy - 142f)
+            quadraticTo(cx + 45f, cy - 116f, cx + 83f, cy - 82f)
+            quadraticTo(cx + 136f, cy - 48f, cx + 170f, cy + 4f)
+            close()
+        }
+        drawStitchedFill(scope, mount, Color(0xFF73764E))
+        scope.drawPath(mount, ThreadColor, style = StitchedStroke)
+        for (tier in 0..2) {
+            val half = 68f - tier * 17f
+            val bottom = cy - 80f - tier * 31f
+            val abbey = Path().apply {
+                addRect(androidx.compose.ui.geometry.Rect(cx - half, bottom - 32f, cx + half, bottom))
+            }
+            drawStitchedFill(scope, abbey, if (tier % 2 == 0) Color(0xFFD3C29D) else Color(0xFFC0AD87))
+            scope.drawPath(abbey, ThreadColor, style = StitchedStroke)
+            for (i in -2..2) {
+                scope.drawCircle(Color(0xFF4A4438), 3.2f, Offset(cx + i * half / 3f, bottom - 16f))
+            }
+        }
+        val spire = Path().apply {
+            moveTo(cx - 14f, cy - 173f); lineTo(cx, cy - 226f); lineTo(cx + 14f, cy - 173f); close()
+        }
+        drawStitchedFill(scope, spire, Color(0xFF5D666B))
+        scope.drawPath(spire, ThreadColor, style = StitchedStroke)
+        scope.drawLine(Color(0xFFD6A420), Offset(cx, cy - 226f), Offset(cx, cy - 240f), 2f)
+}
+
+private fun drawShipBody(scope: DrawScope, cx: Float, cy: Float, hullPath: Path) {
         drawStitchedFill(scope, hullPath, Color(0xFF5D4831))
         scope.drawPath(hullPath, ThreadColor, style = StitchedStroke)
         

@@ -1,6 +1,7 @@
 package com.example.game
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -25,6 +26,66 @@ internal val FillLineStroke = Stroke(
         cap = StrokeCap.Round
     )
 
+internal data class StitchSegment(val start: Offset, val end: Offset)
+
+internal data class StitchGeometry(
+    val horizontal: List<StitchSegment>,
+    val anchors: List<StitchSegment>
+)
+
+private val horizontalStitchPath = Path()
+private val anchorStitchPath = Path()
+
+internal inline fun appendStitchSegments(
+    segments: List<StitchSegment>,
+    moveTo: (Float, Float) -> Unit,
+    lineTo: (Float, Float) -> Unit
+) {
+    segments.forEach { segment ->
+        moveTo(segment.start.x, segment.start.y)
+        lineTo(segment.end.x, segment.end.y)
+    }
+}
+
+internal fun stitchSegments(bounds: Rect): StitchGeometry {
+    val horizontal = mutableListOf<StitchSegment>()
+    val anchors = mutableListOf<StitchSegment>()
+    val rowStep = kotlin.math.max(3.5f, bounds.height / 40f)
+    val segmentLen = kotlin.math.max(8f, bounds.width / 30f)
+    var row = 0
+    var y = bounds.top
+    while (y < bounds.bottom) {
+        var currX = bounds.left - 5f
+        val endX = bounds.right + 5f
+        var seg = 0
+        var prevJitter = ((row * 7 + 3) % 5) * 0.3f - 0.6f
+        while (currX < endX) {
+            val nextX = currX + segmentLen
+            val jitter = ((row * 31 + seg * 17) % 7) * 0.25f - 0.75f
+            horizontal += StitchSegment(
+                start = Offset(currX, y + prevJitter),
+                end = Offset(nextX, y + jitter)
+            )
+            prevJitter = jitter
+            currX = nextX
+            seg++
+        }
+
+        var vx = bounds.left + ((row * 13) % 7)
+        val vStep = segmentLen * 2.5f
+        while (vx < bounds.right) {
+            anchors += StitchSegment(
+                start = Offset(vx, y - 2f),
+                end = Offset(vx, y + 2f)
+            )
+            vx += vStep
+        }
+        y += rowStep
+        row++
+    }
+    return StitchGeometry(horizontal, anchors)
+}
+
 internal fun drawStitchedFill(scope: DrawScope, path: Path, color: Color) {
         // Base fill color (solid but soft)
         scope.drawPath(path, color)
@@ -37,50 +98,32 @@ internal fun drawStitchedFill(scope: DrawScope, path: Path, color: Color) {
         scope.withTransform({
             clipPath(path)
         }) {
-            val bounds = path.getBounds()
-            val rowStep = kotlin.math.max(3.5f, bounds.height / 40f)
-            val segmentLen = kotlin.math.max(8f, bounds.width / 30f)
+            val geometry = stitchSegments(path.getBounds())
             val stitchColor = color.copy(alpha = 0.35f)
             val anchorColor = ThreadColor.copy(alpha = 0.15f)
-            var row = 0
-            var y = bounds.top
-            while (y < bounds.bottom) {
-                val startX = bounds.left - 5f
-                val endX = bounds.right + 5f
+            horizontalStitchPath.rewind()
+            appendStitchSegments(
+                geometry.horizontal,
+                horizontalStitchPath::moveTo,
+                horizontalStitchPath::lineTo
+            )
+            scope.drawPath(
+                path = horizontalStitchPath,
+                color = stitchColor,
+                style = Stroke(width = 1.5f, cap = StrokeCap.Round)
+            )
 
-                var currX = startX
-                var seg = 0
-                var prevJitter = ((row * 7 + 3) % 5) * 0.3f - 0.6f
-                while (currX < endX) {
-                    val nextX = currX + segmentLen
-                    val jitter = ((row * 31 + seg * 17) % 7) * 0.25f - 0.75f
-                    scope.drawLine(
-                        color = stitchColor,
-                        start = Offset(currX, y + prevJitter),
-                        end = Offset(nextX, y + jitter),
-                        strokeWidth = 1.5f,
-                        cap = StrokeCap.Round
-                    )
-                    prevJitter = jitter
-                    currX = nextX
-                    seg++
-                }
-
-                // Sparse vertical anchor stitches
-                var vx = bounds.left + ((row * 13) % 7)
-                val vStep = segmentLen * 2.5f
-                while (vx < bounds.right) {
-                    scope.drawLine(
-                        color = anchorColor,
-                        start = Offset(vx, y - 2f),
-                        end = Offset(vx, y + 2f),
-                        strokeWidth = 1f
-                    )
-                    vx += vStep
-                }
-                y += rowStep
-                row++
-            }
+            anchorStitchPath.rewind()
+            appendStitchSegments(
+                geometry.anchors,
+                anchorStitchPath::moveTo,
+                anchorStitchPath::lineTo
+            )
+            scope.drawPath(
+                path = anchorStitchPath,
+                color = anchorColor,
+                style = Stroke(width = 1f)
+            )
         }
     }
 
@@ -174,4 +217,3 @@ internal fun drawFurTexture(scope: DrawScope, cx: Float, cy: Float, width: Float
             )
         }
     }
-

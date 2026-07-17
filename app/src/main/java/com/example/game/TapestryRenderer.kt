@@ -13,6 +13,15 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
+internal fun fighterCullMargin(fighter: FighterState, scale: Float): Float =
+    (120f * fighter.size + fighter.reach * 40f +
+        if (fighter.isMounted || fighter.isChariot || fighter.isStilts) 120f else 0f) * scale
+
+internal fun splitThroneBattleActors(
+    fighters: List<FighterState>
+): Pair<List<FighterState>, List<FighterState>> =
+    fighters.partition { it.pallbearerIndex >= 2 }
+
 object TapestryRenderer {
 
     /** Plague palette: the pallor of the sick, and Aldwin's mud-coloured rags. */
@@ -45,6 +54,8 @@ object TapestryRenderer {
             // size scales around the feet (358) so any size stands on the ground line
             // instead of floating (small) or sinking (large).
             scale(hFlip * scale, scale, pivot = Offset(fighter.posX, 200f))
+            // Elevation is world-space: apply it after scene scale but before fighter size.
+            translate(top = elevationVisualOffset(fighter))
             // Size scales from the feet so everyone stands on the ground — except the raven,
             // which pivots at shoulder height so it flies instead of shrinking into the floor
             val sizePivotY = if (fighter.isKind("raven")) 240f else 358f
@@ -72,7 +83,8 @@ object TapestryRenderer {
             // Handle dying fall down rotation
             var rotationAngle = 0f
             var offsetX = if (fighter.id == "lil_guy") -20f else 0f
-            var offsetY = fighter.visualOffsetY + bounceY + (if (fighter.id == "lil_guy") -40f else 0f)
+            var offsetY = fighter.visualOffsetY + bounceY +
+                (if (fighter.id == "lil_guy") -40f else 0f)
             var scaleY = 1f
             if (fighter.crumpleDuration > 0f && !fighter.isDead && !fighter.isDying) {
                 // Ragdolled onto the floor
@@ -223,6 +235,7 @@ object TapestryRenderer {
                     } else if (fighter.isKind("raven")) {
                         drawRaven(this, cx, cy, fighter)
                     } else {
+                        drawBossSignature(this, cx, cy, fighter)
                         if (!fighter.isChariot) {
                             drawLegs(this, cx, cy, fighter)
                         }
@@ -254,6 +267,43 @@ object TapestryRenderer {
                 }
             }
         }
+    }
+
+    private fun drawBossSignature(
+        scope: DrawScope,
+        cx: Float,
+        cy: Float,
+        fighter: FighterState
+    ) {
+        val boss = fighter.bossType ?: return
+        val poleX = cx - 42f
+        scope.drawLine(
+            Color(0xFF6B4B2D),
+            Offset(poleX, cy + 118f),
+            Offset(poleX, cy - 82f),
+            strokeWidth = 5f,
+            cap = StrokeCap.Round
+        )
+        val bannerColor = when (boss) {
+            BossType.HAROLD_GODWINSON -> Color(0xFFB08221)
+            BossType.HARALD_HARDRADA -> Color(0xFF265063)
+            BossType.WILLIAM_THE_BASTARD -> Color(0xFF9E3624)
+        }
+        val banner = Path().apply {
+            moveTo(poleX, cy - 80f)
+            lineTo(poleX + 62f, cy - 68f)
+            lineTo(poleX + 48f, cy - 34f)
+            lineTo(poleX, cy - 42f)
+            close()
+        }
+        drawStitchedFill(scope, banner, bannerColor)
+        scope.drawPath(banner, ThreadColor, style = Stroke(2f))
+        scope.drawLine(
+            Color(0xFFD6C48A),
+            Offset(poleX + 10f, cy - 58f),
+            Offset(poleX + 45f, cy - 50f),
+            strokeWidth = 4f
+        )
     }
 
     private fun drawLegs(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
@@ -319,16 +369,20 @@ object TapestryRenderer {
     private fun skinTone(fighter: FighterState): Color = when {
         // Plague shows before it hurts: the peasant is contagious from the moment he spawns
         fighter.diseaseDuration > 0f || fighter.isContagious -> PlagueFlesh
+        fighter.igniteDuration > 0f -> Color(0xFFE6A15A)
         fighter.poisonDuration > 0f -> Color(0xFF8CAF8A)
         else -> Color(0xFFE8C5A4)
     }
+
+    private fun wearsMonkRobe(fighter: FighterState): Boolean =
+        fighter.isWarPriest || fighter.archetype == EnemyArchetype.MONK_MILITIA
 
     /**
      * Arm colour. Bare-chested fighters have bare *arms* — the six sleeve sites used to hardcode a
      * blue/red sleeve regardless of armour, which is what put a shirt on a naked man.
      */
     private fun sleeveTone(fighter: FighterState, back: Boolean): Color = when {
-        fighter.isWarPriest -> if (back) Color(0xFF4A3B2F) else MonkBrown
+        wearsMonkRobe(fighter) -> if (back) Color(0xFF4A3B2F) else MonkBrown
         fighter.armor.id == "armor_bare" -> skinTone(fighter)
         fighter.isPlayer -> if (back) Color(0xFF1E3F4F) else Color(0xFF265063)
         else -> if (back) Color(0xFF8A2E1E) else Color(0xFF9E3624)
@@ -337,15 +391,17 @@ object TapestryRenderer {
     /** True when nothing covers the chest — so it is drawn as flesh, with hair on it. */
     private fun isBarechested(fighter: FighterState): Boolean =
         fighter.armor.id == "armor_bare" &&
-            !fighter.isWarPriest &&
+            !wearsMonkRobe(fighter) &&
             !fighter.isKind("hag") && !fighter.isKind("fanatic_boris") && !fighter.isKind("plague_peasant")
 
     private fun drawTorso(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val monkRobe = wearsMonkRobe(fighter)
+        val longRobe = fighter.archetype == EnemyArchetype.MONK_MILITIA
         val tunicPath = Path().apply {
             moveTo(cx - 25f, cy + 15f)
             lineTo(cx + 25f, cy + 15f)
-            lineTo(cx + 30f, cy + 95f)
-            lineTo(cx - 30f, cy + 95f)
+            lineTo(cx + if (longRobe) 38f else 30f, cy + if (longRobe) 145f else 95f)
+            lineTo(cx - if (longRobe) 38f else 30f, cy + if (longRobe) 145f else 95f)
             close()
         }
 
@@ -355,7 +411,7 @@ object TapestryRenderer {
             fighter.isKind("fanatic_boris") -> Color(0xFF7A1F1F) // blood-red madman's rags, not a clean white shirt
             fighter.isKind("plague_peasant") -> PlagueRags // filthy undyed homespun
             fighter.isKind("greaser") -> Color(0xFF7A6A3A) // fat-stained apron, greasy through
-            fighter.isWarPriest -> MonkBrown
+            monkRobe -> MonkBrown
             isBarechested(fighter) -> skinTone(fighter) // bare means bare: skin, not a white shirt
             else -> fighter.armor.color
         }
@@ -553,8 +609,12 @@ object TapestryRenderer {
             // This draws inside the fighter's own scale transform, so divide it back out —
             // otherwise big enemies wear giant arrows while the flying ones stayed small.
             // Cap stuck-shaft size so ballista spears don't blot out the fighter
-            val effSize = ((if (proj.isBallista) 0.4f else if (proj.type == ProjectileType.BOLT) 0.6f else 1f) * proj.size / fighter.size).coerceAtMost(1.2f)
-            val length = (if (proj.type == ProjectileType.BOLT && !proj.isBallista) 20f else 35f) * effSize
+            val effSize = ((if (proj.isBallista) 0.4f else if (proj.type == ProjectileType.BOLT) 0.6f else if (proj.type == ProjectileType.DART) 0.5f else 1f) * proj.size / fighter.size).coerceAtMost(1.2f)
+            val length = when {
+                proj.type == ProjectileType.DART -> 14f
+                proj.type == ProjectileType.BOLT && !proj.isBallista -> 20f
+                else -> 35f
+            } * effSize
             val tailX = ax + (dirX * length)
             val tailY = ay + (dirY * length)
 
@@ -564,7 +624,7 @@ object TapestryRenderer {
             val headY = ay - (dirY * penetration)
 
             // Draw shaft
-            val strokeW = (if (proj.type == ProjectileType.JAVELIN) 6f else if (proj.isBallista) 8f else 3f) * effSize.coerceAtLeast(0.6f)
+            val strokeW = (if (proj.type == ProjectileType.JAVELIN) 6f else if (proj.isBallista) 8f else if (proj.type == ProjectileType.DART) 2f else 3f) * effSize.coerceAtLeast(0.6f)
             scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(headX, headY), strokeWidth = strokeW)
 
             // Fletching (only for arrows/bolts)
@@ -577,7 +637,7 @@ object TapestryRenderer {
             }
             
             // Projectile head sticking out the other side
-            if (proj.type != ProjectileType.STONE) {
+            if (proj.type != ProjectileType.STONE && proj.type != ProjectileType.DART) {
                 val headSize = if (proj.type == ProjectileType.JAVELIN) 8f else 5f
                 val perpX = -dirY
                 val perpY = dirX
@@ -942,9 +1002,19 @@ object TapestryRenderer {
             // Draw facial hair
             val mustache = Path().apply {
                 if (hasLongBeard) {
-                    moveTo(hx + 4f, hy + 14f)
-                    lineTo(hx + 12f, hy + 14f)
-                    lineTo(hx + 8f, hy + 40f + faceRng.nextFloat() * 20f) // Long wizard beard!
+                    val beardRight = when (fighter.faceBiteShape) {
+                        1 -> hx + 21f // underbite
+                        3 -> hx + 25f // lantern jaw
+                        else -> hx + 14f
+                    }
+                    moveTo(hx + 3f, hy + 12f)
+                    lineTo(beardRight, hy + 14f)
+                    quadraticTo(
+                        beardRight - 2f,
+                        hy + 25f,
+                        hx + 8f,
+                        hy + 40f + faceRng.nextFloat() * 20f
+                    )
                     lineTo(hx - 8f, hy + 35f)
                     lineTo(hx - 12f, hy + 18f)
                     close()
@@ -1380,7 +1450,7 @@ object TapestryRenderer {
                     scope.drawCircle(headColor, radius = 11f, center = ballPos)
                     scope.drawCircle(ThreadColor, radius = 11f, center = ballPos, style = StitchedStroke)
                     for (i in 0 until 6) {
-                        val spikeAngle = chainAngle + i * (Math.PI * 2.0 / 6.0).toFloat() + animFrame // rotate slightly
+                        val spikeAngle = chainAngle + i * (Math.PI * 2.0 / 6.0).toFloat()
                         val sp = Offset(
                             ballPos.x + cos(spikeAngle) * 17f,
                             ballPos.y + sin(spikeAngle) * 17f
@@ -2348,8 +2418,13 @@ object TapestryRenderer {
 
         val normScale = scale
 
-        sortedAncs.forEachIndexed { index, anc ->
+        sortedAncs.withIndex().sortedByDescending { it.index / 5 }.forEach { indexedAnc ->
+            val index = indexedAnc.index
+            val anc = indexedAnc.value
+            val appearanceSeed = (anc.id.hashCode() * 31 + index * 1013) and Int.MAX_VALUE
             val offsetSign = if (playerFighter.facingRight) -1f else 1f
+            val row = if (index >= 5) 1 else 0
+            val column = index % 5
             
             var dynamicWalkOffset = 0f
             if (anc == com.example.game.Ancillary.CUPBEARER && playerFighter.hp < playerFighter.maxHp) {
@@ -2361,16 +2436,26 @@ object TapestryRenderer {
             val baseOffsetX = if (anc == com.example.game.Ancillary.LIL_GUY) {
                 90f * offsetSign // Piggyback position!
             } else {
-                (index + 1) * 110f * offsetSign + dynamicWalkOffset
+                (column + 1) * 110f * offsetSign + dynamicWalkOffset
             }
             val cx = playerFighter.posX + baseOffsetX
             val mountOffsetY = if (playerFighter.isChariot) -15f else if (playerFighter.isMounted && playerFighter.isLord) -20f else if (playerFighter.isMounted && playerFighter.isStilts) -STILTS_LIFT_PX else if (playerFighter.isMounted) -35f else 0f
-            val cy = if (anc == com.example.game.Ancillary.LIL_GUY) (90f + mountOffsetY) else 200f
-            val finalScale = when (anc) {
+            val cy = if (anc == com.example.game.Ancillary.LIL_GUY) {
+                90f + mountOffsetY
+            } else {
+                200f + row * 70f
+            }
+            val roleScale = when (anc) {
                 com.example.game.Ancillary.LIL_GUY -> normScale * 0.8f
                 com.example.game.Ancillary.SQUIRE -> normScale * 0.85f
                 else -> normScale
             }
+            val buildScale = when (appearanceSeed % 3) {
+                0 -> 0.94f
+                1 -> 1f
+                else -> 1.06f
+            }
+            val finalScale = roleScale * buildScale
 
             // Legs walk in sync but slightly phase-shifted for hilarious visual desync
             val phaseShift = index * 1.5f
@@ -2447,21 +2532,32 @@ object TapestryRenderer {
                 }
 
                 // 2. Draw Tiny Torso / Tunic
-                val tunicColor = when (anc) {
-                    com.example.game.Ancillary.SQUIRE -> Color(0xFF539462) // Baldrick's green
-                    com.example.game.Ancillary.HERALD -> Color(0xFFB03131) // Herald's red
-                    com.example.game.Ancillary.TRUMPETER -> Color(0xFFD6A420) // Trumpeter's gold
-                    com.example.game.Ancillary.CUPBEARER -> Color(0xFF632873) // Cupbearer's violet
-                    com.example.game.Ancillary.MONK -> Color(0xFF8B7355) // Hessian sack
-                    com.example.game.Ancillary.LIL_GUY -> Color(0xFFC78440)
-                    else -> Color(0xFF5F6E75)
+                val tunicPalette = when (anc) {
+                    com.example.game.Ancillary.SQUIRE -> listOf(Color(0xFF3F7650), Color(0xFF539462), Color(0xFF6A8545))
+                    com.example.game.Ancillary.HERALD -> listOf(Color(0xFF8E2C32), Color(0xFFB03131), Color(0xFF7A3D54))
+                    com.example.game.Ancillary.TRUMPETER -> listOf(Color(0xFFB78319), Color(0xFFD6A420), Color(0xFFC47832))
+                    com.example.game.Ancillary.CUPBEARER -> listOf(Color(0xFF4D286D), Color(0xFF632873), Color(0xFF75405E))
+                    com.example.game.Ancillary.MONK -> listOf(Color(0xFF6E5942), Color(0xFF8B7355), Color(0xFF78694F))
+                    com.example.game.Ancillary.LIL_GUY -> listOf(Color(0xFFA86632), Color(0xFFC78440), Color(0xFF9B704A))
+                    else -> listOf(Color(0xFF465A63), Color(0xFF5F6E75), Color(0xFF6B6257))
+                }
+                val tunicColor = tunicPalette[(appearanceSeed / 3) % tunicPalette.size]
+                val shoulderHalf = when (appearanceSeed % 3) {
+                    0 -> 13f
+                    1 -> 15f
+                    else -> 18f
+                }
+                val hemHalf = when ((appearanceSeed / 5) % 3) {
+                    0 -> 17f
+                    1 -> 20f
+                    else -> 23f
                 }
 
                 val torsoPath = Path().apply {
-                    moveTo(cx - 15f, cy + 45f)
-                    lineTo(cx + 15f, cy + 45f)
-                    lineTo(cx + 20f, cy + 95f)
-                    lineTo(cx - 20f, cy + 95f)
+                    moveTo(cx - shoulderHalf, cy + 45f)
+                    lineTo(cx + shoulderHalf, cy + 45f)
+                    lineTo(cx + hemHalf, cy + 95f)
+                    lineTo(cx - hemHalf, cy + 95f)
                     close()
                 }
                 drawStitchedFill(this, torsoPath, tunicColor)
@@ -2486,12 +2582,25 @@ object TapestryRenderer {
                     drawLine(Color(0xFF382F22), Offset(cx - 20f, cy + 90f), Offset(strapTargetX, strapTargetY2), strokeWidth = 6f)
                 }
 
-                // Decorate the tunic with embroidery
+                // Per-copy heraldry keeps duplicate followers from becoming palette-swapped clones.
                 val stripeColor = Color(0xFFFAF6EB)
-                if (anc != com.example.game.Ancillary.LIL_GUY) {
-                    drawLine(stripeColor, Offset(cx, cy + 45f), Offset(cx, cy + 95f), strokeWidth = 2.5f)
+                if (anc != com.example.game.Ancillary.LIL_GUY) when ((appearanceSeed / 7) % 3) {
+                    0 -> {
+                        drawLine(stripeColor, Offset(cx, cy + 45f), Offset(cx, cy + 95f), strokeWidth = 2.5f)
+                        drawLine(stripeColor, Offset(cx - hemHalf + 2f, cy + 70f), Offset(cx + hemHalf - 2f, cy + 70f), strokeWidth = 2f)
+                    }
+                    1 -> {
+                        drawLine(stripeColor, Offset(cx - shoulderHalf, cy + 49f), Offset(cx + hemHalf - 2f, cy + 91f), strokeWidth = 4f)
+                        drawCircle(stripeColor, radius = 3f, center = Offset(cx + 5f, cy + 69f))
+                    }
+                    else -> {
+                        drawLine(stripeColor, Offset(cx - hemHalf + 2f, cy + 79f), Offset(cx + hemHalf - 2f, cy + 79f), strokeWidth = 4f)
+                        drawLine(stripeColor, Offset(cx - 7f, cy + 47f), Offset(cx, cy + 57f), strokeWidth = 2f)
+                        drawLine(stripeColor, Offset(cx + 7f, cy + 47f), Offset(cx, cy + 57f), strokeWidth = 2f)
+                    }
+                } else {
+                    drawLine(stripeColor, Offset(cx - 18f, cy + 70f), Offset(cx + 18f, cy + 70f), strokeWidth = 2f)
                 }
-                drawLine(stripeColor, Offset(cx - 18f, cy + 70f), Offset(cx + 18f, cy + 70f), strokeWidth = 2f)
 
                 // 3. Draw Back Arm holding something (ancillary items!)
                 // Most ancillaries hold their item, so we draw their arm first
@@ -2668,18 +2777,27 @@ object TapestryRenderer {
                 }
 
                 // 4. Draw Head (hair, face features vary per ancillary so followers look distinct)
-                val headRadius = 14f
+                val headRadius = when ((appearanceSeed / 11) % 3) {
+                    0 -> 12.5f
+                    1 -> 14f
+                    else -> 15.5f
+                }
                 val hx = cx
-                val hy = cy + 25f
-                val faceSeed = kotlin.math.abs(anc.name.hashCode())
+                val hy = cy + 25f + if (headRadius > 14f) 1f else 0f
+                val faceSeed = appearanceSeed
                 drawCircle(Color(0xFFE8C5A4), radius = headRadius, center = Offset(hx, hy))
                 drawCircle(ThreadColor, radius = headRadius, center = Offset(hx, hy), style = Stroke(width = 2.5f))
 
                 // Hair: color and style picked from the seed
-                val hairCol = listOf(
-                    Color(0xFF8B5A2B), Color(0xFF2C2219), Color(0xFFC08030), Color(0xFF888888)
-                )[faceSeed % 4]
-                when ((faceSeed / 5) % 3) {
+                val hairCol = if (anc == com.example.game.Ancillary.LIL_GUY) {
+                    Color(0xFF8B5A2B)
+                } else {
+                    listOf(
+                        Color(0xFF8B5A2B), Color(0xFF2C2219), Color(0xFFC08030), Color(0xFF888888)
+                    )[faceSeed % 4]
+                }
+                val hairStyle = if (anc == com.example.game.Ancillary.LIL_GUY) 0 else (faceSeed / 5) % 3
+                when (hairStyle) {
                     0 -> { // classic bowl cap
                         val capPath = Path().apply {
                             addArc(androidx.compose.ui.geometry.Rect(hx - headRadius, hy - headRadius, hx + headRadius, hy), 180f, 180f)

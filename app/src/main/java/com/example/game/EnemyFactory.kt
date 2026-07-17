@@ -107,11 +107,114 @@ object EnemyFactory {
         )
     }
 
-    fun randomSaxon(index: Int, level: Int): FighterState {
+    /** Explicit archetype construction for authored encounters (sieges, bosses and tests). */
+    fun createArchetype(archetype: EnemyArchetype, index: Int, level: Int): FighterState {
+        val kit = when (archetype) {
+            EnemyArchetype.WALL_ARCHER, EnemyArchetype.ARCHER ->
+                listOf("head_longbow", "handle_fists", "shield_none", "armor_leather", "helm_kettle")
+            EnemyArchetype.TORCH_BEARER ->
+                listOf("head_slingshot", "handle_fists", "shield_none", "armor_padded", "helm_none")
+            EnemyArchetype.DANE_AXE_EXECUTIONER ->
+                listOf("head_axe", "handle_pike_long", "shield_none", "armor_chainmail", "helm_conical")
+            EnemyArchetype.MONK_MILITIA ->
+                listOf("head_club", "handle_short", "shield_none", "armor_bare", "helm_none")
+            EnemyArchetype.NORMAN_LOYALIST ->
+                listOf("head_broadsword", "handle_medium", "shield_kite", "armor_chainmail", "helm_conical")
+            EnemyArchetype.HOUSECARL ->
+                listOf("head_axe", "handle_medium", "shield_none", "armor_chainmail", "helm_conical")
+            EnemyArchetype.BERSERKER ->
+                listOf("head_axe", "handle_iron", "shield_none", "armor_bare", "helm_none")
+            else ->
+                listOf("head_sword", "handle_medium", "shield_buckler", "armor_padded", "helm_none")
+        }
+        var hp = baseHpFor(level)
+        val size = when (archetype) {
+            EnemyArchetype.DANE_AXE_EXECUTIONER -> 1.25f
+            EnemyArchetype.NORMAN_LOYALIST -> 1.15f
+            EnemyArchetype.MONK_MILITIA -> 0.9f
+            else -> 1f
+        }
+        hp *= when (archetype) {
+            EnemyArchetype.DANE_AXE_EXECUTIONER -> 1.65f
+            EnemyArchetype.NORMAN_LOYALIST -> 1.5f
+            EnemyArchetype.MONK_MILITIA -> 0.65f
+            else -> 1f
+        }
+        val shield = safeShield(kit[2])
+        return FighterState(
+            id = "${archetype.name.lowercase()}_$index",
+            name = when (archetype) {
+                EnemyArchetype.WALL_ARCHER -> "Archer of the Wall"
+                EnemyArchetype.TORCH_BEARER -> "Osric the Incendiary"
+                EnemyArchetype.DANE_AXE_EXECUTIONER -> "Hakon Long-Axe"
+                EnemyArchetype.MONK_MILITIA -> "Brother Cuthbert"
+                EnemyArchetype.NORMAN_LOYALIST -> "Knight of William"
+                else -> archetype.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+            },
+            isPlayer = false,
+            maxHp = hp, hp = hp,
+            weaponHead = safeHead(kit[0]), weaponHandle = safeHandle(kit[1]),
+            shield = shield, armor = safeArmor(kit[3]), headgear = safeHelm(kit[4]),
+            posX = spawnX(index), targetX = spawnX(index), facingRight = false,
+            size = size, hairColor = Color(0xFF5A442E),
+            hairStyle = if (archetype == EnemyArchetype.MONK_MILITIA) "bald" else "short",
+            level = level, shieldHp = shield.defense * 2f, archetype = archetype
+        )
+    }
+
+    fun createBoss(type: BossType, level: Int): FighterState {
+        val base = when (type) {
+            BossType.HAROLD_GODWINSON -> createArchetype(EnemyArchetype.HOUSECARL, 90, level)
+            BossType.HARALD_HARDRADA -> createArchetype(EnemyArchetype.BERSERKER, 90, level)
+            BossType.WILLIAM_THE_BASTARD -> createArchetype(EnemyArchetype.NORMAN_LOYALIST, 90, level)
+        }
+        val scaling = 1f + (level - type.level).coerceAtLeast(0) * 0.045f
+        val hp = baseHpFor(level) * 7f * scaling
+        return base.copy(
+            id = "boss_${type.name.lowercase()}",
+            name = when (type) {
+                BossType.HAROLD_GODWINSON -> "Harold Godwinson"
+                BossType.HARALD_HARDRADA -> "Harald Hardrada"
+                BossType.WILLIAM_THE_BASTARD -> "William the Bastard"
+            },
+            maxHp = hp, hp = hp, size = if (type == BossType.HARALD_HARDRADA) 1.75f else 1.6f,
+            headgear = if (type == BossType.HARALD_HARDRADA) safeHelm("helm_none") else safeHelm("helm_crown"),
+            shield = if (type == BossType.HAROLD_GODWINSON) safeShield("shield_tower") else base.shield,
+            shieldHp = if (type == BossType.HAROLD_GODWINSON) safeShield("shield_tower").defense * 5f else base.shieldHp,
+            posX = 1250f, targetX = 1250f, bossType = type,
+            arrowEyeCritWindow = if (type == BossType.HAROLD_GODWINSON) 2.5f else 0f,
+            isCombatInactive = type == BossType.HARALD_HARDRADA
+        )
+    }
+
+    fun createBossEncounter(type: BossType, level: Int): MutableList<FighterState> {
+        val boss = createBoss(type, level)
+        val retinueType = when (type) {
+            BossType.HAROLD_GODWINSON -> EnemyArchetype.HOUSECARL
+            BossType.HARALD_HARDRADA -> EnemyArchetype.BERSERKER
+            BossType.WILLIAM_THE_BASTARD -> EnemyArchetype.NORMAN_LOYALIST
+        }
+        val count = if (type == BossType.HARALD_HARDRADA) 6 else 4
+        val retinue = List(count) { index ->
+            val base = createArchetype(retinueType, index, level)
+            val eliteHp = base.maxHp * 1.6f
+            base.copy(
+                id = "boss_retinue_${type.name.lowercase()}_$index",
+                maxHp = eliteHp, hp = eliteHp, isBossRetinue = true,
+                posX = 850f + index * 85f, targetX = 850f + index * 85f,
+                isCombatInactive = type == BossType.HARALD_HARDRADA && index >= 2
+            )
+        }
+        return (retinue + boss).toMutableList()
+    }
+
+    fun randomSaxon(
+        index: Int,
+        level: Int,
+        rng: kotlin.random.Random = kotlin.random.Random.Default
+    ): FighterState {
         val saxonName = if (index < NAMES.size) NAMES[index] else "Saxon Foe ${index + 1}"
 
-        // Random.Default, not a millis-based seed: same-tick spawns were getting near-identical rolls
-        val rng = kotlin.random.Random.Default
         val r = rng.nextFloat()
 
         val arch = if (level == 1) {
@@ -126,7 +229,19 @@ object EnemyFactory {
         } else if (level <= 6) {
             if (r < 0.15f) EnemyArchetype.MACEMAN else if (r < 0.3f) EnemyArchetype.PIKEMAN else if (r < 0.45f) EnemyArchetype.SHIELD_WALL else if (r < 0.6f) EnemyArchetype.BERSERKER else if (r < 0.7f) EnemyArchetype.KNIGHT_DISMOUNTED else if (r < 0.8f) EnemyArchetype.CHARIOT_ARCHER else if (r < 0.95f) EnemyArchetype.CAVALRY else EnemyArchetype.LORD
         } else {
-            if (r < 0.15f) EnemyArchetype.ARCHER else if (r < 0.25f) EnemyArchetype.JAVELINEER else if (r < 0.4f) EnemyArchetype.SHIELD_WALL else if (r < 0.5f) EnemyArchetype.BERSERKER else if (r < 0.65f) EnemyArchetype.CAVALRY else if (r < 0.75f) EnemyArchetype.CHARIOT_ARCHER else if (r < 0.9f) EnemyArchetype.CHAMPION else EnemyArchetype.KING
+            when {
+                level >= 30 && r < 0.05f -> EnemyArchetype.NORMAN_LOYALIST
+                r < 0.12f -> EnemyArchetype.ARCHER
+                r < 0.20f -> EnemyArchetype.TORCH_BEARER
+                r < 0.28f -> EnemyArchetype.MONK_MILITIA
+                r < 0.37f -> EnemyArchetype.DANE_AXE_EXECUTIONER
+                r < 0.48f -> EnemyArchetype.SHIELD_WALL
+                r < 0.58f -> EnemyArchetype.BERSERKER
+                r < 0.70f -> EnemyArchetype.CAVALRY
+                r < 0.80f -> EnemyArchetype.CHARIOT_ARCHER
+                r < 0.92f -> EnemyArchetype.CHAMPION
+                else -> EnemyArchetype.KING
+            }
         }
 
         fun <T> List<T>.safeRandom(fallback: T): T = if (this.isEmpty()) fallback else this.random(rng)
@@ -187,6 +302,21 @@ object EnemyFactory {
             EnemyArchetype.KING -> listOf(
                 safeHead("head_claymore"), safeHandle("handle_iron"), safeShield("shield_none"), safeArmor("armor_scale"), safeHelm("helm_none") // will draw crown instead
             )
+            EnemyArchetype.WALL_ARCHER -> listOf(
+                safeHead("head_longbow"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_leather"), safeHelm("helm_kettle")
+            )
+            EnemyArchetype.TORCH_BEARER -> listOf(
+                safeHead("head_slingshot"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_padded"), safeHelm("helm_none")
+            )
+            EnemyArchetype.DANE_AXE_EXECUTIONER -> listOf(
+                safeHead("head_axe"), safeHandle("handle_pike_long"), safeShield("shield_none"), safeArmor("armor_chainmail"), safeHelm("helm_conical")
+            )
+            EnemyArchetype.MONK_MILITIA -> listOf(
+                safeHead("head_club"), safeHandle("handle_short"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
+            )
+            EnemyArchetype.NORMAN_LOYALIST -> listOf(
+                safeHead("head_broadsword"), safeHandle("handle_medium"), safeShield("shield_kite"), safeArmor("armor_chainmail"), safeHelm("helm_conical")
+            )
         }
 
         val isMounted = arch in listOf(EnemyArchetype.CAVALRY, EnemyArchetype.CHAMPION) || (arch == EnemyArchetype.CHAMPION && rng.nextFloat() < 0.5f) || arch in listOf(EnemyArchetype.CHARIOT_ARCHER, EnemyArchetype.CHARIOT_LANCER)
@@ -233,6 +363,7 @@ object EnemyFactory {
             // Old blood in the Saxon line: about one in seven daubs himself in woad before a fight
             warPaint = if (rng.nextFloat() < 0.15f) 1 else 0,
             level = level,
+            archetype = arch,
             isMounted = isMounted,
             isChariot = isChariot,
             isLord = isLord,

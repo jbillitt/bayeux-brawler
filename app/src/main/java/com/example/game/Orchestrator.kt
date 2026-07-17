@@ -2,7 +2,10 @@ package com.example.game
 
 import kotlin.random.Random
 
-enum class LineRef { MELODY, MELODY_ORN, COUNTER, BASS, PADS_FULL, PADS_ROOT, PADS_FIFTH, DRONE, PERC, SPARKLE, ACCOMP, TRUMPETER, DESTINY_FANFARE }
+enum class LineRef {
+    MELODY, MELODY_ORN, COUNTER, BASS, PADS_FULL, PADS_ROOT, PADS_FIFTH,
+    DRONE, PERC, SPARKLE, ACCOMP, RIFF, FLOURISH, TRUMPETER, DESTINY_FANFARE
+}
 
 data class VoiceAssignment(
     val voice: Voice, val line: LineRef, val enterLevel: Int, val exitLevel: Int = 99,
@@ -25,7 +28,7 @@ private fun <T> weightedPick(rng: Random, options: List<Pair<T, Float>>): T {
 
 fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): OrchestrationPlan {
     when (spec.family) {
-        Family.BRAWL -> return planBrawlOrchestration(spec)
+        Family.BRAWL -> return planBrawlOrchestration(spec, hasTrumpeter)
         Family.THRONE -> return planThroneOrchestration(spec, hasTrumpeter)
         else -> {}
     }
@@ -47,11 +50,13 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     // Perc gains run hotter than sustained voices: a drum's energy is one transient, so at equal
     // gain it reads much quieter than a held string.
     val gPerc1 = 0.38f * (1f - solemnCount * 0.15f).coerceAtLeast(0.1f)
-    var gDrone = 0.16f * (1f + wildCount * 1.5f)
-    val gThird = 0.22f; var gPads = 0.14f * (1f + noblerCount * 0.5f) * (1f + solemnCount * 0.5f)
+    val gDrone = (0.16f * (1f + wildCount.coerceAtMost(2) * 0.5f)).coerceAtMost(0.32f)
+    val gThird = 0.22f
+    val gPads = (0.14f * (1f + noblerCount.coerceAtMost(3) * 0.35f) *
+        (1f + solemnCount.coerceAtMost(3) * 0.35f)).coerceAtMost(0.32f)
     val gPerc2 = 0.22f * (1f - solemnCount * 0.15f).coerceAtLeast(0.1f)
     val gWaits = 0.26f; val gSparkle = 0.16f
-    var gBells = 0.22f * (1f + solemnCount * 0.5f)
+    val gBells = (0.22f * (1f + solemnCount.coerceAtMost(3) * 0.35f)).coerceAtMost(0.40f)
     val gTimp = 0.36f
 
     // L1 soloist: family-biased {harp, lute}; self-accompanies until the bass arrives at L3
@@ -155,28 +160,51 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     return OrchestrationPlan(a, destinyFanfare)
 }
 
-/** BRAWL: medieval speed metal. Entrance ladder flattened — everything is in by bar 2,
- *  because the pit crew doesn't do entrances. No harp, no sparkle, no fanfare. */
-private fun planBrawlOrchestration(spec: SongSpec): OrchestrationPlan {
+/** BRAWL: a cumulative medieval speed-metal arrangement with sparse upper-level flourishes. */
+private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean): OrchestrationPlan {
     val a = mutableListOf<VoiceAssignment>()
-    a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, 1, 99, 0.50f, 0.4f)         // the driver: gallop
-    a += VoiceAssignment(Voice.TABOR, LineRef.PERC, 1, 99, 0.40f, -0.45f)        // backbeat snare
-    a += VoiceAssignment(Voice.GURDY, LineRef.DRONE, 1, 99, 0.40f, -0.6f)        // root+fifth power chord
-    a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, 1, 99, 0.55f, -0.6f)      // trompette buzz = the distortion
-    a += VoiceAssignment(Voice.SHAWM, LineRef.MELODY, 1, 99, 0.48f, 0f)          // fast short aggressive lead
-    a += VoiceAssignment(Voice.VIOLA, LineRef.BASS, 2, 99, 0.36f, -0.25f)
-    a += VoiceAssignment(Voice.SACKBUT, LineRef.PADS_ROOT, 3, 99, 0.16f, -0.15f)
-    a += VoiceAssignment(Voice.HORN, LineRef.PADS_FIFTH, 3, 99, 0.13f, 0.15f)
-    a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, 5, 99, 0.36f, 0f)
-    a += VoiceAssignment(Voice.SHAWM, LineRef.MELODY_ORN, 7, 99, 0.30f, 0.3f, octave = 1)
-    a += VoiceAssignment(Voice.FIDDLE2, LineRef.COUNTER, 9, 99, 0.20f, 0.5f)
+    a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, 1, 99, 0.46f, 0.4f)
+    a += VoiceAssignment(Voice.TABOR, LineRef.PERC, 1, 99, 0.34f, -0.45f)
+    a += VoiceAssignment(Voice.LUTE, LineRef.RIFF, 1, 99, 0.30f, -0.3f)
+    a += VoiceAssignment(Voice.GURDY, LineRef.DRONE, 1, 99, 0.30f, -0.6f)
+    a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, 1, 99, 0.36f, -0.6f)
+    a += VoiceAssignment(Voice.SHAWM, LineRef.MELODY, 1, 99, 0.40f, 0f)
+
+    a += VoiceAssignment(Voice.VIOLA, LineRef.BASS, 2, 99, 0.32f, -0.2f)
+    a += VoiceAssignment(Voice.BODHRAN, LineRef.PERC, 2, 99, 0.24f, -0.55f)
+    a += VoiceAssignment(Voice.RECORDER, LineRef.FLOURISH, 2, 99, 0.12f, 0.55f)
+    if (hasTrumpeter) a += VoiceAssignment(Voice.HORN, LineRef.TRUMPETER, 2, 99, 0.16f, 0.3f)
+
+    a += VoiceAssignment(Voice.SACKBUT, LineRef.PADS_ROOT, 3, 99, 0.18f, -0.1f)
+    a += VoiceAssignment(Voice.HORN, LineRef.PADS_FIFTH, 3, 99, 0.15f, 0.1f)
+    a += VoiceAssignment(Voice.HORN, LineRef.FLOURISH, 3, 99, 0.18f, 0.25f)
+
+    a += VoiceAssignment(Voice.TAMBOURINE, LineRef.PERC, 4, 99, 0.15f, 0.65f)
+    a += VoiceAssignment(Voice.VIELLE, LineRef.COUNTER, 4, 99, 0.14f, 0.35f)
+    a += VoiceAssignment(Voice.BELLS, LineRef.SPARKLE, 5, 99, 0.10f, 0.7f)
+    a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, 5, 99, 0.28f, 0f)
+    a += VoiceAssignment(Voice.PSALTERY, LineRef.RIFF, 6, 99, 0.10f, 0.45f, octave = 1)
+    a += VoiceAssignment(Voice.FIDDLE2, LineRef.MELODY_ORN, 7, 99, 0.15f, 0.4f)
+    a += VoiceAssignment(Voice.PANPIPES, LineRef.FLOURISH, 8, 99, 0.11f, 0.6f)
+    a += VoiceAssignment(Voice.HARP, LineRef.FLOURISH, 9, 99, 0.11f, -0.5f)
+    a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 10, 99, 0.08f, 0f)
+    a += VoiceAssignment(Voice.CHOIR, LineRef.FLOURISH, 11, 99, 0.10f, 0.2f)
     return OrchestrationPlan(a, destinyFanfare = false)
 }
 
+/** THRONE: choir-led cinematic menace with tolling bells and a deliberately late melody. */
 private fun planThroneOrchestration(spec: SongSpec, hasTrumpeter: Boolean): OrchestrationPlan {
     val a = mutableListOf<VoiceAssignment>()
-    a += VoiceAssignment(Voice.VIOLA, LineRef.BASS, 1, 99, 0.34f, -0.3f)
+    a += VoiceAssignment(Voice.CHOIR, LineRef.PADS_ROOT, 1, 99, 0.30f, -0.2f)
+    a += VoiceAssignment(Voice.CHOIR, LineRef.PADS_FIFTH, 1, 99, 0.24f, 0.2f)
     a += VoiceAssignment(Voice.GURDY, LineRef.DRONE, 1, 99, 0.26f, -0.7f)
+    a += VoiceAssignment(Voice.VIOLA, LineRef.BASS, 1, 99, 0.34f, -0.3f)
+    a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, 1, 99, 0.44f, 0f)
+    a += VoiceAssignment(Voice.BELLS, LineRef.SPARKLE, 1, 99, 0.26f, 0.6f)
+    a += VoiceAssignment(Voice.VIELLE, LineRef.MELODY, 4, 99, 0.34f, 0.1f, octave = 1)
+    a += VoiceAssignment(Voice.CHOIR, LineRef.COUNTER, 7, 99, 0.18f, 0.35f)
+    a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 10, 99, 0.12f, 0f)
+    if (hasTrumpeter) a += VoiceAssignment(Voice.HORN, LineRef.TRUMPETER, 2, 99, 0.20f, 0.3f)
     return OrchestrationPlan(a, destinyFanfare = false)
 }
 
@@ -188,17 +216,45 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
     for (bar in 0 until spec.totalBars) {
         val base = bar * bpb
         when (voice) {
-            Voice.BODHRAN, Voice.TABOR -> {
-                out += NoteEvent(base, 0.4f, 57, 1f)
-                when (spec.beatsPerBar) {
-                    6 -> { out += NoteEvent(base + 3f, 0.4f, 57, 0.7f); if (wilder) { out += NoteEvent(base + 4.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 5.5f, 0.3f, 57, 0.5f) } }
-                    4 -> { out += NoteEvent(base + 2f, 0.4f, 57, 0.7f); if (wilder) { out += NoteEvent(base + 2.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 3.5f, 0.3f, 57, 0.5f) } }
-                    else -> if (wilder) { out += NoteEvent(base + 1.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 2.5f, 0.3f, 57, 0.5f) }
+            Voice.BODHRAN -> {
+                if (spec.family == Family.BRAWL) {
+                    for (beat in 0 until spec.beatsPerBar) {
+                        out += NoteEvent(base + beat, 0.3f, 57, if (beat % 2 == 0) 0.9f else 0.65f)
+                    }
+                } else {
+                    out += NoteEvent(base, 0.4f, 57, 1f)
+                    when (spec.beatsPerBar) {
+                        6 -> { out += NoteEvent(base + 3f, 0.4f, 57, 0.7f); if (wilder) { out += NoteEvent(base + 4.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 5.5f, 0.3f, 57, 0.5f) } }
+                        4 -> { out += NoteEvent(base + 2f, 0.4f, 57, 0.7f); if (wilder) { out += NoteEvent(base + 2.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 3.5f, 0.3f, 57, 0.5f) } }
+                        else -> if (wilder) { out += NoteEvent(base + 1.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 2.5f, 0.3f, 57, 0.5f) }
+                    }
+                }
+            }
+            Voice.TABOR -> {
+                if (spec.family == Family.BRAWL) {
+                    out += NoteEvent(base + 1f, 0.3f, 57, 0.9f)
+                    out += NoteEvent(base + 3f, 0.3f, 57, 1f)
+                    if (bar % 4 == 3) out += NoteEvent(base + 3.5f, 0.2f, 57, 0.65f)
+                } else {
+                    out += NoteEvent(base, 0.4f, 57, 1f)
+                    when (spec.beatsPerBar) {
+                        6 -> { out += NoteEvent(base + 3f, 0.4f, 57, 0.7f); if (wilder) { out += NoteEvent(base + 4.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 5.5f, 0.3f, 57, 0.5f) } }
+                        4 -> { out += NoteEvent(base + 2f, 0.4f, 57, 0.7f); if (wilder) { out += NoteEvent(base + 2.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 3.5f, 0.3f, 57, 0.5f) } }
+                        else -> if (wilder) { out += NoteEvent(base + 1.5f, 0.3f, 57, 0.5f); out += NoteEvent(base + 2.5f, 0.3f, 57, 0.5f) }
+                    }
                 }
             }
             Voice.TAMBOURINE -> {
-                val offs = when (spec.beatsPerBar) { 6 -> listOf(1.5f, 4.5f); 4 -> listOf(1f, 3f); else -> listOf(1f, 2f) }
-                for (o in offs) out += NoteEvent(base + o, 0.25f, 57, 0.8f)
+                if (spec.family == Family.BRAWL) {
+                    var beat = 0f
+                    while (beat < bpb - 1e-3f) {
+                        out += NoteEvent(base + beat, 0.2f, 57, if (beat % 2f == 0f) 0.75f else 0.5f)
+                        beat += 0.5f
+                    }
+                } else {
+                    val offs = when (spec.beatsPerBar) { 6 -> listOf(1.5f, 4.5f); 4 -> listOf(1f, 3f); else -> listOf(1f, 2f) }
+                    for (o in offs) out += NoteEvent(base + o, 0.25f, 57, 0.8f)
+                }
             }
             Voice.NAKERS -> if (spec.family == Family.BRAWL) {
                 // Double-time gallop: the wilder double-hit is the FLOOR here, not the ceiling.
@@ -211,9 +267,31 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
             } else if (bar % 4 == 0) {
                 out += NoteEvent(base, 0.4f, 56, 0.9f); out += NoteEvent(base + 0.5f, 0.3f, 57, 0.6f)
             }
-            Voice.TIMPANI -> {
+            Voice.TIMPANI -> if (spec.family == Family.THRONE) {
+                val groundRoot = degreeToMidi(spec, spec.ground[bar % 8].bassDegree)
+                if (bar % 2 == 0) out += NoteEvent(base, 2.0f, groundRoot, 1f)
+                if (bar % 8 == 7) {
+                    out += NoteEvent(base + bpb - 1f, 1.0f, spec.finalMidi - 5, 0.8f)
+                }
+            } else if (spec.family == Family.BRAWL) {
+                if (bar % 4 == 0) out += NoteEvent(base, 1.0f, degreeToMidi(spec, spec.ground[bar % 8].bassDegree), 0.9f)
+                if (bar % 4 == 3) {
+                    for (r in 0 until 4) {
+                        out += NoteEvent(base + bpb - 1f + r * 0.25f, 0.18f, spec.finalMidi, 0.55f + 0.1f * r)
+                    }
+                }
+            } else {
                 if (bar % 8 == 0) out += NoteEvent(base, 1.2f, spec.finalMidi, 1f)
-                if (bar % 8 == 7) for (r in 0 until 6) out += NoteEvent(base + bpb - 1f + r * (1f / 6f), 0.15f, spec.finalMidi, 0.4f + 0.08f * r)
+                if (bar % 8 == 7) {
+                    for (r in 0 until 6) {
+                        out += NoteEvent(
+                            base + bpb - 1f + r * (1f / 6f),
+                            0.15f,
+                            spec.finalMidi,
+                            0.4f + 0.08f * r
+                        )
+                    }
+                }
             }
             else -> {}
         }
@@ -224,6 +302,14 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
 fun droneEvents(spec: SongSpec): List<NoteEvent> {
     val out = mutableListOf<NoteEvent>()
     val bpb = spec.beatsPerBar.toFloat()
+    if (spec.family == Family.BRAWL || spec.family == Family.THRONE) {
+        for (bar in 0 until spec.totalBars) {
+            val chord = groundChordMidis(spec, spec.ground[bar % 8].bassDegree)
+            out += NoteEvent(bar * bpb, bpb, chord[0], 0.9f)
+            out += NoteEvent(bar * bpb, bpb, chord[1], 0.7f)
+        }
+        return out
+    }
     var bar = 0
     while (bar < spec.totalBars) {
         val len = minOf(4, spec.totalBars - bar) * bpb
@@ -238,7 +324,14 @@ fun gurdyBuzzEvents(spec: SongSpec): List<NoteEvent> {
     val out = mutableListOf<NoteEvent>()
     val bpb = spec.beatsPerBar.toFloat()
     val strong: List<Float> = when (spec.beatsPerBar) { 6 -> listOf(0f, 3f); 4 -> listOf(0f, 2f); else -> listOf(0f) }
-    for (bar in 0 until spec.totalBars) for (s in strong) out += NoteEvent(bar * bpb + s, 0.09f, spec.finalMidi, 0.9f)
+    for (bar in 0 until spec.totalBars) {
+        val midi = if (spec.family == Family.BRAWL || spec.family == Family.THRONE) {
+            groundChordMidis(spec, spec.ground[bar % 8].bassDegree)[0]
+        } else {
+            spec.finalMidi
+        }
+        for (s in strong) out += NoteEvent(bar * bpb + s, 0.09f, midi, 0.9f)
+    }
     return out
 }
 
@@ -247,11 +340,11 @@ fun sparkleEvents(spec: SongSpec): List<NoteEvent> {
     val bpb = spec.beatsPerBar.toFloat()
     val step = if (spec.beatsPerBar == 6) 1f else 0.5f
     for (bar in 0 until spec.totalBars) {
-        val root = spec.finalMidi + modeOffset(spec.mode, spec.ground[bar % 8].bassDegree) + 24
-        val arp = intArrayOf(0, 7, 12, 7)
+        val chord = groundChordMidis(spec, spec.ground[bar % 8].bassDegree).map { it + 24 }
+        val arp = intArrayOf(chord[0], chord[1], chord[2], chord[1])
         var beat = 0f; var i = 0
         while (beat < bpb - 1e-3f) {
-            out += NoteEvent(bar * bpb + beat, step * 1.5f, root + arp[i % 4], 0.7f)
+            out += NoteEvent(bar * bpb + beat, step * 1.5f, arp[i % 4], 0.7f)
             beat += step; i++
         }
     }
@@ -263,11 +356,74 @@ fun accompEvents(spec: SongSpec): List<NoteEvent> {
     val bpb = spec.beatsPerBar.toFloat()
     for (bar in 0 until spec.totalBars) {
         val g = spec.ground[bar % 8].bassDegree
-        val root = spec.finalMidi + modeOffset(spec.mode, g)
-        out += NoteEvent(bar * bpb, bpb, root, 0.9f)                        // bass note, downbeat
+        val chord = groundChordMidis(spec, g)
+        out += NoteEvent(bar * bpb, bpb, chord[0], 0.9f)                    // bass note, downbeat
         val mid = if (spec.beatsPerBar == 6) 3f else spec.beatsPerBar / 2f
-        out += NoteEvent(bar * bpb + mid * 0.5f, 1f, root + 7, 0.55f)       // broken chord: fifth
-        out += NoteEvent(bar * bpb + mid, 1f, root + 12, 0.5f)              // octave
+        out += NoteEvent(bar * bpb + mid * 0.5f, 1f, chord[1], 0.55f)       // broken chord: fifth
+        out += NoteEvent(bar * bpb + mid, 1f, chord[2], 0.5f)               // octave
+    }
+    return out
+}
+
+fun brawlRiffEvents(spec: SongSpec): List<NoteEvent> {
+    val out = mutableListOf<NoteEvent>()
+    val bpb = spec.beatsPerBar.toFloat()
+    for (bar in 0 until spec.totalBars) {
+        val chord = groundChordMidis(spec, spec.ground[bar % 8].bassDegree)
+        val root = chord[0] + 12
+        var fifth = chord[1]
+        while (fifth < root) fifth += 12
+        val pattern = intArrayOf(root, root, fifth, root, root, root + 12, fifth, root)
+        for (i in pattern.indices) {
+            out += NoteEvent(bar * bpb + i * 0.5f, 0.34f, pattern[i], if (i % 4 == 0) 0.95f else 0.7f)
+        }
+    }
+    return out
+}
+
+fun brawlChordStabEvents(spec: SongSpec, fifth: Boolean): List<NoteEvent> {
+    val out = mutableListOf<NoteEvent>()
+    val bpb = spec.beatsPerBar.toFloat()
+    for (bar in 0 until spec.totalBars) {
+        val chord = groundChordMidis(spec, spec.ground[bar % 8].bassDegree)
+        val midi = chord[if (fifth) 1 else 0]
+        out += NoteEvent(bar * bpb, 0.35f, midi, 0.9f)
+        out += NoteEvent(bar * bpb + 2f, 0.3f, midi, 0.7f)
+        if (bar % 4 == 3) out += NoteEvent(bar * bpb + 3.5f, 0.22f, midi, 0.75f)
+    }
+    return out
+}
+
+fun brawlFlourishEvents(spec: SongSpec, voice: Voice): List<NoteEvent> {
+    val out = mutableListOf<NoteEvent>()
+    val bpb = spec.beatsPerBar.toFloat()
+    if (voice == Voice.CHOIR) {
+        for (bar in 0 until spec.totalBars step 8) {
+            val chord = groundChordMidis(spec, spec.ground[bar % 8].bassDegree)
+            out += NoteEvent(bar * bpb, 2f, chord[0] + 12, 0.75f)
+            out += NoteEvent(bar * bpb + 2f, 2f, chord[1] + 12, 0.65f)
+        }
+        return out
+    }
+    if (voice == Voice.HORN) {
+        for (bar in 0 until spec.totalBars step 4) {
+            val chord = groundChordMidis(spec, spec.ground[bar % 8].bassDegree)
+            out += NoteEvent(bar * bpb, 0.5f, chord[0] + 12, 0.85f)
+            out += NoteEvent(bar * bpb + 0.5f, 0.5f, chord[1] + 12, 0.9f)
+            out += NoteEvent(bar * bpb + 1f, 1f, chord[2] + 12, 1f)
+        }
+        return out
+    }
+    for (bar in 3 until spec.totalBars step 4) {
+        val g = spec.ground[bar % 8].bassDegree
+        val notes = intArrayOf(
+            degreeToMidi(spec, g + 7),
+            degreeToMidi(spec, g + 9),
+            degreeToMidi(spec, g + 11),
+            degreeToMidi(spec, g + 14)
+        )
+        val start = bar * bpb + bpb - 1f
+        for (i in notes.indices) out += NoteEvent(start + i * 0.25f, 0.22f, notes[i], 0.7f + 0.08f * i)
     }
     return out
 }

@@ -3,6 +3,8 @@ package com.example.game
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -58,6 +60,19 @@ class GameViewModelTest {
     }
 
     @Test
+    fun `William battle creates loyalist encounter and forces throne music boolean`() {
+        mutateState { it.copy(level = 30, isThroneMode = false, brawlMode = true) }
+
+        viewModel.startBattle()
+
+        val state = viewModel.uiState.value
+        assertEquals(BossType.WILLIAM_THE_BASTARD, state.bossType)
+        assertTrue(state.forceThroneMusic)
+        assertTrue(viewModel.enemiesState.value.any { it.bossType == BossType.WILLIAM_THE_BASTARD })
+        assertTrue(viewModel.enemiesState.value.any { it.archetype == EnemyArchetype.NORMAN_LOYALIST })
+    }
+
+    @Test
     fun `fists preselected never equip a hilt at battle start`() {
         val bareHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
         viewModel.selectGear(bareHead)
@@ -67,6 +82,16 @@ class GameViewModelTest {
         val player = viewModel.playerState.value!!
         assertEquals("head_bare", player.weaponHead.id)
         assertEquals("handle_fists", player.weaponHandle.id)
+    }
+
+    @Test
+    fun `Lil Guy fires a visible player-owned dart without changing damage`() {
+        viewModel.startBattle()
+        val projectile = createLilGuyDart(viewModel.playerState.value!!, 123L, kotlin.random.Random(7))
+
+        assertEquals(ProjectileType.DART, projectile.type)
+        assertEquals(14f, projectile.damage)
+        assertTrue(projectile.isPlayerOwned)
     }
 
     // Reflection helper: the endBattle(won) that flags a run as lost is private, and the
@@ -109,6 +134,32 @@ class GameViewModelTest {
         field.isAccessible = true
         val flow = field.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<BattleSimState>
         flow.value = mutator(flow.value)
+    }
+
+    private fun setPrivateListFlow(fieldName: String, value: List<*>) {
+        val field = GameViewModel::class.java.getDeclaredField(fieldName)
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val flow = field.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<List<Any>>
+        flow.value = value as List<Any>
+    }
+
+    private fun updateTransientEffects(dt: Float) {
+        val method = GameViewModel::class.java.getDeclaredMethod(
+            "updateTransientEffects",
+            Float::class.javaPrimitiveType
+        )
+        method.isAccessible = true
+        method.invoke(viewModel, dt)
+    }
+
+    private fun updateSimulation(dt: Float) {
+        val method = GameViewModel::class.java.getDeclaredMethod(
+            "updateSimulation",
+            Float::class.javaPrimitiveType
+        )
+        method.isAccessible = true
+        method.invoke(viewModel, dt)
     }
 
     private fun foes() = viewModel.enemiesState.value.filter { !it.isPlayer && !it.isDead && !it.isDying }
@@ -213,6 +264,123 @@ class GameViewModelTest {
     }
 
     @Test
+    fun `divine weather spares queued and climbing defenders`() {
+        mutateState {
+            it.copy(level = 8, divineWeathers = listOf(DivineWeather.HAIL))
+        }
+        viewModel.startBattle()
+        val protected = foes().take(2)
+        assertEquals(2, protected.size)
+        protected[0].isCombatInactive = true
+        protected[1].climbState = ClimbState.CLIMBING_UP
+        val hp = protected.map { it.hp }
+
+        viewModel.triggerWeather("weather_hail")
+
+        assertEquals(hp[0], protected[0].hp, 0f)
+        assertEquals(hp[1], protected[1].hp, 0f)
+        assertFalse(protected[0].isCrumpled)
+        assertFalse(protected[1].isCrumpled)
+    }
+
+    @Test
+    fun `William throne music flag is cleared across the battle lifecycle`() {
+        mutateState { it.copy(level = 30) }
+        viewModel.startBattle()
+        assertTrue(viewModel.uiState.value.forceThroneMusic)
+
+        endBattle(false)
+        assertFalse(viewModel.uiState.value.forceThroneMusic)
+        viewModel.dismissBattleResult()
+        assertFalse(viewModel.uiState.value.forceThroneMusic)
+
+        mutateState { it.copy(level = 2, forceThroneMusic = true) }
+        viewModel.startBattle()
+        assertFalse(viewModel.uiState.value.forceThroneMusic)
+    }
+
+    @Test
+    fun `complete runtime battle descriptor is deterministic for seed and level`() {
+        val seed = 1066L
+        val level = (5..15).first {
+            BossSchedule.forLevel(it) == null && !SiegeSchedule.isSiegeLevel(seed, it)
+        }
+        fun descriptor(vm: GameViewModel): List<Any> {
+            val state = vm.uiState.value
+            return listOf(
+                state.levelWidth,
+                state.siegeState != null,
+                vm.enemiesState.value.map {
+                    listOf(
+                        it.id, it.archetype, it.weaponHead.id, it.weaponHandle.id,
+                        it.shield.id, it.armor.id, it.headgear.id, it.size, it.posX
+                    )
+                },
+                state.backgroundObjects.map {
+                    listOf(it.id, it.type, it.posX, it.width, it.hp, it.maxHp, it.seed, it.artId)
+                }
+            )
+        }
+        fun configured(): GameViewModel {
+            MedievalHarpPlayer.newGame(seed)
+            return GameViewModel().also { vm ->
+                val field = GameViewModel::class.java.getDeclaredField("_uiState")
+                field.isAccessible = true
+                @Suppress("UNCHECKED_CAST")
+                val flow = field.get(vm) as kotlinx.coroutines.flow.MutableStateFlow<BattleSimState>
+                flow.value = flow.value.copy(
+                    level = level,
+                    performanceScore = 0.5f,
+                    unlockedAncillaries = emptyList(),
+                    headgear = GameData.HeadgearPiece.NONE
+                )
+                vm.startBattle()
+            }
+        }
+
+        assertEquals(descriptor(configured()), descriptor(configured()))
+    }
+
+    @Test
+    fun `enemy torch collision consumes the shot without harming defender cover`() {
+        viewModel.startBattle()
+        val player = viewModel.playerState.value!!
+        player.posX = 550f
+        player.targetX = 550f
+        val building = BackgroundObject(
+            id = "defender_cover",
+            type = BackgroundObjectType.BUILDING_BOSHAM,
+            posX = 500f,
+            width = 300f,
+            hp = 300f,
+            maxHp = 300f
+        )
+        mutateState { it.copy(backgroundObjects = listOf(building), levelWidth = 1500f) }
+        setPrivateListFlow(
+            "_projectilesState",
+            listOf(
+                Projectile(
+                    id = "torch_test",
+                    isPlayerOwned = false,
+                    posX = 500f,
+                    posY = 200f,
+                    velocityX = 0f,
+                    velocityY = 0f,
+                    damage = 50f,
+                    pierce = 0f,
+                    blunt = 2f,
+                    type = ProjectileType.TORCH
+                )
+            )
+        )
+
+        updateSimulation(0.001f)
+
+        assertEquals(300f, building.hp, 0f)
+        assertTrue(viewModel.projectilesState.value.none { it.id == "torch_test" })
+    }
+
+    @Test
     fun `weather is only offered late and never a third time`() {
         val method = GameViewModel::class.java.getDeclaredMethod("endBattle", Boolean::class.javaPrimitiveType)
         method.isAccessible = true
@@ -292,6 +460,94 @@ class GameViewModelTest {
     }
 
     @Test
+    fun `Thrice-Blessed never reoffers a consumed follower`() {
+        mutateState {
+            it.copy(
+                level = 8,
+                unlockedAncillaries = listOf(Ancillary.SQUIRE),
+                tripledFollowerIds = setOf(Ancillary.SQUIRE.id)
+            )
+        }
+        repeat(100) {
+            endBattle(true)
+            assertFalse(
+                "consumed follower was offered again",
+                viewModel.uiState.value.pendingLevelUpChoices.any { choice ->
+                    choice.id == "triple_${Ancillary.SQUIRE.id}"
+                }
+            )
+            mutateState { it.copy(level = 8) }
+        }
+    }
+
+    @Test
+    fun `Thrice-Blessed weighting favors an existing twin three to one`() {
+        val followers = listOf(Ancillary.SQUIRE, Ancillary.SQUIRE, Ancillary.HERALD)
+        val random = kotlin.random.Random(42)
+        var squirePicks = 0
+        var heraldPicks = 0
+        repeat(1000) {
+            when (pickTripleCandidate(followers, emptySet(), random)) {
+                Ancillary.SQUIRE -> squirePicks++
+                Ancillary.HERALD -> heraldPicks++
+                else -> {}
+            }
+        }
+        val ratio = squirePicks.toFloat() / heraldPicks
+        assertTrue("weighted ratio was $ratio", ratio in 2.5f..3.5f)
+    }
+
+    @Test
+    fun `rally produces twins thirty percent of the time`() {
+        val random = kotlin.random.Random(99)
+        val twinRate = (0 until 1000).count { rollFollowerCopies(random) == 2 } / 1000f
+        assertTrue("twins rate was $twinRate", twinRate in 0.25f..0.35f)
+    }
+
+    @Test
+    fun `front pallbearers inherit the lords full upgraded kit`() {
+        val sword = GameData.WEAPON_HEADS.first { it.id == "head_sword" }
+        val handle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" }
+        val shield = GameData.SHIELDS.first { it.id != "shield_none" }
+        mutateState {
+            it.copy(
+                isThroneMode = true,
+                weaponHead = sword,
+                weaponHandle = handle,
+                shield = shield,
+                extraAttachments = listOf("head_axe"),
+                handleExtensionCount = 2,
+                rangedUpgrades = listOf("multishot"),
+                shieldUpgrades = listOf("oak_reinforcing", "iron_plating"),
+                brawlerUpgrades = listOf("brass_knuckles"),
+                isDualWielding = false
+            )
+        }
+
+        viewModel.startBattle()
+
+        val player = viewModel.playerState.value!!
+        val bearers = viewModel.enemiesState.value
+            .filter { it.id.startsWith("pallbearer_") }
+            .sortedBy { it.pallbearerIndex }
+        for (front in bearers.take(2)) {
+            assertEquals(listOf("head_axe"), front.extraAttachments.map { it.id })
+            assertEquals(2, front.handleExtensionCount)
+            assertEquals(listOf("multishot"), front.rangedUpgrades)
+            assertEquals(listOf("oak_reinforcing", "iron_plating"), front.shieldUpgrades)
+            assertEquals(listOf("brass_knuckles"), front.brawlerUpgrades)
+        }
+        assertEquals(player.shieldHp, bearers[1].shieldHp, 0f)
+        for (rear in bearers.drop(2)) {
+            assertEquals("head_bare", rear.weaponHead.id)
+            assertEquals("handle_fists", rear.weaponHandle.id)
+            assertEquals("shield_none", rear.shield.id)
+            assertTrue(rear.extraAttachments.isEmpty())
+            assertEquals("armor_bare", rear.armor.id)
+        }
+    }
+
+    @Test
     fun `chariot collapses if armor is too heavy`() {
         // headgear must be pinned: BattleSimState defaults it to a *random* piece (0-6kg),
         // which silently decided whether this loadout crossed the weight limit
@@ -356,5 +612,50 @@ class GameViewModelTest {
         assertFalse(player.isChariot)
         assertTrue(player.isMounted)
         assertEquals(80f, player.mountHp)
+    }
+
+    @Test
+    fun `transient effect tick preserves list identity when membership is unchanged`() {
+        val popup = CombatPopup("10", 5f, 6f, age = 0.2f)
+        val particle = BloodParticle(1f, 2f, 3f, 4f, age = 0.2f, maxAge = 10f)
+        val popups = listOf(popup)
+        val particles = listOf(particle)
+        setPrivateListFlow("_popupsState", popups)
+        setPrivateListFlow("_particlesState", particles)
+
+        updateTransientEffects(0.033f)
+
+        assertSame(popups, viewModel.popupsState.value)
+        assertSame(particles, viewModel.particlesState.value)
+        assertEquals(0.233f, popup.age, 0.0001f)
+        assertEquals(0.233f, particle.age, 0.0001f)
+    }
+
+    @Test
+    fun `transient effect tick removes expired entries and caps spawned particles`() {
+        val expiringPopup = CombatPopup("10", 5f, 6f, age = 1.19f)
+        val expiringParticle = BloodParticle(1f, 2f, 3f, 4f, age = 0.99f, maxAge = 1f)
+        val popups = listOf(expiringPopup)
+        val particles = listOf(expiringParticle)
+        setPrivateListFlow("_popupsState", popups)
+        setPrivateListFlow("_particlesState", particles)
+
+        val bufferField = GameViewModel::class.java.getDeclaredField("particleBuffer")
+        bufferField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val buffer = bufferField.get(viewModel) as MutableList<BloodParticle>
+        val spawned = List(125) { index ->
+            BloodParticle(index.toFloat(), 0f, 0f, 0f, maxAge = 10f)
+        }
+        buffer.addAll(spawned)
+
+        updateTransientEffects(0.02f)
+
+        assertNotSame(popups, viewModel.popupsState.value)
+        assertNotSame(particles, viewModel.particlesState.value)
+        assertTrue(viewModel.popupsState.value.isEmpty())
+        assertEquals(120, viewModel.particlesState.value.size)
+        assertEquals(spawned.takeLast(120), viewModel.particlesState.value)
+        assertTrue(buffer.isEmpty())
     }
 }

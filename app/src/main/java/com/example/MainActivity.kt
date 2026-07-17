@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Box(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
                         BayeuxAppContent(viewModel)
-                    }
+                }
                 }
             }
         }
@@ -106,13 +106,25 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
     var musicOn by rememberSaveable { mutableStateOf(true) }
     val uiState by viewModel.uiState.collectAsState()
     val hasTrumpeter = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.TRUMPETER)
-    // Brawl rides the existing moods pipe: the LaunchedEffect keys on this list, so flipping
-    // brawlMode recomposes the same run-seed tune as its speed-metal variant (in-phase crossfade).
-    val appliedMusicMoods = if (uiState.brawlMode) uiState.appliedMusicMoods + "Brawl" else uiState.appliedMusicMoods
-
-    LaunchedEffect(musicOn, uiState.level, hasTrumpeter, appliedMusicMoods, uiState.gameCount) {
+    // Brawl and Throne are first-class themes. Throne takes precedence in resolveSongSpec.
+    LaunchedEffect(
+        musicOn,
+        uiState.level,
+        hasTrumpeter,
+        uiState.appliedMusicMoods,
+        uiState.brawlMode,
+        uiState.isThroneMode,
+        uiState.forceThroneMusic,
+        uiState.gameCount
+    ) {
         if (musicOn) {
-            MedievalHarpPlayer.startMusic(level = uiState.level, hasTrumpeter = hasTrumpeter, moods = appliedMusicMoods)
+            MedievalHarpPlayer.startMusic(
+                level = uiState.level,
+                hasTrumpeter = hasTrumpeter,
+                moods = uiState.appliedMusicMoods,
+                brawl = uiState.brawlMode,
+                throne = uiState.isThroneMode || uiState.forceThroneMusic
+            )
         } else {
             MedievalHarpPlayer.stopMusic()
         }
@@ -1672,8 +1684,12 @@ fun BattlefieldScene(
             .border(2.dp, TapestryDark, RoundedCornerShape(6.dp))
     ) {
         // Render Tapestry Canvas
-        val latinHeadline = remember(uiState.level) { FlavourText.latinHeadline(MedievalHarpPlayer.gameSeed, uiState.level) }
+        val latinHeadline = remember(uiState.level, uiState.bossType) {
+            FlavourText.latinHeadline(MedievalHarpPlayer.gameSeed, uiState.level, uiState.bossType)
+        }
         val borderSeed = remember(uiState.level) { MedievalHarpPlayer.gameSeed * 7L + uiState.level }
+        val fixedBackdropCache = remember { TapestryBackdropCache() }
+        val worldBackdropCache = remember { TapestryBackdropCache() }
         val weatherFlash by viewModel.weatherFlash.collectAsState()
         Canvas(
             modifier = Modifier
@@ -1686,37 +1702,6 @@ fun BattlefieldScene(
             val enemies = viewModel.enemiesState.value
             val projectiles = viewModel.projectilesState.value
             val popups = viewModel.popupsState.value
-            // Draw coarse woven canvas linen backdrop
-            drawRect(TapestryLinenBg)
-
-            // Dynamic linen weave textured shading
-            var yOffset = 0f
-            while (yOffset < size.height) {
-                drawLine(
-                    color = Color(0x15382F22),
-                    start = Offset(0f, yOffset),
-                    end = Offset(size.width, yOffset),
-                    strokeWidth = 2f
-                )
-                yOffset += 4f
-            }
-            var xOffset = 0f
-            while (xOffset < size.width) {
-                drawLine(
-                    color = Color(0x10382F22),
-                    start = Offset(xOffset, 0f),
-                    end = Offset(xOffset, size.height),
-                    strokeWidth = 2f
-                )
-                xOffset += 4f
-            }
-
-            // 1. Draw TOP Embroidered Border (characteristic of Bayeux)
-            drawTapestryBorder(this, isTop = true, textHeadline = "", motifSeed = borderSeed)
-
-            // 2. Draw BOTTOM Embroidered Border (With decorative stags and some funny bones of fallen foes!)
-            drawTapestryBorder(this, isTop = false, textHeadline = "", motifSeed = borderSeed + 1)
-
             val shakeAmt = shake
             val playerScaleX = size.width / 1000f
             // Pull the camera back only when the player needs the headroom — a big fighter, a mount,
@@ -1738,20 +1723,110 @@ fun BattlefieldScene(
             // block's coordinates) land 45px above the border — room for bodies/blood pools,
             // no dead space.
             val groundOffsetY = (size.height - 40f - 45f) - (200f + 158f * scaleFactor)
+
+            val canvasWidth = size.width.toInt().coerceAtLeast(1)
+            val canvasHeight = size.height.toInt().coerceAtLeast(1)
+            val fixedBackdrop = fixedBackdropCache.bitmapFor(
+                BackdropKey(uiState.level, borderSeed, canvasWidth, canvasHeight)
+            ) {
+                drawRect(TapestryLinenBg)
+                var yOffset = 0f
+                while (yOffset < size.height) {
+                    drawLine(
+                        color = Color(0x15382F22),
+                        start = Offset(0f, yOffset),
+                        end = Offset(size.width, yOffset),
+                        strokeWidth = 2f
+                    )
+                    yOffset += 4f
+                }
+                var xOffset = 0f
+                while (xOffset < size.width) {
+                    drawLine(
+                        color = Color(0x10382F22),
+                        start = Offset(xOffset, 0f),
+                        end = Offset(xOffset, size.height),
+                        strokeWidth = 2f
+                    )
+                    xOffset += 4f
+                }
+                drawTapestryBorder(this, isTop = true, textHeadline = latinHeadline, motifSeed = borderSeed)
+                drawTapestryBorder(this, isTop = false, textHeadline = "", motifSeed = borderSeed + 1)
+            }
+            drawImage(fixedBackdrop)
+
+            // Keep the scrolling scenery in world coordinates while caching its expensive
+            // embroidery. The fixed linen and borders above remain screen-anchored as before.
+            val worldPadding = 600f
+            val worldWidth = kotlin.math.ceil(uiState.levelWidth * playerScaleX + worldPadding * 2f)
+                .toInt()
+                .coerceAtLeast(canvasWidth)
+            val staticBackgroundObjects = uiState.backgroundObjects.filterNot {
+                it.type.isLiveBackgroundObject()
+            }
+            val backgroundVisualSeed = com.example.game.staticBackgroundVisualSeed(
+                borderSeed,
+                staticBackgroundObjects,
+                worldZoom
+            )
+            val worldBackdrop = worldBackdropCache.bitmapFor(
+                BackdropKey(uiState.level, backgroundVisualSeed, worldWidth, canvasHeight)
+            ) {
+                withTransform({
+                    translate(left = worldPadding, top = groundOffsetY)
+                }) {
+                    staticBackgroundObjects.forEach { bg ->
+                        com.example.game.drawStaticBackgroundObject(
+                            this,
+                            bg,
+                            bg.posX * playerScaleX,
+                            scaleFactor
+                        )
+                    }
+                }
+            }
+            withTransform({
+                clipRect(top = 40f, bottom = size.height - 40f)
+                translate(left = offsetX - worldPadding, top = offsetY)
+            }) {
+                drawImage(worldBackdrop)
+            }
+
             withTransform({
                 // Keep the game world inside the embroidered borders (40px bands)
                 clipRect(top = 40f, bottom = size.height - 40f)
                 translate(left = offsetX, top = offsetY + groundOffsetY)
             }) {
-                // 2.5 Draw Background Environment Objects
-                uiState.backgroundObjects.forEach { bg ->
-                    val scaledBgX = bg.posX * playerScaleX
-                    // Buildings span the whole level; only draw the ones on camera. Wide margin —
-                    // forts and ships are much broader than a fighter.
-                    if (scaledBgX + offsetX < -600f || scaledBgX + offsetX > size.width + 600f) return@forEach
-                    com.example.game.drawBackgroundObject(this, bg, scaledBgX, scaleFactor)
+                staticBackgroundObjects.forEach { bg ->
+                    com.example.game.drawBackgroundDamageDecals(
+                        this,
+                        bg,
+                        bg.posX * playerScaleX,
+                        scaleFactor
+                    )
                 }
-            
+
+                uiState.backgroundObjects
+                    .firstOrNull { it.type == BackgroundObjectType.CASTLE_GATE }
+                    ?.let { gate ->
+                        val siege = uiState.siegeState
+                        com.example.game.drawLiveCastleGate(
+                            this,
+                            gate,
+                            gate.posX * playerScaleX,
+                            scaleFactor,
+                            siege?.gateHp ?: gate.hp,
+                            siege?.gateMaxHp ?: gate.maxHp
+                        )
+                        if (siege?.ladderSpawned == true) {
+                            com.example.game.drawSiegeLadder(
+                                this,
+                                gate.posX * playerScaleX,
+                                scaleFactor
+                            )
+                        }
+                    }
+
                 // The great decoy is enormous. Draw it before the player so it stands behind him
                 // instead of hiding him completely.
                 enemies.filter { it.id == "trojan_horse" }.forEach { th ->
@@ -1765,6 +1840,22 @@ fun BattlefieldScene(
 
                 // 3. Draw Players and Enemies
                 if (playerFighter != null) {
+                val (rearThroneActors, foregroundActors) =
+                    com.example.game.splitThroneBattleActors(enemies)
+                fun isVisible(fighter: FighterState): Boolean {
+                    val screenX = fighter.posX * playerScaleX + offsetX
+                    val margin = com.example.game.fighterCullMargin(fighter, scaleFactor)
+                    return screenX >= -margin && screenX <= size.width + margin
+                }
+
+                // Match the throne preview: rear bearers, throne/lord, then front bearers.
+                rearThroneActors.filter(::isVisible).forEach { bearer ->
+                    TapestryRenderer.drawCharacter(
+                        this,
+                        bearer.copy(posX = bearer.posX * playerScaleX),
+                        scale = scaleFactor
+                    )
+                }
 
                 // Draw Knight
                 val scaledPlayer = playerFighter.copy(
@@ -1779,7 +1870,9 @@ fun BattlefieldScene(
                 val px = scaledPlayer.posX
                 val headDist = if (scaledPlayer.isMounted && !scaledPlayer.isChariot) 70f else if (scaledPlayer.isChariot) 50f else 40f
                 // Clamp so the bar never rises above the top border clip (tall fighters/mounts)
-                val py = (200f - (headDist + 35f) * scaledPlayer.size * scaleFactor).coerceAtLeast(55f - groundOffsetY)
+                val py = (200f - (headDist + 35f) * scaledPlayer.size * scaleFactor +
+                    com.example.game.elevationVisualOffset(playerFighter) * scaleFactor)
+                    .coerceAtLeast(55f - groundOffsetY)
                 drawHealthBar(this, px, py, playerFighter.hp, playerFighter.ghostHp, playerFighter.maxHp)
                 drawStatusEffects(this, px, py - 10f, playerFighter)
 
@@ -1789,9 +1882,8 @@ fun BattlefieldScene(
                 // times a second each. Off-screen draws are invisible by definition, so skipping
                 // them changes nothing on screen — it just stops paying for it. The margin is
                 // generous so mounts/tall sprites never pop at the edges.
-                enemies.filter { it.id != "trojan_horse" }.forEach { enemy ->
-                    val screenX = (enemy.posX * playerScaleX) + offsetX
-                    if (screenX < -300f || screenX > size.width + 300f) return@forEach
+                foregroundActors.filter { it.id != "trojan_horse" }.forEach { enemy ->
+                    if (!isVisible(enemy)) return@forEach
                     val scaledEnemy = enemy.copy(
                         posX = enemy.posX * playerScaleX
                     )
@@ -1800,10 +1892,33 @@ fun BattlefieldScene(
                     // Draw health bar for enemy
                     if (!enemy.isDead) {
                         val enemyHeadDist = if (scaledEnemy.isMounted && !scaledEnemy.isChariot) 70f else if (scaledEnemy.isChariot) 50f else 40f
-                        val epy = (200f - (enemyHeadDist + 35f) * scaledEnemy.size * scaleFactor).coerceAtLeast(55f - groundOffsetY)
+                        val epy = (200f - (enemyHeadDist + 35f) * scaledEnemy.size * scaleFactor +
+                            com.example.game.elevationVisualOffset(enemy) * scaleFactor)
+                            .coerceAtLeast(55f - groundOffsetY)
                         drawHealthBar(this, scaledEnemy.posX, epy, enemy.hp, enemy.ghostHp, enemy.maxHp)
                         drawStatusEffects(this, scaledEnemy.posX, epy - 12f, enemy)
+                        if (enemy.bossType != null) {
+                            drawContext.canvas.nativeCanvas.drawText(
+                                enemy.name.uppercase(),
+                                scaledEnemy.posX,
+                                epy - 18f,
+                                bossNamePaint
+                            )
+                        }
                     }
+                }
+
+                // Rear bearers were painted behind the throne, but their HUD stays on top.
+                rearThroneActors.filter { isVisible(it) && !it.isDead }.forEach { enemy ->
+                    val scaledEnemy = enemy.copy(posX = enemy.posX * playerScaleX)
+                    val enemyHeadDist =
+                        if (scaledEnemy.isMounted && !scaledEnemy.isChariot) 70f
+                        else if (scaledEnemy.isChariot) 50f else 40f
+                    val epy = (200f - (enemyHeadDist + 35f) * scaledEnemy.size * scaleFactor +
+                        com.example.game.elevationVisualOffset(enemy) * scaleFactor)
+                        .coerceAtLeast(55f - groundOffsetY)
+                    drawHealthBar(this, scaledEnemy.posX, epy, enemy.hp, enemy.ghostHp, enemy.maxHp)
+                    drawStatusEffects(this, scaledEnemy.posX, epy - 12f, enemy)
                 }
 
                 // 4. Draw Projectiles (Bows / Slingshots)
@@ -1877,6 +1992,31 @@ fun BattlefieldScene(
                         // Some leather bindings
                         drawLine(TapestryDark, Offset(sx - (4f * arrowDir), sy - 3f), Offset(sx - (4f * arrowDir), sy + 3f), strokeWidth = 3f)
                         drawLine(TapestryDark, Offset(sx - (8f * arrowDir), sy - 3f), Offset(sx - (8f * arrowDir), sy + 3f), strokeWidth = 3f)
+                    } else if (proj.type == com.example.game.ProjectileType.DART) {
+                        val length = 18f * scaleFactor
+                        val shaftStart = Offset(sx, sy)
+                        val shaftEnd = Offset(sx - length * arrowDir, sy + 2f)
+                        for (trail in 1..2) {
+                            val offset = trail * 5f * arrowDir
+                            drawLine(
+                                color = TapestryDark.copy(alpha = 0.35f / trail),
+                                start = Offset(sx - offset, sy),
+                                end = Offset(sx - length * arrowDir - offset, sy + 2f),
+                                strokeWidth = 1f
+                            )
+                        }
+                        drawLine(TapestryDark, shaftStart, shaftEnd, strokeWidth = 2f, cap = StrokeCap.Round)
+                        drawCircle(Color(0xFF868C91), radius = 2.5f, center = shaftStart)
+                    } else if (proj.type == com.example.game.ProjectileType.TORCH) {
+                        drawLine(
+                            Color(0xFF6E5536),
+                            Offset(sx - 22f * arrowDir, sy + 5f),
+                            Offset(sx, sy),
+                            strokeWidth = 5f,
+                            cap = StrokeCap.Round
+                        )
+                        drawCircle(Color(0xFFE07020), radius = 9f, center = Offset(sx, sy))
+                        drawCircle(Color(0xFFFFC34D), radius = 4f, center = Offset(sx + 2f, sy - 2f))
                     } else if (proj.type == com.example.game.ProjectileType.ARROW || proj.type == com.example.game.ProjectileType.BOLT) {
                         // Draw flying arrow line with feathers
                         val shaftColor = if (proj.isBallista) Color(0xFF8A7156) else TapestryDark
@@ -2116,6 +2256,17 @@ fun BattlefieldScene(
     }
 }
 
+private val bossNamePaint = android.graphics.Paint().apply {
+    isAntiAlias = true
+    textSize = 15f
+    typeface = android.graphics.Typeface.create(
+        android.graphics.Typeface.SERIF,
+        android.graphics.Typeface.BOLD
+    )
+    color = TapestryDark.toArgb()
+    textAlign = android.graphics.Paint.Align.CENTER
+}
+
 private fun drawStatusEffects(scope: androidx.compose.ui.graphics.drawscope.DrawScope, x: Float, y: Float, fighter: com.example.game.FighterState) {
     var offsetX = x - 10f
     val iconRadius = 4f
@@ -2123,6 +2274,11 @@ private fun drawStatusEffects(scope: androidx.compose.ui.graphics.drawscope.Draw
     if (fighter.poisonDuration > 0f) {
         // Draw poison symbol (green circle with P?) We can just draw a little green bubble
         scope.drawCircle(color = Color(0xFF2E7D32), radius = iconRadius, center = Offset(offsetX, y))
+        offsetX += 12f
+    }
+    if (fighter.igniteDuration > 0f) {
+        scope.drawCircle(color = Color(0xFFE07020), radius = iconRadius + 1f, center = Offset(offsetX, y))
+        scope.drawCircle(color = Color(0xFFFFC34D), radius = iconRadius * 0.45f, center = Offset(offsetX, y - 1f))
         offsetX += 12f
     }
     if (fighter.bleedDuration > 0f) {
@@ -2407,89 +2563,126 @@ internal fun drawWeatherFlourish(
     weather: DivineWeather,
     progress: Float
 ) {
-    val w = scope.size.width
-    val h = scope.size.height
-    val fade = 1f - progress
+    val p = progress.coerceIn(0f, 1f)
+    val fade = 1f - p
+    val fieldRect = innerFieldRect(scope.size, with(scope) { 2.dp.toPx() })
+    val geometry = weatherFlourishGeometry(weather, fieldRect, p)
 
-    when (weather) {
-        DivineWeather.LIGHTNING -> {
+    scope.withTransform({
+        clipRect(
+            left = fieldRect.left,
+            top = fieldRect.top,
+            right = fieldRect.right,
+            bottom = fieldRect.bottom
+        )
+    }) {
+        val washColor = when (weather) {
+            DivineWeather.LIGHTNING -> Color.White.copy(alpha = fade * 0.08f)
+            DivineWeather.FLOOD -> TapestryBlue.copy(alpha = fade * 0.16f)
+            DivineWeather.HAIL -> TapestryBlue.copy(alpha = fade * 0.18f)
+            DivineWeather.FROST -> TapestryBlue.copy(alpha = fade * 0.30f)
+        }
+        drawRect(
+            color = washColor,
+            topLeft = geometry.washRect.topLeft,
+            size = geometry.washRect.size
+        )
+
+        when (geometry) {
+        is LightningFlourishGeometry -> {
             // Two forked bolts — one per foe the smite actually picks (GameViewModel takes the two
             // toughest). The white flash snaps on hard and dies fast; the gold thread lingers.
-            val flash = (1f - progress * 4f).coerceAtLeast(0f)
-            scope.drawRect(Color.White.copy(alpha = flash * 0.75f), size = scope.size)
-            listOf(w * 0.52f, w * 0.72f).forEachIndexed { i, strikeX ->
+            val flash = (1f - p * 4f).coerceAtLeast(0f)
+            drawRect(
+                Color.White.copy(alpha = flash * 0.75f),
+                topLeft = geometry.washRect.topLeft,
+                size = geometry.washRect.size
+            )
+            geometry.strikeXs.forEachIndexed { i, strikeX ->
                 val rng = kotlin.random.Random(1066L + i)
-                val groundY = h * 0.78f
                 // Jagged descent: each segment stutters sideways, like couched thread.
                 val bolt = Path().apply {
-                    moveTo(strikeX, 40f)
-                    var y = 40f
+                    moveTo(strikeX, geometry.skyY)
+                    var y = geometry.skyY
                     var x = strikeX
-                    while (y < groundY) {
-                        y += (groundY - 40f) / 6f
-                        x = strikeX + (rng.nextFloat() * 2f - 1f) * 34f
+                    while (y < geometry.groundY) {
+                        y += (geometry.groundY - geometry.skyY) / 6f
+                        x = strikeX +
+                            (rng.nextFloat() * 2f - 1f) * geometry.jaggedXRadius
                         lineTo(x, y)
                     }
                 }
-                scope.drawPath(bolt, Color.White.copy(alpha = fade * 0.9f), style = Stroke(width = 14f, cap = StrokeCap.Round))
-                scope.drawPath(bolt, TapestryMustard.copy(alpha = fade), style = Stroke(width = 8f, cap = StrokeCap.Round))
-                scope.drawPath(bolt, TapestryDark.copy(alpha = fade * 0.9f), style = Stroke(width = 2.5f, cap = StrokeCap.Round))
+                drawPath(bolt, Color.White.copy(alpha = fade * 0.9f), style = Stroke(width = 14f, cap = StrokeCap.Round))
+                drawPath(bolt, TapestryMustard.copy(alpha = fade), style = Stroke(width = 8f, cap = StrokeCap.Round))
+                drawPath(bolt, TapestryDark.copy(alpha = fade * 0.9f), style = Stroke(width = 2.5f, cap = StrokeCap.Round))
                 // Strike burst at the earth, expanding as it fades
-                val burst = 18f + progress * 70f
-                scope.drawCircle(TapestryMustard.copy(alpha = fade * 0.5f), radius = burst, center = Offset(strikeX, groundY))
+                val burst = geometry.burstStartRadius + p * geometry.burstGrowthRadius
+                drawCircle(TapestryMustard.copy(alpha = fade * 0.5f), radius = burst, center = Offset(strikeX, geometry.groundY))
                 repeat(7) {
                     val a = rng.nextFloat() * 6.283f
-                    scope.drawLine(
+                    drawLine(
                         TapestryMustard.copy(alpha = fade * 0.8f),
-                        Offset(strikeX, groundY),
-                        Offset(strikeX + kotlin.math.cos(a) * burst * 1.3f, groundY + kotlin.math.sin(a) * burst * 0.5f),
+                        Offset(strikeX, geometry.groundY),
+                        Offset(strikeX + kotlin.math.cos(a) * burst * 1.3f, geometry.groundY + kotlin.math.sin(a) * burst * 0.5f),
                         strokeWidth = 3f, cap = StrokeCap.Round
                     )
                 }
             }
         }
-        DivineWeather.FLOOD -> {
+        is FloodFlourishGeometry -> {
             // A stitched wave band sweeping across the field
-            val edge = w * (progress * 1.4f - 0.2f)
+            val edge = geometry.edgeX
             val band = Path().apply {
-                moveTo(edge - 160f, h)
-                lineTo(edge - 120f, 40f)
-                quadraticTo(edge - 40f, h * 0.25f, edge, 40f)
-                lineTo(edge + 40f, h)
+                moveTo(edge - geometry.backExtent, fieldRect.bottom)
+                lineTo(edge - geometry.backExtent * 0.75f, geometry.crestY)
+                quadraticTo(
+                    edge - geometry.backExtent * 0.25f,
+                    geometry.crestDipY,
+                    edge,
+                    geometry.crestY
+                )
+                lineTo(edge + geometry.frontExtent, fieldRect.bottom)
                 close()
             }
-            scope.drawPath(band, TapestryBlue.copy(alpha = fade * 0.8f))
-            scope.drawPath(band, TapestryDark.copy(alpha = fade * 0.6f), style = Stroke(width = 3f))
+            drawPath(band, TapestryBlue.copy(alpha = fade * 0.8f))
+            drawPath(band, TapestryDark.copy(alpha = fade * 0.6f), style = Stroke(width = 3f))
             // Foam on the leading crest, so the band reads as water rather than a grey slab
             val crest = Path().apply {
-                moveTo(edge - 120f, 40f)
-                quadraticTo(edge - 40f, h * 0.25f, edge, 40f)
+                moveTo(edge - geometry.backExtent * 0.75f, geometry.crestY)
+                quadraticTo(
+                    edge - geometry.backExtent * 0.25f,
+                    geometry.crestDipY,
+                    edge,
+                    geometry.crestY
+                )
             }
-            scope.drawPath(crest, Color.White.copy(alpha = fade * 0.85f), style = Stroke(width = 5f, cap = StrokeCap.Round))
+            drawPath(crest, Color.White.copy(alpha = fade * 0.85f), style = Stroke(width = 5f, cap = StrokeCap.Round))
             // Spray thrown off the crest, so the deluge reads as violent water
             val rng = kotlin.random.Random(1068L)
             repeat(26) {
-                val sy = 40f + rng.nextFloat() * (h - 80f)
-                val sx = edge - 30f + rng.nextFloat() * 90f
-                scope.drawCircle(
+                val sy = fieldRect.top + rng.nextFloat() * fieldRect.height
+                val sx = edge - geometry.sprayBackExtent +
+                    rng.nextFloat() *
+                    (geometry.sprayBackExtent + geometry.sprayFrontExtent)
+                drawCircle(
                     Color.White.copy(alpha = fade * (0.4f + rng.nextFloat() * 0.5f)),
                     radius = 2f + rng.nextFloat() * 5f,
                     center = Offset(sx, sy)
                 )
             }
         }
-        DivineWeather.HAIL -> {
+        is HailFlourishGeometry -> {
             // Falling white stitches, seeded so they do not jitter between frames. Denser and
             // faster than before, with stones that shatter on the earth — hail you can feel.
             val rng = kotlin.random.Random(1066L)
-            val groundY = h * 0.8f
-            scope.drawRect(TapestryBlue.copy(alpha = fade * 0.18f), size = scope.size)
             repeat(150) {
-                val x = rng.nextFloat() * w
-                val startY = rng.nextFloat() * h
-                val y = 40f + (startY + progress * h * 2.6f) % (h - 80f)
-                val len = 10f + rng.nextFloat() * 10f
-                scope.drawLine(
+                val x = geometry.dropRect.left + rng.nextFloat() * geometry.dropRect.width
+                val startY = rng.nextFloat() * geometry.dropRect.height
+                val y = geometry.dropRect.top +
+                    (startY + p * geometry.dropRect.height * 2.6f) % geometry.dropRect.height
+                val len = geometry.streakMinLength +
+                    rng.nextFloat() * (geometry.streakMaxLength - geometry.streakMinLength)
+                drawLine(
                     Color.White.copy(alpha = fade * 0.9f),
                     Offset(x, y), Offset(x - len * 0.35f, y + len),
                     strokeWidth = 3.5f, cap = StrokeCap.Round
@@ -2498,49 +2691,60 @@ internal fun drawWeatherFlourish(
             // Shatter marks where the stones land
             val srng = kotlin.random.Random(2066L)
             repeat(22) {
-                val x = srng.nextFloat() * w
+                val x = fieldRect.left + srng.nextFloat() * fieldRect.width
                 val hitAt = srng.nextFloat()
-                val since = progress - hitAt
+                val since = p - hitAt
                 if (since in 0f..0.35f) {
                     val r = since / 0.35f
-                    scope.drawCircle(
+                    drawCircle(
                         Color.White.copy(alpha = (1f - r) * fade * 0.8f),
                         radius = 4f + r * 16f,
-                        center = Offset(x, groundY + srng.nextFloat() * 30f),
+                        center = Offset(
+                            x,
+                            geometry.groundY +
+                                srng.nextFloat() * (geometry.impactBottomY - geometry.groundY)
+                        ),
                         style = Stroke(width = 2f)
                     )
                 }
             }
         }
-        DivineWeather.FROST -> {
+        is FrostFlourishGeometry -> {
             // Rime that creeps out from the ground rather than snapping on as a slab: the frozen
             // band grows with progress, and six-armed frost crystals bloom across it.
-            val creep = (progress * 2.5f).coerceAtMost(1f)
-            val bandTop = h * 0.55f
-            scope.drawRect(TapestryBlue.copy(alpha = fade * 0.30f), size = scope.size)
-            scope.drawRect(
+            val creep = (p * 2.5f).coerceAtMost(1f)
+            drawRect(
                 TapestryBlue.copy(alpha = fade * 0.5f),
-                topLeft = Offset(0f, bandTop),
-                size = Size(w, (h * 0.45f - 40f) * creep)
+                topLeft = Offset(fieldRect.left, geometry.bandTopY),
+                size = Size(
+                    fieldRect.width,
+                    (fieldRect.bottom - geometry.bandTopY) * creep
+                )
             )
             val rng = kotlin.random.Random(1067L)
             repeat(34) {
-                val x = rng.nextFloat() * w
-                val y = h * 0.6f + rng.nextFloat() * (h * 0.35f)
+                val x = geometry.crystalRect.left +
+                    rng.nextFloat() * geometry.crystalRect.width
+                val y = geometry.crystalRect.top +
+                    rng.nextFloat() * geometry.crystalRect.height
                 val bloomAt = rng.nextFloat() * 0.5f
-                if (progress < bloomAt) return@repeat
-                val r = (6f + ((progress - bloomAt) * 34f)).coerceAtMost(15f)
+                if (p < bloomAt) return@repeat
+                val r = (
+                    geometry.crystalStartRadius +
+                        (p - bloomAt) * geometry.crystalMaxRadius * 2.25f
+                    ).coerceAtMost(geometry.crystalMaxRadius)
                 repeat(3) { arm ->
                     val a = arm * (Math.PI.toFloat() / 3f)
                     val dx = kotlin.math.cos(a) * r
                     val dy = kotlin.math.sin(a) * r * 0.5f
-                    scope.drawLine(
+                    drawLine(
                         Color.White.copy(alpha = fade * 0.8f),
                         Offset(x - dx, y - dy), Offset(x + dx, y + dy),
                         strokeWidth = 2f, cap = StrokeCap.Round
                     )
                 }
             }
+        }
         }
     }
 }
@@ -2553,7 +2757,7 @@ private fun drawTapestryBorder(
 ) {
     val h = scope.size.height
     val w = scope.size.width
-    val borderH = 40f
+    val borderH = TAPESTRY_BORDER_BAND_PX
     
     val yTop = if (isTop) 0f else h - borderH
     val dividerY = if (isTop) borderH else h - borderH
@@ -2854,4 +3058,3 @@ fun MusicDecisionScreen(
         }
     }
 }
-

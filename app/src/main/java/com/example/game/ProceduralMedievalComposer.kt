@@ -49,14 +49,18 @@ object ProceduralMedievalComposer {
             LineRef.MELODY_ORN -> song.melodyOrnamented
             LineRef.COUNTER -> song.counter
             LineRef.BASS -> song.bass
-            LineRef.PADS_ROOT -> song.padChords.map { NoteEvent(it.startBeat, it.durBeats, it.midis[0], 0.8f) }
-            LineRef.PADS_FIFTH -> song.padChords.map { NoteEvent(it.startBeat, it.durBeats, it.midis[1], 0.8f) }
+            LineRef.PADS_ROOT -> if (spec.family == Family.BRAWL) brawlChordStabEvents(spec, fifth = false)
+                else song.padChords.map { NoteEvent(it.startBeat, it.durBeats, it.midis[0], 0.8f) }
+            LineRef.PADS_FIFTH -> if (spec.family == Family.BRAWL) brawlChordStabEvents(spec, fifth = true)
+                else song.padChords.map { NoteEvent(it.startBeat, it.durBeats, it.midis[1], 0.8f) }
             LineRef.DRONE -> droneEvents(spec)
             LineRef.PERC -> percussionEvents(spec, a.voice, wilder)
             LineRef.SPARKLE -> if (a.voice == Voice.GURDY) gurdyBuzzEvents(spec)
                                 else if (a.voice == Voice.BELLS) bellCadenceEvents(spec)
                                 else sparkleEvents(spec)
             LineRef.ACCOMP -> accompEvents(spec)
+            LineRef.RIFF -> brawlRiffEvents(spec)
+            LineRef.FLOURISH -> brawlFlourishEvents(spec, a.voice)
             LineRef.TRUMPETER -> trumpeterEvents(spec)
             LineRef.DESTINY_FANFARE -> destinyFanfareEvents(spec)
             LineRef.PADS_FULL -> emptyList()
@@ -87,7 +91,8 @@ object ProceduralMedievalComposer {
             // Tails are wall-clock; at wound-up tempos a 0.8s harp ring spans the next chord and
             // the harmony smears. Scale them down with the beat so releases die before the change.
             val tail = releaseTail(a.voice) * (spec.secondsPerBeat * 2f).coerceIn(0.35f, 1f)
-            val note = renderNote(a.voice, e.midi, durSec + tail, vel, sr, hrng)
+            val phraseIndex = (e.startBeat / (spec.beatsPerBar * 4f)).toInt()
+            val note = renderNote(a.voice, e.midi, durSec + tail, vel, sr, hrng, phraseIndex)
             bus.add(note, offs, a.gain * duck, a.pan, reverbSendFor(a.voice))
         }
     }
@@ -96,8 +101,9 @@ object ProceduralMedievalComposer {
         for (c in chords) {
             val offs = ((c.startBeat * spec.secondsPerBeat) * sr).toInt()
             val durSec = c.durBeats * spec.secondsPerBeat
+            val phraseIndex = (c.startBeat / (spec.beatsPerBar * 4f)).toInt()
             for (m in c.midis) {
-                val note = renderNote(a.voice, m, durSec + 0.05f, 0.8f, sr, hrng)
+                val note = renderNote(a.voice, m, durSec + 0.05f, 0.8f, sr, hrng, phraseIndex)
                 bus.add(note, offs, a.gain * duck / c.midis.size * 2f, a.pan, reverbSendFor(a.voice))
             }
         }

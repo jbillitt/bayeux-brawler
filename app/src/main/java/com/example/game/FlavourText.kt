@@ -70,6 +70,10 @@ object FlavourText {
         return "HIC ${L_HERO[r.nextInt(L_HERO.size)]} ${L_VERB[r.nextInt(L_VERB.size)]} AD ${L_PLACE[r.nextInt(L_PLACE.size)]}"
     }
 
+    fun latinHeadline(seed: Long, level: Int, boss: BossType?): String =
+        if (boss == null) latinHeadline(seed, level)
+        else "HIC ${boss.latinName} PRO CORONA PUGNAT"
+
     private val VICTORY_FLAWLESS = listOf(
         "Not a scratch upon thee! The chroniclers shall struggle to make this sound difficult.",
         "A flawless rout! Even the tapestry weavers gasped.",

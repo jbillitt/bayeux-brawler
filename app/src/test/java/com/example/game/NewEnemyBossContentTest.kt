@@ -89,6 +89,8 @@ class NewEnemyBossContentTest {
             val expected = when {
                 level == 10 -> BossType.HAROLD_GODWINSON
                 level == 20 -> BossType.HARALD_HARDRADA
+                level == 40 -> BossType.GOG
+                level == 50 -> BossType.MAGOG
                 level >= 30 && level % 10 == 0 -> BossType.WILLIAM_THE_BASTARD
                 else -> null
             }

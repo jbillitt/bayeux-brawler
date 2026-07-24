@@ -120,6 +120,10 @@ object EnemyFactory {
                 listOf("head_club", "handle_short", "shield_none", "armor_bare", "helm_none")
             EnemyArchetype.NORMAN_LOYALIST ->
                 listOf("head_broadsword", "handle_medium", "shield_kite", "armor_chainmail", "helm_conical")
+            EnemyArchetype.CYNOCEPHALUS ->
+                listOf("head_spear", "handle_medium", "shield_none", "armor_fur", "helm_none")
+            EnemyArchetype.REBEL_SNAIL -> // it bites; the shell is the armor
+                listOf("head_bare", "handle_fists", "shield_none", "armor_bare", "helm_none")
             EnemyArchetype.HOUSECARL ->
                 listOf("head_axe", "handle_medium", "shield_none", "armor_chainmail", "helm_conical")
             EnemyArchetype.BERSERKER ->
@@ -132,12 +136,16 @@ object EnemyFactory {
             EnemyArchetype.DANE_AXE_EXECUTIONER -> 1.25f
             EnemyArchetype.NORMAN_LOYALIST -> 1.15f
             EnemyArchetype.MONK_MILITIA -> 0.9f
+            EnemyArchetype.CYNOCEPHALUS -> 1.05f
+            EnemyArchetype.REBEL_SNAIL -> 1.35f
             else -> 1f
         }
         hp *= when (archetype) {
             EnemyArchetype.DANE_AXE_EXECUTIONER -> 1.65f
             EnemyArchetype.NORMAN_LOYALIST -> 1.5f
             EnemyArchetype.MONK_MILITIA -> 0.65f
+            EnemyArchetype.CYNOCEPHALUS -> 1.25f
+            EnemyArchetype.REBEL_SNAIL -> 6f // the marginalia knight's true nightmare: it does not die
             else -> 1f
         }
         val shield = safeShield(kit[2])
@@ -149,6 +157,8 @@ object EnemyFactory {
                 EnemyArchetype.DANE_AXE_EXECUTIONER -> "Hakon Long-Axe"
                 EnemyArchetype.MONK_MILITIA -> "Brother Cuthbert"
                 EnemyArchetype.NORMAN_LOYALIST -> "Knight of William"
+                EnemyArchetype.CYNOCEPHALUS -> "Dog-Head of the East"
+                EnemyArchetype.REBEL_SNAIL -> "The Rebel Snail"
                 else -> archetype.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
             },
             isPlayer = false,
@@ -158,30 +168,48 @@ object EnemyFactory {
             posX = spawnX(index), targetX = spawnX(index), facingRight = false,
             size = size, hairColor = Color(0xFF5A442E),
             hairStyle = if (archetype == EnemyArchetype.MONK_MILITIA) "bald" else "short",
+            speedBoost = if (archetype == EnemyArchetype.REBEL_SNAIL) -0.75f else 0f,
             level = level, shieldHp = shield.defense * 2f, archetype = archetype
         )
     }
 
     fun createBoss(type: BossType, level: Int): FighterState {
+        val isGiant = type == BossType.GOG || type == BossType.MAGOG
         val base = when (type) {
             BossType.HAROLD_GODWINSON -> createArchetype(EnemyArchetype.HOUSECARL, 90, level)
-            BossType.HARALD_HARDRADA -> createArchetype(EnemyArchetype.BERSERKER, 90, level)
+            BossType.HARALD_HARDRADA, BossType.GOG, BossType.MAGOG -> createArchetype(EnemyArchetype.BERSERKER, 90, level)
             BossType.WILLIAM_THE_BASTARD -> createArchetype(EnemyArchetype.NORMAN_LOYALIST, 90, level)
         }
         val scaling = 1f + (level - type.level).coerceAtLeast(0) * 0.05f
-        val hp = baseHpFor(level) * 9.5f * scaling
+        val hp = baseHpFor(level) * (if (isGiant) 13f else 9.5f) * scaling
         return base.copy(
             id = "boss_${type.name.lowercase()}",
             name = when (type) {
                 BossType.HAROLD_GODWINSON -> "Harold Godwinson"
                 BossType.HARALD_HARDRADA -> "Harald Hardrada"
                 BossType.WILLIAM_THE_BASTARD -> "William the Bastard"
+                BossType.GOG -> "Gog, Giant of Albion"
+                BossType.MAGOG -> "Magog, Giant of Albion"
             },
-            maxHp = hp, hp = hp, size = if (type == BossType.HARALD_HARDRADA) 1.75f else 1.6f,
-            headgear = if (type == BossType.HARALD_HARDRADA) safeHelm("helm_none") else safeHelm("helm_crown"),
+            maxHp = hp, hp = hp,
+            size = if (isGiant) 2.3f else if (type == BossType.HARALD_HARDRADA) 1.75f else 1.6f,
+            // The giants swing a whole tree stump capped with a mallet head, bare-headed and woaded.
+            weaponHead = if (isGiant) safeHead("head_maul") else base.weaponHead,
+            weaponHandle = if (isGiant) safeHandle("handle_stump") else base.weaponHandle,
+            warPaint = if (isGiant) 1 else base.warPaint,
+            hairStyle = if (isGiant) "long" else base.hairStyle,
+            hairColor = if (type == BossType.GOG) Color(0xFF4A5D23) else if (type == BossType.MAGOG) Color(0xFF384048) else base.hairColor,
+            headgear = if (type == BossType.HARALD_HARDRADA || isGiant) safeHelm("helm_none") else safeHelm("helm_crown"),
             shield = if (type == BossType.HAROLD_GODWINSON) safeShield("shield_tower") else base.shield,
             shieldHp = if (type == BossType.HAROLD_GODWINSON) safeShield("shield_tower").defense * 5f else base.shieldHp,
             posX = 1250f, targetX = 1250f, bossType = type,
+            // Late-run bosses punch through the player's stacked armour: welded lucerne beaks add
+            // pierce (attachments contribute half their stats to every swing).
+            extraAttachments = when {
+                level >= 40 -> listOf(safeHead("head_lucerne"), safeHead("head_lucerne"))
+                level >= 20 -> listOf(safeHead("head_lucerne"))
+                else -> emptyList()
+            },
             arrowEyeCritWindow = if (type == BossType.HAROLD_GODWINSON) 2.5f else 0f,
             isCombatInactive = type == BossType.HARALD_HARDRADA
         )
@@ -193,8 +221,10 @@ object EnemyFactory {
             BossType.HAROLD_GODWINSON -> EnemyArchetype.HOUSECARL
             BossType.HARALD_HARDRADA -> EnemyArchetype.BERSERKER
             BossType.WILLIAM_THE_BASTARD -> EnemyArchetype.NORMAN_LOYALIST
+            // The giants march with a pack of dog-headed men
+            BossType.GOG, BossType.MAGOG -> EnemyArchetype.CYNOCEPHALUS
         }
-        val count = if (type == BossType.HARALD_HARDRADA) 8 else 5
+        val count = if (type == BossType.HARALD_HARDRADA) 8 else if (type == BossType.GOG || type == BossType.MAGOG) 6 else 5
         val retinue = List(count) { index ->
             val base = createArchetype(retinueType, index, level)
             val eliteHp = base.maxHp * 1.9f
@@ -233,6 +263,7 @@ object EnemyFactory {
                 level >= 30 && r < 0.05f -> EnemyArchetype.NORMAN_LOYALIST
                 r < 0.12f -> EnemyArchetype.ARCHER
                 r < 0.20f -> EnemyArchetype.TORCH_BEARER
+                level >= 25 && r < 0.30f -> EnemyArchetype.CYNOCEPHALUS
                 r < 0.37f -> EnemyArchetype.DANE_AXE_EXECUTIONER
                 r < 0.48f -> EnemyArchetype.SHIELD_WALL
                 r < 0.58f -> EnemyArchetype.BERSERKER
@@ -316,6 +347,12 @@ object EnemyFactory {
             EnemyArchetype.NORMAN_LOYALIST -> listOf(
                 safeHead("head_broadsword"), safeHandle("handle_medium"), safeShield("shield_kite"), safeArmor("armor_chainmail"), safeHelm("helm_conical")
             )
+            EnemyArchetype.CYNOCEPHALUS -> listOf(
+                safeHead("head_spear"), safeHandle("handle_medium"), safeShield("shield_none"), safeArmor("armor_fur"), safeHelm("helm_none")
+            )
+            EnemyArchetype.REBEL_SNAIL -> listOf(
+                safeHead("head_bare"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
+            )
         }
 
         val isMounted = arch in listOf(EnemyArchetype.CAVALRY, EnemyArchetype.CHAMPION) || (arch == EnemyArchetype.CHAMPION && rng.nextFloat() < 0.5f) || arch in listOf(EnemyArchetype.CHARIOT_ARCHER, EnemyArchetype.CHARIOT_LANCER)
@@ -369,10 +406,17 @@ object EnemyFactory {
             speedBoost = if (isMounted && !isChariot) 0.5f else if (isChariot) 0.5f else 0f,
             shieldHp = (gear[2] as GameData.Shield).defense * 2f,
             bandagesCount = if (level > 4 && rng.nextFloat() < 0.35f) 1 else 0,
-            // Saxons weld junk to their weapons too, from level 10 — but at most two pieces, and only
-            // sometimes. The player's ludicrous tree of attachments has to stay the winning edge.
-            extraAttachments = if (level >= 10 && rng.nextFloat() < 0.3f) {
-                List(rng.nextInt(1, if (level >= 18) 3 else 2)) { GameData.WEAPON_HEADS.random(rng) }
+            // Saxons weld junk to their weapons too, from level 10 — and the deeper the run goes,
+            // the more of them do it and the more junk they weld. The player's ludicrous tree of
+            // attachments still outgrows them, but the late host keeps pace.
+            extraAttachments = if (level >= 10 && rng.nextFloat() < (0.3f + (level - 10) * 0.015f).coerceAtMost(0.85f)) {
+                val maxPieces = (2 + (level - 18).coerceAtLeast(0) / 15).coerceAtMost(4)
+                List(rng.nextInt(1, maxPieces + 1)) { GameData.WEAPON_HEADS.random(rng) }
+            } else emptyList(),
+            // From level 25 the host layers on extra iron as well: gauntlets, coifs, boots.
+            extraArmors = if (level >= 25 && rng.nextFloat() < (0.3f + (level - 25) * 0.01f).coerceAtMost(0.7f)) {
+                GameData.ARMOR_PIECES.filter { it.id in listOf("armor_gauntlets", "armor_boots", "armor_coif") }
+                    .shuffled(rng).take(1 + rng.nextInt(2))
             } else emptyList()
         )
     }

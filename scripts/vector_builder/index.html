@@ -1,807 +1,960 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bayeux Vector Builder & Configurator</title>
-    <style>
-        :root {
-            --bg-color: #f4eadd;
-            --panel-bg: #e6d8c3;
-            --text-color: #2c2219;
-            --border-color: #2c2219;
-            --accent-color: #9e3624;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            gap: 20px;
-            height: 100vh;
-            box-sizing: border-box;
-        }
-        h1, h2, h3 { margin-top: 0; color: var(--accent-color); }
-        .sidebar {
-            width: 320px;
-            background-color: var(--panel-bg);
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            overflow-y: auto;
-        }
-        .main-content {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-        }
-        .canvas-container {
-            position: relative;
-        }
-        canvas {
-            background-color: #fffaf0;
-            border: 2px solid var(--border-color);
-            border-radius: 4px;
-            cursor: crosshair;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        label { font-weight: bold; font-size: 14px; }
-        input[type="text"], select, button {
-            padding: 8px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            background-color: white;
-            font-family: inherit;
-        }
-        button {
-            background-color: var(--border-color);
-            color: white;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s;
-            border: none;
-        }
-        button:hover { background-color: #4a3a2a; }
-        button.action-btn { background-color: var(--accent-color); }
-        button.action-btn:hover { background-color: #7a2614; }
-        
-        .color-palette {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .color-swatch {
-            width: 24px;
-            height: 24px;
-            border: 2px solid #000;
-            border-radius: 50%;
-            cursor: pointer;
-            position: relative;
-        }
-        .color-swatch.selected::after {
-            content: '';
-            position: absolute;
-            top: -4px; left: -4px; right: -4px; bottom: -4px;
-            border: 2px solid var(--accent-color);
-            border-radius: 50%;
-        }
-        
-        textarea {
-            width: 100%;
-            flex-grow: 1;
-            font-family: 'Courier New', Courier, monospace;
-            resize: none;
-            padding: 10px;
-            border: 2px solid var(--border-color);
-            border-radius: 4px;
-            background-color: #fff;
-            font-size: 12px;
-            box-sizing: border-box;
-            white-space: pre;
-        }
-        .checkbox-label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: normal;
-            cursor: pointer;
-        }
-        .toolbar {
-            display: flex;
-            gap: 10px;
-            width: 100%;
-            justify-content: center;
-        }
-        
-        .layer-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(255,255,255,0.5);
-            padding: 4px 8px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            font-size: 12px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bayeux Asset Magazine</title>
+<style>
+  :root {
+    --linen:#F1E6CC; --panel:#E7DAC0; --panel2:#EFE4CB; --ink:#2C2219;
+    --red:#9E3624; --mustard:#B08221; --olive:#4C613D; --line:#C8B694;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; height:100vh; display:grid;
+    grid-template-rows:auto 1fr; grid-template-columns:280px 1fr 430px;
+    grid-template-areas:"mast mast mast" "rail stage editor";
+    background:var(--linen); color:var(--ink);
+    font-family:'Segoe UI', Tahoma, sans-serif; font-size:13px;
+  }
+  .mast {
+    grid-area:mast; display:flex; align-items:baseline; gap:14px;
+    padding:10px 18px 8px; border-bottom:3px double var(--red); background:var(--panel2);
+  }
+  .mast h1 { margin:0; font-family:Georgia, serif; font-size:20px; letter-spacing:.5px; }
+  .mast h1 em { color:var(--red); font-style:normal; }
+  .mast .sub { opacity:.65; font-size:12px; }
+  .mast a { color:var(--olive); margin-left:auto; }
+  #serverBanner {
+    display:none; grid-area:mast; align-self:end; margin-left:280px;
+    background:var(--red); color:var(--linen); padding:4px 12px; font-weight:bold; border-radius:4px 4px 0 0;
+  }
+
+  .rail { grid-area:rail; overflow-y:auto; border-right:2px solid var(--line); background:var(--panel); padding:10px; }
+  .rail input[type=search] { width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:4px; background:#fff; margin-bottom:10px; font:inherit; }
+  .group h3 {
+    margin:12px 0 4px; font-family:Georgia, serif; font-size:12px; text-transform:uppercase;
+    letter-spacing:1.2px; color:var(--red); border-bottom:1px solid var(--line); padding-bottom:2px;
+  }
+  .group h3 span { color:var(--ink); opacity:.5; font-family:inherit; float:right; }
+  .asset-item { padding:3px 8px; border-radius:3px; cursor:pointer; font-family:Consolas, monospace; font-size:12px; }
+  .asset-item:hover { background:rgba(158,54,36,.12); }
+  .asset-item.active { background:var(--red); color:var(--linen); }
+
+  .stage { grid-area:stage; display:flex; flex-direction:column; gap:8px; padding:12px; overflow-y:auto; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:8px 10px; }
+  .bar label { font-size:11px; font-weight:bold; display:flex; flex-direction:column; gap:2px; }
+  .bar select, .bar input[type=number] { padding:4px; border:1px solid var(--line); border-radius:3px; background:#fff; font:inherit; max-width:150px; }
+  .bar .chk { flex-direction:row; align-items:center; gap:4px; font-weight:normal; }
+  .viewer { display:flex; gap:12px; align-items:flex-start; }
+  .true-view { flex:1; background:var(--panel2); border:2px solid var(--ink); border-radius:6px; min-height:420px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; position:relative; }
+  .true-view img { image-rendering:auto; max-width:100%; }
+  .true-view .placeholder { opacity:.55; text-align:center; padding:30px; font-family:Georgia, serif; }
+  .anim-row { display:flex; gap:10px; align-items:center; width:100%; padding:6px 10px; }
+  .anim-row input[type=range] { flex:1; }
+  button {
+    padding:7px 14px; border:none; border-radius:4px; background:var(--ink); color:#fff;
+    font-weight:bold; cursor:pointer; font-family:inherit;
+  }
+  button:hover { filter:brightness(1.25); }
+  button.forge { background:var(--red); font-size:14px; }
+  button.save { background:var(--olive); }
+  button.ghost { background:transparent; color:var(--ink); border:1px solid var(--line); font-weight:normal; }
+  button:disabled { opacity:.4; cursor:default; }
+  .spin { font-family:Georgia, serif; color:var(--red); }
+
+  details.quickcanvas { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:8px 10px; }
+  details.quickcanvas summary { cursor:pointer; font-weight:bold; font-family:Georgia, serif; }
+  #canvas { background:#fffaf0; border:1px solid var(--ink); border-radius:4px; cursor:crosshair; margin-top:8px; }
+  .qc-tools { display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; align-items:center; }
+  .swatch { width:20px; height:20px; border:2px solid var(--ink); border-radius:50%; cursor:pointer; display:inline-block; }
+  .swatch.sel { outline:3px solid var(--red); }
+
+  .editor { grid-area:editor; display:flex; flex-direction:column; gap:8px; padding:12px; border-left:2px solid var(--line); background:var(--panel); overflow:hidden; }
+  .editor .head { display:flex; align-items:center; gap:8px; }
+  .editor .head h2 { margin:0; font-family:Consolas, monospace; font-size:15px; }
+  .chip { font-size:10px; text-transform:uppercase; letter-spacing:1px; background:var(--mustard); color:var(--linen); border-radius:10px; padding:2px 9px; }
+  #source { flex:1; font-family:Consolas, monospace; font-size:11.5px; white-space:pre; resize:none;
+    border:1px solid var(--line); border-radius:4px; padding:8px; background:#fff; }
+  #colorList { display:flex; flex-direction:column; gap:3px; max-height:150px; overflow-y:auto; }
+  .colorRow { display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,.55);
+    border:1px solid var(--line); border-radius:3px; padding:2px 6px; font-family:Consolas, monospace; font-size:11px; }
+  .btnrow { display:flex; gap:8px; flex-wrap:wrap; }
+  #msg { font-size:11px; min-height:15px; color:var(--olive); white-space:pre-wrap; }
+</style>
 </head>
 <body>
-    <div class="sidebar">
-        <h2>Gear Configurator</h2>
-        
-        <div class="control-group">
-            <label>Item Type</label>
-            <select id="itemType">
-                <option value="WeaponHead">Weapon Head</option>
-                <option value="WeaponHandle">Weapon Handle</option>
-                <option value="RangedGear">Ranged Gear</option>
-                <option value="Shield">Shield</option>
-                <option value="Armor">Armor</option>
-                <option value="Headgear">Headgear</option>
-                <option value="Attachment">Attachment</option>
-            </select>
-        </div>
-        
-        <div class="control-group">
-            <label>Item Name (ID)</label>
-            <input type="text" id="itemName" value="my_epic_sword" placeholder="e.g. spartan_shield">
-        </div>
+  <div class="mast">
+    <h1>Bayeux <em>Asset Magazine</em></h1>
+    <span class="sub">every piece of the tapestry — browse, edit, compose, animate</span>
+    <a href="art.html" target="_blank" title="Separate tool for the data-driven props in assets/art/*.json — it does not carry over what you select here">JSON prop editor (assets/art) &rarr;</a>
+  </div>
+  <div id="serverBanner">Server not running — double-click <b>scripts\vector_builder\magazine.bat</b>, then reload this page.</div>
 
-        <div class="control-group" id="shaftGroup">
-            <label>Preview Shaft / Handle</label>
-            <select id="handleType">
-                <option value="short">Short / Iron / Pick / Fists (30px)</option>
-                <option value="medium">Medium (55px)</option>
-                <option value="chain">Chain / Flail (60px)</option>
-                <option value="double">Double-Ended (80px)</option>
-                <option value="long">Long (110px)</option>
-            </select>
-        </div>
+  <nav class="rail">
+    <input type="search" id="search" placeholder="Search assets…">
+    <div id="groups"></div>
+  </nav>
 
-        <div class="control-group">
-            <label>Draw Mode</label>
-            <select id="drawMode">
-                <option value="path">Draw Path (Click points)</option>
-            </select>
-            <label class="checkbox-label">
-                <input type="checkbox" id="fillShape" checked> Fill Shape?
-            </label>
-        </div>
-
-        <div class="control-group">
-            <label>Current Color</label>
-            <div class="color-palette" id="colorPalette">
-                <!-- Swatches injected by JS -->
-            </div>
-            <div style="font-size: 11px; margin-top: 4px;" id="colorLabel">Thread (Dark) - 0xFF2C2219</div>
-        </div>
-
-        <hr style="width: 100%; border-color: var(--border-color); opacity: 0.2;">
-
-        <div class="control-group">
-            <label>Visualizer Options</label>
-            <label class="checkbox-label">
-                <input type="checkbox" id="mannequinCheck" checked> Show Player Dummy (Profile)
-            </label>
-            <label class="checkbox-label">
-                <input type="checkbox" id="animCheck"> Simulate Swing (Weapon/Shield)
-            </label>
-            <label class="checkbox-label">
-                <input type="checkbox" id="gridCheck" checked> Show Center Grid
-            </label>
-            <label class="checkbox-label">
-                <input type="checkbox" id="snapCheck" checked> Snap to Grid (10px)
-            </label>
-        </div>
-
-        <hr style="width: 100%; border-color: var(--border-color); opacity: 0.2;">
-
-        <div class="control-group">
-            <label>Existing Assets (buildings, mounts, ancillaries, custom items)</label>
-            <select id="assetPicker">
-                <option value="">-- pick an asset to load --</option>
-            </select>
-            <button id="loadAssetBtn">Load Selected Asset</button>
-            <button id="syncAssetBtn" disabled>Sync Canvas Edits &rarr; Text</button>
-            <button id="saveAssetBtn" class="action-btn" style="background-color: #4C613D;" disabled>Save Loaded Asset Back</button>
-            <div id="assetHint" style="font-size: 11px; opacity: 0.8;"></div>
-        </div>
-
-        <div class="control-group" id="assetColorsGroup" style="display:none;">
-            <label>Asset Fill Colours</label>
-            <div id="assetColorList" style="display:flex; flex-direction:column; gap:4px; max-height:180px; overflow-y:auto;"></div>
-            <div style="font-size:11px; opacity:0.8;">Changing a colour rewrites the Kotlin text below live — then click "Save Loaded Asset Back".</div>
-        </div>
-
-        <hr style="width: 100%; border-color: var(--border-color); opacity: 0.2;">
-
-        <div class="control-group">
-            <label>Layers (Paths)</label>
-            <div id="layerList" style="display:flex; flex-direction:column; gap:5px; max-height: 150px; overflow-y: auto;">
-                <!-- Layers go here -->
-            </div>
-        </div>
+  <main class="stage">
+    <div class="bar" id="composerBar">
+      <label>Stage
+        <select id="stageMode">
+          <option value="character">Character</option>
+          <option value="building">Building / prop</option>
+          <option value="ancillary">Ancillary</option>
+        </select>
+      </label>
+      <label id="lBuilding" style="display:none">Building type <select id="buildingSel"></select></label>
+      <label id="lAncillary" style="display:none">Ancillary <select id="ancillarySel"></select></label>
+      <label>Weapon head <select id="headSel"></select></label>
+      <label>Handle <select id="handleSel"></select></label>
+      <label>Shield <select id="shieldSel"></select></label>
+      <label>Armour <select id="armorSel"></select></label>
+      <label>Headgear <select id="helmSel"></select></label>
+      <label>Size <input type="number" id="sizeIn" value="1.0" step="0.05" min="0.35" max="2"></label>
+      <label class="chk"><input type="checkbox" id="dualWield"> dual wield</label>
+      <label class="chk"><input type="checkbox" id="mounted"> horse</label>
+      <label class="chk"><input type="checkbox" id="chariot"> chariot</label>
+      <label class="chk"><input type="checkbox" id="stilts"> stilts</label>
+      <label>Animation
+        <select id="animMode">
+          <option value="idle">Idle (1 frame)</option>
+          <option value="walk">Walk (8 frames)</option>
+          <option value="attack" selected>Attack swing (8 frames)</option>
+          <option value="walkattack">Walk + attack (8 frames)</option>
+        </select>
+      </label>
+      <button class="forge" id="forgeBtn">&#9874; Forge true render</button>
     </div>
 
-    <div class="main-content">
-        <div class="toolbar">
-            <button id="newPathBtn">New Path</button>
-            <button id="undoBtn">Undo Last Point</button>
-            <button id="clearBtn">Clear All</button>
-            <button id="loadBtn" class="action-btn">Load Kotlin</button>
-            <button id="exportBtn" class="action-btn">Export Code</button>
-            <button id="injectBtn" class="action-btn" style="background-color: #4C613D;">Save & Inject</button>
-        </div>
-        
-        <div class="canvas-container">
-            <canvas id="canvas" width="600" height="600"></canvas>
-        </div>
-        
-        <textarea id="output" placeholder="Kotlin code goes here... (Paste code and click Load Kotlin, or Export to view generated code)"></textarea>
+    <div class="viewer">
+      <div class="true-view" id="trueView">
+        <div class="placeholder">The real game renderer draws here.<br>
+          Compose a loadout above, then <b>Forge true render</b> (&asymp;40s — it runs the actual Kotlin).<br>
+          Edits saved in the panel on the right are picked up by the next forge.</div>
+      </div>
+    </div>
+    <div class="anim-row">
+      <button class="ghost" id="playBtn" disabled>&#9658; Play</button>
+      <input type="range" id="frameScrub" min="0" max="0" value="0" disabled>
+      <span id="frameLabel"></span>
     </div>
 
-    <script>
-        document.getElementById('itemType').addEventListener('change', (e) => {
-            const isWeapon = e.target.value === 'WeaponHead' || e.target.value === 'Attachment';
-            document.getElementById('shaftGroup').style.display = isWeapon ? 'flex' : 'none';
+    <details class="quickcanvas">
+      <summary>Quick canvas — instant preview &amp; point-editing for simple paths, and forging brand-new items</summary>
+      <div class="qc-tools">
+        <label>New item type
+          <select id="itemType">
+            <option value="WeaponHead">Weapon Head</option>
+            <option value="Shield">Shield</option>
+            <option value="Armor">Armor</option>
+            <option value="Headgear">Headgear</option>
+            <option value="Attachment">Attachment</option>
+          </select>
+        </label>
+        <input type="text" id="itemName" value="my_epic_item" style="padding:5px;border:1px solid var(--line);border-radius:3px;">
+        <label class="chk"><input type="checkbox" id="fillShape" checked> fill</label>
+        <span id="palette"></span>
+        <button class="ghost" id="newPathBtn">New path</button>
+        <button class="ghost" id="undoBtn">Undo pt</button>
+        <button class="ghost" id="clearBtn">Clear</button>
+        <button class="ghost" id="syncBtn">Canvas &rarr; text</button>
+        <button id="injectBtn" class="save">Inject NEW item</button>
+      </div>
+      <canvas id="canvas" width="520" height="420"></canvas>
+    </details>
+  </main>
+
+  <aside class="editor">
+    <div class="head"><h2 id="assetTitle">— pick an asset —</h2><span class="chip" id="assetType"></span></div>
+    <div id="msg"></div>
+    <textarea id="source" spellcheck="false" placeholder="Select an asset from the left rail. Its real Kotlin drawing code appears here. Edit it (or use the colour pickers / quick canvas), Save, then Forge to see it on the true model."></textarea>
+    <div id="colorList"></div>
+    <div class="btnrow">
+      <button class="save" id="saveBtn" disabled>Save asset back</button>
+      <button class="ghost" id="revertBtn" disabled>Revert</button>
+      <button class="ghost" id="toCanvasBtn" disabled>Load into canvas</button>
+    </div>
+  </aside>
+
+<script>
+const API = 'http://localhost:3000';
+const $ = id => document.getElementById(id);
+
+// ---------- state ----------
+let assets = [];            // /api/assets
+let assetsByKey = {};       // "type:id" -> asset
+let current = null;         // {type, id}
+let originalSource = '';
+let frames = [];            // true-render frame urls
+let playing = null;
+
+const GROUP_LABELS = {
+  body: 'Body & pose', weaponhead: 'Weapon heads', handle: 'Handles & shafts',
+  armor: 'Armour', headgear: 'Headgear', building: 'Buildings & props',
+  creature: 'Mounts & creatures', ancillary: 'Ancillaries', custom: 'Custom (forged here)'
+};
+
+// ---------- boot ----------
+async function boot() {
+  try {
+    const [aRes, gRes] = await Promise.all([fetch(API + '/api/assets'), fetch(API + '/api/gear')]);
+    const aData = await aRes.json(); const gData = await gRes.json();
+    assets = aData.assets || [];
+    fillGear(gData);
+    renderRail('');
+  } catch (e) {
+    $('serverBanner').style.display = 'block';
+  }
+}
+function fillGear(g) {
+  const fill = (sel, list, includeNone) => {
+    const el = $(sel); el.innerHTML = '';
+    list.forEach(x => {
+      const o = document.createElement('option');
+      o.value = x.id; o.textContent = x.name || x.id;
+      el.appendChild(o);
+    });
+  };
+  fill('headSel', g.gear.head); fill('handleSel', g.gear.handle);
+  fill('shieldSel', g.gear.shield); fill('armorSel', g.gear.armor); fill('helmSel', g.gear.helm);
+  $('headSel').value = 'head_sword'; $('handleSel').value = 'handle_medium';
+  $('shieldSel').value = 'shield_none'; $('armorSel').value = 'armor_chainmail'; $('helmSel').value = 'helm_none';
+  fill('buildingSel', (g.backgrounds||[]).map(b => ({id:b, name:b})));
+  fill('ancillarySel', (g.ancillaries||[]).map(a => ({id:a, name:a})));
+}
+
+function renderRail(filter) {
+  const root = $('groups'); root.innerHTML = ''; assetsByKey = {};
+  const f = filter.trim().toLowerCase();
+  for (const [type, label] of Object.entries(GROUP_LABELS)) {
+    const items = assets.filter(a => a.type === type && (!f || a.id.toLowerCase().includes(f)));
+    if (!items.length) continue;
+    const g = document.createElement('div'); g.className = 'group';
+    g.innerHTML = `<h3>${label}<span>${items.length}</span></h3>`;
+    if (type === 'ancillary') {
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:11px;opacity:.65;padding:2px 8px 4px;line-height:1.35;';
+      note.textContent = 'Only these 8 have parade-lane art. Loose followers (hag, firebrand, beekeeper…) are ordinary fighters — edit their look via gear pieces, body parts, or Mounts & creatures.';
+      g.appendChild(note);
+    }
+    items.forEach(a => {
+      const key = a.type + ':' + a.id; assetsByKey[key] = a;
+      const el = document.createElement('div');
+      el.className = 'asset-item'; el.textContent = a.label; el.dataset.key = key;
+      el.onclick = () => selectAsset(key, el);
+      g.appendChild(el);
+    });
+    root.appendChild(g);
+  }
+}
+$('search').oninput = e => { renderRail(e.target.value); if (current) highlightActive(); };
+function highlightActive() {
+  document.querySelectorAll('.asset-item').forEach(el =>
+    el.classList.toggle('active', current && el.dataset.key === current.type + ':' + current.id));
+}
+
+// ---------- selection ----------
+function selectAsset(key, el) {
+  const a = assetsByKey[key];
+  current = { type: a.type, id: a.id };
+  originalSource = a.source;
+  $('assetTitle').textContent = a.label;
+  $('assetType').textContent = GROUP_LABELS[a.type] || a.type;
+  $('source').value = a.source;
+  $('saveBtn').disabled = false; $('revertBtn').disabled = false;
+  $('msg').textContent = '';
+  editPts = []; scene = []; dragIdx = null;
+  buildColorPickers();
+  highlightActive();
+
+  // Auto-compose the stage so "Forge" shows this asset in context
+  const stage = $('stageMode');
+  if (a.type === 'weaponhead') { stage.value = 'character'; $('headSel').value = a.id; }
+  else if (a.type === 'handle') { stage.value = 'character'; $('handleSel').value = a.id; }
+  else if (a.type === 'armor') { stage.value = 'character'; $('armorSel').value = a.id; }
+  else if (a.type === 'headgear') { stage.value = 'character'; $('helmSel').value = a.id; }
+  else if (a.type === 'body') { stage.value = a.id.startsWith('drawFollower') ? 'ancillary' : 'character'; }
+  else if (a.type === 'ancillary') { stage.value = 'ancillary'; $('ancillarySel').value = a.id; }
+  else if (a.type === 'building' || a.type === 'creature') {
+    stage.value = 'building';
+    // drawBuildingBosham -> BUILDING_BOSHAM
+    const guess = a.id.replace(/^draw/, '').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
+    if ([...$('buildingSel').options].some(o => o.value === guess)) $('buildingSel').value = guess;
+  }
+  stage.dispatchEvent(new Event('change'));
+
+  // The live canvas can hold anything with at least one literal point; parseScene
+  // decides what draws live vs. what only Forge can show.
+  $('toCanvasBtn').disabled = false;
+}
+
+$('stageMode').onchange = () => {
+  const v = $('stageMode').value;
+  $('lBuilding').style.display = v === 'building' ? '' : 'none';
+  $('lAncillary').style.display = v === 'ancillary' ? '' : 'none';
+};
+
+// ---------- colour chips ----------
+const COLOR_RE = /Color\(0x([0-9A-Fa-f]{8})\)/g;
+function buildColorPickers() {
+  const src = $('source').value, list = $('colorList');
+  list.innerHTML = '';
+  [...src.matchAll(COLOR_RE)].forEach((m, idx) => {
+    const argb = m[1].toUpperCase();
+    const row = document.createElement('div'); row.className = 'colorRow';
+    row.innerHTML = `<span>0x${argb}</span>`;
+    const input = document.createElement('input'); input.type = 'color'; input.value = '#' + argb.slice(2);
+    input.onchange = () => {
+      let i = 0;
+      $('source').value = $('source').value.replace(COLOR_RE,
+        (full, a) => (i++ === idx) ? `Color(0x${a.slice(0,2).toUpperCase()}${input.value.slice(1).toUpperCase()})` : full);
+      buildColorPickers();
+    };
+    row.appendChild(input); list.appendChild(row);
+  });
+}
+$('source').addEventListener('change', buildColorPickers);
+
+// ---------- save / revert ----------
+$('saveBtn').onclick = async () => {
+  if (!current) return;
+  try {
+    const r = await fetch(API + '/api/asset/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ type: current.type, id: current.id, source: $('source').value })
+    });
+    const d = await r.json();
+    $('msg').textContent = d.success ? ('Saved. ' + d.message + ' Forge to see it.') : ('SAVE FAILED: ' + d.message);
+    if (d.success) {
+      originalSource = $('source').value;
+      const a = assetsByKey[current.type + ':' + current.id]; if (a) a.source = originalSource;
+    }
+  } catch (e) { $('msg').textContent = 'Server unreachable — is magazine.bat running?'; }
+};
+$('revertBtn').onclick = () => { $('source').value = originalSource; buildColorPickers(); };
+
+// ---------- true render ----------
+function buildSpec() {
+  const mode = $('animMode').value;
+  const two = Math.PI * 2;
+  let frameSpecs;
+  if (mode === 'idle') frameSpecs = [{ animFrame: 0 }];
+  else if (mode === 'walk') frameSpecs = Array.from({length:8}, (_,i) => ({ animFrame: i/8*two }));
+  else if (mode === 'attack') frameSpecs = Array.from({length:8}, (_,i) => ({ attacking:true, swing: i/7 }));
+  else frameSpecs = Array.from({length:8}, (_,i) => ({ animFrame: i/8*two, attacking:true, swing: i/7 }));
+  return {
+    subject: $('stageMode').value,
+    building: $('buildingSel').value,
+    ancillary: $('ancillarySel').value,
+    head: $('headSel').value, handle: $('handleSel').value, shield: $('shieldSel').value,
+    armor: $('armorSel').value, helm: $('helmSel').value,
+    size: parseFloat($('sizeIn').value) || 1,
+    dualWield: $('dualWield').checked, mounted: $('mounted').checked,
+    chariot: $('chariot').checked, stilts: $('stilts').checked,
+    width: 420, height: 400, scale: 1.0,
+    frames: frameSpecs
+  };
+}
+
+$('forgeBtn').onclick = async () => {
+  stopPlay();
+  const view = $('trueView');
+  $('forgeBtn').disabled = true;
+  const t0 = Date.now();
+  view.innerHTML = '<div class="spin">Forging with the real renderer&hellip; <span id="elapsed">0</span>s<br><small>(gradle + Robolectric; ~40s warm)</small></div>';
+  const tick = setInterval(() => { const el = $('elapsed'); if (el) el.textContent = Math.round((Date.now()-t0)/1000); }, 1000);
+  try {
+    const r = await fetch(API + '/api/preview', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildSpec())
+    });
+    const d = await r.json();
+    clearInterval(tick);
+    if (!d.success) { view.innerHTML = '<div class="placeholder">Render failed:<br><pre style="text-align:left;font-size:10px;max-width:380px;overflow:auto;">' + (d.message||'') + '</pre></div>'; return; }
+    frames = d.frames;
+    view.innerHTML = '<img id="frameImg">';
+    $('frameScrub').max = frames.length - 1; $('frameScrub').value = 0;
+    $('frameScrub').disabled = frames.length < 2; $('playBtn').disabled = frames.length < 2;
+    showFrame(0);
+    if (frames.length > 1) startPlay();
+  } catch (e) {
+    clearInterval(tick);
+    view.innerHTML = '<div class="placeholder">Server unreachable — run magazine.bat.</div>';
+  } finally {
+    $('forgeBtn').disabled = false;
+  }
+};
+function showFrame(i) {
+  const img = $('frameImg'); if (!img || !frames[i]) return;
+  img.src = API + frames[i];
+  qcBg.src = API + frames[i];  // same frame becomes the quick-canvas backdrop
+  $('frameScrub').value = i;
+  $('frameLabel').textContent = 'frame ' + (Number(i)+1) + '/' + frames.length;
+}
+function startPlay() {
+  stopPlay();
+  $('playBtn').textContent = '❚❚ Pause';
+  let i = Number($('frameScrub').value);
+  playing = setInterval(() => { i = (i + 1) % frames.length; showFrame(i); }, 100);
+}
+function stopPlay() {
+  if (playing) clearInterval(playing);
+  playing = null; $('playBtn').textContent = '▶ Play';
+}
+$('playBtn').onclick = () => playing ? stopPlay() : startPlay();
+$('frameScrub').oninput = e => { stopPlay(); showFrame(Number(e.target.value)); };
+
+// ---------- quick canvas (instant path editing + forging new items) ----------
+const canvas = $('canvas'), ctx = canvas.getContext('2d');
+const cx = canvas.width/2, cy = canvas.height/2;
+const PALETTE = [
+  { name:'Thread', hex:'#2C2219', kt:'0xFF2C2219' }, { name:'Red', hex:'#9E3624', kt:'0xFF9E3624' },
+  { name:'Mustard', hex:'#B08221', kt:'0xFFB08221' }, { name:'Green', hex:'#4C613D', kt:'0xFF4C613D' },
+  { name:'Navy', hex:'#265063', kt:'0xFF265063' }, { name:'Leather', hex:'#8A5E38', kt:'0xFF8A5E38' },
+  { name:'Steel', hex:'#BAC5CC', kt:'0xFFBAC5CC' }, { name:'Mail', hex:'#6B7882', kt:'0xFF6B7882' },
+  { name:'White', hex:'#FAF6EB', kt:'0xFFFAF6EB' }, { name:'Skin', hex:'#E8C5A4', kt:'0xFFE8C5A4' }
+];
+let selColor = PALETTE[0], paths = [], currentPoints = [];
+PALETTE.forEach(c => {
+  const s = document.createElement('span');
+  s.className = 'swatch' + (c === selColor ? ' sel' : ''); s.style.background = c.hex; s.title = c.name;
+  s.onclick = () => { document.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel')); s.classList.add('sel'); selColor = c; };
+  $('palette').appendChild(s);
+});
+// ---- live vector layer: interpret the Kotlin, draw it, drag it ----
+// A tiny evaluator + statement parser cover the declarative subset the art uses
+// (val defs, Path blocks, drawLine/drawCircle/drawRect/drawOval, stitched fills).
+// Shapes render live on the canvas; dragging a point reshapes them in real time and
+// writes the numbers back into the source on release. Procedural pieces (loops,
+// transforms, animation maths) are skipped here and only visible via Forge.
+let editPts = [], dragIdx = null, scene = [], sceneEnv = {}, sceneSkipped = 0;
+
+function parseArgExpr(s) {
+  s = s.trim();
+  // dotted bases (headPos.x) are how weapon heads anchor everything
+  let m = s.match(/^([A-Za-z_][\w.]*)$/);
+  if (m && !/^(true|false|if|else)$/.test(m[1])) return { base: m[1], off: 0 };
+  m = s.match(/^([A-Za-z_][\w.]*)\s*([-+])\s*([\d.]+)f$/);
+  if (m) return { base: m[1], off: (m[2] === '-' ? -1 : 1) * parseFloat(m[3]) };
+  m = s.match(/^(-?[\d.]+)f$/);
+  return m ? { base: null, off: parseFloat(m[1]) } : null;
+}
+// Evaluates the Kotlin expression subset the art actually uses: numbers, known idents
+// (dotted ok), + - * / %, parens, sin/cos/abs, comparisons, `if (c) a else b`.
+// Animation inputs are seeded to rest pose, so anim terms collapse to constants.
+// `fb(ident)` supplies a fallback for unknown idents (axis-defaults for dotted anchors);
+// returns null when anything is genuinely unknown.
+function evalExpr(s, env, fb) {
+  s = s.replace(/\.toFloat\(\)/g, '').replace(/kotlin\.math\./g, '');
+  const toks = s.match(/[A-Za-z_][\w.]*|\d*\.?\d+f?|==|!=|>=|<=|[()+\-*\/%><]/g);
+  if (!toks || !toks.length) return null;
+  let i = 0, bad = false;
+  function prim() {
+    const t = toks[i++];
+    if (t === undefined) { bad = true; return 0; }
+    if (t === '(') { const v = expr(); if (toks[i++] !== ')') bad = true; return v; }
+    if (t === '-') return -prim();
+    if (t === '+') return prim();
+    if (t === 'if') {
+      if (toks[i++] !== '(') { bad = true; return 0; }
+      const c = expr();
+      if (toks[i++] !== ')') { bad = true; return 0; }
+      const a = expr();
+      if (toks[i++] !== 'else') { bad = true; return 0; }
+      const b = expr();
+      return c !== 0 ? a : b;
+    }
+    if (t === 'sin' || t === 'cos' || t === 'abs') {
+      if (toks[i++] !== '(') { bad = true; return 0; }
+      const v = expr();
+      if (toks[i++] !== ')') { bad = true; return 0; }
+      return t === 'sin' ? Math.sin(v) : t === 'cos' ? Math.cos(v) : Math.abs(v);
+    }
+    if (t === 'true') return 1;
+    if (t === 'false') return 0;
+    if (/^[\d.]/.test(t)) return parseFloat(t);
+    if (t in env) return env[t];
+    if (fb) { const v = fb(t); if (v !== null && v !== undefined) return v; }
+    bad = true; return 0;
+  }
+  function prod() { let v = prim(); while (toks[i] === '*' || toks[i] === '/' || toks[i] === '%') { const op = toks[i++], r = prim(); v = op === '*' ? v * r : op === '/' ? v / r : v % r; } return v; }
+  function sum() { let v = prod(); while (toks[i] === '+' || toks[i] === '-') { const op = toks[i++], r = prod(); v = op === '+' ? v + r : v - r; } return v; }
+  function expr() {
+    let v = sum();
+    const t = toks[i];
+    if (t === '>' || t === '<' || t === '>=' || t === '<=' || t === '==' || t === '!=') {
+      i++; const r = sum();
+      v = (t === '>' ? v > r : t === '<' ? v < r : t === '>=' ? v >= r : t === '<=' ? v <= r : t === '==' ? v === r : v !== r) ? 1 : 0;
+    }
+    return v;
+  }
+  const v = expr();
+  return bad || i !== toks.length ? null : v;
+}
+// Unknown dotted anchors (headPos.x) default to the canvas anchor of their axis letter
+const dottedFb = ident => ident.endsWith('.x') ? cx : ident.endsWith('.y') ? cy : null;
+function colorOf(expr) {
+  const m = expr.match(/0x[0-9A-Fa-f]{2}([0-9A-Fa-f]{6})/);
+  return m ? '#' + m[1] : '#2C2219'; // ThreadColor & friends
+}
+// {pt: editPt} or {sx, sy} static → canvas coords. Unknown bases (vars defined
+// outside the region, like a helm's hx/hy) anchor to the canvas centre; points
+// inside a translate() transform anchor at that transform's origin instead.
+const baseVal = (name, axis) => {
+  if (name === null) return axis === 'x' ? cx : cy;
+  const v = sceneEnv[name];
+  return v !== undefined ? v : (axis === 'x' ? cx : cy);
+};
+function ptAxis(p, axis) {
+  const a = p[axis];                       // {base, off}
+  const anchor = p.t ? p.t[axis] : (axis === 'x' ? cx : cy);
+  if (a.base === null) return anchor + a.off;
+  const v = sceneEnv[a.base];
+  if (v === undefined) return anchor + a.off;
+  return v + (p.t ? p.t[axis] : 0) + a.off;  // known local value inside a transform shifts by its origin
+}
+function resolvePt(h) {
+  if (!h) return null;
+  if (h.pt) return { x: ptAxis(h.pt, 'x'), y: ptAxis(h.pt, 'y') };
+  return { x: h.sx, y: h.sy };
+}
+
+function parseScene(code) {
+  editPts = []; scene = []; sceneSkipped = 0; dragIdx = null;
+  const lines = code.split('\n');
+  // Rest-pose seeding: anim terms (sin(animFrame…), if (isAttacking)…) collapse to constants
+  const env = { cx: cx, cy: cy, 'Math.PI': Math.PI, PI: Math.PI,
+                animFrame: 0, swingProgress: 0, isAttacking: 0, wrecked: 0, dir: 1,
+                handleLen: 60 };  // typical shaft length so handle art previews at sane proportions
+  sceneEnv = env;
+
+  // pass 1: every draggable coordinate pair, indexed by line:char for pass 2
+  const ptIndex = {};
+  const pairRe = /\b(moveTo|lineTo|Offset)\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)/g;
+  lines.forEach((line, li) => {
+    let m;
+    while ((m = pairRe.exec(line)) !== null) {
+      const xp = parseArgExpr(m[2]), yp = parseArgExpr(m[3]);
+      if (xp && yp) {
+        const p = { line: li, start: m.index, end: m.index + m[0].length, kind: m[1], x: xp, y: yp };
+        editPts.push(p);
+        ptIndex[li + ':' + m.index] = p;
+      }
+    }
+  });
+
+  // An Offset(...) at a known position → draggable pt, else static eval, else null
+  function offsetAt(li, idx, xExpr, yExpr) {
+    const p = ptIndex[li + ':' + idx];
+    if (p) {
+      const t = curT();
+      if (t) p.t = { x: t.x, y: t.y };
+      return { pt: p };
+    }
+    const vx = evalExpr(xExpr, env, dottedFb), vy = evalExpr(yExpr, env, dottedFb);
+    return (vx !== null && vy !== null) ? { sx: vx, sy: vy } : null;
+  }
+
+  // pass 2: statements → shapes. Indexed loop so multi-line calls can be joined
+  // and withTransform translate() origins tracked by brace depth.
+  let cur = null, curDepth = 0, depth = 0;
+  const kpaths = {}, offsetVals = {}, tstack = [];
+  const curT = () => tstack.length ? tstack[tstack.length - 1] : null;
+
+  // Line/circle/rect/oval from a (possibly joined) call. li >= 0 keeps draggable points.
+  function handleDrawCall(line, li) {
+    let m;
+    const t = curT();
+    const offs = [];
+    // Literal Offset(x, y) args — draggable when on a known line, else computed
+    const ore = /Offset\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)/g;
+    let om;
+    while ((om = ore.exec(line)) !== null) {
+      if (/Offset\.Zero/.test(line.slice(Math.max(0, om.index - 8), om.index))) continue;
+      const o = li >= 0 ? offsetAt(li, om.index, om[1], om[2]) : offsetStatic(om[1], om[2]);
+      if (o) offs.push({ at: om.index, o });
+    }
+    // Named ident args: start = headPos, end = bladeEnd — resolved Offset vals or anchor default
+    const ire = /(?:start|end|center)\s*=\s*([A-Za-z_][\w.]*)\s*[,)\s]/g;
+    while ((om = ire.exec(line)) !== null) {
+      if (om[1] === 'Offset') continue;
+      const v = offsetVals[om[1]];
+      offs.push({ at: om.index, o: v ? { sx: v.x, sy: v.y } : { sx: t ? t.x : cx, sy: t ? t.y : cy } });
+    }
+    offs.sort((a, b) => a.at - b.at);
+    const list = offs.map(e => e.o);
+
+    if (/\bdrawLine\(/.test(line)) {
+      const wm = line.match(/strokeWidth\s*=\s*([\d.]+)f/);
+      if (list.length >= 2) scene.push({ type: 'line', a: list[0], b: list[1], color: colorOf(line), width: wm ? +wm[1] : 3 });
+      else sceneSkipped++;
+      return true;
+    }
+    if (/\bdrawCircle\(/.test(line)) {
+      const rm = line.match(/radius\s*=\s*([^,)]+)/) || line.match(/drawCircle\([^,]+,\s*([\d.]+)f\s*,/);
+      const r = rm ? evalExpr(rm[1], env, null) : null;
+      if (list.length >= 1 && r !== null) scene.push({ type: 'circle', c: list[0], r, color: colorOf(line), fill: !/style\s*=\s*Stroke/.test(line) });
+      else sceneSkipped++;
+      return true;
+    }
+    m = line.match(/draw(Rect|Oval)\(\s*.*Size\(\s*([^,()]+?)\s*,\s*([^()]+?)\s*\)/);
+    if (m) {
+      const w = evalExpr(m[2], env, null), h = evalExpr(m[3], env, null);
+      if (list.length >= 1 && w !== null && h !== null) scene.push({ type: m[1] === 'Rect' ? 'rect' : 'oval', c: list[0], w, h, color: colorOf(line), fill: !/style\s*=\s*Stroke/.test(line) });
+      else sceneSkipped++;
+      return true;
+    }
+    return false;
+  }
+
+  function offsetStatic(xExpr, yExpr) {
+    const t = curT();
+    const vx = evalExpr(xExpr, env, dottedFb), vy = evalExpr(yExpr, env, dottedFb);
+    if (vx === null || vy === null) return null;
+    return { sx: vx + (t ? t.x - cxIfAbs(xExpr) : 0), sy: vy + (t ? t.y - cyIfAbs(yExpr) : 0) };
+  }
+  // Inside a transform, coordinates are local — but expressions that already resolved
+  // through cx/cy (or dotted anchors) are absolute; don't double-shift those.
+  const cxIfAbs = e => /\bcx\b|\.x\b/.test(e) ? cx : 0;
+  const cyIfAbs = e => /\bcy\b|\.y\b/.test(e) ? cy : 0;
+
+  // A coordinate expression inside the current transform, axis-aware
+  function axisVal(pe, axis) {
+    const t = curT();
+    const anchor = t ? t[axis] : (axis === 'x' ? cx : cy);
+    if (pe.base === null) return (t ? t[axis] : (axis === 'x' ? cx : cy)) + pe.off;
+    const v = env[pe.base];
+    if (v === undefined) return anchor + pe.off;
+    return v + (t ? t[axis] : 0) + pe.off;
+  }
+  function staticAdj(expr, v, axis) {
+    const t = curT();
+    if (!t || v === null) return v;
+    return v + t[axis] - (axis === 'x' ? cxIfAbs(expr) : cyIfAbs(expr));
+  }
+
+  function processLine(line, li) {
+    let m;
+    if (cur) {
+      curDepth += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+      const cm = line.match(/\b(moveTo|lineTo)\s*\(/);
+      if (cm) {
+        const p = ptIndex[li + ':' + cm.index];
+        if (p) {
+          const t = curT();
+          if (t) p.t = { x: t.x, y: t.y };
+          cur.cmds.push({ op: cm[1] === 'moveTo' ? 'M' : 'L', pt: p });
+        } else {
+          const am = line.slice(cm.index).match(/\(([^()]*)\)/);
+          const parts = am ? am[1].split(',') : [];
+          const vx = parts.length === 2 ? staticAdj(parts[0], evalExpr(parts[0], env, dottedFb), 'x') : null;
+          const vy = parts.length === 2 ? staticAdj(parts[1], evalExpr(parts[1], env, dottedFb), 'y') : null;
+          if (vx !== null && vy !== null) cur.cmds.push({ op: cm[1] === 'moveTo' ? 'M' : 'L', sx: vx, sy: vy });
+          else cur.bad = true;
+        }
+      }
+      const qm = line.match(/\bquadratic(?:Bezier)?To\s*\(([^()]*)\)/);
+      if (qm) {
+        // Control points aren't draggable but resolve with the same base-defaulting as handles
+        const a = qm[1].split(',').map((s, ai) => {
+          const axis = ai % 2 === 0 ? 'x' : 'y';
+          const pe = parseArgExpr(s);
+          if (pe) return axisVal(pe, axis);
+          return staticAdj(s, evalExpr(s, env, dottedFb), axis);
         });
+        if (a.length === 4 && a.every(v => v !== null)) cur.cmds.push({ op: 'Q', pts: a });
+        else cur.bad = true;
+      }
+      const am = line.match(/\badd(Arc|Oval|Rect)\(\s*(?:[\w.]+\.)?Rect\(\s*([^()]*?)\s*\)\s*(?:,\s*([-\d.]+)f\s*,\s*([-\d.]+)f\s*)?\)/);
+      if (am) {
+        const r = am[2].split(',').map((s, ai) => staticAdj(s, evalExpr(s, env, dottedFb), ai % 2 === 0 ? 'x' : 'y'));
+        if (r.length === 4 && r.every(v => v !== null)) {
+          cur.cmds.push({ op: am[1] === 'Rect' ? 'RECTP' : 'ARC', l: r[0], t: r[1], r: r[2], b: r[3],
+                          start: am[3] !== undefined ? +am[3] : 0, sweep: am[4] !== undefined ? +am[4] : 360 });
+        } else cur.arcs = (cur.arcs || 0) + 1;  // unresolvable arc: partial, Forge shows it
+      }
+      if (/\bclose\s*\(\s*\)/.test(line)) cur.cmds.push({ op: 'Z' });
+      if (curDepth <= 0) { kpaths[cur.name] = cur; cur = null; }
+      return;
+    }
+    // withTransform({ translate(x, y) … }): drawing inside is in local coordinates
+    if (/withTransform\s*\(\s*\{/.test(line)) {
+      let tx = null, ty = null;
+      for (let j = li; j < Math.min(li + 6, lines.length); j++) {
+        const tm = lines[j].match(/\btranslate\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)/);
+        if (tm) { tx = evalExpr(tm[1], env, dottedFb); ty = evalExpr(tm[2], env, dottedFb); break; }
+        if (j > li && /\}\s*\)\s*\{/.test(lines[j])) break;
+      }
+      // rotate-only transforms (walk cycles) draw at rest pose: origin stays put
+      if (tx !== null || ty !== null) tstack.push({ depth: depth + 1, x: tx !== null ? tx : cx, y: ty !== null ? ty : cy });
+      return;
+    }
+    m = line.match(/val\s+(\w+)\s*=\s*(?:[\w.]+\.)?Path\(\)\.apply\s*\{/);
+    if (m) { cur = { name: m[1], cmds: [], bad: false }; curDepth = 1; return; }
+    // val X = Offset(...): a named point later used as start=/end=/center=
+    m = line.match(/val\s+(\w+)\s*=\s*(?:[\w.]+\.)?Offset\(\s*([^,()]+?)\s*,\s*([^()]+?)\s*\)\s*$/);
+    if (m) {
+      const vx = evalExpr(m[2], env, dottedFb), vy = evalExpr(m[3], env, dottedFb);
+      if (vx !== null && vy !== null) offsetVals[m[1]] = { x: vx, y: vy };
+      return;
+    }
+    // val X = when (...) { — take the first branch value that evaluates (variant 0)
+    m = line.match(/val\s+(\w+)\s*=\s*when\s*\(.*\{\s*$/);
+    if (m) {
+      for (let j = li + 1; j < Math.min(li + 30, lines.length); j++) {
+        if (/^\s*\}/.test(lines[j])) break;
+        const bm = lines[j].match(/->\s*([^{].*)$/);
+        if (bm) { const v = evalExpr(bm[1], env, null); if (v !== null) { env[m[1]] = v; break; } }
+      }
+      return;
+    }
+    m = line.match(/val\s+(\w+)\s*=\s*(.+)$/);
+    if (m && !/Path\(/.test(m[2])) { const v = evalExpr(m[2], env, null); if (v !== null) env[m[1]] = v; return; }
+    m = line.match(/drawStitchedFill\(\s*(?:this|scope|drawScope)\s*,\s*(\w+)\s*,\s*([^)]+)\)/);
+    if (m) {
+      if (kpaths[m[1]] && !kpaths[m[1]].bad) {
+        scene.push({ type: 'fill', cmds: kpaths[m[1]].cmds, color: colorOf(m[2]) });
+        if (kpaths[m[1]].arcs) sceneSkipped++;  // arc segments in it only show via Forge
+      } else sceneSkipped++;
+      return;
+    }
+    m = line.match(/drawPath\(\s*(\w+)\s*,\s*([^,)]+)/);
+    if (m) {
+      if (kpaths[m[1]] && !kpaths[m[1]].bad) {
+        const wm = line.match(/width\s*=\s*([\d.]+)f/);
+        scene.push({ type: 'stroke', cmds: kpaths[m[1]].cmds, color: colorOf(m[2]), width: wm ? +wm[1] : 3 });
+      } else sceneSkipped++;
+      return;
+    }
+    if (handleDrawCall(line, li)) return;
+    if (/drawArc|drawPoints|drawImage/.test(line)) sceneSkipped++;
+  }
 
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
-        
-        // Colors from Bayeux Palette
-        const palette = [
-            { name: "Thread (Dark)", hex: "#2C2219", kt: "0xFF2C2219" },
-            { name: "Terracotta Red", hex: "#9E3624", kt: "0xFF9E3624" },
-            { name: "Mustard Gold", hex: "#B08221", kt: "0xFFB08221" },
-            { name: "Forest Green", hex: "#4C613D", kt: "0xFF4C613D" },
-            { name: "Navy Blue", hex: "#265063", kt: "0xFF265063" },
-            { name: "Leather Brown", hex: "#8A5E38", kt: "0xFF8A5E38" },
-            { name: "Steel Grey", hex: "#BAC5CC", kt: "0xFFBAC5CC" },
-            { name: "Chainmail Blue-Grey", hex: "#6B7882", kt: "0xFF6B7882" },
-            { name: "Undergarment White", hex: "#FAF6EB", kt: "0xFFFAF6EB" },
-            { name: "Skin Tone", hex: "#E8C5A4", kt: "0xFFE8C5A4" }
-        ];
+  // Main walk — last so every helper (incl. const axis helpers) is initialised
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
 
-        let selectedColor = palette[0];
-        const colorPaletteEl = document.getElementById('colorPalette');
-        const colorLabelEl = document.getElementById('colorLabel');
+    // Multi-line draw call: join lines until parens balance so named args resolve
+    if (!cur && /\bdraw(Line|Circle|Rect|Oval)\(/.test(line) &&
+        (line.match(/\(/g) || []).length > (line.match(/\)/g) || []).length) {
+      let joined = line, j = li;
+      while (j + 1 < lines.length && (joined.match(/\(/g) || []).length > (joined.match(/\)/g) || []).length && j - li < 10) {
+        j++; joined += ' ' + lines[j].trim();
+      }
+      depth += (joined.match(/\{/g) || []).length - (joined.match(/\}/g) || []).length;
+      li = j;
+      handleDrawCall(joined, -1);   // -1: no per-line pt lookup; offsets resolve statically
+      continue;
+    }
 
-        // Init Palette
-        palette.forEach(c => {
-            const swatch = document.createElement('div');
-            swatch.className = 'color-swatch';
-            swatch.style.backgroundColor = c.hex;
-            if (c === selectedColor) swatch.classList.add('selected');
-            swatch.onclick = () => {
-                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
-                swatch.classList.add('selected');
-                selectedColor = c;
-                colorLabelEl.innerText = `${c.name} - ${c.kt}`;
-                if (paths.length > 0 && currentPoints.length === 0) {
-                    paths[paths.length - 1].color = selectedColor;
-                    updateLayerList();
-                }
-            };
-            colorPaletteEl.appendChild(swatch);
-        });
+    processLine(line, li);
+    depth += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+    while (tstack.length && depth < tstack[tstack.length - 1].depth) tstack.pop();
+  }
+}
 
-        let paths = []; // Array of { points: [{x,y}], color: {}, isFilled: bool }
-        let currentPoints = [];
+// ---- view transform: zoom the shape to fill the canvas, all edits stay in model units ----
+let view = { k: 1, tx: 0, ty: 0 };
+const toScr = p => ({ x: p.x * view.k + view.tx, y: p.y * view.k + view.ty });
+const toModel = (x, y) => ({ x: (x - view.tx) / view.k, y: (y - view.ty) / view.k });
+function fitView() {
+  const xs = [], ys = [];
+  const add = p => { if (p) { xs.push(p.x); ys.push(p.y); } };
+  editPts.forEach(p => add(resolvePt({ pt: p })));
+  scene.forEach(s => {
+    if (s.cmds) s.cmds.forEach(c => {
+      if (c.op === 'ARC' || c.op === 'RECTP') { add({ x: c.l, y: c.t }); add({ x: c.r, y: c.b }); }
+      else if (c.op !== 'Z' && c.op !== 'Q') add(resolvePt(c));
+    });
+    [s.a, s.b, s.c].filter(Boolean).forEach(h => add(resolvePt(h)));
+  });
+  if (!xs.length) { view = { k: 1, tx: 0, ty: 0 }; return; }
+  const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
+  const bw = Math.max(maxx - minx, 10), bh = Math.max(maxy - miny, 10);
+  view.k = Math.min(canvas.width * 0.65 / bw, canvas.height * 0.65 / bh, 8);
+  if (view.k < 1) view.k = 1;
+  view.tx = canvas.width / 2 - (minx + maxx) / 2 * view.k;
+  view.ty = canvas.height / 2 - (miny + maxy) / 2 * view.k;
+}
 
-        function initNewPath() {
-            if (currentPoints.length > 0) {
-                paths.push({
-                    points: [...currentPoints],
-                    color: selectedColor,
-                    isFilled: document.getElementById('fillShape').checked
-                });
-                currentPoints = [];
-                updateLayerList();
-            }
-        }
+function fmtNum(n) { const r = Math.round(n * 2) / 2; return (r % 1 === 0 ? r.toFixed(0) : r.toFixed(1)); }
+function argText(p) {
+  if (!p.base) return fmtNum(p.off) + 'f';
+  if (p.off === 0) return p.base;
+  return `${p.base} ${p.off < 0 ? '-' : '+'} ${fmtNum(Math.abs(p.off))}f`;
+}
+function writePointsBack() {
+  const lines = $('source').value.split('\n');
+  // Rewrite right-to-left within each line so earlier offsets stay valid
+  [...editPts].sort((a,b) => b.line - a.line || b.start - a.start).forEach(p => {
+    const line = lines[p.line];
+    lines[p.line] = line.slice(0, p.start) + `${p.kind}(${argText(p.x)}, ${argText(p.y)})` + line.slice(p.end);
+  });
+  $('source').value = lines.join('\n');
+  parseScene($('source').value); // re-sync spans + live shapes after rewrite
+}
+canvas.onmousedown = e => {
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  dragIdx = null;
+  editPts.forEach((p, i) => {
+    const s = resolvePt({ pt: p });
+    if (!s) return;
+    const sc = toScr(s);
+    if (Math.abs(sc.x - mx) < 8 && Math.abs(sc.y - my) < 8) dragIdx = i;
+  });
+  if (dragIdx !== null) return;
+  const m = toModel(mx, my);
+  currentPoints.push({ x: Math.round(m.x/5)*5, y: Math.round(m.y/5)*5 });
+};
+canvas.onmousemove = e => {
+  if (dragIdx === null) return;
+  const r = canvas.getBoundingClientRect();
+  const p = editPts[dragIdx];
+  const m = toModel(e.clientX - r.left, e.clientY - r.top);
+  // Mirror ptAxis: subtract the same effective base (incl. transform origin) that rendering adds
+  p.x.off = m.x - (ptAxis(p, 'x') - p.x.off);
+  p.y.off = m.y - (ptAxis(p, 'y') - p.y.off);
+};
+canvas.onmouseup = () => {
+  if (dragIdx === null) return;
+  writePointsBack();
+  dragIdx = null;
+  $('msg').textContent = 'Point written into the Kotlin — Save asset back, then Forge to confirm in the real renderer.';
+};
+$('newPathBtn').onclick = commitPath;
+$('clearBtn').onclick = () => { paths = []; currentPoints = []; };
+$('undoBtn').onclick = () => {
+  if (currentPoints.length) currentPoints.pop();
+  else if (paths.length) { currentPoints = paths.pop().points; currentPoints.pop(); }
+};
+function commitPath() {
+  if (currentPoints.length > 1) paths.push({ points:[...currentPoints], color: selColor, isFilled: $('fillShape').checked });
+  currentPoints = [];
+}
+function generateCodeSnippet() {
+  let code = '';
+  paths.forEach((p, idx) => {
+    if (!p.points.length) return;
+    code += `    val path_${idx} = Path().apply {\n        moveTo(${p.points[0].x-cx}f, ${p.points[0].y-cy}f)\n`;
+    for (let i=1; i<p.points.length; i++) code += `        lineTo(${p.points[i].x-cx}f, ${p.points[i].y-cy}f)\n`;
+    code += `        close()\n    }\n`;
+    code += p.isFilled
+      ? `    drawStitchedFill(scope, path_${idx}, Color(${p.color.kt}))\n    scope.drawPath(path_${idx}, ThreadColor, style = StitchedStroke)\n`
+      : `    scope.drawPath(path_${idx}, Color(${p.color.kt}), style = Stroke(width = 4f))\n`;
+  });
+  return code;
+}
+$('toCanvasBtn').onclick = () => {
+  paths = []; currentPoints = [];
+  parseScene($('source').value);
+  fitView();
+  $('canvas').closest('details').open = true;
+  $('msg').textContent = scene.length
+    ? `Live vectors: ${scene.length} shapes, ${editPts.length} draggable points.` +
+      (sceneSkipped ? ` ${sceneSkipped} procedural piece(s) only show via Forge.` : '')
+    : 'Nothing here is drawable live (fully procedural) — use the Kotlin text + Forge.';
+};
+$('syncBtn').onclick = () => { commitPath(); $('source').value = generateCodeSnippet(); buildColorPickers(); };
+$('injectBtn').onclick = async () => {
+  commitPath();
+  try {
+    const r = await fetch(API + '/api/inject', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ itemType: $('itemType').value, itemName: $('itemName').value, codeSnippet: generateCodeSnippet() })
+    });
+    const d = await r.json();
+    $('msg').textContent = d.success ? d.message : ('INJECT FAILED: ' + d.message);
+    if (d.success) boot();
+  } catch (e) { $('msg').textContent = 'Server unreachable.'; }
+};
 
-        document.getElementById('newPathBtn').onclick = initNewPath;
-        document.getElementById('clearBtn').onclick = () => { paths = []; currentPoints = []; updateLayerList(); };
-        document.getElementById('undoBtn').onclick = () => {
-            if (currentPoints.length > 0) currentPoints.pop();
-            else if (paths.length > 0) {
-                currentPoints = paths.pop().points;
-                currentPoints.pop();
-            }
-            updateLayerList();
-        };
+// ghost manikin + path render loop for the quick canvas
+const qcBg = new Image();  // last forged frame, drawn behind the handles for context
+function qcLoop() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = '#e5dcc8'; ctx.lineWidth = 1;
+  for (let i=0;i<canvas.width;i+=20){ ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,canvas.height);ctx.stroke(); }
+  for (let i=0;i<canvas.height;i+=20){ ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(canvas.width,i);ctx.stroke(); }
+  // Everything from here draws in model space, zoomed by the view transform
+  ctx.save();
+  ctx.setTransform(view.k, 0, 0, view.k, view.tx, view.ty);
+  ctx.strokeStyle='#c9b895'; ctx.lineWidth = 1/view.k;
+  ctx.beginPath();ctx.moveTo(cx,-2000);ctx.lineTo(cx,2000);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-2000,cy);ctx.lineTo(2000,cy);ctx.stroke();
+  // Forged model as a dim ghost for context; the live vectors draw on top of it.
+  // Game anchor (w/2, 200) maps onto (cx, cy).
+  if (qcBg.complete && qcBg.naturalWidth) {
+    ctx.globalAlpha = 0.25;
+    ctx.drawImage(qcBg, cx - qcBg.naturalWidth/2, cy - 200);
+    ctx.globalAlpha = 1;
+  }
 
-        function updateLayerList() {
-            const list = document.getElementById('layerList');
-            list.innerHTML = '';
-            paths.forEach((p, i) => {
-                const item = document.createElement('div');
-                item.className = 'layer-item';
-                item.innerHTML = `<span>Path ${i+1} (${p.points.length} pts)</span>
-                                  <div style="width:15px;height:15px;background:${p.color.hex};border:1px solid #000;"></div>`;
-                list.appendChild(item);
-            });
-            if (currentPoints.length > 0) {
-                const item = document.createElement('div');
-                item.className = 'layer-item';
-                item.style.border = '2px dashed #9e3624';
-                item.innerHTML = `<span>Active Path (${currentPoints.length} pts)</span>`;
-                list.appendChild(item);
-            }
-        }
+  // Live-interpreted Kotlin shapes — these reshape in real time as points drag
+  const tracePath = cmds => {
+    ctx.beginPath();
+    for (const c of cmds) {
+      if (c.op === 'Z') { ctx.closePath(); continue; }
+      if (c.op === 'Q') { ctx.quadraticCurveTo(c.pts[0], c.pts[1], c.pts[2], c.pts[3]); continue; }
+      if (c.op === 'ARC') {
+        // Compose addArc/addOval: degrees, 0° at 3 o'clock, positive sweep clockwise — same as canvas
+        ctx.ellipse((c.l + c.r) / 2, (c.t + c.b) / 2, Math.abs(c.r - c.l) / 2, Math.abs(c.b - c.t) / 2,
+                    0, c.start * Math.PI / 180, (c.start + c.sweep) * Math.PI / 180);
+        continue;
+      }
+      if (c.op === 'RECTP') { ctx.rect(c.l, c.t, c.r - c.l, c.b - c.t); continue; }
+      const p = resolvePt(c); if (!p) continue;
+      if (c.op === 'M') ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+  };
+  for (const s of scene) {
+    if (s.type === 'fill') { tracePath(s.cmds); ctx.fillStyle = s.color; ctx.fill(); ctx.strokeStyle = '#2C2219'; ctx.lineWidth = 2; ctx.stroke(); }
+    else if (s.type === 'stroke') { tracePath(s.cmds); ctx.strokeStyle = s.color; ctx.lineWidth = s.width; ctx.stroke(); }
+    else if (s.type === 'line') {
+      const a = resolvePt(s.a), b = resolvePt(s.b); if (!a || !b) continue;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = s.color; ctx.lineWidth = s.width; ctx.stroke();
+    } else if (s.type === 'circle') {
+      const c = resolvePt(s.c); if (!c) continue;
+      ctx.beginPath(); ctx.arc(c.x, c.y, s.r, 0, Math.PI*2);
+      if (s.fill) { ctx.fillStyle = s.color; ctx.fill(); } else { ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.stroke(); }
+    } else if (s.type === 'rect' || s.type === 'oval') {
+      const c = resolvePt(s.c); if (!c) continue;
+      ctx.beginPath();
+      if (s.type === 'rect') ctx.rect(c.x, c.y, s.w, s.h); else ctx.ellipse(c.x + s.w/2, c.y + s.h/2, s.w/2, s.h/2, 0, 0, Math.PI*2);
+      if (s.fill) { ctx.fillStyle = s.color; ctx.fill(); } else { ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.stroke(); }
+    }
+  }
+  const draw = (pts, filled, color, active) => {
+    if (!pts.length) return;
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    if (active) { ctx.setLineDash([5,5]); ctx.strokeStyle = '#9E3624'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); }
+    else if (filled) { ctx.fillStyle = color.hex; ctx.fill(); ctx.strokeStyle = '#2C2219'; ctx.lineWidth = 1; ctx.stroke(); }
+    else { ctx.strokeStyle = color.hex; ctx.lineWidth = 4; ctx.stroke(); }
+    ctx.fillStyle = active ? '#9E3624' : '#2C2219';
+    pts.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI*2); ctx.fill(); });
+  };
+  paths.forEach(p => draw(p.points, p.isFilled, p.color, false));
+  draw(currentPoints, $('fillShape').checked, selColor, true);
+  ctx.restore();
+  // Amber squares: the draggable points of the live shapes above — fixed screen
+  // size regardless of zoom, drawn outside the transform.
+  editPts.forEach((p, i) => {
+    const s = resolvePt({ pt: p }); if (!s) return;
+    const sc = toScr(s);
+    ctx.fillStyle = i === dragIdx ? '#9E3624' : '#B08221';
+    ctx.strokeStyle = '#2C2219'; ctx.lineWidth = 1;
+    ctx.fillRect(sc.x - 4, sc.y - 4, 8, 8);
+    ctx.strokeRect(sc.x - 4, sc.y - 4, 8, 8);
+  });
+  requestAnimationFrame(qcLoop);
+}
+requestAnimationFrame(qcLoop);
 
-        function getMousePos(e) {
-            const rect = canvas.getBoundingClientRect();
-            let x = e.clientX - rect.left;
-            let y = e.clientY - rect.top;
-            if (document.getElementById('snapCheck').checked) {
-                x = Math.round(x / 10) * 10;
-                y = Math.round(y / 10) * 10;
-            }
-            return { x, y };
-        }
-
-        canvas.addEventListener('mousedown', (e) => {
-            currentPoints.push(getMousePos(e));
-            updateLayerList();
-        });
-
-        // Animation Loop
-        function renderLoop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            const itemType = document.getElementById('itemType').value;
-            const handleType = document.getElementById('handleType').value;
-            let handleLen = 30; // short, iron, pick, wheel, fists
-            if (handleType === 'medium') handleLen = 55;
-            if (handleType === 'chain') handleLen = 60;
-            if (handleType === 'double') handleLen = 80;
-            if (handleType === 'long') handleLen = 110;
-
-            const isAnimating = document.getElementById('animCheck').checked;
-            let swing = isAnimating ? (Math.sin(Date.now() / 300) + 1) / 2 : 0; // 0 to 1
-            let armAngle = isAnimating ? -75 + 160 * swing : -30;
-
-            const hdx = 48;
-            const hdy = 5;
-            const sdx = handleLen * 0.8;
-            const sdy = -handleLen * 0.4;
-            
-            const unrotatedShaftEndX = hdx + sdx;
-            const unrotatedShaftEndY = hdy + sdy;
-
-            const armAngleRad = armAngle * Math.PI / 180;
-            const rotatedShaftEndX = unrotatedShaftEndX * Math.cos(armAngleRad) - unrotatedShaftEndY * Math.sin(armAngleRad);
-            const rotatedShaftEndY = unrotatedShaftEndX * Math.sin(armAngleRad) + unrotatedShaftEndY * Math.cos(armAngleRad);
-
-            let targetOffsetFromTorso = { x: 0, y: 0 };
-            if (itemType === 'WeaponHead' || itemType === 'Attachment') {
-                targetOffsetFromTorso = { x: -23 + rotatedShaftEndX, y: 25 + rotatedShaftEndY };
-            } else if (itemType === 'WeaponHandle' || itemType === 'RangedGear') {
-                const handX = hdx * Math.cos(armAngleRad) - hdy * Math.sin(armAngleRad);
-                const handY = hdx * Math.sin(armAngleRad) + hdy * Math.cos(armAngleRad);
-                targetOffsetFromTorso = { x: -23 + handX, y: 25 + handY };
-            } else if (itemType === 'Headgear' || itemType === 'Face' || itemType === 'Hair') {
-                targetOffsetFromTorso = { x: 0, y: -25 };
-            } else if (itemType === 'Shield') {
-                targetOffsetFromTorso = { x: 35, y: 40 }; 
-            }
-
-            const torsoX = cx - targetOffsetFromTorso.x;
-            const torsoY = cy - targetOffsetFromTorso.y;
-            const shoulderX = torsoX - 23;
-            const shoulderY = torsoY + 25;
-
-            if (document.getElementById('gridCheck').checked) {
-                ctx.strokeStyle = '#e0e0e0';
-                ctx.lineWidth = 1;
-                for (let i = 0; i < canvas.width; i += 20) {
-                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
-                }
-                ctx.strokeStyle = '#bbb';
-                ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(canvas.width, cy); ctx.stroke();
-                
-                ctx.fillStyle = 'blue';
-                ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2); ctx.fill();
-            }
-
-            // Draw Mannequin
-            if (document.getElementById('mannequinCheck').checked) {
-                ctx.save();
-                ctx.translate(torsoX, torsoY);
-                
-                ctx.globalAlpha = 0.4;
-                ctx.fillStyle = '#E8C5A4'; // Skin
-                ctx.strokeStyle = '#2C2219';
-                ctx.lineWidth = 2;
-
-                // Back leg
-                ctx.fillStyle = '#4C613D';
-                ctx.beginPath(); ctx.rect(-10, 60, 14, 45); ctx.fill(); ctx.stroke();
-                // Front leg
-                ctx.fillStyle = '#9E3624';
-                ctx.beginPath(); ctx.rect(5, 60, 14, 45); ctx.fill(); ctx.stroke();
-                
-                // Torso
-                ctx.fillStyle = '#E4D6B6';
-                ctx.beginPath(); ctx.rect(-20, -10, 40, 70); ctx.fill(); ctx.stroke();
-                
-                // Head (Side profile)
-                ctx.fillStyle = '#E8C5A4';
-                ctx.beginPath(); 
-                ctx.moveTo(-10, -10); // Neck base
-                ctx.lineTo(-12, -40); // Back head
-                ctx.lineTo(8, -42);   // Forehead
-                ctx.lineTo(10, -38);  // Brow indent
-                ctx.lineTo(16, -30);  // Nose
-                ctx.lineTo(10, -26);  // Lip
-                ctx.lineTo(12, -18);  // Chin
-                ctx.lineTo(-5, -10);  // Neck front
-                ctx.closePath();
-                ctx.fill(); ctx.stroke();
-
-                ctx.restore();
-
-                // Arm and Weapon Handle
-                ctx.save();
-                ctx.translate(shoulderX, shoulderY);
-                ctx.rotate(armAngleRad);
-
-                // Sleeve
-                ctx.fillStyle = '#265063';
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.lineTo(hdx, hdy); // To Hand
-                ctx.lineWidth = 14;
-                ctx.stroke();
-
-                // Hand
-                ctx.fillStyle = '#E8C5A4';
-                ctx.beginPath(); ctx.arc(hdx, hdy, 8, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-
-                if (itemType === 'WeaponHead' || itemType === 'Attachment') {
-                    // Draw the shaft!
-                    ctx.strokeStyle = '#8A5E38';
-                    ctx.lineWidth = 6;
-                    ctx.beginPath();
-                    ctx.moveTo(hdx - 25, hdy + 12); // Base of grip
-                    ctx.lineTo(hdx + sdx, hdy + sdy); // Shaft end
-                    ctx.stroke();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = '#2C2219';
-                    ctx.stroke();
-                }
-
-                ctx.restore();
-            }
-
-            // Draw Paths
-            const drawPathData = (pList, isFilled, colorInfo, isCurrent) => {
-                if (pList.length === 0) return;
-                
-                ctx.save();
-                
-                // If animating AND we are simulating a weapon head, we want the drawn paths to swing along with the shaft!
-                // Wait, if we are drawing, we want the paths to be exactly where our mouse is.
-                // We'll draw them statically relative to the canvas, but if you want to preview animation, 
-                // we can draw a ghosted version attached to the moving shaft.
-                
-                ctx.beginPath();
-                ctx.moveTo(pList[0].x, pList[0].y);
-                for(let i=1; i<pList.length; i++) ctx.lineTo(pList[i].x, pList[i].y);
-                
-                if (isFilled && !isCurrent) {
-                    ctx.fillStyle = colorInfo.hex;
-                    ctx.fill();
-                } else if (!isCurrent) {
-                    ctx.strokeStyle = colorInfo.hex;
-                    ctx.lineWidth = 4;
-                    ctx.stroke();
-                    ctx.strokeStyle = '#2C2219';
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
-                }
-
-                if (isCurrent) {
-                    ctx.strokeStyle = '#9e3624';
-                    ctx.setLineDash([5, 5]);
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                }
-                
-                // Draw nodes
-                ctx.fillStyle = isCurrent ? '#9e3624' : '#000';
-                pList.forEach(pt => {
-                    ctx.beginPath(); ctx.arc(pt.x, pt.y, 3, 0, Math.PI*2); ctx.fill();
-                });
-                
-                ctx.restore();
-                
-                // Draw animated ghost
-                if (isAnimating && !isCurrent) {
-                    ctx.save();
-                    
-                    let targetGhostOffset = { x: 0, y: 0 };
-                    if (itemType === 'WeaponHead' || itemType === 'Attachment') {
-                        targetGhostOffset = { x: rotatedShaftEndX, y: rotatedShaftEndY };
-                    } else if (itemType === 'WeaponHandle' || itemType === 'RangedGear') {
-                        targetGhostOffset = { x: hdx * Math.cos(armAngleRad) - hdy * Math.sin(armAngleRad), y: hdx * Math.sin(armAngleRad) + hdy * Math.cos(armAngleRad) };
-                    }
-                    
-                    if (itemType === 'WeaponHead' || itemType === 'Attachment' || itemType === 'WeaponHandle' || itemType === 'RangedGear') {
-                        ctx.translate(shoulderX, shoulderY);
-                        ctx.translate(targetGhostOffset.x, targetGhostOffset.y);
-                        
-                        ctx.beginPath();
-                        ctx.moveTo(pList[0].x - cx, pList[0].y - cy);
-                        for(let i=1; i<pList.length; i++) ctx.lineTo(pList[i].x - cx, pList[i].y - cy);
-                        
-                        if (isFilled) {
-                            ctx.fillStyle = colorInfo.hex;
-                            ctx.fill();
-                        } else {
-                            ctx.strokeStyle = colorInfo.hex;
-                            ctx.lineWidth = 4;
-                            ctx.stroke();
-                        }
-                    }
-                    ctx.restore();
-                }
-            };
-
-            paths.forEach(p => drawPathData(p.points, p.isFilled, p.color, false));
-            drawPathData(currentPoints, document.getElementById('fillShape').checked, selectedColor, true);
-
-            requestAnimationFrame(renderLoop);
-        }
-        
-        requestAnimationFrame(renderLoop);
-
-        // Export logic
-        function generateCodeSnippet() {
-            let code = '';
-            paths.forEach((p, idx) => {
-                if (p.points.length === 0) return;
-                const pathVar = `path_${idx}`;
-                code += `    val ${pathVar} = Path().apply {\n`;
-                code += `        moveTo(${p.points[0].x - cx}f, ${p.points[0].y - cy}f)\n`;
-                for(let i=1; i<p.points.length; i++) {
-                    code += `        lineTo(${p.points[i].x - cx}f, ${p.points[i].y - cy}f)\n`;
-                }
-                code += `        close()\n    }\n`;
-                
-                if (p.isFilled) {
-                    code += `    drawStitchedFill(scope, ${pathVar}, Color(${p.color.kt}))\n`;
-                    code += `    scope.drawPath(${pathVar}, ThreadColor, style = StitchedStroke)\n`;
-                } else {
-                    code += `    scope.drawPath(${pathVar}, Color(${p.color.kt}), style = Stroke(width = 4f))\n`;
-                }
-            });
-            return code;
-        }
-
-        document.getElementById('exportBtn').onclick = () => {
-            initNewPath(); // commit current
-            
-            const type = document.getElementById('itemType').value;
-            const name = document.getElementById('itemName').value;
-            const safeName = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-            
-            let code = `// --- Generated Bayeux Kotlin Code ---\n`;
-            code += `// Item Type: ${type} | Name: ${name}\n\n`;
-            
-            code += `// Add this to your enum class (e.g. GameData.${type}s):\n`;
-            code += `${safeName}(\n    id = "${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}",\n    displayName = "Custom ${name}",\n    // ... add stat properties here ...\n),\n\n`;
-
-            code += `// Add this block to TapestryRenderer.kt inside the when(item.id) block:\n`;
-            code += `"${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}" -> {\n`;
-            code += generateCodeSnippet();
-            code += `}\n`;
-            
-            document.getElementById('output').value = code;
-        };
-
-        // Load Kotlin Logic
-        function parseKotlinIntoCanvas(code) {
-            paths = [];
-            currentPoints = [];
-            const lines = code.split('\n');
-            let currentPath = null;
-            let currentColor = palette[0];
-            let isFilled = false;
-
-            for (let line of lines) {
-                if (line.includes('Path().apply')) {
-                    if (currentPath) paths.push(currentPath);
-                    currentPath = { points: [], color: currentColor, isFilled: false };
-                } else if (line.includes('moveTo(')) {
-                    const match = line.match(/moveTo\(([-\d.]+)f,\s*([-\d.]+)f\)/);
-                    if (match && currentPath) currentPath.points.push({x: parseFloat(match[1]) + cx, y: parseFloat(match[2]) + cy});
-                } else if (line.includes('lineTo(')) {
-                    const match = line.match(/lineTo\(([-\d.]+)f,\s*([-\d.]+)f\)/);
-                    if (match && currentPath) currentPath.points.push({x: parseFloat(match[1]) + cx, y: parseFloat(match[2]) + cy});
-                } else if (line.includes('drawStitchedFill')) {
-                    if (currentPath) currentPath.isFilled = true;
-                    const colorMatch = line.match(/0xFF[A-Fa-f0-9]{6}/i);
-                    if (colorMatch && currentPath) {
-                        const ktColor = colorMatch[0].toUpperCase();
-                        const matchedPalette = palette.find(p => p.kt === ktColor);
-                        if (matchedPalette) currentPath.color = matchedPalette;
-                    }
-                } else if (line.includes('style = Stroke') && !line.includes('StitchedStroke')) {
-                    if (currentPath && !currentPath.isFilled) {
-                        const colorMatch = line.match(/0xFF[A-Fa-f0-9]{6}/i);
-                        if (colorMatch && currentPath) {
-                            const ktColor = colorMatch[0].toUpperCase();
-                            const matchedPalette = palette.find(p => p.kt === ktColor);
-                            if (matchedPalette) currentPath.color = matchedPalette;
-                        }
-                    }
-                }
-            }
-            if (currentPath) paths.push(currentPath);
-            updateLayerList();
-        }
-
-        document.getElementById('loadBtn').onclick = () => {
-            parseKotlinIntoCanvas(document.getElementById('output').value);
-            alert('Path loaded!');
-        };
-
-        // Save & Inject logic
-        document.getElementById('injectBtn').onclick = async () => {
-            initNewPath(); // commit current
-            
-            const type = document.getElementById('itemType').value;
-            const name = document.getElementById('itemName').value;
-            const codeSnippet = generateCodeSnippet();
-            
-            try {
-                const response = await fetch('http://localhost:3000/api/inject', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ itemType: type, itemName: name, codeSnippet })
-                });
-                const result = await response.json();
-                if (result.success) {
-                    alert('Success! ' + result.message);
-                } else {
-                    alert('Error: ' + result.message);
-                }
-            } catch (err) {
-                alert('Network error connecting to Save & Inject server.');
-            }
-        };
-
-        // Existing-asset browser: load/edit/save-back buildings, mounts, ancillaries and
-        // previously-injected custom items straight from TapestryRenderer.kt via the server.
-        let assetsById = {}; // "type:id" -> asset
-        let currentAssetKey = null;
-
-        async function loadAssetList() {
-            try {
-                const res = await fetch('http://localhost:3000/api/assets');
-                const data = await res.json();
-                if (!data.success) { console.warn('Could not load asset list:', data.message); return; }
-
-                const groups = { building: 'Buildings', creature: 'Mounts & Creatures', ancillary: 'Ancillaries', custom: 'Custom (made in this tool)' };
-                const picker = document.getElementById('assetPicker');
-                Object.entries(groups).forEach(([type, label]) => {
-                    const items = data.assets.filter(a => a.type === type);
-                    if (items.length === 0) return;
-                    const og = document.createElement('optgroup');
-                    og.label = label;
-                    items.forEach(a => {
-                        const key = `${a.type}:${a.id}`;
-                        assetsById[key] = a;
-                        const opt = document.createElement('option');
-                        opt.value = key;
-                        opt.textContent = a.label;
-                        og.appendChild(opt);
-                    });
-                    picker.appendChild(og);
-                });
-            } catch (err) {
-                console.warn('Vector Builder server not running — Existing Assets list is empty. Run `node server.js`.');
-            }
-        }
-        loadAssetList();
-
-        document.getElementById('loadAssetBtn').onclick = () => {
-            const key = document.getElementById('assetPicker').value;
-            if (!key || !assetsById[key]) { alert('Pick an asset first.'); return; }
-            const asset = assetsById[key];
-            currentAssetKey = { type: asset.type, id: asset.id };
-
-            document.getElementById('output').value = asset.source;
-            paths = []; currentPoints = [];
-
-            const hasCurvesOrLoops = /quadraticTo|cubicTo|\bfor\s*\(|\bwhile\s*\(|withTransform/.test(asset.source);
-            if (hasCurvesOrLoops) {
-                document.getElementById('assetHint').textContent =
-                    'This asset uses curves/loops/transforms the canvas can\'t show — edit the Kotlin text below directly, then "Save Loaded Asset Back". (Canvas editing would flatten curves to straight lines and visibly wreck it, so it\'s left disabled here.)';
-                document.getElementById('syncAssetBtn').disabled = true;
-            } else {
-                parseKotlinIntoCanvas(asset.source);
-                document.getElementById('assetHint').textContent =
-                    'Loaded into the canvas. Draw/edit points, click "Sync Canvas Edits -> Text" to write them into the text box, THEN "Save Loaded Asset Back" (save always uses whatever is in the text box, not the canvas directly).';
-                document.getElementById('syncAssetBtn').disabled = false;
-            }
-            document.getElementById('saveAssetBtn').disabled = false;
-            buildColorPickers();
-        };
-
-        // Colour editing: every Color(0xAARRGGBB) literal in the loaded region gets a picker.
-        // Edits rewrite the textarea (the single source of truth for saving); alpha is preserved.
-        const COLOR_RE = /Color\(0x([0-9A-Fa-f]{8})\)/g;
-        function buildColorPickers() {
-            const src = document.getElementById('output').value;
-            const list = document.getElementById('assetColorList');
-            list.innerHTML = '';
-            const matches = [...src.matchAll(COLOR_RE)];
-            document.getElementById('assetColorsGroup').style.display = matches.length ? 'flex' : 'none';
-            matches.forEach((m, idx) => {
-                const argb = m[1].toUpperCase();
-                const row = document.createElement('div');
-                row.className = 'layer-item';
-                const label = document.createElement('span');
-                label.textContent = `Colour ${idx + 1} — 0x${argb}`;
-                const input = document.createElement('input');
-                input.type = 'color';
-                input.value = '#' + argb.slice(2);
-                input.onchange = () => {
-                    let i = 0;
-                    document.getElementById('output').value = document.getElementById('output').value.replace(
-                        COLOR_RE,
-                        (full, a) => (i++ === idx) ? `Color(0x${a.slice(0, 2).toUpperCase()}${input.value.slice(1).toUpperCase()})` : full
-                    );
-                    buildColorPickers();
-                };
-                row.appendChild(label);
-                row.appendChild(input);
-                list.appendChild(row);
-            });
-        }
-
-        document.getElementById('syncAssetBtn').onclick = () => {
-            initNewPath(); // commit current in-progress point set
-            document.getElementById('output').value = generateCodeSnippet();
-        };
-
-        document.getElementById('saveAssetBtn').onclick = async () => {
-            if (!currentAssetKey) { alert('Load an asset first.'); return; }
-            const source = document.getElementById('output').value;
-            try {
-                const response = await fetch('http://localhost:3000/api/asset/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: currentAssetKey.type, id: currentAssetKey.id, source })
-                });
-                const result = await response.json();
-                alert(result.success ? 'Saved! ' + result.message : 'Error: ' + result.message);
-            } catch (err) {
-                alert('Network error connecting to Save & Inject server.');
-            }
-        };
-    </script>
+boot();
+</script>
 </body>
 </html>

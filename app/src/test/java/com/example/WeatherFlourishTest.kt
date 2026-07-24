@@ -130,6 +130,8 @@ class WeatherFlourishTest {
                     assertRectEquals(first.dropRect.translate(37f, 23f), second.dropRect)
                 first is FrostFlourishGeometry && second is FrostFlourishGeometry ->
                     assertRectEquals(first.crystalRect.translate(37f, 23f), second.crystalRect)
+                first is FrogsFlourishGeometry && second is FrogsFlourishGeometry ->
+                    assertRectEquals(first.dropRect.translate(37f, 23f), second.dropRect)
                 else -> throw AssertionError("Mismatched geometry types for $weather")
             }
         }

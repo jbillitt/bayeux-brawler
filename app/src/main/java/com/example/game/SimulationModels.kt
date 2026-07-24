@@ -30,7 +30,11 @@ enum class EnemyArchetype {
     // 10 New archetypes
     PEASANT, SLINGER, JAVELINEER, MACEMAN, PIKEMAN,
     KNIGHT_DISMOUNTED, CHARIOT_ARCHER, CHARIOT_LANCER, LORD, KING,
-    WALL_ARCHER, TORCH_BEARER, DANE_AXE_EXECUTIONER, MONK_MILITIA, NORMAN_LOYALIST
+    WALL_ARCHER, TORCH_BEARER, DANE_AXE_EXECUTIONER, MONK_MILITIA, NORMAN_LOYALIST,
+    /** Dog-headed men of the mappae mundi; join the Saxon host from level 25. */
+    CYNOCEPHALUS,
+    /** The marginalia made flesh: a giant snail. Glacial, enormous HP, bites. */
+    REBEL_SNAIL
 }
 
 enum class Ancillary(
@@ -60,18 +64,35 @@ enum class Ancillary(
     RAVEN("anc_raven", "Munin", "Raven", "Rests on your off-hand, flies out to peck enemy eyes, blinding them.", hpBoost = 0f, speedBoost = 0f, color = Color.Black),
     WARDOG("anc_wardog", "Buster", "Wardog", "Charges fast, bites enemies, hard to hit, sometimes trips them.", hpBoost = 25f, speedBoost = 0.2f, color = Color(0xFF452E1B)),
     PLAGUE_PEASANT("anc_plague_peasant", "Wretched Aldwin", "Plague-Bearer", "A dying peasant who sprints at the foe. His pestilence spreads to ALL who come near — there is a small chance YOU catch it too.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF6B7D4A)),
-    GREASER("anc_greaser", "Slippery Sam", "Greaser", "Lobs pots of rendered fat from your backline. Foes skid over and flounder in the muck.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD9C77A))
+    GREASER("anc_greaser", "Slippery Sam", "Greaser", "Lobs pots of rendered fat from your backline. Foes skid over and flounder in the muck.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD9C77A)),
+    FIREBRAND("anc_firebrand", "Cinder Cedric", "Firebrand", "Hurls burning torches from your backline. Foes catch alight, and siege gates burn down far quicker.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFE07020)),
+    BEEKEEPER("anc_beekeeper", "Humble Bede", "Bee Keeper", "Lobs whole hives from your backline, as the siege manuals advise. All who stand near the burst are stung.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD6A420))
 }
 
 /** Mounts, by ancillary id. Their hp/speed stats apply only when the mount is actually ridden. */
 val MOUNT_ANCILLARY_IDS = setOf("anc_mount_horse", "anc_mount_chariot", "anc_mount_stilts")
+
+/**
+ * Ancillaries that never march in the parade line behind the player: mounts, and everyone who
+ * spawns (or is drawn as) his own body on the field. One list, shared by the renderer and any
+ * combat logic that mirrors the parade — two hand-kept copies is how the firebrand and beekeeper
+ * ended up with grey parade twins.
+ */
+val NON_PARADE_ANCILLARIES = setOf(
+    Ancillary.WARHORSE, Ancillary.CHARIOT, Ancillary.STILTS,
+    Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG,
+    Ancillary.TROJAN_HORSE, Ancillary.PLAGUE_PEASANT, Ancillary.GREASER,
+    Ancillary.FIREBRAND, Ancillary.BEEKEEPER,
+    Ancillary.ARCHER, Ancillary.CROSSBOWMAN
+)
 
 /** Divine intervention, called down from the tapestry border once per battle-ish. */
 enum class DivineWeather(val id: String, val label: String, val description: String) {
     LIGHTNING("weather_lightning", "Divine Bolt", "The heavens smite your mightiest foe."),
     FLOOD("weather_flood", "The Deluge", "A wall of water sweeps enemies from the field."),
     HAIL("weather_hail", "Hailstorm", "Fist-sized hail batters every foe to the ground."),
-    FROST("weather_frost", "Killing Frost", "Ice underfoot — the enemy host slips and falls.")
+    FROST("weather_frost", "Killing Frost", "Ice underfoot — the enemy host slips and falls."),
+    FROGS("weather_frogs", "Rain of Frogs", "The sky opens and frogs fall on EVERY man afield — friend, foe, and you. Chaos, as the chronicles promised.")
 }
 
 interface GearItem {
@@ -134,10 +155,18 @@ object GameData {
         SPIKED_MACE("head_spiked_mace", "Spiked Mace", 2.5f, blunt = 22f, pierce = 8f, reach = 1.4f, description = "A mace adorned with vicious iron spikes.", color = Color(0xFF535C61)),
         BASIC_CLUB("head_club", "Basic Club", 1.8f, blunt = 15f, reach = 1.3f, description = "A crude wooden club. Cheap and surprisingly effective.", color = Color(0xFF8A5E38)),
         SAW_1("head_saw_1", "Bone Saw", 1.2f, slash = 18f, pierce = 2f, reach = 1.2f, description = "A crude saw meant for bone, repurposed for Saxon flesh.", color = Color(0xFF8C969E)),
-        SAW_2("head_saw_2", "Lumber Saw", 2.0f, slash = 28f, pierce = 5f, reach = 1.8f, description = "A massive two-man saw wielded by a single lunatic.", color = Color(0xFF909BA0));
+        SAW_2("head_saw_2", "Lumber Saw", 2.0f, slash = 28f, pierce = 5f, reach = 1.8f, description = "A massive two-man saw wielded by a single lunatic.", color = Color(0xFF909BA0)),
+        // Strange relics: never in the shop or the normal attachment pool — only the rare
+        // "Strange Relic" reward card offers them (GameViewModel). See STRANGE_HEAD_IDS.
+        SMOKED_EEL("head_eel", "Smoked Eel", 0.8f, slash = 36f, blunt = 6f, reach = 2.0f, description = "A whole smoked eel, wielded like a flail. Slippery, whippy, and deeply insulting to be slain by.", color = Color(0xFF4E5A50)),
+        SAINT_FEMUR("head_femur", "Femur of St. Odo", 1.1f, blunt = 30f, pierce = 12f, reach = 1.4f, description = "A holy relic thighbone. Smiting with it is technically a blessing.", color = Color(0xFFE7DCC4)),
+        IRATE_GOOSE("head_goose", "Irate Goose", 1.4f, blunt = 22f, slash = 16f, reach = 1.7f, description = "A live and furious goose gripped by the legs. It does most of the work.", color = Color(0xFFEFE6D4)),
+        CHEESE_WHEEL("head_cheese", "Wheel of Aged Cheese", 3.0f, blunt = 42f, reach = 1.3f, description = "A cathedral-aged cheese wheel, hard as any quernstone and twice as pungent.", color = Color(0xFFE0B94F));
         override val type: ItemType get() = ItemType.WEAPON_HEAD
     }
     val WEAPON_HEADS = WeaponHead.values().toList()
+    /** Attachment-only oddities, kept out of the normal pools; offered by the rare relic card. */
+    val STRANGE_HEAD_IDS = setOf("head_eel", "head_femur", "head_goose", "head_cheese")
 
     enum class WeaponHandle(
         override val id: String,
@@ -193,6 +222,9 @@ object GameData {
         TOWER("shield_tower", "Saxon Wall Shield", 8.0f, defense = 75f, speedPenalty = 0.28f, description = "A massive wooden shield used in shield walls. Heavy as an iron gate.", color = Color(0xFF4C613D)),
         HEATER("shield_heater", "Heater Shield", 3.5f, defense = 35f, speedPenalty = 0.08f, description = "A highly maneuverable shield favoured by cavalry.", color = Color(0xFF265063));
         override val type: ItemType get() = ItemType.SHIELD
+
+        /** Chance to catch a blow or missile, from sheer size/weight. Every block costs shield HP. */
+        val blockChance: Float get() = (mass * 0.09f).coerceAtMost(0.8f)
     }
     val SHIELDS = Shield.values().toList()
 
@@ -284,6 +316,7 @@ enum class BackgroundObjectType {
     BUILDING_BAYEUX, TOWER_SPIRAL,
     CASTLE_WALL, CASTLE_GATE, MOTTE,
     FEASTING_HALL, FLEET_CROSSING, MONT_SAINT_MICHEL, STAMFORD_BRIDGE,
+    INTERIOR_KITCHEN, INTERIOR_CHAMBER,
     FIELD_TREE, FIELD_GRASS, HILL_SLOPE,
 
     /** Drawn entirely from assets/art/<artId>.json. New art needs no new enum value. */
@@ -406,6 +439,9 @@ data class FighterState(
     var climbTimer: Float = 0f,
     var isCombatInactive: Boolean = false,
     var armorShred: Float = 0f,
+    // Consecutive times this fighter's swing was staggered without completing one; past a cap the
+    // next swing comes through regardless (no more stun-locking a boss with a fast weapon).
+    var interruptStreak: Int = 0,
     val bossType: BossType? = null,
     val isBossRetinue: Boolean = false,
     var arrowEyeCritWindow: Float = 0f,
@@ -461,7 +497,10 @@ data class FighterState(
 
     val baseDamage: Float
         get() {
-            val base = (weaponHead.slash + weaponHead.pierce + weaponHead.blunt) * size * size
+            // The shaft hits too: a tree stump or battering ram brings its own blunt force,
+            // whatever head is lashed to it.
+            val base = (weaponHead.slash + weaponHead.pierce + weaponHead.blunt +
+                weaponHandle.slash + weaponHandle.pierce + weaponHandle.blunt) * size * size
             val attachmentsDmg = extraAttachments.sumOf { (it.slash + it.pierce + it.blunt).toDouble() * 0.5 }.toFloat()
             // Player gets 12% extra base damage per level survived to scale up against high level mobs
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
@@ -474,28 +513,29 @@ data class FighterState(
             return (base + attachmentsDmg) * scaleLvl * doubleEndedMultiplier
         }
 
-    val damagePierce: Float 
+    val damagePierce: Float
         get() {
             if (missingArm) return 0f
-            val base = weaponHead.pierce * size * size
+            val base = (weaponHead.pierce + weaponHandle.pierce) * size * size
             val att = extraAttachments.sumOf { it.pierce.toDouble() * 0.5 }.toFloat()
             val brawlerBonus = if (weaponHead.id == "head_bare" && weaponHandle.id == "handle_fists" && brawlerUpgrades.contains("spiked_wraps")) 8f else 0f
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
             return (base + att + brawlerBonus) * scaleLvl * lateGameMultiplier * nakedBoldness
         }
 
-    val damageSlash: Float 
+    val damageSlash: Float
         get() {
             if (missingArm) return 0f
-            val base = weaponHead.slash * size * size
+            val base = (weaponHead.slash + weaponHandle.slash) * size * size
             val att = extraAttachments.sumOf { it.slash.toDouble() * 0.5 }.toFloat()
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
             return (base + att) * scaleLvl * lateGameMultiplier * nakedBoldness
         }
 
-    val damageBlunt: Float 
+    val damageBlunt: Float
         get() {
-            val base = weaponHead.blunt * size * size
+            // Handle blunt counts even one-armed — a stump swung by one arm is still a stump
+            val base = (weaponHead.blunt + weaponHandle.blunt) * size * size
             val att = extraAttachments.sumOf { it.blunt.toDouble() * 0.5 }.toFloat()
             val brawlerBonus = if (weaponHead.id == "head_bare" && weaponHandle.id == "handle_fists" && brawlerUpgrades.contains("brass_knuckles")) 15f else 0f
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
@@ -522,7 +562,10 @@ data class FighterState(
             // Speed penalty from handle choices
             val handleSpeedPenalty = weaponHandle.speedPenalty + (if (weaponHandle.id == "handle_double_ended") 0.15f else 0f)
             val crumpleFactor = if (crumpleDuration > 0f) 1.5f else 1.0f
-            val finalDelay = baseDelay * weightFactor * shieldFactor * (1f + handleSpeedPenalty) * crumpleFactor
+            // Bows can't dual-wield and pay full price for a shieldless build, so the player's
+            // draw hand works faster to compensate.
+            val playerBowFactor = if (isPlayer && weaponHead.id in listOf("head_bow", "head_longbow")) 0.6f else 1f
+            val finalDelay = baseDelay * weightFactor * shieldFactor * (1f + handleSpeedPenalty) * crumpleFactor * playerBowFactor
             return max(0.3f, finalDelay) // lower cap
         }
 
@@ -581,6 +624,20 @@ val HAIR_COLORS: List<Color> = listOf(
     Color(0xFFE8D9A0), // flaxen blond
     Color(0xFF8B2500)  // rust red
 )
+
+/** Armour that rings like metal when struck. Cloth, felt, leather, fur and motley thud instead. */
+val METAL_ARMOUR_IDS = setOf(
+    "armor_lamellar", "armor_chainmail", "armor_scale",
+    "armor_gauntlets", "armor_boots", "armor_coif"
+)
+
+/**
+ * True when a body blow lands on iron rather than flesh/cloth — drives the armour-hit sound.
+ * The snail is excluded outright: its shell is horn, not mail, whatever it "wears".
+ */
+val FighterState.wearsMetalArmour: Boolean
+    get() = archetype != EnemyArchetype.REBEL_SNAIL &&
+        (armor.id in METAL_ARMOUR_IDS || extraArmors.any { it.id in METAL_ARMOUR_IDS })
 
 /**
  * True if this fighter is of the given kind, whether he's the only one or one of a pack.
@@ -653,6 +710,8 @@ data class BattleSimState(
     val isBattleActive: Boolean = false,
     val battleWon: Boolean = false,
     val battleLost: Boolean = false,
+    /** The run ended by choice, not by the sword: same defeat flow, but "Retired", no dirge. */
+    val isRetired: Boolean = false,
     val gameCount: Int = 0,
     
     // Environment State
@@ -692,6 +751,8 @@ data class BattleSimState(
     val divineWeathers: List<DivineWeather> = emptyList(),
     val weatherCooldowns: Map<String, Float> = emptyMap(), // id -> seconds remaining; charged at battle start
     val hasShieldbreaker: Boolean = false,
+    /** Siege-ladder reward: you and your squad scale fortress walls right away. */
+    val hasSiegeLadders: Boolean = false,
     val hasArmorPiercing: Boolean = false,
     // Counters the player has actually met. Drives which "out" card gets added to the reward pool.
     val seenCounters: Set<String> = emptySet(),
@@ -727,6 +788,8 @@ data class BattleSimState(
     val hillState: HillState? = null,
     val bossType: BossType? = null,
     val forceThroneMusic: Boolean = false,
+    /** Halley's own portent, straight off the tapestry: both hosts fight half again as fierce. */
+    val cometPortent: Boolean = false,
 
     val pendingSkipBonus: Int = 0, // score to award on next dismiss of level-up screen when skipped
     val performanceScore: Float = 0.5f // dynamic difficulty: 0=struggling, 1=dominating

@@ -122,20 +122,21 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
             val grounds = if (mode == Mode.PHRYGIAN) BRAWL_PHRYGIAN_GROUNDS else BRAWL_AEOLIAN_GROUNDS
             groundDegrees = grounds[rng.nextInt(grounds.size)]
         }
-        Family.THRONE -> {                       // epic cinematic thriller — throne mode only
-            mode = if (rng.nextBoolean()) Mode.DORIAN else Mode.AEOLIAN
+        Family.THRONE -> {                       // royal processional — throne mode only
+            // Regal, not ominous: major (Ionian) or fanfare-flat-7 (Mixolydian)
+            mode = if (rng.nextBoolean()) Mode.IONIAN else Mode.MIXOLYDIAN
             bpm = 66 + rng.nextInt(11)           // 66-76
             beatsPerBar = 4; totalBars = 16
             groundDegrees = THRONE_GROUNDS[rng.nextInt(THRONE_GROUNDS.size)]
         }
     }
     var finalMidi = 45 + rng.nextInt(8)          // A2-G#3
-    if (family == Family.THRONE) finalMidi -= 4  // the court sits deep
+    if (family == Family.THRONE) finalMidi -= 1  // stately, but no longer buried in the sub-bass murk
     var ornament = when (family) {
         Family.MINUET -> 0.6f; Family.GREENSLEEVES -> 0.4f; Family.TINTAGEL -> 0.25f
         Family.ESTAMPIE -> 0.5f
         Family.BRAWL -> 0.3f                     // already fast; divisions would smear
-        Family.THRONE -> 0.15f                   // sparse, ominous
+        Family.THRONE -> 0.35f                   // courtly graces on the phrase-ends
     }
 
     // Mood deltas (applied in list order, stackable). Themed families ignore moods:

@@ -155,12 +155,89 @@ function locateRegion(content, anchorRegex) {
 
 const ANCILLARY_WHEN_ANCHOR = /Draw Back Arm holding something[\s\S]*?when \(anc\) \{/;
 
+// Structural/dispatch functions stay uneditable; body-part functions are now a first-class
+// editable group (the magazine wants "edit how feet look on legs").
 const EXCLUDED_FNS = new Set([
-    'drawCharacter', 'drawLegs', 'drawTorso', 'drawHead', 'drawWeaponHead', 
-    'drawWeapon', 'drawFrontArmAndWeapon', 'drawBackArmAndShield', 
-    'drawAncillaries', 'drawStitchedFill', 'drawStitchedStrap', 
+    'drawCharacter', 'drawWeaponHead', 'drawAncillaries',
+    'drawStitchedFill', 'drawStitchedStrap',
     'drawDamageDecals', 'drawDamageFlurry', 'drawBackgroundObject'
 ]);
+const BODY_FNS = new Set([
+    'drawLegs', 'drawTorso', 'drawHead', 'drawWeapon',
+    'drawFrontArmAndWeapon', 'drawBackArmAndShield',
+    'drawFollowerBody', 'drawFollowerHead'
+]);
+// Plain-English labels so "edit how feet look" is findable
+const BODY_LABELS = {
+    drawLegs: 'Legs & feet', drawTorso: 'Torso & tunic', drawHead: 'Head & face',
+    drawWeapon: 'Weapon in hand', drawFrontArmAndWeapon: 'Front arm', drawBackArmAndShield: 'Back arm & shield',
+    drawFollowerBody: 'Follower body (legs, tunic, heraldry)', drawFollowerHead: 'Follower head, hair & face'
+};
+// Creatures that live in TapestryRenderer, not MountRenderer
+const CREATURE_FNS = new Set(['drawRebelSnail', 'drawBossSignature', 'drawDogHead']);
+
+// --- Gear-region discovery: the when(id)/if(id) branches the renderer actually dispatches on ---
+
+/** Branches of a `when (<anchor>) { "id" -> { ... } }` block. Returns [{id, bodyStart, bodyEnd}]. */
+function findWhenBranchRegions(content, anchorStr, idPrefix) {
+    const out = [];
+    const anchorIdx = content.indexOf(anchorStr);
+    if (anchorIdx === -1) return out;
+    const whenOpen = content.indexOf('{', anchorIdx);
+    const whenClose = findMatchingBrace(content, whenOpen);
+    if (whenClose === -1) return out;
+    const re = new RegExp(`"(${idPrefix}_\\w+)"(?:\\s*,\\s*"\\w+")*\\s*->\\s*\\{`, 'g');
+    re.lastIndex = whenOpen;
+    let m;
+    while ((m = re.exec(content)) !== null && m.index < whenClose) {
+        const open = content.indexOf('{', m.index + m[0].length - 1);
+        const close = findMatchingBrace(content, open);
+        if (close === -1) continue;
+        out.push({ id: m[1], bodyStart: open + 1, bodyEnd: close });
+        re.lastIndex = close;
+    }
+    return out;
+}
+
+/** Guard-chain branches like `if (helmId == "helm_x" ...) {` — first occurrence per id wins. */
+function findGuardRegions(content, guardExpr, idPrefix) {
+    const out = [];
+    const seen = new Set();
+    const re = new RegExp(`${guardExpr} == "(${idPrefix}_\\w+)"[^{\\n]*\\{`, 'g');
+    let m;
+    while ((m = re.exec(content)) !== null) {
+        if (seen.has(m[1])) continue;
+        const open = content.indexOf('{', m.index + m[0].length - 1);
+        const close = findMatchingBrace(content, open);
+        if (close === -1) continue;
+        seen.add(m[1]);
+        out.push({ id: m[1], bodyStart: open + 1, bodyEnd: close });
+    }
+    return out;
+}
+
+const GEAR_REGION_FINDERS = {
+    weaponhead: c => findWhenBranchRegions(c, 'when (headId) {', 'head'),
+    armor: c => findWhenBranchRegions(c, 'when (fighter.armor.id) {', 'armor'),
+    headgear: c => findGuardRegions(c, 'helmId', 'helm'),
+    handle: c => findGuardRegions(c, 'fighter\\.weaponHandle\\.id', 'handle')
+};
+
+function discoverGearRegions(content) {
+    const assets = [];
+    for (const [type, finder] of Object.entries(GEAR_REGION_FINDERS)) {
+        for (const r of finder(content)) {
+            assets.push({ type, id: r.id, label: r.id, source: content.slice(r.bodyStart, r.bodyEnd) });
+        }
+    }
+    return assets;
+}
+
+function findGearRegion(content, type, id) {
+    const finder = GEAR_REGION_FINDERS[type];
+    if (!finder) return null;
+    return finder(content).find(r => r.id === id) || null;
+}
 
 function discoverAssets() {
     const assets = [];
@@ -176,18 +253,31 @@ function discoverAssets() {
         let m;
         while ((m = re.exec(content)) !== null) {
             const fnName = m[1];
-            if (EXCLUDED_FNS.has(fnName) || fnName.endsWith('Texture')) continue;
+            if (EXCLUDED_FNS.has(fnName)) continue;
             if (discoveredIds.has(fnName)) continue;
-            
+
             const region = findFunctionRegion(content, fnName);
             if (region) {
-                const type = file.includes('MountRenderer') || file.includes('Stilts') ? 'creature' : 'building';
-                assets.push({ type, id: fnName, label: fnName.replace('draw', ''), source: content.slice(region.bodyStart, region.bodyEnd) });
+                // Armor branches in the renderer are one-line dispatches to draw*Texture fns —
+                // the textures ARE the editable armor art, so they surface as the armor group.
+                const type = fnName.endsWith('Texture') ? 'armor'
+                    : BODY_FNS.has(fnName) ? 'body'
+                    : CREATURE_FNS.has(fnName) ? 'creature'
+                    : (file.includes('MountRenderer') || file.includes('Stilts') ? 'creature' : 'building');
+                assets.push({ type, id: fnName, label: BODY_LABELS[fnName] || fnName.replace('draw', ''), source: content.slice(region.bodyStart, region.bodyEnd) });
                 discoveredIds.add(fnName);
             }
         }
     }
-    
+
+    if (tapestryContent) {
+        for (const a of discoverGearRegions(tapestryContent)) {
+            if (discoveredIds.has(a.id)) continue;
+            assets.push(a);
+            discoveredIds.add(a.id);
+        }
+    }
+
     if (tapestryContent) {
         const whenAnchor = ANCILLARY_WHEN_ANCHOR.exec(tapestryContent);
         if (whenAnchor) {
@@ -216,7 +306,8 @@ function discoverAssets() {
 }
 
 function findFunctionRegion(content, fnName) {
-    return locateRegion(content, new RegExp(`(?:private |internal )?fun ${fnName}\\([^)]*\\)\\s*\\{`));
+    // Optional return type: fun drawX(...): Color {
+    return locateRegion(content, new RegExp(`(?:private |internal )?fun ${fnName}\\([^)]*\\)(?:\\s*:\\s*[\\w.<>?]+)?\\s*\\{`));
 }
 
 // Searches every renderer file for the function; returns { file, region } or null.
@@ -270,7 +361,7 @@ app.post('/api/asset/save', (req, res) => {
         const { type, id, source } = req.body;
         const { discoveredIds } = discoverAssets();
 
-        if (type === 'building' || type === 'creature') {
+        if (type === 'building' || type === 'creature' || type === 'body' || id.startsWith('draw')) {
             if (!discoveredIds.has(id)) throw new Error(`Unknown asset id "${id}"`);
             const hit = findFunctionRegionAcrossFiles(id);
             if (!hit) throw new Error(`Could not re-locate "${id}" in any renderer file (has the surrounding code changed?)`);
@@ -283,7 +374,9 @@ app.post('/api/asset/save', (req, res) => {
         let content = fs.readFileSync(TAPESTRY_RENDERER_PATH, 'utf-8');
         let region;
 
-        if (type === 'ancillary') {
+        if (GEAR_REGION_FINDERS[type]) {
+            region = findGearRegion(content, type, id);
+        } else if (type === 'ancillary') {
             if (!discoveredIds.has(id)) throw new Error(`Unknown ancillary id "${id}"`);
             region = findAncillaryRegion(content, id);
         } else if (type === 'custom') {
@@ -386,6 +479,92 @@ app.post('/api/art/:id', (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 });
+
+// --- Gear catalogue: every equippable id + display name, parsed from SimulationModels.kt ---
+app.get('/api/gear', (req, res) => {
+    try {
+        const content = fs.readFileSync(SIMULATION_MODELS_PATH, 'utf-8');
+        const buckets = { head: [], handle: [], shield: [], armor: [], helm: [] };
+        const re = /\("((?:head|handle|shield|armor|helm)_\w+)",\s*"([^"]+)"/g;
+        let m;
+        while ((m = re.exec(content)) !== null) {
+            const prefix = m[1].split('_')[0];
+            if (buckets[prefix] && !buckets[prefix].some(g => g.id === m[1])) {
+                buckets[prefix].push({ id: m[1], name: m[2] });
+            }
+        }
+        // Stage subjects for the true renderer: building types and ancillary enum names
+        const backgrounds = [];
+        const bgBlock = content.match(/enum class BackgroundObjectType \{([\s\S]*?)\n\}/);
+        if (bgBlock) {
+            // Strip comments first, then take every NAME — several sit on one line
+            const body = bgBlock[1].replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+            for (const bm of body.matchAll(/\b([A-Z][A-Z0-9_]+)\b/g)) backgrounds.push(bm[1]);
+        }
+        const ancillaries = [...content.matchAll(/^\s*([A-Z][A-Z0-9_]+)\("anc_/gm)].map(m => m[1]);
+        res.json({ success: true, gear: buckets, backgrounds, ancillaries });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// --- True preview: the game's own Kotlin renderer draws the frames via a Robolectric test ---
+// The client POSTs a loadout+animation spec; we write it where MagazinePreviewTest reads it,
+// run that one test, and answer with the frame PNG urls as soon as the test drops its marker.
+const { spawn } = require('child_process');
+const REPO_ROOT = path.join(__dirname, '..', '..');
+const PREVIEW_DIR = path.join(REPO_ROOT, 'app', 'build', 'magazine_preview');
+let previewRunning = false;
+
+app.post('/api/preview', (req, res) => {
+    if (previewRunning) return res.status(409).json({ success: false, message: 'A render is already in progress — wait for it to finish.' });
+    previewRunning = true;
+    try {
+        fs.mkdirSync(PREVIEW_DIR, { recursive: true });
+        for (const f of fs.readdirSync(PREVIEW_DIR)) {
+            if (f.endsWith('.png') || f === 'done.marker') fs.unlinkSync(path.join(PREVIEW_DIR, f));
+        }
+        fs.writeFileSync(path.join(PREVIEW_DIR, 'spec.json'), JSON.stringify(req.body, null, 2));
+    } catch (err) {
+        previewRunning = false;
+        return res.status(500).json({ success: false, message: err.message });
+    }
+
+    const child = spawn('gradle', [':app:testDebugUnitTest', '--tests', 'com.example.game.MagazinePreviewTest', '--rerun', '--console=plain'],
+        { cwd: REPO_ROOT, shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let log = '';
+    child.stdout.on('data', d => { log += d; });
+    child.stderr.on('data', d => { log += d; });
+
+    const t0 = Date.now();
+    let exited = null;
+    child.on('exit', code => { exited = code; });
+
+    // The gradle daemon on this machine sometimes finishes the work but never returns to the
+    // client (known wedge) — so we answer off the test's own done.marker, not gradle's exit.
+    const poll = setInterval(() => {
+        if (fs.existsSync(path.join(PREVIEW_DIR, 'done.marker'))) {
+            clearInterval(poll); previewRunning = false;
+            try { child.kill(); } catch (e) {}
+            const frames = fs.readdirSync(PREVIEW_DIR)
+                .filter(f => /^frame_\d+\.png$/.test(f))
+                .sort((a, b) => parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0]))
+                .map(f => `/preview/${f}?t=${Date.now()}`);
+            return res.json({ success: true, frames });
+        }
+        const timedOut = Date.now() - t0 > 300000;
+        if (timedOut || (exited !== null && exited !== 0)) {
+            clearInterval(poll); previewRunning = false;
+            try { child.kill(); } catch (e) {}
+            return res.status(500).json({
+                success: false,
+                message: (timedOut ? 'Render timed out after 5 minutes.\n' : `gradle exited with code ${exited}.\n`) + log.slice(-3000)
+            });
+        }
+    }, 2000);
+});
+
+app.use('/preview', express.static(PREVIEW_DIR));
 
 app.use(express.static(__dirname));
 

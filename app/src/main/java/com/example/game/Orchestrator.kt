@@ -192,20 +192,33 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean): Orche
     return OrchestrationPlan(a, destinyFanfare = false)
 }
 
-/** THRONE: choir-led cinematic menace with tolling bells and a deliberately late melody. */
+/**
+ * THRONE: a royal processional — regal and majestic, not oppressive. The melody leads from the
+ * first bar over stately timpani; herald horns answer in fanfares; the choir lifts rather than
+ * looms; bells crown the cadences. The old plan (choir menace, gurdy drone, melody withheld until
+ * L4) read as a dirge.
+ */
 private fun planThroneOrchestration(spec: SongSpec, hasTrumpeter: Boolean): OrchestrationPlan {
     val a = mutableListOf<VoiceAssignment>()
-    a += VoiceAssignment(Voice.CHOIR, LineRef.PADS_ROOT, 1, 99, 0.30f, -0.2f)
-    a += VoiceAssignment(Voice.CHOIR, LineRef.PADS_FIFTH, 1, 99, 0.24f, 0.2f)
-    a += VoiceAssignment(Voice.GURDY, LineRef.DRONE, 1, 99, 0.26f, -0.7f)
-    a += VoiceAssignment(Voice.VIOLA, LineRef.BASS, 1, 99, 0.34f, -0.3f)
-    a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, 1, 99, 0.44f, 0f)
-    a += VoiceAssignment(Voice.BELLS, LineRef.SPARKLE, 1, 99, 0.26f, 0.6f)
-    a += VoiceAssignment(Voice.VIELLE, LineRef.MELODY, 4, 99, 0.34f, 0.1f, octave = 1)
-    a += VoiceAssignment(Voice.CHOIR, LineRef.COUNTER, 7, 99, 0.18f, 0.35f)
-    a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 10, 99, 0.12f, 0f)
+    a += VoiceAssignment(Voice.VIELLE, LineRef.MELODY, 1, 99, 0.40f, 0.1f, octave = 1)
+    a += VoiceAssignment(Voice.HARP, LineRef.ACCOMP, 1, 99, 0.24f, -0.35f)
+    a += VoiceAssignment(Voice.VIOLA, LineRef.BASS, 1, 99, 0.32f, -0.3f)
+    a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, 1, 99, 0.52f, 0f)
+    a += VoiceAssignment(Voice.BELLS, LineRef.SPARKLE, 1, 99, 0.30f, 0.6f)
+    // Herald fanfares: rising horn triads every four bars (the same figure that crowns BRAWL)
+    a += VoiceAssignment(Voice.HORN, LineRef.FLOURISH, 1, 99, 0.30f, 0.2f)
+    a += VoiceAssignment(Voice.SACKBUT, LineRef.PADS_ROOT, 2, 99, 0.22f, -0.15f)
+    a += VoiceAssignment(Voice.HORN, LineRef.PADS_FIFTH, 2, 99, 0.18f, 0.15f)
+    a += VoiceAssignment(Voice.CHOIR, LineRef.PADS_FULL, 4, 99, 0.14f, 0f)
+    a += VoiceAssignment(Voice.RECORDER, LineRef.MELODY_ORN, 5, 99, 0.18f, 0.5f, octave = 1)
+    a += VoiceAssignment(Voice.PSALTERY, LineRef.SPARKLE, 6, 99, 0.14f, 0.45f)
+    a += VoiceAssignment(Voice.CHOIR, LineRef.COUNTER, 7, 99, 0.16f, 0.35f)
+    a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 9, 99, 0.12f, 0f)
     if (hasTrumpeter) a += VoiceAssignment(Voice.HORN, LineRef.TRUMPETER, 2, 99, 0.20f, 0.3f)
-    return OrchestrationPlan(a, destinyFanfare = false)
+    // Deep runs earn the full coronation: massed fanfare on the strain-ends.
+    a += VoiceAssignment(Voice.HORN, LineRef.DESTINY_FANFARE, 10, 99, 0.28f, -0.2f)
+    a += VoiceAssignment(Voice.BELLS, LineRef.DESTINY_FANFARE, 10, 99, 0.20f, 0.7f)
+    return OrchestrationPlan(a, destinyFanfare = true)
 }
 
 // ---- Pattern generators (all pure functions of the spec - level-free, rng-free) ----

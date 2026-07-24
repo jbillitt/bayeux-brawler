@@ -97,11 +97,12 @@ class SoundTest {
     }
 
     @Test
-    fun throneThemeIsSlowAndDark() {
+    fun throneThemeIsStatelyAndRegal() {
         for (seed in 1L..10L) {
             val spec = resolveSongSpec(seed, emptyList(), throne = true)
             assertTrue("throne bpm ${spec.bpm}", spec.bpm in 66..76)
-            assertTrue(spec.mode == Mode.DORIAN || spec.mode == Mode.AEOLIAN)
+            // Regal, not ominous: major (Ionian) or fanfare-flat-7 (Mixolydian)
+            assertTrue(spec.mode == Mode.IONIAN || spec.mode == Mode.MIXOLYDIAN)
             assertEquals(8, spec.ground.size)
             // Descending tetrachord head: i - bVII - VI/bVI - V
             assertEquals(listOf(0, 6, 5, 4), spec.ground.take(4).map { it.bassDegree })
@@ -185,15 +186,18 @@ class SoundTest {
     }
 
     @Test
-    fun thronePlanIsChoirLedAndFanfareFree() {
+    fun thronePlanIsRegalProcessional() {
         val spec = resolveSongSpec(7L, emptyList(), throne = true)
         val plan = planOrchestration(spec, hasTrumpeter = false, rng = orchRng(7L))
         val l1 = activeAssignments(plan, 1).map { it.voice }
-        assertTrue("choir pads from level 1: $l1", Voice.CHOIR in l1)
+        // Melody, timpani, bells and the herald horn all sound from the first bar.
+        assertTrue("melody leads from level 1: $l1", Voice.VIELLE in l1)
         assertTrue("timpani + bells from level 1", Voice.TIMPANI in l1 && Voice.BELLS in l1)
-        assertTrue("melody enters late", Voice.VIELLE !in l1)
-        assertTrue(!plan.destinyFanfare)
-        assertTrue("no harp/psaltery sparkle", plan.assignments.none { it.voice == Voice.HARP || it.voice == Voice.PSALTERY })
+        assertTrue("herald horn fanfare from level 1", Voice.HORN in l1)
+        // The choir lifts later rather than looming from the start.
+        assertTrue("choir held back from level 1", Voice.CHOIR !in l1)
+        assertTrue("choir joins the procession eventually", plan.assignments.any { it.voice == Voice.CHOIR })
+        assertTrue("deep runs earn the coronation fanfare", plan.destinyFanfare)
     }
 
     @Test

@@ -11,7 +11,9 @@ data class SiegeState(
     val parapetFighterIds: Set<String>,
     val queuedFighterIds: Set<String>,
     var ladderSpawned: Boolean = false,
-    var gateBroken: Boolean = false
+    var gateBroken: Boolean = false,
+    /** Siege-ladder reward: the ladder is up from the first horn, no broken gate required. */
+    val siegeLadders: Boolean = false
 )
 
 object SiegeRules {
@@ -57,7 +59,8 @@ object SiegeRules {
         }
 
     fun ladderActive(state: SiegeState, fighters: List<FighterState>): Boolean =
-        state.ladderSpawned && state.gateBroken && livingParapetEnemies(state, fighters).isNotEmpty()
+        (state.siegeLadders || (state.ladderSpawned && state.gateBroken)) &&
+            livingParapetEnemies(state, fighters).isNotEmpty()
 
     fun beginClimbUp(state: SiegeState, fighter: FighterState, fighters: List<FighterState>): Boolean {
         if (fighter.elevated || fighter.climbState != ClimbState.NONE || !ladderActive(state, fighters)) return false
@@ -138,13 +141,19 @@ object SiegeSchedule {
 enum class BossType(val level: Int, val latinName: String) {
     HAROLD_GODWINSON(10, "HAROLDUS REX"),
     HARALD_HARDRADA(20, "HARALDUS DURUS"),
-    WILLIAM_THE_BASTARD(30, "WILLELMUS BASTARDUS")
+    WILLIAM_THE_BASTARD(30, "WILLELMUS BASTARDUS"),
+    // The giants of Albion, out of the deep legend at the map's edge. Their retinue is a pack
+    // of cynocephali — the dog-headed men of the mappae mundi.
+    GOG(40, "GOG GIGAS"),
+    MAGOG(50, "MAGOG GIGAS")
 }
 
 object BossSchedule {
     fun forLevel(level: Int): BossType? = when {
         level == 10 -> BossType.HAROLD_GODWINSON
         level == 20 -> BossType.HARALD_HARDRADA
+        level == 40 -> BossType.GOG
+        level == 50 -> BossType.MAGOG
         level >= 30 && level % 10 == 0 -> BossType.WILLIAM_THE_BASTARD
         else -> null
     }

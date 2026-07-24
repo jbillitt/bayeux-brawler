@@ -66,6 +66,13 @@ internal data class FrostFlourishGeometry(
     val crystalMaxRadius: Float
 ) : WeatherFlourishGeometry
 
+internal data class FrogsFlourishGeometry(
+    override val fieldRect: Rect,
+    val dropRect: Rect,
+    val groundY: Float,
+    val impactBottomY: Float
+) : WeatherFlourishGeometry
+
 internal fun weatherFlourishGeometry(
     weather: DivineWeather,
     innerFieldRect: Rect,
@@ -131,6 +138,13 @@ internal fun weatherFlourishGeometry(
             ),
             crystalStartRadius = max(6f, shortestSide * 0.006f),
             crystalMaxRadius = max(15f, shortestSide * 0.015f)
+        )
+
+        DivineWeather.FROGS -> FrogsFlourishGeometry(
+            fieldRect = innerFieldRect,
+            dropRect = innerFieldRect,
+            groundY = innerFieldRect.top + height * 0.80f,
+            impactBottomY = innerFieldRect.top + height * 0.92f
         )
     }
 }

@@ -206,6 +206,8 @@
 <body>
 
 <aside class="rail">
+  <p class="eyebrow">JSON props only</p>
+  <p class="empty" style="margin:0 0 14px">This edits the data-driven props in assets/art/*.json. Characters, gear, ancillaries and buildings live in the <a href="index.html" style="color:var(--mustard)">Asset Magazine</a>.</p>
   <p class="eyebrow">Assets</p>
   <div id="assetList" class="empty">Loading…</div>
 </aside>
@@ -283,9 +285,10 @@ async function loadList() {
     el.appendChild(b);
   });
 
-  // Deep-link (?asset=building_manor), or just open it if there is only one thing to open
+  // Deep-link (?asset=building_manor) only — auto-opening the sole asset read as
+  // "it ignored my magazine selection", so cold opens now start blank.
   const wanted = new URLSearchParams(location.search).get('asset');
-  if (!art && (wanted || list.length === 1)) openAsset(wanted || list[0].id);
+  if (!art && wanted) openAsset(wanted);
 }
 
 async function openAsset(id) {

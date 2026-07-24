@@ -3,13 +3,18 @@ package com.example.game
 import kotlin.random.Random
 
 enum class SoundType {
-    CLANG,   // Shield block / metallic strike
-    THWACK,  // Soft tissue hit / blunt force
+    CLANG,   // Metallic ping (helm knocks, weapon steals)
+    THWACK,  // Blunt impact on wood/buildings
     SWOOSH,  // Weapon swing or flying projectile
     OUCH,    // Comedic pain screech
     DRUM_ROLL,  // War drum roll
     CRUNCH,  // Bone breaking / heavy smash
-    VICTORY_FANFARE // 1.5s victory sting
+    VICTORY_FANFARE, // 1.5s victory sting
+    // The three impact voices below prefer the player's own recordings when the matching assets
+    // folder (armour/, shield/, flesh/) has files; the synth here is only the fallback.
+    ARMOUR_HIT,   // Blow landing on mail/scale/plate
+    SHIELD_BLOCK, // Blow caught on a shield
+    FLESH         // Meaty thud on an unarmoured (or cloth/leather-clad) body
 }
 
 object SfxGenerator {
@@ -24,7 +29,38 @@ object SfxGenerator {
             SoundType.OUCH -> ouch(sampleRate, rng, pitchMul)
             SoundType.DRUM_ROLL -> drumRoll(sampleRate, rng)
             SoundType.VICTORY_FANFARE -> victory(sampleRate, rng)
+            // Fallbacks only — the assets folders override these when recordings exist
+            SoundType.ARMOUR_HIT -> clang(sampleRate, rng, pitchMul * 0.7)  // duller ring than a helm ping
+            SoundType.SHIELD_BLOCK -> clang(sampleRate, rng, pitchMul)
+            SoundType.FLESH -> flesh(sampleRate, rng, pitchMul, decayMul)
         }
+    }
+
+    /**
+     * Body "whump": a punch sinking into padding and muscle. What sells it is the shape, not the
+     * pitch — a cushioned ~8ms attack (an instant attack reads as wood), noise through a lowpass
+     * whose cutoff FALLS as the blow lands (the air being pushed out), and a soft sub swell.
+     * No harmonic tone, no resonance, or it turns into a drum again.
+     */
+    fun flesh(sr: Int, rng: Random, pitchMul: Double, decayMul: Double): ShortArray {
+        val dur = (0.16f * decayMul).toFloat(); val n = (sr * dur).toInt(); val out = ShortArray(n)
+        val dt = 1.0 / sr
+        var y1 = 0.0; var y2 = 0.0; var phase = 0.0
+        for (i in 0 until n) {
+            val t = i.toDouble() / sr
+            val attack = if (t < 0.008) t / 0.008 else 1.0
+            val env = attack * Math.exp(-26.0 * t / decayMul)
+            // Time-varying one-pole pair: the whump sweeps from a soft smack down into pure weight
+            val cutoff = (380.0 - 260.0 * (t / dur)) * pitchMul
+            val a = 1.0 - Math.exp(-2.0 * Math.PI * cutoff * dt)
+            val x = rng.nextDouble() * 2 - 1
+            y1 += a * (x - y1); y2 += a * (y1 - y2)
+            phase += 2 * Math.PI * 52.0 * pitchMul * dt
+            val sub = Math.sin(phase) * 0.25 * Math.exp(-30.0 * t)
+            val soft = Math.tanh((y2 * 3.4 + sub) * env * 1.5)
+            out[i] = (soft * 26000).toInt().coerceIn(-32768, 32767).toShort()
+        }
+        return out
     }
 
     private fun clang(sr: Int, rng: Random, pitchMul: Double): ShortArray {

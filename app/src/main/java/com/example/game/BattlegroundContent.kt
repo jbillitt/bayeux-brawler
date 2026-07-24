@@ -3,18 +3,31 @@ package com.example.game
 import kotlin.random.Random
 
 enum class BattlegroundTheme {
-    FEASTING_HALL,
-    FLEET_CROSSING,
+    // INTERIOR replaces the old free-standing FEASTING_HALL theme: one procedurally chosen room
+    // (feasting hall, kitchen or chamber) with no exterior buildings spawning inside it.
+    INTERIOR,
+    /** The classic open map: scattered buildings/forts only, no trees, no hall. */
+    VILLAGE,
     MONT_SAINT_MICHEL,
     FIELD
 }
 
 object BattlegroundContent {
     fun themeFor(gameSeed: Long, level: Int): BattlegroundTheme {
+        // Fleet crossings are gone — the maps read as broken. The landing ship on level 1 stays.
+        // VILLAGE is weighted double and INTERIOR down to ~1 in 5: rooms are a change of scene,
+        // not the default scene.
         val pool = when {
-            level < 7 -> listOf(BattlegroundTheme.FIELD, BattlegroundTheme.FEASTING_HALL)
-            level < 14 -> listOf(BattlegroundTheme.FIELD, BattlegroundTheme.FEASTING_HALL, BattlegroundTheme.FLEET_CROSSING)
-            else -> BattlegroundTheme.entries.toList()
+            level < 14 -> listOf(
+                BattlegroundTheme.FIELD, BattlegroundTheme.FIELD,
+                BattlegroundTheme.VILLAGE, BattlegroundTheme.VILLAGE,
+                BattlegroundTheme.INTERIOR
+            )
+            else -> listOf(
+                BattlegroundTheme.FIELD, BattlegroundTheme.FIELD,
+                BattlegroundTheme.VILLAGE, BattlegroundTheme.VILLAGE,
+                BattlegroundTheme.INTERIOR, BattlegroundTheme.MONT_SAINT_MICHEL
+            )
         }
         return pool[Random(gameSeed + level).nextInt(pool.size)]
     }
@@ -23,18 +36,21 @@ object BattlegroundContent {
         val theme = themeFor(gameSeed, level)
         // The open field is scattered trees + long grass, not one big structure.
         if (theme == BattlegroundTheme.FIELD) return FieldScenery.objectsFor(gameSeed, level, levelWidth)
-        val type = when (theme) {
-            BattlegroundTheme.FEASTING_HALL -> BackgroundObjectType.FEASTING_HALL
-            BattlegroundTheme.FLEET_CROSSING -> BackgroundObjectType.FLEET_CROSSING
-            BattlegroundTheme.MONT_SAINT_MICHEL -> BackgroundObjectType.MONT_SAINT_MICHEL
-            BattlegroundTheme.FIELD -> BackgroundObjectType.FIELD_TREE // unreachable; handled above
-        }
+        // The village has no centrepiece — its buildings come from the scatter pass in startBattle.
+        if (theme == BattlegroundTheme.VILLAGE) return emptyList()
         val random = Random(gameSeed + level)
+        val type = when (theme) {
+            BattlegroundTheme.INTERIOR -> listOf(
+                BackgroundObjectType.FEASTING_HALL,
+                BackgroundObjectType.INTERIOR_KITCHEN,
+                BackgroundObjectType.INTERIOR_CHAMBER
+            )[random.nextInt(3)]
+            BattlegroundTheme.MONT_SAINT_MICHEL -> BackgroundObjectType.MONT_SAINT_MICHEL
+            else -> BackgroundObjectType.FIELD_TREE // unreachable; handled above
+        }
         val width = when (theme) {
-            BattlegroundTheme.FEASTING_HALL -> 500f
-            BattlegroundTheme.FLEET_CROSSING -> 560f
-            BattlegroundTheme.MONT_SAINT_MICHEL -> 540f
-            BattlegroundTheme.FIELD -> 260f
+            BattlegroundTheme.INTERIOR -> 500f
+            else -> 540f
         }
         return listOf(
             BackgroundObject(

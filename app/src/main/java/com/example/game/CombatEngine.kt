@@ -99,6 +99,28 @@ class CombatEngine(private val ctx: BattleContext) {
         const val GREASE_SLOW_SECS = 2.5f
         const val GREASE_TRIP_CHANCE = 0.3f
         const val GREASE_TRIP_SECS = 1.8f
+
+        /** Consecutive staggers before a fighter powers through and finishes his swing anyway. */
+        const val MAX_INTERRUPT_STREAK = 3
+    }
+
+    /**
+     * Stagger [target] out of his swing — unless he has already been staggered
+     * [MAX_INTERRUPT_STREAK] times without landing one, in which case he grits his teeth and the
+     * swing continues (the streak clears when a swing completes). Stops fast builds stun-locking
+     * bosses forever.
+     */
+    private fun tryInterrupt(target: FighterState, requireSwing: Boolean = true): Boolean {
+        if (requireSwing && !target.isAttacking) return false
+        if (target.interruptStreak >= MAX_INTERRUPT_STREAK) {
+            ctx.popup("IMPERTURBATUS!", target.posX, 150f, Color(0xFFD6A420))
+            return false
+        }
+        target.interruptStreak++
+        target.isAttacking = false
+        target.swingProgress = 0f
+        target.hasLandedStrike = false
+        return true
     }
 
     // Delayed follow-up swings/shots (dual-wield 2nd hit, double-ended pole hits, multishot).
@@ -386,6 +408,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 fighter.isAttacking = false
                 fighter.hasLandedStrike = false
                 fighter.swingProgress = 0f
+                fighter.interruptStreak = 0 // a completed swing earns back the right to be staggered
                 // Ensure a slammed enemy never sticks mid-air if the move was interrupted
                 if (fighter.activeWrestlingMove != null) {
                     target?.visualOffsetY = 0f
@@ -750,12 +773,13 @@ class CombatEngine(private val ctx: BattleContext) {
 
             // Speed Advantage: Interrupt slow enemy attack progress
             if (currTarget.isAttacking && (attacker.moveSpeed > currTarget.moveSpeed * 1.2f || attacker.size < currTarget.size * 0.95f) && !currTarget.isPlayer) {
-                currTarget.isAttacking = false
-                currTarget.swingProgress = 0f
-                ctx.popup("INTERRUPT!", currTarget.posX, 150f, Color.Gray)
+                if (tryInterrupt(currTarget)) {
+                    ctx.popup("INTERRUPT!", currTarget.posX, 150f, Color.Gray)
+                }
             }
 
-            var blockChance = currTarget.shield.defense / 100f
+            // Block chance comes from the shield's sheer size/weight; every block costs shield HP.
+            var blockChance = currTarget.shield.blockChance
             if (!currTarget.isPlayer && currTarget.shield.id == "shield_tower") blockChance = 0.8f
 
             val shieldBypass = if (attacker.weaponHead.id == "head_flail" || attacker.weaponHead.id == "head_war_flail" || attacker.weaponHandle.id == "handle_flail_chain") 0.4f else 0f
@@ -781,7 +805,7 @@ class CombatEngine(private val ctx: BattleContext) {
 
             if (isBlocked) {
                 // Blocked by shield!
-                ctx.sound(SoundType.CLANG)
+                ctx.sound(SoundType.SHIELD_BLOCK)
 
                 val blockDamage = ((slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt) * dmgScale
 
@@ -825,10 +849,12 @@ class CombatEngine(private val ctx: BattleContext) {
                     applyArmorShred(currTarget)
                 }
 
-                // Fists connect fast enough to stagger the defender out of their attack rhythm
-                if (attacker.isFists && Random.nextFloat() < FIST_INTERRUPT_CHANCE) {
-                    currTarget.swingProgress = 0f
-                    currTarget.isAttacking = false
+                // Fists connect fast enough to stagger the defender out of their attack rhythm —
+                // even between swings (requireSwing = false pushes the cooldown), but the same
+                // streak cap applies so fists can't stun-lock either.
+                if (attacker.isFists && Random.nextFloat() < FIST_INTERRUPT_CHANCE &&
+                    tryInterrupt(currTarget, requireSwing = false)
+                ) {
                     currTarget.attackCooldown = currTarget.attackCooldown.coerceAtLeast(0.4f)
                     ctx.popup("INTERRUPTUS!", currTarget.posX, 150f, Color.Yellow)
                 }
@@ -851,8 +877,14 @@ class CombatEngine(private val ctx: BattleContext) {
 
                 // Play hit sounds & comedically yell in latin!
                 if (totalDamage > 0f) {
+                    // Iron rings, flesh (and cloth/leather/fur — and snail shell) thuds.
+                    // The occasional bone crunch only ever comes off an unarmoured body.
                     val isCrunch = blunt > 15f && Random.nextFloat() < 0.4f
-                    ctx.sound(if (isCrunch) SoundType.CRUNCH else SoundType.THWACK)
+                    ctx.sound(when {
+                        currTarget.wearsMetalArmour -> SoundType.ARMOUR_HIT
+                        isCrunch -> SoundType.CRUNCH
+                        else -> SoundType.FLESH
+                    })
 
                     // Random blood particles
                     val px = currTarget.posX + (Random.nextFloat() * 20f - 10f)
@@ -928,7 +960,9 @@ class CombatEngine(private val ctx: BattleContext) {
         val isPlayer = attacker.isPlayer
         val dir = if (attacker.facingRight) 1f else -1f
         var startX = attacker.posX + (dir * 25f)
-        var startY = 230f
+        // Loose from where the shooter actually stands: a parapet archer's arrow leaves the wall
+        // top, a hillside archer's leaves the slope — not a fixed ground height for everyone.
+        var startY = 230f + elevationVisualOffset(attacker)
 
         if (hitIdx == 1) {
             startX -= (dir * 15f)
@@ -1028,6 +1062,14 @@ class CombatEngine(private val ctx: BattleContext) {
             splash = true
             projType = ProjectileType.ROCK
         }
+        if (attacker.isKind("beekeeper")) {
+            // A whole hive on a lazy arc. Bursts on the mark; everyone nearby is stung (splash),
+            // and the victim carries the swarm (poison) a while.
+            projId = "bee_hive_${System.currentTimeMillis()}_${Random.nextInt(100)}"
+            finalDmg = 4f
+            splash = true
+            projType = ProjectileType.ROCK
+        }
         if (attacker.isKind("hag")) {
             projId = "hag_mud_${System.currentTimeMillis()}_${Random.nextInt(100)}"
             finalDmg = 5f
@@ -1035,6 +1077,15 @@ class CombatEngine(private val ctx: BattleContext) {
             projType = ProjectileType.ROCK
         }
         var igniting = false
+        if (attacker.isKind("firebrand")) {
+            // Cinder Cedric: a lit torch on a lazy arc. Modest damage, but they burn.
+            projId = "torch_${System.currentTimeMillis()}_${Random.nextInt(100)}"
+            projType = ProjectileType.TORCH
+            finalDmg = 6f
+            finalPierce = 0f
+            finalBlunt = 2f
+            igniting = true
+        }
         if (attacker.archetype == EnemyArchetype.TORCH_BEARER) {
             projId = "torch_${System.currentTimeMillis()}_${Random.nextInt(100)}"
             projType = ProjectileType.TORCH
@@ -1078,12 +1129,12 @@ class CombatEngine(private val ctx: BattleContext) {
             return
         }
 
-        // Ranged hit calculation
+        // Ranged hit calculation — same weight-based block chance as melee
         val isBlocked = !eyeCritCandidate && defender.shield.id != "shield_none" &&
-            Random.nextFloat() < (defender.shield.defense / 110f)
+            Random.nextFloat() < defender.shield.blockChance
 
         if (isBlocked) {
-            ctx.sound(SoundType.CLANG)
+            ctx.sound(SoundType.SHIELD_BLOCK)
             if (proj.type.isArrowLike) {
                 defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, true, proj.isBallista))
                 if (defender.stuckProjectiles.size > 12) defender.stuckProjectiles.removeAt(0)
@@ -1108,6 +1159,8 @@ class CombatEngine(private val ctx: BattleContext) {
             val eyeCrit = eyeCritCandidate
             val totalDamage = ((proj.damage * armorFactor) + (proj.blunt * 0.6f)) *
                 if (eyeCrit) 3f else 1f
+            // Missile striking home: iron rings, everything else thuds
+            ctx.sound(if (defender.wearsMetalArmour) SoundType.ARMOUR_HIT else SoundType.FLESH)
             applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
             if (eyeCrit) {
                 defender.arrowEyeCritWindow = 0f
@@ -1125,6 +1178,27 @@ class CombatEngine(private val ctx: BattleContext) {
                 ctx.popup("+POISONED+", defender.posX, 120f, Color(0xFF2E7D32))
             }
             if (proj.isIgniting) applyIgnite(defender)
+
+            // Bee hive burst: not poison (that's the hag's trade) — stings hurt NOW, and the victim
+            // flails at the swarm instead of fighting: slowed, and his next swing is delayed.
+            if (proj.id.startsWith("bee_hive_")) {
+                applyFlatDamage(10f, defender, proj.isPlayerOwned)
+                defender.slowDuration = 2.5f
+                defender.attackCooldown = (defender.attackCooldown + 1.2f).coerceAtMost(3f)
+                ctx.popup("STUNG!", defender.posX, 140f, Color(0xFFD6A420))
+                repeat(10) {
+                    ctx.particle(
+                        BloodParticle(
+                            x = defender.posX + Random.nextInt(-20, 21),
+                            y = 110f + Random.nextInt(-15, 16),
+                            vx = Random.nextFloat() * 160f - 80f,
+                            vy = Random.nextFloat() * -60f - 10f,
+                            color = if (it % 2 == 0) Color(0xFFD6A420) else Color(0xFF2C2219),
+                            maxAge = 1.5f + Random.nextFloat()
+                        )
+                    )
+                }
+            }
 
             // Hag Mud effect
             if (proj.id.startsWith("hag_mud_")) {
@@ -1274,12 +1348,15 @@ class CombatEngine(private val ctx: BattleContext) {
             if (isPlayerSource && !defender.isPlayer) {
                 ctx.enemyKilled()
             }
-        } else if (Random.nextBoolean()) {
+        } else if (!quiet && Random.nextBoolean()) {
+            // quiet = DoT trickle: a 1hp poison tick must not yelp — it spammed the pain channel
             ctx.sound(SoundType.OUCH)
         }
     }
 
     fun applyIgnite(defender: FighterState) {
+        // Burn-over-time on the player was simply too punishing — the lord does not catch fire.
+        if (defender === ctx.player) return
         if (defender.igniteDuration > 0f) return
         defender.igniteDuration = IGNITE_DURATION
         ctx.popup("IGNIS!", defender.posX, 120f, Color(0xFFE07020))

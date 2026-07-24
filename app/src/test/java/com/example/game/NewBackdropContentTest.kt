@@ -61,10 +61,10 @@ class NewBackdropContentTest {
             )
         }
         for (level in 2..6) {
-            // Early bands are the open field or the feasting hall (no fleet/mont yet).
+            // Early bands are field, village or an interior room (no Mont-Saint-Michel yet).
             assertTrue(
                 BattlegroundContent.themeFor(42L, level) in
-                    listOf(BattlegroundTheme.FIELD, BattlegroundTheme.FEASTING_HALL)
+                    listOf(BattlegroundTheme.FIELD, BattlegroundTheme.VILLAGE, BattlegroundTheme.INTERIOR)
             )
         }
         for (seed in 1L..100L) {
@@ -77,20 +77,30 @@ class NewBackdropContentTest {
 
     @Test
     fun `every new battleground theme maps to its exhaustive renderer type`() {
-        // The three single-structure themes each map to one renderer type.
-        val structural = mapOf(
-            BattlegroundTheme.FEASTING_HALL to BackgroundObjectType.FEASTING_HALL,
-            BattlegroundTheme.FLEET_CROSSING to BackgroundObjectType.FLEET_CROSSING,
-            BattlegroundTheme.MONT_SAINT_MICHEL to BackgroundObjectType.MONT_SAINT_MICHEL
-        )
         val seen = (1L..500L)
             .map { BattlegroundContent.themeFor(it, 20) }
             .toSet()
         assertEquals(BattlegroundTheme.entries.toSet(), seen)
-        structural.forEach { (theme, type) ->
-            val seed = (1L..500L).first { BattlegroundContent.themeFor(it, 20) == theme }
-            assertEquals(type, BattlegroundContent.objectsFor(seed, 20, 2500f).single().type)
-        }
+
+        val montSeed = (1L..500L).first { BattlegroundContent.themeFor(it, 20) == BattlegroundTheme.MONT_SAINT_MICHEL }
+        assertEquals(
+            BackgroundObjectType.MONT_SAINT_MICHEL,
+            BattlegroundContent.objectsFor(montSeed, 20, 2500f).single().type
+        )
+
+        // INTERIOR is one procedurally chosen room.
+        val interiorSeed = (1L..500L).first { BattlegroundContent.themeFor(it, 20) == BattlegroundTheme.INTERIOR }
+        assertTrue(
+            BattlegroundContent.objectsFor(interiorSeed, 20, 2500f).single().type in listOf(
+                BackgroundObjectType.FEASTING_HALL,
+                BackgroundObjectType.INTERIOR_KITCHEN,
+                BackgroundObjectType.INTERIOR_CHAMBER
+            )
+        )
+
+        // VILLAGE has no centrepiece — its buildings come from the scatter pass in startBattle.
+        val villageSeed = (1L..500L).first { BattlegroundContent.themeFor(it, 20) == BattlegroundTheme.VILLAGE }
+        assertTrue(BattlegroundContent.objectsFor(villageSeed, 20, 2500f).isEmpty())
         // The open field is scattered scenery, not one structure.
         val fieldSeed = (1L..500L).first { BattlegroundContent.themeFor(it, 20) == BattlegroundTheme.FIELD }
         val fieldObjs = BattlegroundContent.objectsFor(fieldSeed, 20, 2500f)

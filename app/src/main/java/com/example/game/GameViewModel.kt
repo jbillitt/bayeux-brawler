@@ -47,7 +47,7 @@ internal fun createLilGuyDart(
         id = "lilguy_${nowMillis}_${random.nextInt(100)}",
         isPlayerOwned = true,
         posX = player.posX + direction * (35f + 30f * player.size),
-        posY = 150f,
+        posY = 150f + player.terrainLiftY, // riding the player's back, so his hill lift applies
         velocityX = direction * (300f + random.nextFloat() * 80f),
         velocityY = -25f,
         damage = 14f,
@@ -139,6 +139,11 @@ class GameViewModel : ViewModel() {
     private var pendingReinforcements = 0
     private var battleContentRandom = Random(0)
 
+    // Softlock watchdog: seconds since ANY hp (fighters, mounts, shields, gate) last changed.
+    // If nothing has been hurt for a while mid-battle, something is stuck — see updateSimulation.
+    private var stallSeconds = 0f
+    private var lastVitalitySignature = Float.NaN
+
     // New particles collect here and flush to the StateFlow once per tick —
     // per-hit list copies were the biggest allocation churn in the loop
     private val particleBuffer = mutableListOf<BloodParticle>()
@@ -153,7 +158,8 @@ class GameViewModel : ViewModel() {
          */
         val STACKABLE_ANCILLARIES = setOf(
             Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.LIL_GUY,
-            Ancillary.HAG, Ancillary.FANATIC, Ancillary.GREASER, Ancillary.PLAGUE_PEASANT
+            Ancillary.HAG, Ancillary.FANATIC, Ancillary.GREASER, Ancillary.PLAGUE_PEASANT,
+            Ancillary.FIREBRAND, Ancillary.BEEKEEPER
         )
 
         // Every live particle is a draw call per frame, so this is a frame-budget number, not a
@@ -224,6 +230,26 @@ class GameViewModel : ViewModel() {
                     }
                 }
             }
+            DivineWeather.FROGS -> {
+                // Chronicle-grade chaos: frogs on EVERYONE. Foes go down hard; you and yours
+                // merely stumble. High risk, high comedy.
+                foes.forEach {
+                    it.isCrumpled = true
+                    it.crumpleDuration = 3.2f
+                    engine.applyFlatDamage(14f, it, isPlayerSource = true)
+                }
+                _enemiesState.value.filter { it.isPlayer && !it.isDead && !it.isDying }.forEach {
+                    it.isCrumpled = true
+                    it.crumpleDuration = 1.4f
+                }
+                _playerState.value?.let {
+                    if (!it.isDead && !it.isDying) {
+                        it.isCrumpled = true
+                        it.crumpleDuration = 1.4f
+                    }
+                }
+                _screenshake.value = 18f
+            }
         }
         _weatherFlash.value = weather to System.currentTimeMillis()
         _uiState.update { it.copy(weatherCooldowns = it.weatherCooldowns + (id to WEATHER_COOLDOWN)) }
@@ -256,7 +282,7 @@ class GameViewModel : ViewModel() {
         initialGear.add("head_none")
         
         // Randomly unlock 2 more of each category to start
-        initialGear.addAll(GameData.WEAPON_HEADS.shuffled().take(2).map { it.id })
+        initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.ARMOR_PIECES.filter { it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }.shuffled().take(2).map { it.id })
@@ -326,6 +352,7 @@ class GameViewModel : ViewModel() {
             val newHasSilkenGarments = state.hasSilkenGarments || choice.id == "silken_garments"
             val newHasRetinuePanoply = state.hasRetinuePanoply || choice.type == "panoply"
             val newHasShieldbreaker = state.hasShieldbreaker || choice.itemId == "counter_shieldbreaker"
+            val newHasSiegeLadders = state.hasSiegeLadders || choice.type == "siege_ladders"
             val newHasArmorPiercing = state.hasArmorPiercing || choice.itemId == "counter_armor_piercing"
             
             var newHeadgear = state.headgear
@@ -348,6 +375,7 @@ class GameViewModel : ViewModel() {
                 hasRetinuePanoply = newHasRetinuePanoply,
                 divineWeathers = newWeathers,
                 hasShieldbreaker = newHasShieldbreaker,
+                hasSiegeLadders = newHasSiegeLadders,
                 hasArmorPiercing = newHasArmorPiercing,
                 showLevelUpScreen = false,
                 pendingLevelUpChoices = emptyList()
@@ -598,7 +626,9 @@ class GameViewModel : ViewModel() {
         val perfBonus = ((state.performanceScore - 0.5f) * 2f).coerceIn(-0.3f, 0.5f)
         // Now the renderer is optimised the field can carry more bodies — a fuller host earlier
         // (was 1 + level/2, which felt thin in the opening rounds).
-        val rawEnemiesCount = (2 + (state.level * 6 / 10) + contentRandom.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(2)
+        // Level 1 is the landing beach tutorial: a bare pair of foes, no reinforcements.
+        val rawEnemiesCount = if (state.level == 1) 2
+            else (2 + (state.level * 6 / 10) + contentRandom.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(2)
         val enemiesCount = rawEnemiesCount.coerceAtMost(10)
         // Overflow beyond the on-screen cap arrives as reinforcements from the right once
         // the battle scrolls past dead foes — longer battles instead of inflated HP.
@@ -610,8 +640,13 @@ class GameViewModel : ViewModel() {
             bossType != null -> EnemyFactory.createBossEncounter(bossType, state.level)
             isSiegeBattle -> {
                 // Harder siege: a fuller line of archers raining down and a deeper relief column.
-                val parapetCount = max(3, (enemiesCount * 2) / 3)
-                val queueCount = max(3, enemiesCount + 2)
+                // The first siege of a run goes easier (two fewer archers on the wall); every siege
+                // after it adds men to the wall and the relief column, so they keep escalating.
+                val siegeOrdinal = SiegeSchedule.levels(MedievalHarpPlayer.gameSeed, state.level)
+                    .indexOf(state.level).coerceAtLeast(0)
+                val parapetCount = (max(3, (enemiesCount * 2) / 3) +
+                    (if (siegeOrdinal == 0) -2 else siegeOrdinal.coerceAtMost(4))).coerceAtLeast(1)
+                val queueCount = max(3, enemiesCount + 2) + siegeOrdinal.coerceAtMost(5)
                 val wall = List(parapetCount) { index ->
                     EnemyFactory.createArchetype(EnemyArchetype.WALL_ARCHER, index, state.level).apply {
                         elevated = true
@@ -637,7 +672,8 @@ class GameViewModel : ViewModel() {
                     gateHp = gateHp,
                     gateMaxHp = gateHp,
                     parapetFighterIds = wall.map { it.id }.toSet(),
-                    queuedFighterIds = queue.map { it.id }.toSet()
+                    queuedFighterIds = queue.map { it.id }.toSet(),
+                    siegeLadders = state.hasSiegeLadders
                 )
                 (wall + queue).toMutableList()
             }
@@ -692,6 +728,22 @@ class GameViewModel : ViewModel() {
             metCounters.add(EnemyFactory.COUNTER_WAR_PRIEST)
         }
 
+        // Deep-run curveballs: from level 40 the host occasionally shows up with a surprise —
+        // a pair of immovable brutes, a berserker mob, or a double shield wall.
+        if (bossType == null && !isSiegeBattle && state.level >= 40) {
+            when (contentRandom.nextInt(5)) {
+                0 -> repeat(2) { enemies.add(EnemyFactory.armouredBrute(enemiesCount + 10 + it, state.level)) }
+                1 -> repeat(3) { enemies.add(EnemyFactory.createArchetype(EnemyArchetype.BERSERKER, enemiesCount + 10 + it, state.level)) }
+                2 -> {
+                    enemies.addAll(EnemyFactory.shieldWallPair(enemiesCount + 10, state.level))
+                    enemies.addAll(EnemyFactory.shieldWallPair(enemiesCount + 12, state.level))
+                }
+                3 -> // The marginalia strike back: a giant snail joins the host
+                    enemies.add(EnemyFactory.createArchetype(EnemyArchetype.REBEL_SNAIL, enemiesCount + 10, state.level))
+                // else: a plain fight — the threat of the curveball is part of the curve
+            }
+        }
+
         repeat(state.unlockedAncillaries.count { it == Ancillary.PLAGUE_PEASANT }) { i ->
             enemies.add(FighterState(
                 // Dying already, so he simply runs at the foe and breathes on them until one of them drops
@@ -731,6 +783,36 @@ class GameViewModel : ViewModel() {
             ))
         }
 
+        repeat(state.unlockedAncillaries.count { it == Ancillary.BEEKEEPER }) { i ->
+            enemies.add(FighterState(
+                // Backline lobber like the hag; CombatEngine turns his shots into bee hives via
+                // isKind("beekeeper"). The renderer gives him his veiled hat and a live swarm.
+                id = "beekeeper#$i", name = "Humble Bede", isPlayer = true, maxHp = 40f, hp = 40f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 35f + i * 22f, targetX = 35f + i * 22f, facingRight = true, size = 0.95f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFF8A7156), hairStyle = "bald", isDualWielding = false
+            ))
+        }
+
+        repeat(state.unlockedAncillaries.count { it == Ancillary.FIREBRAND }) { i ->
+            enemies.add(FighterState(
+                // Same trick as the hag/greaser: head_slingshot marks him isRanged so he holds the
+                // backline; CombatEngine turns his shots into igniting torches via isKind("firebrand").
+                id = "firebrand#$i", name = "Cinder Cedric", isPlayer = true, maxHp = 35f, hp = 35f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 30f + i * 22f, targetX = 30f + i * 22f, facingRight = true, size = 0.9f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFFC08030), hairStyle = "short", isDualWielding = false
+            ))
+        }
+
         repeat(state.unlockedAncillaries.count { it == Ancillary.HAG }) { i ->
             enemies.add(FighterState(
                 // head_slingshot makes her isRanged, so the AI kites at range and lobs mud instead of rushing to melee
@@ -741,6 +823,33 @@ class GameViewModel : ViewModel() {
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
                 posX = 20f + i * 20f, targetX = 20f + i * 20f, facingRight = true, size = 0.8f, hairColor = androidx.compose.ui.graphics.Color(0xFFAAAAAA), hairStyle = "long", isDualWielding = false
+            ))
+        }
+
+        // Longbowman and crossbowman fight from the field like the hag — real bodies with real
+        // bows, not parade-line followers conjuring arrows from thin air.
+        repeat(state.unlockedAncillaries.count { it == Ancillary.ARCHER }) { i ->
+            enemies.add(FighterState(
+                id = "archer#$i", name = "Robin", isPlayer = true, maxHp = 45f, hp = 45f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bow" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_leather" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 55f + i * 24f, targetX = 55f + i * 24f, facingRight = true, size = 0.95f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFF4C613D), hairStyle = "short", isDualWielding = false
+            ))
+        }
+        repeat(state.unlockedAncillaries.count { it == Ancillary.CROSSBOWMAN }) { i ->
+            enemies.add(FighterState(
+                id = "crossbowman#$i", name = "Gaston", isPlayer = true, maxHp = 50f, hp = 50f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_crossbow" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_kettle" },
+                posX = 45f + i * 24f, targetX = 45f + i * 24f, facingRight = true, size = 1.0f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFF3B2F2F), hairStyle = "short", isDualWielding = false
             ))
         }
 
@@ -916,8 +1025,10 @@ class GameViewModel : ViewModel() {
                     levelWidth
                 )
             )
-            // Generate some range cover buildings or forts
-            val numBuildings = if (state.level >= 5) contentRandom.nextInt(1, 4) else contentRandom.nextInt(0, 2)
+            // Generate some range cover buildings or forts. Never inside an interior — towers
+            // sprouting through the feast-hall floor looked absurd.
+            val isInterior = BattlegroundContent.themeFor(MedievalHarpPlayer.gameSeed, state.level) == BattlegroundTheme.INTERIOR
+            val numBuildings = if (isInterior) 0 else if (state.level >= 5) contentRandom.nextInt(1, 4) else contentRandom.nextInt(0, 2)
 
             // Code-drawn buildings (procedural, or with seeded overlays) plus every JSON asset in
             // assets/art/ that declares a spawn block. A new .json file therefore needs no code here.
@@ -992,6 +1103,7 @@ class GameViewModel : ViewModel() {
                 isBattleActive = true,
                 battleWon = false,
                 battleLost = false,
+                isRetired = false,
                 // Starting a battle bare-fisted flips the music to the BRAWL (speed-metal) theme
                 // for the rest of the run. Throne mode doesn't count — the lord isn't punching.
                 brawlMode = it.brawlMode || (!it.isThroneMode && it.weaponHead.id == "head_bare"),
@@ -1006,17 +1118,39 @@ class GameViewModel : ViewModel() {
                 siegeState = siegeState,
                 hillState = hillState,
                 bossType = bossType,
-                forceThroneMusic = BossSchedule.forcesThroneMusic(bossType)
+                forceThroneMusic = BossSchedule.forcesThroneMusic(bossType),
+                cometPortent = false
             )
         }
 
         engine.reset() // drop any follow-up hits queued in a previous battle
+        // A weather flourish from the last battle must not replay when this screen recomposes —
+        // the stale flash re-drew as a phantom "rain storm" at the start of the next fight.
+        _weatherFlash.value = null
+        stallSeconds = 0f
+        lastVitalitySignature = Float.NaN
 
         // Play battle start timpani roll
         MedievalAudioSynth.playSound(SoundType.DRUM_ROLL)
 
         // Launch game loop
         startGameLoop()
+    }
+
+    /** True while the pause menu holds the battle. The loop keeps ticking but simulates nothing. */
+    val isPaused = MutableStateFlow(false)
+    fun setPaused(paused: Boolean) { isPaused.value = paused }
+
+    /**
+     * End the run by choice: same defeat flow (retry / share the tale) but the tapestry reads
+     * "Retired" and the defeat dirge stays silent.
+     */
+    fun retire() {
+        val s = _uiState.value
+        if (!s.isBattleActive || s.battleWon || s.battleLost) return
+        isPaused.value = false
+        _uiState.update { it.copy(isRetired = true) }
+        endBattle(won = false)
     }
 
     private fun startGameLoop() {
@@ -1026,7 +1160,7 @@ class GameViewModel : ViewModel() {
             val scheduler = TickScheduler()
             while (_uiState.value.isBattleActive) {
                 delay(scheduler.nextDelay(android.os.SystemClock.elapsedRealtime()))
-                updateSimulation(dt)
+                if (!isPaused.value) updateSimulation(dt)
             }
         }
     }
@@ -1095,6 +1229,14 @@ class GameViewModel : ViewModel() {
             SiegeRules.tickClimb(player, dt)
             SiegeRules.tickClimbs(enemies, dt)
             SiegeRules.reconcileParapet(siege, player, enemies)
+            // The player going over the wall commits the garrison exactly like a broken gate:
+            // the queue behind it wakes up. Without this, mounting by ladder left them inert
+            // and the battle could never end.
+            if ((player.elevated || player.climbState == ClimbState.CLIMBING_UP) && !siege.gateBroken) {
+                enemies.forEach {
+                    if (it.id in siege.queuedFighterIds && it.isCombatInactive) it.isCombatInactive = false
+                }
+            }
         }
 
         // Hill terrain: lift every fighter to the slope under his feet so the high-ground bonus
@@ -1137,13 +1279,28 @@ class GameViewModel : ViewModel() {
 
         // 3. Update Player Fighter State
         var closestEnemy = targetableEnemies.minByOrNull { kotlin.math.abs(it.posX - player.posX) }
-        if (siege != null && siege.gateBroken && !player.elevated &&
+        // Firebrand: his torches keep the gate smouldering — it burns down on its own, slowly.
+        if (siege != null && !siege.gateBroken &&
+            enemies.any { it.isKind("firebrand") && !it.isDead && !it.isDying }
+        ) {
+            SiegeRules.damageGate(siege, 10f * dt, enemies)
+        }
+        // Ladders raise only at the wall itself — you march there first, no climbing from the
+        // beach. (A broken gate keeps the old behaviour: the way is open wherever you stand.)
+        if (siege != null && !player.elevated &&
+            (siege.gateBroken || (siege.siegeLadders && abs(1800f - player.posX) < 140f)) &&
             enemies.none {
                 !it.isPlayer && !it.isDead && !it.isDying && !it.isCombatInactive &&
                     !it.elevated && it.climbState == ClimbState.NONE
             }
         ) {
-            SiegeRules.beginClimbUp(siege, player, enemies)
+            if (player.isLord) {
+                // A carried throne does not go up a ladder. The wall's defenders climb down
+                // to face the lord instead — no more glitched throne-on-parapet.
+                SiegeRules.livingParapetEnemies(siege, enemies).forEach { SiegeRules.beginClimbDown(it) }
+            } else {
+                SiegeRules.beginClimbUp(siege, player, enemies)
+            }
             closestEnemy = null
         }
         engine.tick(dt) // run any queued follow-up hits before this tick's new swings
@@ -1160,7 +1317,13 @@ class GameViewModel : ViewModel() {
                 // ourselves or the player moon-walks up to the gate with frozen legs.
                 player.animFrame += dt * 9f
             } else if (player.attackCooldown <= 0f) {
-                SiegeRules.damageGate(siege, player.baseDamage.coerceAtLeast(5f), enemies)
+                if (player.weaponHandle.id == "handle_ram") {
+                    // The battering ram does one thing, and it does it in one blow.
+                    SiegeRules.breakGate(siege, enemies)
+                } else {
+                    val gatecrasher = if ("gatecrasher" in player.brawlerUpgrades) 4f else 1f
+                    SiegeRules.damageGate(siege, player.baseDamage.coerceAtLeast(5f) * gatecrasher, enemies)
+                }
                 player.attackCooldown = player.attackSpeedDelay
                 player.isAttacking = true
                 addPopup("PORTA!", gateX, 130f, Color(0xFF6E5536))
@@ -1205,6 +1368,11 @@ class GameViewModel : ViewModel() {
                 !enemy.isDead && !enemy.isDying && !enemy.elevated &&
                 enemy.climbState == ClimbState.NONE && enemy.pallbearerIndex < 0
             ) {
+                // Siege ladders: the squad scales the wall with you instead of battering the gate —
+                // but only once they have actually marched up to it.
+                if (siege.siegeLadders && abs(1800f - enemy.posX) < 140f &&
+                    SiegeRules.beginClimbUp(siege, enemy, enemies)
+                ) return@forEach
                 engine.updateFighter(enemy, null, dt)
                 val gateX = 1800f
                 if (abs(gateX - enemy.posX) > 75f) {
@@ -1216,6 +1384,14 @@ class GameViewModel : ViewModel() {
                     enemy.attackCooldown = enemy.attackSpeedDelay
                     enemy.isAttacking = true
                 }
+                return@forEach
+            }
+            // On a hill field the host defends the crest: they hold their ground and only join
+            // battle once you've climbed within reach, rather than streaming down at you.
+            if (hill != null && !enemy.isPlayer && pTarget != null &&
+                abs(pTarget.posX - enemy.posX) > 380f
+            ) {
+                engine.updateFighter(enemy, null, dt)
                 return@forEach
             }
             engine.updateFighter(enemy, pTarget, dt)
@@ -1333,6 +1509,10 @@ class GameViewModel : ViewModel() {
                 bg.type != BackgroundObjectType.CASTLE_GATE &&
                 bg.type != BackgroundObjectType.CASTLE_WALL &&
                 bg.type != BackgroundObjectType.MOTTE &&
+                // You are INSIDE these — the room itself cannot stand between archer and target.
+                bg.type != BackgroundObjectType.FEASTING_HALL &&
+                bg.type != BackgroundObjectType.INTERIOR_KITCHEN &&
+                bg.type != BackgroundObjectType.INTERIOR_CHAMBER &&
                 proj.posX in (bg.posX - 100f)..(bg.posX + 100f) && proj.posY in 100f..350f &&
                 coverTargets.any { t ->
                     val behindBuilding = if (proj.velocityX >= 0f) t.posX > bg.posX else t.posX < bg.posX
@@ -1387,61 +1567,26 @@ class GameViewModel : ViewModel() {
         // Boundary collision or hit
             if (!hit && proj.posX in -500f..(_uiState.value.levelWidth + 500f) && proj.posY < 350f) {
                 remainingProjectiles.add(proj)
-            } else if (hit) {
+            } else if (bgHit != null) {
+                // Only building/cover hits thud from here — body hits sound from CombatEngine,
+                // which knows whether the missile struck iron, shield or flesh.
                 MedievalAudioSynth.playSound(SoundType.THWACK)
             }
         }
         
-        // 5b. Archer Entourage Fire
-                // 5b. Archer & Crossbowman Entourage Fire
-        val hasArcher = _uiState.value.unlockedAncillaries.contains(Ancillary.ARCHER)
-        val hasCrossbow = _uiState.value.unlockedAncillaries.contains(Ancillary.CROSSBOWMAN)
-        if (!player.isDead && !player.isDying) {
-            // Must match the entourage TapestryRenderer.drawAncillaries actually draws, or the arrows
-            // fly out of thin air — unlocking a mount shifted the index and Long Shanks "shot arrows".
-            val sortedAncs = _uiState.value.unlockedAncillaries
-                .filter {
-                    !it.id.startsWith("anc_mount_") &&
-                        it !in listOf(Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG,
-                            Ancillary.TROJAN_HORSE, Ancillary.PLAGUE_PEASANT, Ancillary.GREASER)
-                }
-                .sortedBy { it.name }
-            val archerIdx = sortedAncs.indexOf(Ancillary.ARCHER)
-            val crossbowIdx = sortedAncs.indexOf(Ancillary.CROSSBOWMAN)
-            
-            if (hasArcher && Random.nextFloat() < dt * 0.4f) {
-                val dir = if (player.facingRight) 1f else -1f
-                val archerOffsetX = -80f - (archerIdx * 50f)
-                val spawnX = player.posX + (archerOffsetX * dir)
-                remainingProjectiles.add(Projectile(
-                    id = "arch__",
-                    isPlayerOwned = true, posX = spawnX, posY = 240f,
-                    velocityX = dir * (400f + Random.nextFloat() * 80f), velocityY = -30f + (Random.nextFloat() * 10f),
-                    damage = 12f, pierce = 8f, blunt = 2f, type = ProjectileType.ARROW,
-                    sizeMultiplier = 1f, hasSpikes = false, launchedWeaponId = null,
-                    isSplash = false, isPoisonous = false, isBallista = false,
-                    sourceFighterId = Ancillary.ARCHER.id
-                ))
-                MedievalAudioSynth.playSound(SoundType.SWOOSH)
-            }
-            if (hasCrossbow && Random.nextFloat() < dt * 0.25f) {
-                val dir = if (player.facingRight) 1f else -1f
-                val crossbowOffsetX = -80f - (crossbowIdx * 50f)
-                val spawnX = player.posX + (crossbowOffsetX * dir)
-                remainingProjectiles.add(Projectile(
-                    id = "xbow__",
-                    isPlayerOwned = true, posX = spawnX, posY = 230f,
-                    velocityX = dir * (600f + Random.nextFloat() * 50f), velocityY = -5f,
-                    damage = 25f, pierce = 20f, blunt = 10f, type = ProjectileType.BOLT,
-                    sizeMultiplier = 1f, 
-                    hasSpikes = false, launchedWeaponId = null,
-                    isSplash = false, isPoisonous = false, isBallista = false,
-                    sourceFighterId = Ancillary.CROSSBOWMAN.id
-                ))
-                MedievalAudioSynth.playSound(SoundType.THWACK)
-            }
+        // (Archer & crossbowman now fight as their own bodies on the field, spawned in startBattle —
+        // their shots come from CombatEngine like any other ranged fighter.)
+
+        // One throw rate per Lil Guy on your back — three of them sling three times as often.
+        // Must run BEFORE the StateFlow assignment below: adding to the list after assigning it
+        // was lost whenever the flow's equality check skipped the (structurally equal, e.g. empty)
+        // new list — which is why he waved his arms and nothing ever flew.
+        val lilGuyCount = _uiState.value.unlockedAncillaries.count { it == Ancillary.LIL_GUY }
+        if (lilGuyCount > 0 && !player.isDead && Random.nextFloat() < dt * 0.7f * lilGuyCount) {
+            remainingProjectiles.add(createLilGuyDart(player))
+            MedievalAudioSynth.playSound(SoundType.SWOOSH)
         }
-        
+
         val newlySpawned = _projectilesState.value.filter { it !in projectiles }
         remainingProjectiles.addAll(newlySpawned)
         _projectilesState.value = remainingProjectiles
@@ -1471,11 +1616,29 @@ class GameViewModel : ViewModel() {
             MedievalAudioSynth.playHagCackle()
         }
 
-        // One throw rate per Lil Guy on your back — three of them sling three times as often.
-        val lilGuyCount = _uiState.value.unlockedAncillaries.count { it == Ancillary.LIL_GUY }
-        if (lilGuyCount > 0 && !player.isDead && Random.nextFloat() < dt * 0.7f * lilGuyCount) {
-            remainingProjectiles.add(createLilGuyDart(player))
-            MedievalAudioSynth.playSound(SoundType.SWOOSH)
+        // Softlock watchdog: if no hp anywhere (fighters, mounts, shields, gate) has moved for a
+        // while, some units are stuck — inactive spawns never released, or someone shoved off the
+        // playfield. Wake everything up and drag strays back in rather than leave a dead battle.
+        // Positions are in the signature too: a long quiet march (e.g. the walk to a siege gate)
+        // is progress, not a stall — hp alone would fire mid-march and release the gate garrison.
+        // ponytail: sum-signature can theoretically miss offsetting changes in one tick; fine as a watchdog
+        val vitality = player.hp + player.mountHp + player.posX +
+            enemies.sumOf { (it.hp + it.mountHp + it.shieldHp + it.posX).toDouble() }.toFloat() +
+            (siege?.gateHp ?: 0f)
+        if (vitality == lastVitalitySignature) stallSeconds += dt else stallSeconds = 0f
+        lastVitalitySignature = vitality
+        if (stallSeconds > 12f) {
+            stallSeconds = 0f
+            enemies.forEach { e ->
+                if (e.isCombatInactive && !e.isDead && !e.isDying) e.isCombatInactive = false
+                // Stranded on a parapet with nobody coming up? Come down and fight.
+                if (e.elevated && !e.isPlayer && !player.elevated) SiegeRules.beginClimbDown(e)
+                if (!e.isDead && !e.isDying) {
+                    e.posX = e.posX.coerceIn(30f, _uiState.value.levelWidth - 30f)
+                    e.targetX = e.posX
+                }
+            }
+            player.posX = player.posX.coerceIn(30f, _uiState.value.levelWidth - 30f)
         }
 
         // Sync player HP to UI State for HUD bar
@@ -1570,12 +1733,24 @@ class GameViewModel : ViewModel() {
                 // 1b. Retinue panoply: arm the whole retinue. Only worth offering once you have
                 // bodies on the field to equip, and only once.
                 val panoplyWorthy = state.unlockedAncillaries.any {
-                    it in listOf(Ancillary.HAG, Ancillary.FANATIC, Ancillary.GREASER, Ancillary.PLAGUE_PEASANT)
+                    it in listOf(Ancillary.HAG, Ancillary.FANATIC, Ancillary.GREASER, Ancillary.PLAGUE_PEASANT, Ancillary.FIREBRAND, Ancillary.BEEKEEPER, Ancillary.ARCHER, Ancillary.CROSSBOWMAN)
+                }
+
+                // 1c. Siege ladders: you and your squad scale fortress walls right away. Offered
+                // once sieges are on the horizon, until taken.
+                if (!state.hasSiegeLadders && state.level >= 4 && Random.nextFloat() < 0.35f) {
+                    pendingChoices.add(LevelUpChoice(
+                        id = "siege_ladders",
+                        title = "Siege Ladders",
+                        description = "Your retinue carries escalade ladders to every fortress. Scale the walls from the first horn — no waiting on a broken gate.",
+                        type = "siege_ladders",
+                        itemId = "siege_ladders"
+                    ))
                 }
                 if (!state.hasRetinuePanoply && panoplyWorthy && state.level >= 5) {
                     pendingChoices.add(LevelUpChoice(
                         id = "retinue_panoply",
-                        title = "Panoply: Arm the Retinue",
+                        title = "Arm the Retinue",
                         description = "Spangenhelms, mail and iron gauntlets for every follower who walks the field. They kit up exactly as you do — and live a good deal longer for it.",
                         type = "panoply",
                         itemId = "retinue_panoply"
@@ -1587,19 +1762,20 @@ class GameViewModel : ViewModel() {
                 val availableAncs = GameData.ANCILLARIES.filter {
                     it !in state.unlockedAncillaries || it in STACKABLE_ANCILLARIES
                 }
-                // Two distinct follower offers instead of one — the extra card per battle. Shuffle
-                // and take 2 so they never duplicate each other.
-                val followerOffers = availableAncs.shuffled().take(2)
+                // Two distinct follower offers instead of one — the extra card per battle.
+                // First slot favours someone you DON'T yet own: the always-eligible stackable
+                // pets were crowding the pool, so every run collected the same dogs.
+                val unowned = availableAncs.filter { it !in state.unlockedAncillaries }
+                val followerOffers = (unowned.shuffled().take(1) + availableAncs.shuffled()).distinct().take(2)
                 if (followerOffers.isNotEmpty()) {
                     followerOffers.forEach { anc ->
                         val isObject = anc in listOf(com.example.game.Ancillary.WARHORSE, com.example.game.Ancillary.CHARIOT, com.example.game.Ancillary.STILTS, com.example.game.Ancillary.TROJAN_HORSE)
                         val owned = state.unlockedAncillaries.count { it == anc }
-                        val titlePrefix = if (isObject) "Acquire" else if (owned > 0) "Another" else "Rally"
                         val titleSuffix = if (isObject) "" else " the ${anc.role}"
                         val packNote = if (owned > 0) " You already have $owned — they stack." else ""
                         pendingChoices.add(LevelUpChoice(
                             id = "follower_${anc.id}",
-                            title = "$titlePrefix: ${anc.ancillaryName}$titleSuffix",
+                            title = "${anc.ancillaryName}$titleSuffix",
                             description = "${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)$packNote",
                             type = "follower",
                             itemId = anc.id
@@ -1609,7 +1785,7 @@ class GameViewModel : ViewModel() {
                     // Fallback boost if all followers are hired
                     pendingChoices.add(LevelUpChoice(
                         id = "boost_hp",
-                        title = "Drill: Follower Vitality Boost",
+                        title = "Follower Vitality Boost",
                         description = "Train your squires to carry extra medical wine flagons (+25 Max HP).",
                         type = "follower",
                         itemId = "anc_squire"
@@ -1623,20 +1799,29 @@ class GameViewModel : ViewModel() {
                     val possibleBrawler = listOf(
                         LevelUpChoice("brawler_brass_knuckles", "Brawler: Brass Knuckles", "Reinforce your fists with heavy brass! Massive blunt damage.", "brawler_upgrade", "brass_knuckles"),
                         LevelUpChoice("brawler_spiked_wraps", "Brawler: Spiked Wraps", "Wrap your hands in leather and rusty nails. Causes bleeding!", "brawler_upgrade", "spiked_wraps"),
-                        LevelUpChoice("brawler_wrestling_belt", "Brawler: Champion Belt", "Increases grapple strength. Wrestle foes to the ground!", "brawler_upgrade", "champion_belt")
+                        LevelUpChoice("brawler_wrestling_belt", "Brawler: Champion Belt", "Increases grapple strength. Wrestle foes to the ground!", "brawler_upgrade", "champion_belt"),
+                        LevelUpChoice("brawler_gatecrasher", "Brawler: Gatecrasher Fists", "Punch through oak like it owes you money. Your bare hands deal 4x damage to fortress gates!", "brawler_upgrade", "gatecrasher")
                     )
                     val availableBrawler = possibleBrawler.filter { it.itemId !in state.brawlerUpgrades }
                     if (availableBrawler.isNotEmpty()) {
                         pendingChoices.add(availableBrawler.random())
                     }
                 } else if (!state.weaponHead.isRanged) {
-                    val attachmentHeads = GameData.WEAPON_HEADS.filter { 
-                        it.id !in listOf("head_bare", "head_bow", "head_longbow", "head_slingshot") 
+                    // Very rarely the attachment on offer is a Strange Relic — the eel, the femur,
+                    // the goose, the cheese. Never in the normal pool, each taken only once.
+                    val strangeAvailable = GameData.WEAPON_HEADS.filter {
+                        it.id in GameData.STRANGE_HEAD_IDS && it.id !in state.extraAttachments
                     }
-                    val weaponHead = attachmentHeads.random()
+                    val strange = strangeAvailable.isNotEmpty() && state.level >= 10 && Random.nextFloat() < 0.02f
+                    val weaponHead = if (strange) strangeAvailable.random() else {
+                        GameData.WEAPON_HEADS.filter {
+                            it.id !in listOf("head_bare", "head_bow", "head_longbow", "head_slingshot") &&
+                                it.id !in GameData.STRANGE_HEAD_IDS
+                        }.random()
+                    }
                     pendingChoices.add(LevelUpChoice(
                         id = "attach_${weaponHead.id}",
-                        title = "Attach Head: ${weaponHead.itemName}",
+                        title = if (strange) "STRANGE RELIC: ${weaponHead.itemName}" else weaponHead.itemName,
                         description = "${weaponHead.description} Attached dynamically to weapon, adding +50% of its base damage!",
                         type = "attachment",
                         itemId = weaponHead.id
@@ -1649,7 +1834,7 @@ class GameViewModel : ViewModel() {
                 if (rndVal < 0.33f && !isUnarmed && !state.weaponHead.isRanged) {
                     pendingChoices.add(LevelUpChoice(
                         id = "extension",
-                        title = "Haft Upgrade: Handle Extension",
+                        title = "Handle Extension",
                         description = "Lash an additional 1.5-foot wood shaft extension to your grip. Drastically increases reach (+0.35m) and supports more attachments!",
                         type = "extension",
                         itemId = ""
@@ -1670,7 +1855,7 @@ class GameViewModel : ViewModel() {
                         if (totalArmorMass > ARMOR_WEIGHT_LIMIT && !state.hasSilkenGarments) {
                             pendingChoices.add(LevelUpChoice(
                                 id = "silken_garments",
-                                title = "Equip: Silken Garments",
+                                title = "Silken Garments",
                                 description = "Lightens your armour below chariot weight while preserving armour level!",
                                 type = "armor",
                                 itemId = "silken_garments"
@@ -1691,10 +1876,9 @@ class GameViewModel : ViewModel() {
                             val armorPiece = armorOptions.random()
                             val isComedy = armorPiece.id == "armor_jester"
                             val typeCat = if (isComedy) "comedy" else "armor"
-                            val titlePrefix = if (isComedy) "Joke Item" else if (armorPiece.id in listOf("armor_gauntlets", "armor_boots", "armor_coif")) "Equip" else "Layer Armor"
                             pendingChoices.add(LevelUpChoice(
                                 id = "armor_${armorPiece.id}",
-                                title = "$titlePrefix: ${armorPiece.itemName}",
+                                title = armorPiece.itemName,
                                 description = if (isComedy) "A joke item! Removes all armor protection but gives a massive score multiplier." else "Add ${armorPiece.itemName} to your loadout, gaining +${armorPiece.defense.toInt()} Armor!",
                                 type = typeCat,
                                 itemId = armorPiece.id
@@ -1806,7 +1990,7 @@ class GameViewModel : ViewModel() {
                 initialGear.add("shield_none")
                 initialGear.add("armor_bare")
                 initialGear.add("helm_none")
-                initialGear.addAll(GameData.WEAPON_HEADS.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(3).map { it.id })
                 initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.ARMOR_PIECES.filter { it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }.shuffled().take(2).map { it.id })
@@ -1874,6 +2058,10 @@ class GameViewModel : ViewModel() {
                     weatherCooldowns = emptyMap(),
                     hasShieldbreaker = false,
                     hasArmorPiercing = false,
+                    // Same leak class as activeMount: ladders were surviving the reset, so the
+                    // next run scaled walls it never earned.
+                    hasSiegeLadders = false,
+                    isRetired = false,
                     seenCounters = emptySet(),
                     // Music state is per-run: moods were surviving the reset and stacking across
                     // runs (uncapped tempo, key drift) until every track came out discordant.

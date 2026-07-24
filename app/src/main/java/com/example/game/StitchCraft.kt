@@ -33,8 +33,14 @@ internal data class StitchGeometry(
     val anchors: List<StitchSegment>
 )
 
-private val horizontalStitchPath = Path()
-private val anchorStitchPath = Path()
+// Stitch texture depends only on the shape's SIZE, so pre-built origin-anchored stitch paths are
+// shared across every shape in the same 8px size bucket and merely translated into place. This
+// removes the per-call segment-list allocation and path rebuild that made stitched fills scale
+// with body count (each follower is ~8 stitched shapes, every frame).
+// ponytail: unbounded map, but keys are quantized on-screen sizes — a few hundred entries max.
+private val stitchPathCache = HashMap<Int, Pair<Path, Path>>()
+private val stitchFillStroke = Stroke(width = 1.5f, cap = StrokeCap.Round)
+private val stitchAnchorStroke = Stroke(width = 1f)
 
 internal inline fun appendStitchSegments(
     segments: List<StitchSegment>,
@@ -93,37 +99,26 @@ internal fun drawStitchedFill(scope: DrawScope, path: Path, color: Color) {
         // Add dense parallel lines to look like embroidered thread couching.
         // Density is capped so huge shapes (buildings, forts, the ship) don't
         // issue thousands of drawLine calls per frame; small shapes keep the
-        // original fine stitching. Jitter is deterministic (cheap hash), not
-        // Math.random() — that alone was ~16k synchronized calls/frame per building.
+        // original fine stitching. Jitter is deterministic (cheap hash), and the
+        // resulting stitch paths are cached per quantized size (see stitchPathCache).
+        val bounds = path.getBounds()
+        if (bounds.width <= 0f || bounds.height <= 0f) return
+        val qw = (bounds.width / 8f).toInt() + 1
+        val qh = (bounds.height / 8f).toInt() + 1
+        val (hPath, aPath) = stitchPathCache.getOrPut(qw * 4096 + qh) {
+            val geometry = stitchSegments(Rect(0f, 0f, qw * 8f, qh * 8f))
+            val h = Path()
+            appendStitchSegments(geometry.horizontal, h::moveTo, h::lineTo)
+            val a = Path()
+            appendStitchSegments(geometry.anchors, a::moveTo, a::lineTo)
+            h to a
+        }
         scope.withTransform({
             clipPath(path)
+            translate(bounds.left, bounds.top)
         }) {
-            val geometry = stitchSegments(path.getBounds())
-            val stitchColor = color.copy(alpha = 0.35f)
-            val anchorColor = ThreadColor.copy(alpha = 0.15f)
-            horizontalStitchPath.rewind()
-            appendStitchSegments(
-                geometry.horizontal,
-                horizontalStitchPath::moveTo,
-                horizontalStitchPath::lineTo
-            )
-            scope.drawPath(
-                path = horizontalStitchPath,
-                color = stitchColor,
-                style = Stroke(width = 1.5f, cap = StrokeCap.Round)
-            )
-
-            anchorStitchPath.rewind()
-            appendStitchSegments(
-                geometry.anchors,
-                anchorStitchPath::moveTo,
-                anchorStitchPath::lineTo
-            )
-            scope.drawPath(
-                path = anchorStitchPath,
-                color = anchorColor,
-                style = Stroke(width = 1f)
-            )
+            scope.drawPath(hPath, color = color.copy(alpha = 0.35f), style = stitchFillStroke)
+            scope.drawPath(aPath, color = ThreadColor.copy(alpha = 0.15f), style = stitchAnchorStroke)
         }
     }
 

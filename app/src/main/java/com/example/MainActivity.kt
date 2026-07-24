@@ -180,7 +180,8 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
         if (uiState.battleWon) playRandomVoiceClip()
     }
     LaunchedEffect(uiState.battleLost) {
-        if (uiState.battleLost) playRandomVoiceClip("defeat")
+        // A voluntary retirement is not a death — the defeat dirge stays silent for it.
+        if (uiState.battleLost && !uiState.isRetired) playRandomVoiceClip("defeat")
     }
     LaunchedEffect(uiState.showLevelUpScreen) {
         // Voice clips are victory-only
@@ -288,6 +289,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
     val enemies by viewModel.enemiesState.collectAsState()
     val projectiles by viewModel.projectilesState.collectAsState()
     val popups by viewModel.popupsState.collectAsState()
+    var showPauseMenu by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -304,7 +306,11 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                 musicOn = musicOn,
                 onToggleMusic = onToggleMusic,
                 playerState = playerFighter,
-                onTriggerWeather = { viewModel.triggerWeather(it) }
+                onTriggerWeather = { viewModel.triggerWeather(it) },
+                onOpenMenu = {
+                    showPauseMenu = true
+                    viewModel.setPaused(true)
+                }
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -383,6 +389,188 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                 }
             }
         }
+
+        if (showPauseMenu) {
+            PauseMenuOverlay(
+                musicOn = musicOn,
+                onToggleMusic = onToggleMusic,
+                canRetire = uiState.isBattleActive && !uiState.battleWon && !uiState.battleLost,
+                onResume = {
+                    showPauseMenu = false
+                    viewModel.setPaused(false)
+                },
+                onRetire = {
+                    showPauseMenu = false
+                    viewModel.retire()
+                }
+            )
+        }
+    }
+}
+
+/**
+ * The Intermissio: a marginal note in the tapestry, not a battle panel. Scrim of dark thread,
+ * one linen card crowned with a titulus band (the same border language as the top of the scroll),
+ * the music/sound rites, and — set apart below a stitch line — the Retire rite, which arms on
+ * first touch so a level-79 campaign cannot end by a slipped thumb.
+ */
+@Composable
+fun PauseMenuOverlay(
+    musicOn: Boolean,
+    onToggleMusic: () -> Unit,
+    canRetire: Boolean,
+    onResume: () -> Unit,
+    onRetire: () -> Unit
+) {
+    var sfxOn by remember { mutableStateOf(com.example.game.MedievalAudioSynth.sfxEnabled) }
+    var retireArmed by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TapestryDark.copy(alpha = 0.55f))
+            .clickable(onClick = onResume), // tap the linen outside to resume
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = TapestryLinenCard),
+            modifier = Modifier
+                .width(340.dp)
+                .border(4.dp, TapestryDark, RoundedCornerShape(8.dp))
+                .padding(4.dp)
+                .clickable(enabled = false) {}, // swallow taps so the scrim doesn't resume
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            // Scrolls inside the screen on short landscape displays — the Retire rite must
+            // never hang off the bottom edge.
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                // Titulus band: the card wears the scroll's own border as its crown
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(TapestryLinenBg)
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("✛", fontSize = 11.sp, color = TapestryMustard)
+                    Text(
+                        "  INTERMISSIO  ",
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 17.sp,
+                        color = TapestryDark
+                    )
+                    Text("✛", fontSize = 11.sp, color = TapestryMustard)
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(TapestryDark)
+                )
+                Text(
+                    "The needles rest. The battle holds its breath.",
+                    fontFamily = FontFamily.Serif,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    fontSize = 11.sp,
+                    color = TapestryDark.copy(alpha = 0.75f),
+                    modifier = Modifier.padding(top = 10.dp, bottom = 6.dp)
+                )
+
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    @Composable
+                    fun toggleRow(label: String, sub: String, on: Boolean, tag: String, onFlip: () -> Unit) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(2.dp, TapestryDark.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                .clickable { onFlip() }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .testTag(tag),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(label, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TapestryDark)
+                                Text(sub, fontFamily = FontFamily.Serif, fontSize = 9.sp, color = TapestryDark.copy(alpha = 0.6f))
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .background(if (on) TapestryGreen else TapestryDark.copy(alpha = 0.35f), RoundedCornerShape(3.dp))
+                                    .border(1.dp, TapestryDark, RoundedCornerShape(3.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    if (on) "SOUNDING" else "SILENCED",
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp,
+                                    color = TapestryLight
+                                )
+                            }
+                        }
+                    }
+
+                    toggleRow("MUSICA", "The harpist and his procedural airs", musicOn, "toggle_harp_music_btn") { onToggleMusic() }
+                    toggleRow("SONITUS", "The clang and thwack of honest combat", sfxOn, "toggle_sfx_btn") {
+                        sfxOn = !sfxOn
+                        com.example.game.MedievalAudioSynth.sfxEnabled = sfxOn
+                    }
+
+                    Button(
+                        onClick = onResume,
+                        colors = ButtonDefaults.buttonColors(containerColor = TapestryGreen),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("resume_battle_btn")
+                    ) {
+                        Text("Resume the Fray", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryLight)
+                    }
+
+                    if (canRetire) {
+                        // A stitch line sets the irreversible rite apart from the reversible ones
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(2.dp)
+                                .background(TapestryDark.copy(alpha = 0.3f))
+                        )
+                        Button(
+                            onClick = { if (retireArmed) onRetire() else retireArmed = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (retireArmed) TapestryRed else TapestryLinenCard
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(2.dp, TapestryRed),
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("retire_btn")
+                        ) {
+                            Text(
+                                if (retireArmed) "Tap Again to Retire" else "Retire from the Field",
+                                fontFamily = FontFamily.Serif,
+                                fontWeight = FontWeight.Bold,
+                                color = if (retireArmed) TapestryLight else TapestryRed
+                            )
+                        }
+                        Text(
+                            "End the campaign with honour. Thy tale is still stitched, and may still be shared.",
+                            fontFamily = FontFamily.Serif,
+                            fontSize = 9.sp,
+                            textAlign = TextAlign.Center,
+                            color = TapestryDark.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -394,7 +582,8 @@ fun HeaderBar(
     musicOn: Boolean,
     onToggleMusic: () -> Unit,
     playerState: FighterState? = null,
-    onTriggerWeather: (String) -> Unit = {}
+    onTriggerWeather: (String) -> Unit = {},
+    onOpenMenu: () -> Unit = {}
 ) {
     var showStatsPopup by remember { mutableStateOf(false) }
 
@@ -529,39 +718,26 @@ fun HeaderBar(
                 Text("${uiState.highscore}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TapestryDark)
             }
             
-            // Medieval Harp Music Toggle
+            // Menu seal: a linen roundel bearing two woven pause-bars. Opens the Intermissio
+            // (pause menu), which now holds the music/sound toggles and the Retire rite.
             Box(
                 modifier = Modifier
-                    .background(if (musicOn) TapestryGreen else TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
-                    .border(1.dp, TapestryDark, RoundedCornerShape(2.dp))
-                    .clickable { onToggleMusic() }
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                    .testTag("toggle_harp_music_btn")
+                    .size(26.dp)
+                    .background(TapestryLinenBg, androidx.compose.foundation.shape.CircleShape)
+                    .border(2.dp, TapestryDark, androidx.compose.foundation.shape.CircleShape)
+                    .clickable { onOpenMenu() }
+                    .testTag("open_pause_menu_btn"),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = if (musicOn) "🎵" else "🎵✕",
-                    color = TapestryLight,
-                    fontSize = 10.sp
-                )
-            }
-            // SFX Toggle
-            var sfxOn by remember { mutableStateOf(com.example.game.MedievalAudioSynth.sfxEnabled) }
-            Box(
-                modifier = Modifier
-                    .background(if (sfxOn) TapestryGreen else TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
-                    .border(1.dp, TapestryDark, RoundedCornerShape(2.dp))
-                    .clickable {
-                        sfxOn = !sfxOn
-                        com.example.game.MedievalAudioSynth.sfxEnabled = sfxOn
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    repeat(2) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 3.dp, height = 11.dp)
+                                .background(TapestryDark, RoundedCornerShape(1.dp))
+                        )
                     }
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                    .testTag("toggle_sfx_btn")
-            ) {
-                Text(
-                    text = if (sfxOn) "🔊" else "🔇",
-                    color = TapestryLight,
-                    fontSize = 10.sp
-                )
+                }
             }
         }
     }
@@ -1460,7 +1636,11 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit) {
                 if (item.pierce > 0f) add("P${item.pierce.toInt()}")
                 if (item.slash > 0f) add("S${item.slash.toInt()}")
                 if (item.blunt > 0f) add("B${item.blunt.toInt()}")
-                if (item.defense > 0f) add("DEF${item.defense.toInt()}")
+                // Shields don't add armour — they roll to block, by weight, and wear down per block
+                if (item is com.example.game.GameData.Shield && item.defense > 0f) {
+                    add("BLK${(item.blockChance * 100).toInt()}%")
+                    add("HP${(item.defense * 2f).toInt()}")
+                } else if (item.defense > 0f) add("DEF${item.defense.toInt()}")
                 if (!item.isRanged && item.reach > 0f) add("RCH${"%.1f".format(item.reach)}")
                 if (item.isRanged) add("RANGED")
             }.joinToString("  ")
@@ -1688,6 +1868,10 @@ fun BattlefieldScene(
         val fixedBackdropCache = remember { TapestryBackdropCache() }
         val worldBackdropCache = remember { TapestryBackdropCache() }
         val weatherFlash by viewModel.weatherFlash.collectAsState()
+        // Clock the flourish from when the UI first SEES the flash, not from when the tap fired.
+        // Under frame lag the wall-clock window could expire before a single frame drew it, so the
+        // weather looked like it "didn't work" even though its combat effect had applied.
+        val weatherFlashShownAt = remember(weatherFlash) { System.currentTimeMillis() }
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -1720,6 +1904,9 @@ fun BattlefieldScene(
             // block's coordinates) land 45px above the border — room for bodies/blood pools,
             // no dead space.
             val groundOffsetY = (size.height - 40f - 45f) - (200f + 158f * scaleFactor)
+            // Vertical camera follow: as the player climbs a hill (negative terrainLiftY) the whole
+            // world shifts down by the same amount, so he never walks up out of frame.
+            val cameraLiftY = -(playerFighter?.terrainLiftY ?: 0f) * scaleFactor
 
             val canvasWidth = size.width.toInt().coerceAtLeast(1)
             val canvasHeight = size.height.toInt().coerceAtLeast(1)
@@ -1784,7 +1971,7 @@ fun BattlefieldScene(
             }
             withTransform({
                 clipRect(top = 40f, bottom = size.height - 40f)
-                translate(left = offsetX - worldPadding, top = offsetY)
+                translate(left = offsetX - worldPadding, top = offsetY + cameraLiftY)
             }) {
                 drawImage(worldBackdrop)
             }
@@ -1792,7 +1979,7 @@ fun BattlefieldScene(
             withTransform({
                 // Keep the game world inside the embroidered borders (40px bands)
                 clipRect(top = 40f, bottom = size.height - 40f)
-                translate(left = offsetX, top = offsetY + groundOffsetY)
+                translate(left = offsetX, top = offsetY + groundOffsetY + cameraLiftY)
             }) {
                 // Hill slope sits behind all scenery and fighters, matching their lifted feet.
                 uiState.hillState?.let { hill ->
@@ -1928,7 +2115,29 @@ fun BattlefieldScene(
                     val sy = 200f + (proj.posY - 200f) * scaleFactor
                     val arrowDir = if (proj.velocityX > 0) 1f else -1f
 
-                    if (proj.launchedWeaponId != null) {
+                    if (proj.id.startsWith("bee_hive_")) {
+                        // A flying bee skep: banded straw dome with the swarm trailing behind it
+                        val dome = Path().apply {
+                            moveTo(sx - 9f, sy + 6f)
+                            quadraticTo(sx - 10f, sy - 8f, sx, sy - 10f)
+                            quadraticTo(sx + 10f, sy - 8f, sx + 9f, sy + 6f)
+                            close()
+                        }
+                        drawPath(dome, Color(0xFFD9B871))
+                        drawPath(dome, TapestryDark, style = Stroke(width = 1.5f))
+                        for (band in 0..2) {
+                            val by = sy + 4f - band * 5f
+                            drawLine(TapestryDark.copy(alpha = 0.6f), Offset(sx - 9f + band, by), Offset(sx + 9f - band, by), strokeWidth = 1.5f)
+                        }
+                        drawCircle(TapestryDark, radius = 2f, center = Offset(sx, sy + 2f)) // entrance hole
+                        // The swarm streaming after it
+                        val brng = kotlin.random.Random(proj.id.hashCode())
+                        repeat(5) { b ->
+                            val bx = sx - arrowDir * (12f + brng.nextFloat() * 22f)
+                            val by = sy - 6f + brng.nextFloat() * 12f
+                            drawCircle(if (b % 2 == 0) Color(0xFFD6A420) else TapestryDark, radius = 1.6f, center = Offset(bx, by))
+                        }
+                    } else if (proj.launchedWeaponId != null) {
                         // Drawing miniature launched weapon head as the projectile!
                         val weaponHeadId = proj.launchedWeaponId
                         if (weaponHeadId == "head_axe") {
@@ -2105,10 +2314,13 @@ fun BattlefieldScene(
                 }
             }
 
+            // (The Halley's-comet portent — the "miniature sun" — is retired along with its hidden
+            // 1.5x both-sides buff. Weather visuals are reserved for the divine weather rewards.)
+
             // Divine weather sits outside the camera transform, so the flourish washes the whole
             // field. The charges themselves are buttons in the header bar, not on the map.
-            weatherFlash?.let { (weather, firedAt) ->
-                val elapsed = (System.currentTimeMillis() - firedAt) / 1000f
+            weatherFlash?.let { (weather, _) ->
+                val elapsed = (System.currentTimeMillis() - weatherFlashShownAt) / 1000f
                 if (elapsed <= WEATHER_FLOURISH_SECS) {
                     drawWeatherFlourish(this, weather, elapsed / WEATHER_FLOURISH_SECS)
                 }
@@ -2122,11 +2334,12 @@ fun BattlefieldScene(
             modifier = Modifier.align(Alignment.Center)
         ) {
             val isWin = uiState.battleWon
+            val isRetired = uiState.isRetired
             Card(
                 colors = CardDefaults.cardColors(containerColor = TapestryLinenCard),
                 modifier = Modifier
                     .width(420.dp)
-                    .border(4.dp, if (isWin) TapestryGreen else TapestryRed, RoundedCornerShape(8.dp))
+                    .border(4.dp, if (isWin) TapestryGreen else if (isRetired) TapestryMustard else TapestryRed, RoundedCornerShape(8.dp))
                     .padding(4.dp),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -2138,11 +2351,11 @@ fun BattlefieldScene(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = if (isWin) "VICTORIA GLORIOSUS!" else "MORTIS ET DEFEAT!",
+                        text = if (isWin) "VICTORIA GLORIOSUS!" else if (isRetired) "RETIRED WITH HONOUR" else "MORTIS ET DEFEAT!",
                         fontFamily = FontFamily.Serif,
                         fontWeight = FontWeight.Black,
                         fontSize = 18.sp,
-                        color = if (isWin) TapestryGreen else TapestryRed
+                        color = if (isWin) TapestryGreen else if (isRetired) TapestryMustard else TapestryRed
                     )
 
                     
@@ -2474,6 +2687,23 @@ internal fun drawWeatherIcon(
                 scope.drawCircle(TapestryDark.copy(alpha = alpha), radius = r, center = Offset(cx + dx, cy + dy), style = Stroke(width = 1.2f))
             }
         }
+        DivineWeather.FROGS -> { // one plump frog, mid-leap
+            val body = Path().apply {
+                moveTo(cx - 8f, cy + 6f)
+                quadraticTo(cx - 6f, cy - 6f, cx + 4f, cy - 5f)
+                quadraticTo(cx + 10f, cy - 4f, cx + 9f, cy + 3f)
+                quadraticTo(cx + 2f, cy + 8f, cx - 8f, cy + 6f)
+                close()
+            }
+            scope.drawPath(body, TapestryGreen.copy(alpha = alpha))
+            scope.drawPath(body, TapestryDark.copy(alpha = alpha), style = Stroke(width = 1.5f))
+            // Folded leaping leg
+            scope.drawLine(TapestryGreen.copy(alpha = alpha), Offset(cx - 7f, cy + 6f), Offset(cx - 12f, cy + 1f), strokeWidth = 2.5f, cap = StrokeCap.Round)
+            scope.drawLine(TapestryGreen.copy(alpha = alpha), Offset(cx - 12f, cy + 1f), Offset(cx - 13f, cy + 9f), strokeWidth = 2.5f, cap = StrokeCap.Round)
+            // Bulging eyes
+            scope.drawCircle(Color.White.copy(alpha = alpha), radius = 2.5f, center = Offset(cx + 3f, cy - 7f))
+            scope.drawCircle(TapestryDark.copy(alpha = alpha), radius = 1.2f, center = Offset(cx + 3.5f, cy - 7f))
+        }
         DivineWeather.FROST -> { // six-armed frost crystal
             repeat(6) { i ->
                 val a = (Math.PI / 3.0 * i).toFloat()
@@ -2566,7 +2796,9 @@ internal fun drawWeatherFlourish(
 ) {
     val p = progress.coerceIn(0f, 1f)
     val fade = 1f - p
-    val fieldRect = innerFieldRect(scope.size, with(scope) { 2.dp.toPx() })
+    // The heavens open over the WHOLE tapestry, border bands included — boxed inside the inner
+    // field the flourish read as weather-in-a-window.
+    val fieldRect = androidx.compose.ui.geometry.Rect(0f, 0f, scope.size.width, scope.size.height)
     val geometry = weatherFlourishGeometry(weather, fieldRect, p)
 
     scope.withTransform({
@@ -2582,6 +2814,7 @@ internal fun drawWeatherFlourish(
             DivineWeather.FLOOD -> TapestryBlue.copy(alpha = fade * 0.16f)
             DivineWeather.HAIL -> TapestryBlue.copy(alpha = fade * 0.18f)
             DivineWeather.FROST -> TapestryBlue.copy(alpha = fade * 0.30f)
+            DivineWeather.FROGS -> TapestryGreen.copy(alpha = fade * 0.14f)
         }
         drawRect(
             color = washColor,
@@ -2705,6 +2938,44 @@ internal fun drawWeatherFlourish(
                             geometry.groundY +
                                 srng.nextFloat() * (geometry.impactBottomY - geometry.groundY)
                         ),
+                        style = Stroke(width = 2f)
+                    )
+                }
+            }
+        }
+        is FrogsFlourishGeometry -> {
+            // Falling frogs: plump green bodies with trailing legs, seeded so they do not
+            // jitter, and landing hop-rings where they strike the earth.
+            val rng = kotlin.random.Random(1068L)
+            repeat(60) {
+                val x = geometry.dropRect.left + rng.nextFloat() * geometry.dropRect.width
+                val startY = rng.nextFloat() * geometry.dropRect.height
+                val y = geometry.dropRect.top +
+                    (startY + p * geometry.dropRect.height * 2.2f) % geometry.dropRect.height
+                val s = 0.7f + rng.nextFloat() * 0.6f
+                val frogGreen = Color(0xFF4C7A3D).copy(alpha = fade * 0.95f)
+                // Body
+                drawOval(frogGreen, topLeft = Offset(x - 7f * s, y - 5f * s), size = Size(14f * s, 10f * s))
+                drawOval(TapestryDark.copy(alpha = fade * 0.8f), topLeft = Offset(x - 7f * s, y - 5f * s), size = Size(14f * s, 10f * s), style = Stroke(width = 1.5f))
+                // Trailing splayed legs (falling posture)
+                drawLine(frogGreen, Offset(x - 5f * s, y + 3f * s), Offset(x - 11f * s, y - 6f * s), strokeWidth = 2f * s, cap = StrokeCap.Round)
+                drawLine(frogGreen, Offset(x + 5f * s, y + 3f * s), Offset(x + 11f * s, y - 6f * s), strokeWidth = 2f * s, cap = StrokeCap.Round)
+                // Eyes
+                drawCircle(Color.White.copy(alpha = fade), radius = 1.8f * s, center = Offset(x - 3f * s, y - 5f * s))
+                drawCircle(Color.White.copy(alpha = fade), radius = 1.8f * s, center = Offset(x + 3f * s, y - 5f * s))
+            }
+            // Hop-rings where they land
+            val srng = kotlin.random.Random(3066L)
+            repeat(16) {
+                val x = fieldRect.left + srng.nextFloat() * fieldRect.width
+                val hitAt = srng.nextFloat()
+                val since = p - hitAt
+                if (since in 0f..0.4f) {
+                    val r = since / 0.4f
+                    drawOval(
+                        TapestryGreen.copy(alpha = (1f - r) * fade * 0.7f),
+                        topLeft = Offset(x - (6f + r * 18f), geometry.groundY + srng.nextFloat() * (geometry.impactBottomY - geometry.groundY) - (2f + r * 5f)),
+                        size = Size((6f + r * 18f) * 2f, (2f + r * 5f) * 2f),
                         style = Stroke(width = 2f)
                     )
                 }
@@ -2860,7 +3131,7 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
     
     paint.textSize = 35f
     paint.typeface = android.graphics.Typeface.SERIF
-    val statusText = if(isWin) "Vanquished" else "Perished"
+    val statusText = if (isWin) "Vanquished" else if (uiState.isRetired) "Retired" else "Perished"
     androidCanvas.drawText("Status: " + statusText + " | Score: " + uiState.score + " | Kills: " + uiState.totalKills, width / 2f, 150f, paint)
     
     val wpnBase = uiState.weaponHead.itemName + " on a " + uiState.weaponHandle.itemName

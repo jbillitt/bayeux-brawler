@@ -83,6 +83,11 @@ object ProceduralMedievalComposer {
 
     private fun renderEvents(bus: MixBus, spec: SongSpec, a: VoiceAssignment, events: List<NoteEvent>, sr: Int, duck: Float, hrng: Random) {
         val isPerc = a.line == LineRef.PERC
+        // Phone speakers reproduce almost nothing below ~400Hz, so a drum's fundamental vanishes
+        // and only its brief transient is left competing against held voices that sustain their
+        // full level. Percussion therefore runs a flat mix boost — on-paper "correct" gains are
+        // exactly why every previous pass left the drums inaudible on a handset.
+        val percBoost = if (isPerc) 1.8f else 1f
         for (e in events) {
             val jitterMs = if (isPerc) 1f else 3f
             val offs = ((e.startBeat * spec.secondsPerBeat) * sr).toInt() + ((hrng.nextFloat() * 2f - 1f) * jitterMs / 1000f * sr).toInt()
@@ -93,7 +98,7 @@ object ProceduralMedievalComposer {
             val tail = releaseTail(a.voice) * (spec.secondsPerBeat * 2f).coerceIn(0.35f, 1f)
             val phraseIndex = (e.startBeat / (spec.beatsPerBar * 4f)).toInt()
             val note = renderNote(a.voice, e.midi, durSec + tail, vel, sr, hrng, phraseIndex)
-            bus.add(note, offs, a.gain * duck, a.pan, reverbSendFor(a.voice))
+            bus.add(note, offs, a.gain * duck * percBoost, a.pan, reverbSendFor(a.voice))
         }
     }
 

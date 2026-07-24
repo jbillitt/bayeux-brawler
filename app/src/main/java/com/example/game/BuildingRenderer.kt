@@ -142,6 +142,8 @@ internal fun renderBackgroundObject(scope: DrawScope, bg: BackgroundObject, cx: 
         BackgroundObjectType.CASTLE_GATE -> drawCastleGate(scope, cx, cy, bg.hp, bg.maxHp)
         BackgroundObjectType.MOTTE -> drawSiegeMotte(scope, cx, cy, bg)
         BackgroundObjectType.FEASTING_HALL -> drawFeastingHall(scope, cx, cy, bg)
+        BackgroundObjectType.INTERIOR_KITCHEN -> drawInteriorKitchen(scope, cx, cy, bg)
+        BackgroundObjectType.INTERIOR_CHAMBER -> drawInteriorChamber(scope, cx, cy, bg)
         BackgroundObjectType.FLEET_CROSSING -> drawFleetCrossing(scope, cx, cy, bg)
         BackgroundObjectType.MONT_SAINT_MICHEL -> drawMontSaintMichel(scope, cx, cy, bg)
         BackgroundObjectType.STAMFORD_BRIDGE -> drawStamfordBridge(scope, cx, cy, bg)
@@ -440,6 +442,111 @@ internal fun drawFeastingHall(scope: DrawScope, cx: Float, cy: Float, bg: Backgr
                 scope.drawLine(Color(0xFF8F3328), Offset(px, cy - 39f), Offset(px + 8f, cy - 53f), 4f)
             }
         }
+}
+
+/** Shared interior shell: plastered gable walls and roof beams, same footprint as the feast hall. */
+private fun drawInteriorShell(scope: DrawScope, cx: Float, cy: Float) {
+    val beam = Color(0xFF5C4029)
+    val plaster = Color(0xFFD8C49B)
+    val back = Path().apply {
+        moveTo(cx - 235f, cy + 28f); lineTo(cx - 235f, cy - 145f)
+        lineTo(cx, cy - 214f); lineTo(cx + 235f, cy - 145f); lineTo(cx + 235f, cy + 28f); close()
+    }
+    drawStitchedFill(scope, back, plaster)
+    scope.drawPath(back, ThreadColor, style = StitchedStroke)
+    scope.drawLine(beam, Offset(cx - 230f, cy - 143f), Offset(cx, cy - 208f), 8f)
+    scope.drawLine(beam, Offset(cx, cy - 208f), Offset(cx + 230f, cy - 143f), 8f)
+}
+
+internal fun drawInteriorKitchen(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+    val rng = Random(bg.seed)
+    val beam = Color(0xFF5C4029)
+    drawInteriorShell(scope, cx, cy)
+    // Great hearth on the left: stone arch, fire, and a hanging cauldron
+    val hearth = Path().apply {
+        moveTo(cx - 210f, cy + 25f); lineTo(cx - 210f, cy - 85f)
+        lineTo(cx - 95f, cy - 85f); lineTo(cx - 95f, cy + 25f); close()
+    }
+    drawStitchedFill(scope, hearth, Color(0xFF8A8478))
+    scope.drawPath(hearth, ThreadColor, style = StitchedStroke)
+    scope.drawOval(Color(0xFF2C2219), Offset(cx - 190f, cy - 55f), androidx.compose.ui.geometry.Size(75f, 75f))
+    scope.drawOval(Color(0xFFE07020), Offset(cx - 178f, cy - 20f), androidx.compose.ui.geometry.Size(50f, 40f))
+    scope.drawOval(Color(0xFFFFC34D), Offset(cx - 165f, cy - 8f), androidx.compose.ui.geometry.Size(24f, 24f))
+    scope.drawLine(beam, Offset(cx - 152f, cy - 85f), Offset(cx - 152f, cy - 48f), 3f)
+    scope.drawArc(Color(0xFF4C5154), 0f, 180f, false, Offset(cx - 172f, cy - 60f), androidx.compose.ui.geometry.Size(40f, 34f))
+    // Hanging pots and herbs along the ridge
+    for (i in 0..4) {
+        val px = cx - 40f + i * 55f
+        scope.drawLine(beam, Offset(px, cy - 160f + i % 2 * 8f), Offset(px, cy - 128f), 2f)
+        if (i % 2 == 0) {
+            scope.drawArc(Color(0xFF636A6E), 0f, 180f, true, Offset(px - 14f, cy - 132f), androidx.compose.ui.geometry.Size(28f, 22f))
+        } else {
+            scope.drawCircle(Color(0xFF4C613D), 10f, Offset(px, cy - 122f))
+        }
+    }
+    // Prep table on the right with loaves, a cleaver and a shelf above
+    val table = Path().apply {
+        moveTo(cx + 30f, cy - 27f); lineTo(cx + 205f, cy - 27f)
+        lineTo(cx + 190f, cy + 5f); lineTo(cx + 45f, cy + 5f); close()
+    }
+    drawStitchedFill(scope, table, Color(0xFF8B6037))
+    scope.drawPath(table, ThreadColor, style = StitchedStroke)
+    scope.drawLine(beam, Offset(cx + 60f, cy + 2f), Offset(cx + 66f, cy + 36f), 8f)
+    scope.drawLine(beam, Offset(cx + 178f, cy + 2f), Offset(cx + 172f, cy + 36f), 8f)
+    for (i in 0..2) {
+        scope.drawOval(Color(0xFFC49A43), Offset(cx + 55f + i * 45f, cy - 40f), androidx.compose.ui.geometry.Size(30f, 12f))
+    }
+    scope.drawLine(Color(0xFF8C969E), Offset(cx + 150f, cy - 42f), Offset(cx + 180f, cy - 32f), 5f)
+    scope.drawLine(beam, Offset(cx + 40f, cy - 95f), Offset(cx + 200f, cy - 95f), 6f)
+    for (i in 0..3) {
+        val jarCol = if (rng.nextBoolean()) Color(0xFF265063) else Color(0xFF9E3624)
+        scope.drawRect(jarCol, Offset(cx + 55f + i * 38f, cy - 118f), androidx.compose.ui.geometry.Size(16f, 22f))
+    }
+}
+
+internal fun drawInteriorChamber(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+    val rng = Random(bg.seed)
+    val beam = Color(0xFF5C4029)
+    drawInteriorShell(scope, cx, cy)
+    // A wall tapestry (of course) between two candle sconces
+    val tap = Path().apply {
+        moveTo(cx - 70f, cy - 165f); lineTo(cx + 70f, cy - 165f)
+        lineTo(cx + 70f, cy - 90f); lineTo(cx - 70f, cy - 90f); close()
+    }
+    drawStitchedFill(scope, tap, if (rng.nextBoolean()) Color(0xFF9E3624) else Color(0xFF265063))
+    scope.drawPath(tap, ThreadColor, style = StitchedStroke)
+    scope.drawLine(Color(0xFFD6A420), Offset(cx - 45f, cy - 140f), Offset(cx + 45f, cy - 140f), 4f)
+    scope.drawLine(Color(0xFFD6A420), Offset(cx - 45f, cy - 118f), Offset(cx + 45f, cy - 118f), 4f)
+    listOf(-110f, 110f).forEach { x ->
+        scope.drawLine(beam, Offset(cx + x, cy - 120f), Offset(cx + x, cy - 100f), 4f)
+        scope.drawCircle(Color(0xFFFFC34D), 7f, Offset(cx + x, cy - 128f))
+    }
+    // Curtained bed on the left
+    val bed = Path().apply {
+        moveTo(cx - 215f, cy + 20f); lineTo(cx - 215f, cy - 30f)
+        lineTo(cx - 80f, cy - 30f); lineTo(cx - 80f, cy + 20f); close()
+    }
+    drawStitchedFill(scope, bed, Color(0xFF632873))
+    scope.drawPath(bed, ThreadColor, style = StitchedStroke)
+    scope.drawOval(Color(0xFFEFE6D4), Offset(cx - 205f, cy - 42f), androidx.compose.ui.geometry.Size(42f, 20f))
+    scope.drawLine(beam, Offset(cx - 215f, cy - 30f), Offset(cx - 215f, cy - 95f), 6f)
+    scope.drawLine(beam, Offset(cx - 80f, cy - 30f), Offset(cx - 80f, cy - 95f), 6f)
+    scope.drawLine(beam, Offset(cx - 218f, cy - 95f), Offset(cx - 77f, cy - 95f), 5f)
+    // Chairs and a small table on the right
+    val table = Path().apply {
+        moveTo(cx + 55f, cy - 20f); lineTo(cx + 150f, cy - 20f)
+        lineTo(cx + 140f, cy + 5f); lineTo(cx + 65f, cy + 5f); close()
+    }
+    drawStitchedFill(scope, table, Color(0xFF8B6037))
+    scope.drawPath(table, ThreadColor, style = StitchedStroke)
+    scope.drawLine(beam, Offset(cx + 75f, cy + 2f), Offset(cx + 78f, cy + 34f), 7f)
+    scope.drawLine(beam, Offset(cx + 130f, cy + 2f), Offset(cx + 127f, cy + 34f), 7f)
+    listOf(20f, 175f).forEach { x ->
+        scope.drawLine(beam, Offset(cx + x, cy + 34f), Offset(cx + x, cy - 45f), 6f) // chair back
+        scope.drawLine(beam, Offset(cx + x, cy - 2f), Offset(cx + x + 26f, cy - 2f), 6f) // seat
+        scope.drawLine(beam, Offset(cx + x + 26f, cy - 2f), Offset(cx + x + 26f, cy + 34f), 6f)
+    }
+    scope.drawCircle(Color(0xFFD6A420), 8f, Offset(cx + 100f, cy - 30f)) // goblet on the table
 }
 
 internal fun drawFleetCrossing(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {

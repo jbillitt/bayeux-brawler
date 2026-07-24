@@ -13,7 +13,7 @@
 - **No gradle wrapper exists.** Use the system gradle on PATH (Gradle 9.6.0). Never write `./gradlew`.
 - Unit tests: `gradle :app:testDebugUnitTest --console=plain`. Compile check: `gradle :app:compileDebugKotlin --console=plain`.
 - **Gradle daemon quirk:** if a command has not returned after ~60s it is not still compiling. Check `~/.gradle/daemon/9.6.0/daemon-*.out.log` for `BUILD SUCCESSFUL` or `e: ` lines, then `gradle --stop` and re-run.
-- **Depends on Batch A + B being merged.** The seven handles in `GameData.UNLOCKABLE_HANDLE_IDS` must already exist; this plan makes them reachable.
+- **Depends on Batch A + B being merged.** The seven handles in `GameData.UNLOCKABLE_HANDLE_IDS` already exist and already roll in the base pool, marked with ✦ in the picker as coming unlocks. This plan turns that promise into fact: it filters them out of the base roll and grants them by milestone instead.
 - `GameViewModel` is a plain `ViewModel()` (`GameViewModel.kt:107`) with no Android context. Do **not** convert it to `AndroidViewModel`. Follow the existing context pattern: a singleton `object` with an `init(context)` called from `MainActivity.onCreate` (see `MainActivity.kt:70` for `VectorAsset.init`).
 - DataStore reads and writes are suspending. Never block the game loop on them.
 - Every milestone must grant exactly once, ever. A level-threshold check with no `clearedMilestones` guard re-fires on every run.
@@ -627,17 +627,46 @@ viewModelScope.launch { GameProfile.setHighscore(newHighscore) }
 
 `recordDeath` is what C3's ad cadence reads. `setHighscore` makes the highscore survive — it is currently reset to 0 on every new run (`GameViewModel.kt:292`).
 
-- [ ] **Step 8: Run the full suite**
+- [ ] **Step 8: Make good on the ✦ marker — gate the handles**
+
+Batch A shipped the seven handles in the base pool with a ✦ meaning "earned by deeds in a later age". That age is now. Two changes:
+
+At `GameViewModel.kt:286`, filter them out of the random roll:
+
+```kotlin
+initialGear.addAll(GameData.WEAPON_HANDLES.filter { it.id !in GameData.UNLOCKABLE_HANDLE_IDS }
+    .shuffled().take(2).map { it.id })
+```
+
+They still reach the pool for anyone who has earned them, because Task 3 unions the saved set on top.
+
+At `MainActivity.kt`, the picker still marks them — but the legend text is now a lie. Change it from `"✦ free for now — earned by deeds in a later age"` to:
+
+```kotlin
+Text(
+    "✦ earned by deeds",
+    color = TapestryDark.copy(alpha = 0.6f),
+    fontSize = 7.sp,
+    textAlign = TextAlign.Center,
+    modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+)
+```
+
+Leave the ✦ prefix on the item name itself alone — it now marks an earned item, which is worth showing off.
+
+**Anyone who played Batch A keeps nothing.** The handles were free then and are gated now, and there is no saved record of having used them. This is a deliberate, accepted regression for pre-C1 players: the alternative is a migration that grants seven items to everyone who ever opened the app, which defeats the feature. If that trade is unacceptable, say so before implementing — granting all seven on first C1 launch is a two-line change to `GameProfile.load()`.
+
+- [ ] **Step 9: Run the full suite**
 
 Run: `gradle :app:testDebugUnitTest --console=plain`
 
 Expected: PASS
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add app/src/main/java/com/example/game/GameViewModel.kt app/src/test/java/com/example/game/MilestoneTest.kt
-git commit -m "feat: fire unlock milestones after a won battle"
+git add app/src/main/java/com/example/game/GameViewModel.kt app/src/main/java/com/example/MainActivity.kt app/src/test/java/com/example/game/MilestoneTest.kt
+git commit -m "feat: fire unlock milestones, and gate the marked handles behind them"
 ```
 
 ---

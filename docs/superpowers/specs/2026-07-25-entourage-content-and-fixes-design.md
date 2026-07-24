@@ -21,7 +21,7 @@ they belong together in a later spec.
 3. Trojan Horse spearmen inherit the retinue panoply.
 4. Stilts detach from small players (render bug).
 5. Bosses cleave — anti-swarm difficulty fix.
-6. Seven new weapon handles (unlock-gated, dormant).
+6. Seven new weapon handles (in the pool now, marked as future unlocks).
 7. Ten new armour pieces.
 
 ### Batch B — sound folders
@@ -250,21 +250,25 @@ skip-list at `:687`. The zero-defence comic outfits also need entries in
 `MagazinePreviewTest` / `ArtScreenshotTest` Roborazzi harness. This matters more
 than usual here — see the gating decision below.
 
-## 8. Gating — dormant until Batch C
+## 8. Gating — in the pool now, marked as a future unlock
 
-The new handles are unlock-gated. There is already an exact precedent:
-`GameData.STRANGE_HEAD_IDS` (`SimulationModels.kt:169`), a set of ids held out of
-the normal pools and offered only by a rare card.
+The seven new handles roll in the base pool from day one, exactly like any other
+handle. Each is **marked in the picker** so the player can see it is destined to
+become an earned item rather than a permanent freebie.
 
-Batch A adds `GameData.UNLOCKABLE_HANDLE_IDS` the same way and excludes it from
-the base roll at `GameViewModel.kt:286`. **No unlock trigger is wired in this
-batch** — this is the user's explicit decision. Batch C wires persistence and the
-milestone grants that make them reachable.
+`GameData.UNLOCKABLE_HANDLE_IDS` is still added in Batch A — it is what drives
+the marker, and Batch C reuses the same set to gate the pool once the milestones
+exist. Nothing about the set changes between batches; only whether the base roll
+filters on it.
 
-**Stated consequence:** the seven handles are unreachable in normal play until
-Batch C ships. The screenshot tests in §6/§7 are therefore the *only* verification
-that the new art is correct, which makes blessing those goldens carefully a
-requirement, not a nicety.
+The marker is one prefix character on the handle name in the picker
+(`MainActivity.kt:1542`) plus a legend line under the row, not a new composable.
+
+**Why this rather than shipping them dormant:** content nobody can reach cannot
+be playtested. Seven handles sitting behind an unwired gate would have had no
+verification but a human squinting at a PNG — and the screenshot harness asserts
+nothing (`ArtScreenshotTest.kt:34-38`). In the pool, they get exercised by normal
+play immediately, and the C1 change to re-gate them is a one-line filter.
 
 The armour pieces are **not** unlock-gated, but they follow the existing base-roll
 convention at `GameViewModel.kt:288`, which already excludes the stackable layers

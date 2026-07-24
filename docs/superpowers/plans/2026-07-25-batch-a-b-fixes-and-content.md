@@ -648,7 +648,7 @@ git commit -m "fix: startNewGame seeded two gear ids that do not exist"
 **Interfaces:**
 - Produces: `GameData.UNLOCKABLE_HANDLE_IDS: Set<String>`, and seven new `GameData.WeaponHandle` entries
 
-**Background:** `GameData.STRANGE_HEAD_IDS` (`SimulationModels.kt:169`) is the existing precedent for content held out of the normal pools. Mirror it exactly. Batch C wires the unlock triggers; **this task wires no trigger**, so the seven handles are deliberately unreachable in play until then.
+**Background:** `GameData.STRANGE_HEAD_IDS` (`SimulationModels.kt:169`) is the existing precedent for an id set that content-gating reads from. Mirror its shape. **The difference here: this set does not filter the base roll yet.** The seven handles roll freely in Batch A and carry a ✦ marker in the picker announcing they will become earned items. C1 adds the filter and the milestones. Building the set now means C1 is a one-line change.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -699,9 +699,9 @@ Directly below `val WEAPON_HANDLES = WeaponHandle.values().toList()` (`Simulatio
 
 ```kotlin
     /**
-     * Handles earned by playing, never in the opening roll — the same treatment STRANGE_HEAD_IDS
-     * gives the relic heads. Batch C wires the milestones that grant them; until then they are
-     * deliberately unreachable in play.
+     * Handles destined to be earned rather than rolled. For now they roll like anything else and
+     * the picker marks them with a ✦; C1 adds the milestones and filters this set out of the
+     * opening roll, the way STRANGE_HEAD_IDS already holds the relic heads back.
      */
     val UNLOCKABLE_HANDLE_IDS = setOf(
         "handle_oar", "handle_femur", "handle_antler", "handle_trumpet",
@@ -709,19 +709,33 @@ Directly below `val WEAPON_HANDLES = WeaponHandle.values().toList()` (`Simulatio
     )
 ```
 
-- [ ] **Step 5: Hold them out of the base roll**
+- [ ] **Step 5: Leave the base roll alone, and mark them in the picker**
 
-At `GameViewModel.kt:286`, change:
+The seven handles roll normally for now — `GameViewModel.kt:286` is **not** changed in this batch. They are marked instead, so a player can see they will become earned items later. C1 adds the filter that gates them once the milestones exist.
+
+At `MainActivity.kt:1563`, the handle cell renders `text = handle.itemName`. Change it to:
 
 ```kotlin
-initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(2).map { it.id })
+Text(
+    // Marked as a coming unlock: it rolls freely today, C1 makes it something you earn.
+    text = if (handle.id in GameData.UNLOCKABLE_HANDLE_IDS) "✦ ${handle.itemName}" else handle.itemName,
+    color = if (isHandleSelected) TapestryLight else TapestryDark,
+    fontSize = 8.sp,
+    fontWeight = FontWeight.Bold,
+    textAlign = TextAlign.Center
+)
 ```
 
-to:
+Directly beneath the closing brace of the handle `Row` (`MainActivity.kt:1572`), add the legend so the star means something:
 
 ```kotlin
-initialGear.addAll(GameData.WEAPON_HANDLES.filter { it.id !in GameData.UNLOCKABLE_HANDLE_IDS }
-    .shuffled().take(2).map { it.id })
+Text(
+    "✦ free for now — earned by deeds in a later age",
+    color = TapestryDark.copy(alpha = 0.6f),
+    fontSize = 7.sp,
+    textAlign = TextAlign.Center,
+    modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+)
 ```
 
 - [ ] **Step 6: Run the tests**
@@ -733,8 +747,8 @@ Expected: PASS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add app/src/main/java/com/example/game/SimulationModels.kt app/src/main/java/com/example/game/GameViewModel.kt app/src/test/java/com/example/game/GameDataTest.kt
-git commit -m "feat: seven unlockable weapon handles, gated out of the base pool"
+git add app/src/main/java/com/example/game/SimulationModels.kt app/src/main/java/com/example/MainActivity.kt app/src/test/java/com/example/game/GameDataTest.kt
+git commit -m "feat: seven new weapon handles, marked as future unlocks"
 ```
 
 ---
@@ -828,7 +842,7 @@ Expected: BUILD SUCCESSFUL, PNGs written to `app/src/test/screenshots/`.
 
 - [ ] **Step 6: Look at every one of them**
 
-**Open `app/src/test/screenshots/` and inspect all seven handles by eye.** Check specifically that the axe head sits at the top of each haft and does not float away from it or overlap the grip. These files assert nothing — this human pass is the only check on the new art, and because Batch C has not wired the unlocks, these handles cannot be reached in play to be checked any other way.
+**Open `app/src/test/screenshots/` and inspect all seven handles by eye.** Check specifically that the axe head sits at the top of each haft and does not float away from it or overlap the grip. These files assert nothing, so this is a human pass — but it is no longer the only check: the handles roll in the base pool from this batch, so they can also be picked up and swung in a real run.
 
 - [ ] **Step 7: Commit**
 
@@ -1335,8 +1349,12 @@ Run: `gradle :app:testDebugUnitTest --tests "*ArtScreenshotTest*" --tests "*Maga
 
 State plainly in the completion report:
 - Assertions covering the frontline lead, the panoply, stilt geometry, boss cleave, plank poison, gear data and sound folders — all passing.
-- The seven unlockable handles are **unreachable in play** until Batch C wires the milestones, so their only verification is the human screenshot pass.
+- All seventeen new gear items roll in the base pool and are reachable in play. The seven handles carry the ✦ marker flagging them as future unlocks.
 - `ArtScreenshotTest` and `MagazinePreviewTest` assert nothing about pixels. Do not report them as visual regressions caught or passed.
+
+- [ ] **Step 5: Play it**
+
+Install the debug APK and start runs until each of the seven handles has been rolled and swung at least once. This is the verification that the dormant plan could not have given: the marker renders, the head sockets onto the haft in motion, and the plank actually poisons.
 
 ---
 
@@ -1349,6 +1367,8 @@ State plainly in the completion report:
 1. **Boss cleave needs no `BOSS_CLEAVE_FRACTION` constant.** The spec proposed one at 0.6. `meleeSweep` already applies `damageFalloff` (`CombatEngine.kt:743`, `:953`), multiplying secondary targets down by 0.5 per additional target. Task 4 reuses it and adds one branch instead of a new damage path.
 
 2. **The screenshot tests cannot verify the stilts fix.** The spec said to "re-bless goldens". There are no goldens — `ArtScreenshotTest.kt:34-38` states outright that nothing fails on a pixel diff. Task 3 therefore extracts `stiltTopY` / `stiltGroundY` as pure functions and asserts them against the leg position across five body sizes. The screenshots remain a human eyeball pass, correctly labelled as such throughout.
+
+3. **The seven handles ship in the base pool, marked, not dormant** (user decision, reversing the earlier call). `UNLOCKABLE_HANDLE_IDS` still exists in Task 6 — it drives the ✦ marker in the picker, and C1 reuses the same set as a base-roll filter once milestones exist. This is why Task 6 Step 5 changes `MainActivity.kt` rather than `GameViewModel.kt:286`, and why Task 12 gains a play-test step.
 
 **Placeholder scan.** No TBD/TODO. Every code step carries real code. Task 11 Step 8 and Task 7 Step 4 direct the implementer to locate existing call sites by search rather than quoting line numbers that will have shifted by then — the search terms are exact.
 

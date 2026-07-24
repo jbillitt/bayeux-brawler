@@ -1,8 +1,9 @@
 # Progression & Monetisation — Design (Batch C)
 
 Follows `2026-07-25-entourage-content-and-fixes-design.md` (Batches A + B) and
-depends on it: the seven unlock-gated handles ship dormant there and become
-reachable here.
+depends on it: the seven new handles ship there in the base pool, marked with a
+✦ as coming unlocks. This batch makes good on that marker — it filters them out
+of the random roll and grants them by milestone instead.
 
 ## Why this is a separate spec
 
@@ -31,7 +32,7 @@ Three waves. The split exists because C1 delivers the entire unlock loop with
 drawings in C2.
 
 - **C1 — the loop.** Persistence, milestone tracking, unlock grants, and the
-  UI that shows them. Content comes from Batch A's seven dormant handles plus
+  UI that shows them. Content comes from Batch A's seven ✦-marked handles plus
   promoting the four existing Strange Relics to selectable weapon heads.
 - **C2 — new unlockable art.** Special mounts, hats and hairstyles.
 - **C3 — ads and IAP.**

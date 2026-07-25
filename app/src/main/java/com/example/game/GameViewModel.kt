@@ -165,6 +165,12 @@ class GameViewModel : ViewModel() {
         // Every live particle is a draw call per frame, so this is a frame-budget number, not a
         // taste one. 120 still reads as a gout of blood; 250 was costing frames on mid devices.
         /**
+         * The gear a run may draw on: this run's random roll, plus everything ever earned. Reads the
+         * cached profile so it never suspends on the game loop.
+         */
+        fun poolWithUnlocks(roll: Set<String>): Set<String> = roll + GameProfile.cached.unlockedItemIds
+
+        /**
          * Kit one ally out in the retinue panoply. Shared by the start-of-battle pass and the
          * Trojan Horse's spearmen, who spawn long after that pass has run.
          */
@@ -306,10 +312,22 @@ class GameViewModel : ViewModel() {
 
         _uiState.update { it.copy(
             highscore = 0,
-            unlockedGearIds = initialGear,
+            unlockedGearIds = poolWithUnlocks(initialGear),
             hasThroneOption = kotlin.random.Random.nextFloat() < 0.2f
         ) }
         randomizeGear()
+
+        // Reading the profile suspends, so the pool above is built from whatever was already cached
+        // (nothing, on the first launch of the process). Re-apply once it has actually loaded, or
+        // earned gear is missing until the player dies once and the retry path rebuilds the pool.
+        viewModelScope.launch {
+            GameProfile.migrateBatchAHandles()
+            val profile = GameProfile.load()
+            _uiState.update { it.copy(
+                unlockedGearIds = poolWithUnlocks(it.unlockedGearIds),
+                highscore = profile.highscore
+            ) }
+        }
         
         val sizes = listOf(0.85f, 1.0f, 1.15f)
         // Must match the start-screen hair swatches exactly, or the preselected colour highlights no
@@ -2073,7 +2091,7 @@ class GameViewModel : ViewModel() {
                     // Preselect hair like gear — always one of the start-screen palette options
                     hairColor = HAIR_COLORS.random(rng),
                     hairStyle = listOf("short", "long", "bald").random(rng),
-                    unlockedGearIds = initialGear,
+                    unlockedGearIds = poolWithUnlocks(initialGear),
                     extraAttachments = emptyList(),
                     extraArmors = emptyList(),
                     handleExtensionCount = 0,

@@ -57,6 +57,24 @@ class GameProfileTest {
     }
 
     @Test
+    fun theRunPoolIsTheRandomRollPlusEverythingEarned() = runTest {
+        GameProfile.grant("handle_anchor", "defeat_hardrada")
+        GameProfile.load()
+
+        val roll = setOf("head_sword", "handle_medium", "shield_kite")
+        val pool = GameViewModel.poolWithUnlocks(roll)
+
+        assertTrue("earned items must always be present", "handle_anchor" in pool)
+        assertTrue("the random roll must survive", "head_sword" in pool)
+    }
+
+    @Test
+    fun anEmptyProfileLeavesTheRollUntouched() = runTest {
+        val roll = setOf("head_sword", "handle_medium")
+        assertEquals(roll, GameViewModel.poolWithUnlocks(roll))
+    }
+
+    @Test
     fun theBatchAMigrationDecidesOnceAndOnlyOnce() = runTest {
         GameProfile.migrateBatchAHandles()
         val first = GameProfile.load()

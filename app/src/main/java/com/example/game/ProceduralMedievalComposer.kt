@@ -87,7 +87,9 @@ object ProceduralMedievalComposer {
         // and only its brief transient is left competing against held voices that sustain their
         // full level. Percussion therefore runs a flat mix boost — on-paper "correct" gains are
         // exactly why every previous pass left the drums inaudible on a handset.
-        val percBoost = if (isPerc) 1.8f else 1f
+        // CALIBRATION KNOB — tuned by ear on a handset, not derived. 1.8 was still inaudible in
+        // play; raise this first if the drums go quiet again, before touching per-voice gains.
+        val percBoost = if (isPerc) 2.7f else 1f
         for (e in events) {
             val jitterMs = if (isPerc) 1f else 3f
             val offs = ((e.startBeat * spec.secondsPerBeat) * sr).toInt() + ((hrng.nextFloat() * 2f - 1f) * jitterMs / 1000f * sr).toInt()

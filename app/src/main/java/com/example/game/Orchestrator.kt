@@ -28,7 +28,7 @@ private fun <T> weightedPick(rng: Random, options: List<Pair<T, Float>>): T {
 
 fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): OrchestrationPlan {
     when (spec.family) {
-        Family.BRAWL -> return planBrawlOrchestration(spec, hasTrumpeter)
+        Family.BRAWL -> return planBrawlOrchestration(spec, hasTrumpeter, rng)
         Family.THRONE -> return planThroneOrchestration(spec, hasTrumpeter)
         else -> {}
     }
@@ -161,17 +161,39 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
 }
 
 /** BRAWL: a cumulative medieval speed-metal arrangement with sparse upper-level flourishes. */
-private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean): OrchestrationPlan {
+private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): OrchestrationPlan {
     val a = mutableListOf<VoiceAssignment>()
-    a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, 1, 99, 0.46f, 0.4f)
-    a += VoiceAssignment(Voice.TABOR, LineRef.PERC, 1, 99, 0.34f, -0.45f)
-    a += VoiceAssignment(Voice.LUTE, LineRef.RIFF, 1, 99, 0.38f, -0.3f)
-    a += VoiceAssignment(Voice.GURDY, LineRef.DRONE, 1, 99, 0.36f, -0.6f)
-    a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, 1, 99, 0.36f, -0.6f)
-    a += VoiceAssignment(Voice.SHAWM, LineRef.MELODY, 1, 99, 0.40f, 0f)
+
+    // The harp takes the tune. It is the fastest plucked voice in the consort and the nearest
+    // thing here to a lead guitar; it used to strum ACCOMP behind a shawm carrying the melody.
+    a += VoiceAssignment(Voice.HARP, LineRef.MELODY, 1, 99, 0.46f, 0f)
+
+    // Everything from here rolls per run. The opening line-up was a fixed seven voices, so every
+    // brawl in every run began with the identical wall of sound and they all blurred together.
+    val riff = weightedPick(rng, listOf(Voice.LUTE to 0.5f, Voice.GURDY to 0.3f, Voice.PSALTERY to 0.2f))
+    a += VoiceAssignment(riff, LineRef.RIFF, 1, 99, 0.38f, -0.3f)
+
+    // Who answers the harp, and whether they open alongside it or arrive a level or two in.
+    val foil = weightedPick(rng, listOf(Voice.SHAWM to 0.45f, Voice.VIELLE to 0.3f, Voice.FIDDLE2 to 0.25f))
+    a += VoiceAssignment(foil, LineRef.COUNTER, 1 + rng.nextInt(3), 99, 0.34f, 0.4f)
+
+    // Kit: kick and snare are fixed — it is metal — but the third drum and its entry vary.
+    a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, 1, 99, 0.62f, 0.4f)   // double kick
+    a += VoiceAssignment(Voice.TABOR, LineRef.PERC, 1, 99, 0.50f, -0.45f)  // snare
+    val thirdDrum = weightedPick(rng, listOf(Voice.BODHRAN to 0.6f, Voice.TAMBOURINE to 0.4f))
+    a += VoiceAssignment(thirdDrum, LineRef.PERC, 1 + rng.nextInt(2), 99, 0.24f, -0.55f)
+
+    // The drone bed. Never the same voice as the riff, or the low end turns to porridge.
+    val drone = weightedPick(
+        rng,
+        listOf(Voice.GURDY to 0.6f, Voice.ORGAN to 0.4f).filter { it.first != riff }
+            .ifEmpty { listOf(Voice.ORGAN to 1f) }
+    )
+    a += VoiceAssignment(drone, LineRef.DRONE, 1, 99, 0.36f, -0.6f)
+    // GURDY+SPARKLE is the buzz-accent mapping in the composer facade, not an arpeggio.
+    if (drone == Voice.GURDY) a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, 1, 99, 0.36f, -0.6f)
 
     a += VoiceAssignment(Voice.VIOLA, LineRef.BASS, 2, 99, 0.32f, -0.2f)
-    a += VoiceAssignment(Voice.BODHRAN, LineRef.PERC, 2, 99, 0.24f, -0.55f)
     a += VoiceAssignment(Voice.RECORDER, LineRef.FLOURISH, 2, 99, 0.12f, 0.55f)
     if (hasTrumpeter) a += VoiceAssignment(Voice.HORN, LineRef.TRUMPETER, 2, 99, 0.16f, 0.3f)
 
@@ -179,16 +201,34 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean): Orche
     a += VoiceAssignment(Voice.HORN, LineRef.PADS_FIFTH, 3, 99, 0.15f, 0.1f)
     a += VoiceAssignment(Voice.HORN, LineRef.FLOURISH, 3, 99, 0.18f, 0.25f)
 
-    a += VoiceAssignment(Voice.TAMBOURINE, LineRef.PERC, 4, 99, 0.15f, 0.65f)
-    a += VoiceAssignment(Voice.VIELLE, LineRef.COUNTER, 4, 99, 0.14f, 0.35f)
+    if (thirdDrum != Voice.TAMBOURINE) a += VoiceAssignment(Voice.TAMBOURINE, LineRef.PERC, 4, 99, 0.15f, 0.65f)
     a += VoiceAssignment(Voice.BELLS, LineRef.SPARKLE, 5, 99, 0.10f, 0.7f)
     a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, 5, 99, 0.28f, 0f)
-    a += VoiceAssignment(Voice.PSALTERY, LineRef.RIFF, 6, 99, 0.10f, 0.45f, octave = 1)
-    a += VoiceAssignment(Voice.FIDDLE2, LineRef.MELODY_ORN, 7, 99, 0.15f, 0.4f)
+    if (riff != Voice.PSALTERY) a += VoiceAssignment(Voice.PSALTERY, LineRef.RIFF, 6, 99, 0.10f, 0.45f, octave = 1)
+    // The harp's own divisions an octave up — the lead taking a solo over its own riff.
+    a += VoiceAssignment(Voice.HARP, LineRef.MELODY_ORN, 7, 99, 0.18f, 0.25f, octave = 1)
     a += VoiceAssignment(Voice.PANPIPES, LineRef.FLOURISH, 8, 99, 0.11f, 0.6f)
-    a += VoiceAssignment(Voice.HARP, LineRef.FLOURISH, 9, 99, 0.11f, -0.5f)
     a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 10, 99, 0.08f, 0f)
     a += VoiceAssignment(Voice.CHOIR, LineRef.FLOURISH, 11, 99, 0.10f, 0.2f)
+
+    // Late consort: whatever the rolls above left out joins for the closing stretch, quietly.
+    // The variation is meant to change how a brawl OPENS, not to cost a long run voices — a
+    // deep run should still end up hearing the whole palette.
+    val used = a.map { it.voice }.toSet()
+    var lateLevel = 12
+    fun late(v: Voice, line: LineRef, gain: Float, pan: Float, octave: Int = 0) {
+        if (v in used) return
+        a += VoiceAssignment(v, line, lateLevel, 99, gain, pan, octave = octave)
+        lateLevel++
+    }
+    late(Voice.LUTE, LineRef.RIFF, 0.16f, -0.45f)
+    late(Voice.GURDY, LineRef.DRONE, 0.14f, -0.7f)
+    late(Voice.BODHRAN, LineRef.PERC, 0.16f, -0.5f)
+    late(Voice.SHAWM, LineRef.MELODY, 0.16f, -0.35f)
+    late(Voice.VIELLE, LineRef.COUNTER, 0.14f, 0.35f)
+    late(Voice.FIDDLE2, LineRef.MELODY_ORN, 0.14f, 0.4f)
+    late(Voice.PSALTERY, LineRef.SPARKLE, 0.10f, 0.5f)
+    late(Voice.TAMBOURINE, LineRef.PERC, 0.13f, 0.65f)
     return OrchestrationPlan(a, destinyFanfare = false)
 }
 
@@ -270,12 +310,24 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
                 }
             }
             Voice.NAKERS -> if (spec.family == Family.BRAWL) {
-                // Double-time gallop: the wilder double-hit is the FLOOR here, not the ceiling.
+                // A true double kick: continuous 16ths, not the old 8th-note gallop, which at this
+                // tempo just read as one pedal working hard. Accents mark the bar and the beat so
+                // the pulse survives; short durations keep the low end from smearing into a drone.
                 var b = 0f
                 while (b < bpb - 1e-3f) {
-                    val accent = b % 2f == 0f
-                    out += NoteEvent(base + b, 0.25f, if (accent) 56 else 57, if (accent) 1f else 0.6f)
-                    b += 0.5f
+                    val barAccent = b % 2f == 0f
+                    val onBeat = b % 1f == 0f
+                    out += NoteEvent(
+                        base + b,
+                        0.12f,
+                        if (barAccent) 56 else 57,
+                        when {
+                            barAccent -> 1f
+                            onBeat -> 0.78f
+                            else -> 0.5f
+                        }
+                    )
+                    b += 0.25f
                 }
             } else if (bar % 4 == 0) {
                 out += NoteEvent(base, 0.4f, 56, 0.9f); out += NoteEvent(base + 0.5f, 0.3f, 57, 0.6f)

@@ -69,8 +69,13 @@ private val BRAWL_PHRYGIAN_GROUNDS = listOf(
     listOf(0, 1, 0, 1, 0, 6, 1, 0)
 )
 private val THRONE_GROUNDS = listOf(
-    listOf(0, 6, 5, 4, 0, 6, 4, 0),   // descending tetrachord, then bVII-V-i
-    listOf(0, 6, 5, 4, 0, 5, 4, 0)    // tetrachord answered by VI/bVI-V-i
+    // Rising, cadential progressions — a coronation, not a cortege. Both of the old grounds
+    // opened on a descending tetrachord (0-6-5-4), which is the lamento bass: the stock
+    // Baroque ground for grief. No tempo or mode change survives that in the bass.
+    listOf(0, 4, 5, 3, 0, 3, 4, 0),   // I-V-vi-IV / I-IV-V-I — the processional
+    listOf(0, 3, 0, 4, 5, 3, 4, 0),   // I-IV-I-V / vi-IV-V-I — answered by a full cadence
+    listOf(0, 5, 3, 4, 0, 4, 3, 0),   // I-vi-IV-V, the stately turn
+    listOf(0, 6, 5, 4, 0, 5, 4, 0)    // one tetrachord kept, for the sombre coronation
 )
 
 // Normal rotation only — BRAWL and THRONE are trigger-selected, never rolled.
@@ -123,9 +128,12 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
             groundDegrees = grounds[rng.nextInt(grounds.size)]
         }
         Family.THRONE -> {                       // royal processional — throne mode only
-            // Regal, not ominous: major (Ionian) or fanfare-flat-7 (Mixolydian)
-            mode = if (rng.nextBoolean()) Mode.IONIAN else Mode.MIXOLYDIAN
-            bpm = 66 + rng.nextInt(11)           // 66-76
+            // Regal, not ominous: major (Ionian) mostly, fanfare-flat-7 (Mixolydian) sometimes.
+            // Weighted to Ionian — an even split let half the coronations come out modal and grim.
+            mode = if (rng.nextInt(10) < 7) Mode.IONIAN else Mode.MIXOLYDIAN
+            // 66-76 was a funeral, not a coronation. A processional march walks at ~90: fast
+            // enough to have a stride, slow enough to be stately.
+            bpm = 86 + rng.nextInt(13)           // 86-98
             beatsPerBar = 4; totalBars = 16
             groundDegrees = THRONE_GROUNDS[rng.nextInt(THRONE_GROUNDS.size)]
         }
@@ -155,7 +163,7 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
     // the counter-voice falls out of its playable register.
     bpm = bpm.coerceIn(40, when {
         family == Family.BRAWL -> 184
-        family == Family.THRONE -> 76
+        family == Family.THRONE -> 98
         beatsPerBar == 6 -> 84
         else -> 150
     })

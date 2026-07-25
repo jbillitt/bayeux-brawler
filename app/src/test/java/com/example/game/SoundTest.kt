@@ -100,12 +100,15 @@ class SoundTest {
     fun throneThemeIsStatelyAndRegal() {
         for (seed in 1L..10L) {
             val spec = resolveSongSpec(seed, emptyList(), throne = true)
-            assertTrue("throne bpm ${spec.bpm}", spec.bpm in 66..76)
+            // A processional march, not a cortege — 66-76 read as a funeral.
+            assertTrue("throne bpm ${spec.bpm}", spec.bpm in 86..98)
             // Regal, not ominous: major (Ionian) or fanfare-flat-7 (Mixolydian)
             assertTrue(spec.mode == Mode.IONIAN || spec.mode == Mode.MIXOLYDIAN)
             assertEquals(8, spec.ground.size)
-            // Descending tetrachord head: i - bVII - VI/bVI - V
-            assertEquals(listOf(0, 6, 5, 4), spec.ground.take(4).map { it.bassDegree })
+            // Must open on the tonic and cadence home; the old grounds all opened on the
+            // descending lamento tetrachord (0-6-5-4), which is the Baroque ground for grief.
+            assertEquals(0, spec.ground.first().bassDegree)
+            assertEquals(0, spec.ground.last().bassDegree)
         }
     }
 
@@ -138,12 +141,14 @@ class SoundTest {
         assertEquals("every existing medieval voice should join by the late game", Voice.values().toSet(), voices)
         assertTrue("no destiny fanfare", !plan.destinyFanfare)
         val l1 = activeAssignments(plan, 1)
+        // The opening line-up now rolls per run, so this pins the ROLES that must be present
+        // at level one, not the specific instruments filling them.
         assertTrue("level one needs the metal rhythm section: $l1",
-            l1.any { it.voice == Voice.LUTE && it.line == LineRef.RIFF } &&
+            l1.any { it.line == LineRef.RIFF } &&
                 l1.any { it.voice == Voice.NAKERS } &&
                 l1.any { it.voice == Voice.TABOR } &&
-                l1.any { it.voice == Voice.SHAWM } &&
-                l1.any { it.voice == Voice.GURDY })
+                l1.any { it.voice == Voice.HARP && it.line == LineRef.MELODY } &&
+                l1.any { it.line == LineRef.DRONE })
         for (level in 1 until 11) {
             val current = activeAssignments(plan, level).toSet()
             val next = activeAssignments(plan, level + 1).toSet()
@@ -155,8 +160,9 @@ class SoundTest {
     fun brawlNakersGallopEveryBar() {
         val spec = resolveSongSpec(7L, emptyList(), brawl = true)
         val events = percussionEvents(spec, Voice.NAKERS, wilder = true)
-        // 8 eighth-note hits per 4/4 bar, every bar — the engine of the theme.
-        assertEquals(8 * spec.totalBars, events.size)
+        // 16 sixteenth-note hits per 4/4 bar, every bar — a true double kick. At 8ths this
+        // read as one pedal working hard rather than two feet.
+        assertEquals(16 * spec.totalBars, events.size)
     }
 
     @Test

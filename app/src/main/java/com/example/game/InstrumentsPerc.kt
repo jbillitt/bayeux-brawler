@@ -4,8 +4,13 @@ import kotlin.random.Random
 
 internal fun renderPerc(voice: Voice, midi: Int, durSec: Float, velocity: Float, sr: Int, rng: Random): FloatArray = when (voice) {
     Voice.BELLS      -> bells(midi, durSec, sr, rng)
-    Voice.NAKERS     -> membrane(if (midi % 2 == 0) 150.0 else 200.0, durSec, sr, rng, t60 = 0.18f, drop = 0.03, noiseAmp = 0.95f, slapAmp = 1.3f, bodyAmp = 0.7f)
-    Voice.TIMPANI    -> membrane(timpaniFundamental(midi), durSec, sr, rng, t60 = 1.1f, drop = 0.04, noiseAmp = 0.55f, slapAmp = 0.7f, bodyAmp = 1.1f)
+    // CALIBRATION: membrane() ends in normalise(0.9), so every hit peaks the same however these
+    // are set — what they actually control is how much of that fixed peak sits in the 300-900Hz
+    // knock/body bands a phone speaker can reproduce, versus the fundamental it cannot. Raising
+    // slapAmp/bodyAmp is therefore the real "make the drums audible" lever; percBoost in
+    // ProceduralMedievalComposer is the other. Tuned by ear on a handset.
+    Voice.NAKERS     -> membrane(if (midi % 2 == 0) 150.0 else 200.0, durSec, sr, rng, t60 = 0.22f, drop = 0.03, noiseAmp = 1.2f, slapAmp = 2.2f, bodyAmp = 1.7f)
+    Voice.TIMPANI    -> membrane(timpaniFundamental(midi), durSec, sr, rng, t60 = 1.1f, drop = 0.04, noiseAmp = 0.55f, slapAmp = 1.1f, bodyAmp = 1.6f)
     Voice.BODHRAN    -> membrane(72.0, durSec, sr, rng, t60 = 0.13f, drop = 0.05, noiseAmp = 0.85f, slapAmp = 1.2f, bodyAmp = 1.5f)
     Voice.TABOR      -> tabor(durSec, sr, rng)
     Voice.TAMBOURINE -> tambourine(durSec, sr, rng)

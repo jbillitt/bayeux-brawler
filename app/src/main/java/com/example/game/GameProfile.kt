@@ -50,6 +50,19 @@ object GameProfile {
         appContext = context.applicationContext
     }
 
+    /**
+     * Forget the context, so every call below becomes a no-op again.
+     *
+     * Test support. This is a process-wide singleton, so a test that calls [init] otherwise leaves a
+     * Robolectric Application here after its sandbox has been torn down; the next test class to
+     * construct a GameViewModel then does DataStore I/O against a dead classloader and deadlocks the
+     * whole run. Any test that calls [init] must call this in an @After.
+     */
+    fun shutdown() {
+        appContext = null
+        cached = Profile()
+    }
+
     suspend fun load(): Profile {
         val ctx = appContext ?: return Profile()
         val prefs = ctx.profileStore.data.first()

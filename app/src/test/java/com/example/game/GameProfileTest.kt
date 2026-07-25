@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,6 +24,10 @@ class GameProfileTest {
         // The store outlives a single test method, so start every one from a known-empty profile.
         kotlinx.coroutines.runBlocking { GameProfile.clearForTest() }
     }
+
+    /** Leaving this Application on the singleton deadlocks later test classes. See GameProfile.shutdown. */
+    @After
+    fun tearDown() = GameProfile.shutdown()
 
     @Test
     fun aFreshProfileIsEmptyRatherThanACrash() = runTest {

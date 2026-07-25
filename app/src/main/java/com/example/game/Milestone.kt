@@ -16,7 +16,8 @@ enum class Milestone(
     REACH_5("reach_level_5", "Off the Beach", "Reach level 5", "handle_oar"),
     FIRST_SIEGE("first_siege", "Breaker of Gates", "Clear your first siege", "handle_plank"),
     BEAT_HAROLD("beat_harold", "The Eye of the King", "Defeat Harold Godwinson", "handle_antler"),
-    THREE_SIEGES("three_sieges", "Castellan", "Clear three sieges", "handle_wheelbarrow"),
+    // Per-run, not lifetime: siegesClearedThisRun resets with the run, so say so plainly.
+    THREE_SIEGES("three_sieges", "Castellan", "Clear three sieges in one run", "handle_wheelbarrow"),
     BEAT_HARDRADA("beat_hardrada", "Stamford Bridge", "Defeat Harald Hardrada", "handle_anchor"),
     BEAT_GIANT("beat_giant", "Giant-Slayer", "Defeat Gog or Magog", "handle_femur"),
     BEAT_WILLIAM("beat_william", "The Usurper", "Defeat William the Bastard", "handle_trumpet"),

@@ -309,7 +309,10 @@ class GameViewModel : ViewModel() {
         
         // Randomly unlock 2 more of each category to start
         initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
-        initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(2).map { it.id })
+        // The seven unlockables are earned, not rolled — the ✦ marker's promise, now kept. They still
+        // reach the pool for anyone who has earned them, via poolWithUnlocks below.
+        initialGear.addAll(GameData.WEAPON_HANDLES.filter { it.id !in GameData.UNLOCKABLE_HANDLE_IDS }
+            .shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.ARMOR_PIECES.filter {
                     it.id !in listOf(
@@ -1745,9 +1748,58 @@ class GameViewModel : ViewModel() {
         particleBuffer.addAll(newParticles)
     }
 
+    /**
+     * Sieges cleared in the current run, for the siege milestones. Deliberately per-run rather than
+     * a lifetime tally: three sieges in one run is the achievement, and it needs no extra saved key.
+     */
+    private var siegesClearedThisRun = 0
+
+    /**
+     * Check every milestone the run's current state could have satisfied. Cheap — eleven set
+     * lookups — and only runs between battles, so there is no reason to be clever about it.
+     */
+    private fun checkMilestones(
+        won: Boolean, level: Int, kills: Int, woreNoArmour: Boolean,
+        bossBeaten: BossType?, usedFistsOnly: Boolean, siegesCleared: Int
+    ) {
+        if (!won) return
+        val earned = buildList {
+            if (level >= 5) add(Milestone.REACH_5)
+            if (level >= 20) add(Milestone.REACH_20)
+            if (kills >= 500) add(Milestone.FIVE_HUNDRED_KILLS)
+            if (woreNoArmour) add(Milestone.NAKED_WIN)
+            if (siegesCleared >= 1) add(Milestone.FIRST_SIEGE)
+            if (siegesCleared >= 3) add(Milestone.THREE_SIEGES)
+            when (bossBeaten) {
+                BossType.HAROLD_GODWINSON -> add(Milestone.BEAT_HAROLD)
+                BossType.HARALD_HARDRADA -> add(Milestone.BEAT_HARDRADA)
+                BossType.WILLIAM_THE_BASTARD -> add(Milestone.BEAT_WILLIAM)
+                BossType.GOG, BossType.MAGOG -> add(Milestone.BEAT_GIANT)
+                null -> {}
+            }
+            if (bossBeaten != null && usedFistsOnly) add(Milestone.BARE_FISTED_BOSS)
+        }
+        if (earned.isEmpty()) return
+        viewModelScope.launch {
+            earned.forEach { m ->
+                if (awardMilestone(m)) {
+                    addPopup("UNLOCKED: ${m.label}", 400f, 200f, Color(0xFFB08221))
+                }
+            }
+            // The pool is rebuilt from the freshly granted set so the new gear is selectable now,
+            // not only after the next death.
+            _uiState.update { it.copy(unlockedGearIds = poolWithUnlocks(it.unlockedGearIds)) }
+        }
+    }
+
     private fun endBattle(won: Boolean) {
         gameLoopJob?.cancel()
-        
+
+        // Read before the update block: it is what the milestone checks are judged against, and
+        // that lambda can be re-executed.
+        val pre = _uiState.value
+        if (won && pre.siegeState != null) siegesClearedThisRun++
+
         _uiState.update { state ->
             val finalMultiplier = state.scoreMultiplier
             val scoreEarned = if (won) (100 * state.level * finalMultiplier).toInt() else 0
@@ -2035,6 +2087,24 @@ class GameViewModel : ViewModel() {
             )
         }
 
+        // Milestones are checked outside the update lambda above, which can be re-executed.
+        val post = _uiState.value
+        checkMilestones(
+            won = won,
+            level = post.level,
+            kills = post.totalKills,
+            woreNoArmour = pre.armor.id == "armor_bare" && pre.extraArmors.isEmpty(),
+            bossBeaten = if (won) pre.bossType else null,
+            usedFistsOnly = pre.weaponHead.id == "head_bare" && pre.weaponHandle.id == "handle_fists",
+            siegesCleared = siegesClearedThisRun
+        )
+
+        // The highscore has to outlive the process; a defeat is what C3's ad cadence counts.
+        viewModelScope.launch {
+            GameProfile.setHighscore(post.highscore)
+            if (!won) GameProfile.recordDeath()
+        }
+
         // The run's score is NOT cleared here: the defeat card and its shared tapestry are still
         // showing it. It resets in dismissBattleResult, when the next run actually begins.
     }
@@ -2045,6 +2115,7 @@ class GameViewModel : ViewModel() {
             if (isGameOver) {
                 // Generate a new song seed for the next run!
                 MedievalHarpPlayer.newGame()
+                siegesClearedThisRun = 0 // the siege milestones count within a single run
                 val initialGear = mutableSetOf<String>()
                 initialGear.add("head_bare")
                 initialGear.add("handle_fists")
@@ -2052,7 +2123,8 @@ class GameViewModel : ViewModel() {
                 initialGear.add("armor_bare")
                 initialGear.add("helm_none")
                 initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
-                initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(3).map { it.id })
+                initialGear.addAll(GameData.WEAPON_HANDLES.filter { it.id !in GameData.UNLOCKABLE_HANDLE_IDS }
+                    .shuffled().take(3).map { it.id })
                 initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.ARMOR_PIECES.filter {
                     it.id !in listOf(

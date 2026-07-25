@@ -66,6 +66,10 @@ class MilestoneAwardTest {
         kotlinx.coroutines.runBlocking { GameProfile.clearForTest() }
     }
 
+    /** Leaving this Application on the singleton deadlocks later test classes. See GameProfile.shutdown. */
+    @org.junit.After
+    fun tearDown() = GameProfile.shutdown()
+
     @Test
     fun aMilestoneFiresOnceAndOnlyOnce() = runTest {
         val first = GameViewModel.awardMilestone(Milestone.REACH_5)

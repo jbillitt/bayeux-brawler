@@ -1223,6 +1223,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 defender.slowDuration = 2.5f
                 defender.attackCooldown = (defender.attackCooldown + 1.2f).coerceAtMost(3f)
                 ctx.popup("STUNG!", defender.posX, 140f, Color(0xFFD6A420))
+                // Direct call rather than ctx.sound: that route only carries synth SoundTypes, and
+                // this is a recording folder. Harmless with no app context — playFolder returns false.
+                MedievalAudioSynth.playBeeSwarm()
                 repeat(10) {
                     ctx.particle(
                         BloodParticle(

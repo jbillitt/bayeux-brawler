@@ -1145,6 +1145,11 @@ class GameViewModel : ViewModel() {
         // Play battle start timpani roll
         MedievalAudioSynth.playSound(SoundType.DRUM_ROLL)
 
+        // Sir Boast-a-lot announces you over the drums (assets/herald; silent until clips are added)
+        if (_uiState.value.unlockedAncillaries.contains(Ancillary.HERALD)) {
+            MedievalAudioSynth.playHeraldBoast()
+        }
+
         // Launch game loop
         startGameLoop()
     }
@@ -1431,6 +1436,7 @@ class GameViewModel : ViewModel() {
                     newEnemiesToSpawn.add(spearman)
                 }
                 MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                MedievalAudioSynth.playTrojanBurst()
             }
         }
         // Reinforcements: once dead foes have scrolled off the left edge and the field has
@@ -1629,6 +1635,18 @@ class GameViewModel : ViewModel() {
         // Old Maud cackles now and then (assets/hag; silent until clips are added)
         if (enemies.any { it.isKind("hag") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.15f) {
             MedievalAudioSynth.playHagCackle()
+        }
+
+        // The rest of the entourage's voices, same rarity-roll pattern (all silent until clips land)
+        if (enemies.any { it.isKind("fanatic") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.15f) {
+            MedievalAudioSynth.playFanaticScream()
+        }
+        if (enemies.any { it.isKind("plague_peasant") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.2f) {
+            MedievalAudioSynth.playPlagueCough()
+        }
+        // The Monk is a non-combatant follower, so he is not on the field to be found in `enemies`.
+        if (_uiState.value.unlockedAncillaries.contains(Ancillary.MONK) && Random.nextFloat() < dt * 0.1f) {
+            MedievalAudioSynth.playMonkChant()
         }
 
         // Softlock watchdog: if no hp anywhere (fighters, mounts, shields, gate) has moved for a

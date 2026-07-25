@@ -73,7 +73,10 @@ object MedievalAudioSynth {
                 }
                 synthIds[type] = ids
             }
-            for (folder in listOf("dog", "hag", "drums", "victory", "pain", "armour", "shield", "flesh")) {
+            for (folder in listOf(
+                "dog", "hag", "drums", "victory", "pain", "armour", "shield", "flesh",
+                "trojan", "bee", "herald", "fanatic", "monk", "plague"
+            )) {
                 val files = ctx.assets.list(folder)?.toList().orEmpty()
                 val poolable = files.filter {
                     it.endsWith(".wav") || it.endsWith(".ogg") || it.endsWith(".mp3")
@@ -157,6 +160,24 @@ object MedievalAudioSynth {
     fun playHagCackle() {
         if (sfxEnabled) playFolder("hag")
     }
+
+    /** The belly of the great horse splitting open. */
+    fun playTrojanBurst() { if (sfxEnabled) playFolder("trojan") }
+
+    /** Humble Bede's hive bursting among the enemy. */
+    fun playBeeSwarm() { if (sfxEnabled) playFolder("bee") }
+
+    /** Sir Boast-a-lot announcing you, at length. */
+    fun playHeraldBoast() { if (sfxEnabled) playFolder("herald") }
+
+    /** Mad Boris, charging. */
+    fun playFanaticScream() { if (sfxEnabled) playFolder("fanatic") }
+
+    /** Brother Tuck at his devotions. */
+    fun playMonkChant() { if (sfxEnabled) playFolder("monk") }
+
+    /** Wretched Aldwin's cough, which is also his weapon. */
+    fun playPlagueCough() { if (sfxEnabled) playFolder("plague") }
 
     fun playSound(type: SoundType) {
         if (!sfxEnabled) return

@@ -248,6 +248,44 @@ class ArtScreenshotTest {
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/fighters.png")
     }
 
+    /**
+     * The seven new handles, each carrying an axe head, so a human can confirm the head sockets
+     * onto the haft. Oar, femur and plank ride the generic straight-haft path; antler, trumpet,
+     * wheelbarrow and anchor each have a bespoke render block. Asserts nothing — eyeball only.
+     */
+    @Test
+    fun newHandles() {
+        fun withHandle(handle: String) = FighterState(
+            id = handle, name = handle, isPlayer = false,
+            maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_axe" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handle },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            // posX offsets the figure into its canvas; at 0 the left column draws half off-screen.
+            posX = 90f, targetX = 90f, facingRight = true, size = 1.0f,
+            hairColor = Color(0xFF5A442E), hairStyle = "short"
+        )
+
+        val cast = GameData.UNLOCKABLE_HANDLE_IDS.sorted().map { withHandle(it) }
+
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                cast.chunked(2).forEach { row ->
+                    Row {
+                        row.forEach { fighter ->
+                            Canvas(modifier = Modifier.width(206.dp).height(190.dp)) {
+                                TapestryRenderer.drawCharacter(this, fighter, scale = 1.0f, isBattleActive = true)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/new_handles.png")
+    }
+
     @Test
     fun productionScaleRendererProducesInk() {
         val monk = EnemyFactory.createArchetype(EnemyArchetype.MONK_MILITIA, 0, 10)

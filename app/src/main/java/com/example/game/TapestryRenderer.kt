@@ -2032,6 +2032,14 @@ object TapestryRenderer {
                 "handle_pike_long" -> 210f
                 "handle_long", "handle_plough" -> 110f
                 "handle_medium", "handle_stump", "handle_ram" -> 70f
+                "handle_wheelbarrow", "handle_anchor" -> 70f
+                "handle_trumpet" -> 55f
+                "handle_antler" -> 40f
+                // The straight new hafts ride the generic path, so length has to track reach here or
+                // an oar (reach 1.4, longer than handle_long) draws as a 30px stub.
+                "handle_oar" -> 120f
+                "handle_plank" -> 65f
+                "handle_femur" -> 10f
                 "handle_chain", "handle_flail_chain" -> 60f
                 "handle_double_ended" -> 80f
                 "handle_blessed_branch" -> 70f
@@ -2207,6 +2215,67 @@ object TapestryRenderer {
                 // Weapon head welds to the branch's visual tip (60,-80 local), not the generic
                 // shaftEnd — there was a visible gap otherwise
                 headPos = Offset(hx + 60f, hy - 80f)
+            } else if (fighter.weaponHandle.id == "handle_antler") {
+                // A forked antler: main beam plus two tines off the outside edge.
+                scope.withTransform({ translate(hx, hy) }) {
+                    val beam = Path().apply {
+                        moveTo(0f, 0f)
+                        quadraticTo(6f, -18f, 2f, -40f)
+                    }
+                    drawPath(beam, fighter.weaponHandle.color, style = Stroke(width = 7f))
+                    drawPath(beam, ThreadColor, style = StitchedStroke)
+                    drawLine(fighter.weaponHandle.color, Offset(3f, -18f), Offset(16f, -26f), strokeWidth = 5f)
+                    drawLine(fighter.weaponHandle.color, Offset(2f, -30f), Offset(14f, -40f), strokeWidth = 5f)
+                }
+                headPos = Offset(hx + 2f, hy - 40f)
+            } else if (fighter.weaponHandle.id == "handle_trumpet") {
+                // Gripped by the bell, tube pointing back along the arm.
+                scope.withTransform({ translate(hx, hy) }) {
+                    drawStitchedStrap(this, Offset(0f, 0f), Offset(0f, -46f), fighter.weaponHandle.color)
+                    val bell = Path().apply {
+                        moveTo(-14f, -46f)
+                        lineTo(14f, -46f)
+                        lineTo(7f, -60f)
+                        lineTo(-7f, -60f)
+                        close()
+                    }
+                    drawStitchedFill(this, bell, fighter.weaponHandle.color)
+                    drawPath(bell, ThreadColor, style = StitchedStroke)
+                }
+                headPos = Offset(hx, hy - 60f)
+            } else if (fighter.weaponHandle.id == "handle_wheelbarrow") {
+                // Two shafts, a tray, and the wheel out front.
+                scope.withTransform({ translate(hx, hy) }) {
+                    drawStitchedStrap(this, Offset(-6f, 0f), Offset(-6f, -62f), fighter.weaponHandle.color)
+                    drawStitchedStrap(this, Offset(8f, 0f), Offset(8f, -62f), fighter.weaponHandle.color)
+                    val tray = Path().apply {
+                        moveTo(-14f, -34f)
+                        lineTo(16f, -34f)
+                        lineTo(12f, -56f)
+                        lineTo(-10f, -56f)
+                        close()
+                    }
+                    drawStitchedFill(this, tray, fighter.weaponHandle.color)
+                    drawPath(tray, ThreadColor, style = StitchedStroke)
+                    drawCircle(Color(0xFF5D4831), radius = 13f, center = Offset(1f, -68f), style = Stroke(width = 5f))
+                }
+                headPos = Offset(hx + 1f, hy - 62f)
+            } else if (fighter.weaponHandle.id == "handle_anchor") {
+                // Iron shank with a stock across it and two hooked flukes at the crown.
+                scope.withTransform({ translate(hx, hy) }) {
+                    drawStitchedStrap(this, Offset(0f, 0f), Offset(0f, -70f), fighter.weaponHandle.color)
+                    drawLine(fighter.weaponHandle.color, Offset(-20f, -52f), Offset(20f, -52f), strokeWidth = 7f)
+                    val flukes = Path().apply {
+                        moveTo(-22f, -70f)
+                        quadraticTo(0f, -84f, 22f, -70f)
+                        quadraticTo(14f, -76f, 0f, -76f)
+                        quadraticTo(-14f, -76f, -22f, -70f)
+                        close()
+                    }
+                    drawStitchedFill(this, flukes, fighter.weaponHandle.color)
+                    drawPath(flukes, ThreadColor, style = StitchedStroke)
+                }
+                headPos = Offset(hx, hy - 78f)
             } else if (fighter.weaponHandle.id == "handle_fists") {
                 // Do nothing for fists handle
             } else {

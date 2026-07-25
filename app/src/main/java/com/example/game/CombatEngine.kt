@@ -95,6 +95,17 @@ class CombatEngine(private val ctx: BattleContext) {
         const val CORPSE_CONTAGION_SECS = 4f
         const val DEATH_PLAGUE_BURST_PX = 130f // his dying gift — wider than the passive miasma
         const val TROJAN_ROLL_MULT = 1.9f // must outpace the player to reach the enemy rear first
+
+        /**
+         * The frontline reaches the fray first. Ancillary speedBoost buffs the *player*, not the
+         * ally, so every recruit makes the lord faster while his dogs stay put — the floor has to
+         * be a ratio against his live speed, not a bigger number on the ally.
+         */
+        const val FRONTLINE_LEAD = 1.2f
+
+        /** Melee chargers who lead the advance. Backline lobbers are ranged and must keep kiting. */
+        val FRONTLINE_KINDS = setOf("fanatic", "wardog", "plague_peasant", "raven")
+
         // Greaser (all tunable). He's crowd control, not damage — the trip is the whole point.
         const val GREASE_SLOW_SECS = 2.5f
         const val GREASE_TRIP_CHANCE = 0.3f
@@ -146,8 +157,14 @@ class CombatEngine(private val ctx: BattleContext) {
         val player = ctx.player ?: return 1f
         if (!fighter.isPlayer || fighter.pallbearerIndex >= 0 || fighter === player) return 1f
         val deltaToPlayer = player.posX - fighter.posX
-        if (deltaToPlayer == 0f || direction * deltaToPlayer <= 0f) return 1f
-        return 1f + ((abs(deltaToPlayer) - 150f) / 300f).coerceIn(0f, 1.5f)
+        val catchUp = if (deltaToPlayer == 0f || direction * deltaToPlayer <= 0f) 1f
+            else 1f + ((abs(deltaToPlayer) - 150f) / 300f).coerceIn(0f, 1.5f)
+
+        // Advancing only: a retreat-speed floor would shove kiters backwards faster than they mean to.
+        if (direction <= 0f) return catchUp
+        if (FRONTLINE_KINDS.none { fighter.isKind(it) }) return catchUp
+        if (fighter.moveSpeed <= 0f) return catchUp
+        return maxOf(catchUp, (player.moveSpeed * FRONTLINE_LEAD) / fighter.moveSpeed)
     }
 
     /**

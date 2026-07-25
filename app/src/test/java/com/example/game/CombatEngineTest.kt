@@ -104,6 +104,33 @@ class CombatEngineTest {
     }
 
     @Test
+    fun frontlineAllyOutrunsASpeedBoostedPlayer() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+
+        val player = fighter(isPlayer = true, posX = 500f).copy(speedBoost = 1.5f)
+        val dog = fighter(isPlayer = true, posX = 460f)
+            .copy(id = "wardog#0", weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" })
+        val foe = fighter(posX = 1200f)
+        ctx.player = player
+        ctx.enemies = listOf(dog, foe)
+
+        val dogStart = dog.posX
+        val playerStart = player.posX
+        repeat(60) {
+            engine.updateFighter(dog, foe, 1f / 60f)
+            engine.updateFighter(player, foe, 1f / 60f)
+        }
+
+        val dogMoved = dog.posX - dogStart
+        val playerMoved = player.posX - playerStart
+        assertTrue(
+            "dog advanced $dogMoved, player advanced $playerMoved — frontline must lead",
+            dogMoved > playerMoved
+        )
+    }
+
+    @Test
     fun flatDamageKillsAndCountsForPlayer() {
         val ctx = FakeContext()
         val engine = CombatEngine(ctx)

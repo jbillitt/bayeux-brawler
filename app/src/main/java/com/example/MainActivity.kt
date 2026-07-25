@@ -376,8 +376,11 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                         ) {
                             // Only shown while ads are actually in play: hidden in debug builds and
                             // gone for good once the purchase is owned.
+                            // ...and behind Features.SHOW_REMOVE_ADS_BUTTON until release day.
                             val storeActivity = LocalContext.current as? android.app.Activity
-                            if (com.example.game.AdGate.adsAllowedNow() && storeActivity != null) {
+                            if (com.example.game.Features.SHOW_REMOVE_ADS_BUTTON &&
+                                com.example.game.AdGate.adsAllowedNow() && storeActivity != null
+                            ) {
                                 Text(
                                     text = "REMOVE ADS" + (com.example.game.Billing.removeAdsPrice?.let { " ($it)" } ?: ""),
                                     fontSize = 9.sp,
@@ -1636,8 +1639,11 @@ fun GearSelectionTabs(
             }
         }
 
-        // Handle attachment selection (Only visible on Weapon Tab, not for ranged)
-        if (selectedTab == 0 && uiState.weaponHead.id != "head_bare" && uiState.weaponHead.id !in listOf("head_bow", "head_longbow", "head_slingshot")) {
+        // Handle attachment selection: sits under the head grid in the SAME menu, and stays put
+        // whatever head is currently picked. Hiding it while bare-handed made it pop into
+        // existence only after a head was chosen, which read as a second, glitchy step.
+        // Ranged heads are still the one exception — a longer shaft does nothing for a bow.
+        if (selectedTab == 0 && uiState.weaponHead.id !in listOf("head_bow", "head_longbow", "head_slingshot")) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "WEAPON HAFT / HANDLE ATTACHMENT",
@@ -2600,6 +2606,17 @@ fun BattlefieldScene(
                                     val anc = uiState.unlockedAncillaries.joinToString(", ") { it.ancillaryName }
                                     Text("Ancillaries: ${if (anc.isEmpty()) "None" else anc}", fontSize = 9.sp, fontFamily = FontFamily.Serif, color = TapestryDark)
                                     Text("Kills: ${uiState.totalKills}", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, color = TapestryRed)
+                                    com.example.game.FlavourText.slainByLine(
+                                        uiState.slainByName, uiState.slainByWeapon
+                                    )?.let { epitaph ->
+                                        Text(
+                                            epitaph,
+                                            fontSize = 9.sp,
+                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                            fontFamily = FontFamily.Serif,
+                                            color = TapestryDark
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -3329,11 +3346,16 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
         textSize = 24f 
         textAlign = android.graphics.Paint.Align.LEFT
     }
-    val wpnText = if (uiState.weaponHead.id == "head_bare" && uiState.weaponHandle.id == "handle_fists") {
+    val wielding = if (uiState.weaponHead.id == "head_bare" && uiState.weaponHandle.id == "handle_fists") {
         "Wielding: Bare Hands (Brawler)"
     } else {
         "Wielding: $wpnName"
     }
+    // The epitaph rides as a second line in the same StaticLayout — it already wraps and centres,
+    // and two lines at 24px still clear the portrait box that starts at y=260.
+    val epitaph = if (isWin) null else
+        com.example.game.FlavourText.slainByLine(uiState.slainByName, uiState.slainByWeapon)
+    val wpnText = if (epitaph != null) "$wielding\n$epitaph" else wielding
     val staticLayout = android.text.StaticLayout.Builder.obtain(wpnText, 0, wpnText.length, textPaint, width - 40)
         .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
         .build()

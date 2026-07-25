@@ -944,12 +944,18 @@ fun CharacterPreviewCard(
                             isMounted = previewMount != null || uiState.isThroneMode,
                             isChariot = previewMount == com.example.game.Ancillary.CHARIOT,
                             isStilts = previewMount == com.example.game.Ancillary.STILTS,
+                            isOx = previewMount == com.example.game.Ancillary.WAR_OX,
+                            isMule = previewMount == com.example.game.Ancillary.PACK_MULE,
+                            isBear = previewMount == com.example.game.Ancillary.WAR_BEAR,
                             isLord = uiState.isThroneMode,
                             mountHp = when {
                                 uiState.isThroneMode -> 100f
                                 previewMount == com.example.game.Ancillary.WARHORSE -> 80f
                                 previewMount == com.example.game.Ancillary.CHARIOT -> 120f
                                 previewMount == com.example.game.Ancillary.STILTS -> 40f
+                                previewMount == com.example.game.Ancillary.WAR_OX -> 140f
+                                previewMount == com.example.game.Ancillary.PACK_MULE -> 40f
+                                previewMount == com.example.game.Ancillary.WAR_BEAR -> 100f
                                 else -> 0f
                             }
                         )

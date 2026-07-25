@@ -171,6 +171,18 @@ class GameViewModel : ViewModel() {
         fun poolWithUnlocks(roll: Set<String>): Set<String> = roll + GameProfile.cached.unlockedItemIds
 
         /**
+         * Earned mounts are saved as Ancillary ids, but the mount picklist and the stat wiring both
+         * read `unlockedAncillaries` — so they have to be folded in there too, or a mount can be won
+         * and never appear. Runs reset that list, which is exactly why this is applied on reset.
+         */
+        fun ancillariesWithUnlocks(current: List<Ancillary>): List<Ancillary> {
+            val earned = GameProfile.cached.unlockedItemIds.mapNotNull { id ->
+                Ancillary.values().firstOrNull { it.id == id }
+            }
+            return current + earned.filter { it !in current }
+        }
+
+        /**
          * Grant a milestone if it has not been granted before. Returns true only on the first award,
          * so the caller knows whether to shout about it.
          */
@@ -338,6 +350,7 @@ class GameViewModel : ViewModel() {
             val profile = GameProfile.load()
             _uiState.update { it.copy(
                 unlockedGearIds = poolWithUnlocks(it.unlockedGearIds),
+                unlockedAncillaries = ancillariesWithUnlocks(it.unlockedAncillaries),
                 highscore = profile.highscore,
                 clearedMilestones = profile.clearedMilestones
             ) }
@@ -654,10 +667,13 @@ class GameViewModel : ViewModel() {
             shieldUpgrades = state.shieldUpgrades,
             brawlerUpgrades = state.brawlerUpgrades,
             shieldHp = shieldHpFor(state.shield, state.shieldUpgrades),
-            isMounted = currentMount == Ancillary.WARHORSE || (currentMount == Ancillary.CHARIOT && !chariotCollapses) || currentMount == Ancillary.STILTS || state.isThroneMode,
-            mountHp = if (state.isThroneMode) 100f else if (currentMount == Ancillary.STILTS) 40f else if (currentMount == Ancillary.CHARIOT && !chariotCollapses) 100f else if (currentMount == Ancillary.WARHORSE) 80f else 0f,
+            isMounted = currentMount == Ancillary.WARHORSE || (currentMount == Ancillary.CHARIOT && !chariotCollapses) || currentMount == Ancillary.STILTS || currentMount == Ancillary.WAR_OX || currentMount == Ancillary.PACK_MULE || currentMount == Ancillary.WAR_BEAR || state.isThroneMode,
+            mountHp = if (state.isThroneMode) 100f else if (currentMount == Ancillary.STILTS) 40f else if (currentMount == Ancillary.CHARIOT && !chariotCollapses) 100f else if (currentMount == Ancillary.WARHORSE) 80f else if (currentMount == Ancillary.WAR_OX) 140f else if (currentMount == Ancillary.PACK_MULE) 40f else if (currentMount == Ancillary.WAR_BEAR) 100f else 0f,
             isChariot = currentMount == Ancillary.CHARIOT && !chariotCollapses,
             isStilts = !state.isThroneMode && currentMount == Ancillary.STILTS,
+            isOx = !state.isThroneMode && currentMount == Ancillary.WAR_OX,
+            isMule = !state.isThroneMode && currentMount == Ancillary.PACK_MULE,
+            isBear = !state.isThroneMode && currentMount == Ancillary.WAR_BEAR,
             isLord = state.isThroneMode,
             hasSilkenGarments = state.hasSilkenGarments,
             bandagesCount = state.bandagesCount
@@ -1791,6 +1807,7 @@ class GameViewModel : ViewModel() {
             // not only after the next death. The trophy rows refresh with it.
             _uiState.update { it.copy(
                 unlockedGearIds = poolWithUnlocks(it.unlockedGearIds),
+                unlockedAncillaries = ancillariesWithUnlocks(it.unlockedAncillaries),
                 clearedMilestones = GameProfile.cached.clearedMilestones
             ) }
         }
@@ -2187,7 +2204,8 @@ class GameViewModel : ViewModel() {
                     hasThroneOption = kotlin.random.Random.nextFloat() < 0.2f,
                     isThroneMode = false,
                     hasTakenThrone = false,
-                    unlockedAncillaries = emptyList(),
+                    // A new man keeps nothing he rallied — but an earned mount is his for good.
+                    unlockedAncillaries = ancillariesWithUnlocks(emptyList()),
                     tripledFollowerIds = emptySet(),
                     // A new man starts with nothing. activeMount was surviving the reset, so the
                     // next run began already riding the last one's chariot.

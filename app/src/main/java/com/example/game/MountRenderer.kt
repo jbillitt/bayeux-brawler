@@ -124,6 +124,263 @@ internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
         scope.drawPath(reignPath, strapColor, style = Stroke(width = 3f))
     }
 
+/**
+ * Four legs on the same swing the horse uses, so every mount walks in one rhythm. Kept as a helper
+ * rather than copied three more times — the hoof colour and stride length are all that ever differ.
+ */
+private fun drawBeastLegs(
+    scope: DrawScope, cx: Float, cy: Float, legSwing: Float,
+    legColor: Color, hoofColor: Color, topY: Float, length: Float, width: Float, spread: Float
+) {
+    val legs = listOf(
+        Triple(cx + spread - 10f, topY, legSwing),
+        Triple(cx + spread, topY, -legSwing),
+        Triple(cx - spread + 10f, topY, -legSwing * 0.8f),
+        Triple(cx - spread, topY, legSwing * 0.8f)
+    )
+    legs.forEach { (lx, ly, angle) ->
+        scope.withTransform({ rotate(angle, pivot = Offset(lx, ly)) }) {
+            val ex = lx + (if (lx > cx) 2f else -2f)
+            val ey = ly + length
+            scope.drawLine(legColor, Offset(lx, ly), Offset(ex, ey), strokeWidth = width, cap = StrokeCap.Round)
+            scope.drawLine(ThreadColor, Offset(lx, ly), Offset(ex, ey), strokeWidth = 2f, cap = StrokeCap.Round)
+            scope.drawCircle(hoofColor, radius = width * 0.7f, center = Offset(ex, ey))
+        }
+    }
+}
+
+/** A plough ox: heavy barrel body, short legs, low head, horns. Slow, and hard to kill. */
+internal fun drawWarOx(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+    val anim = fighter.animFrame
+    val walking = !fighter.isDead && !fighter.isDying
+    val legSwing = if (walking) sin(anim) * 11f else 0f // a shorter stride than a horse: it plods
+    val hide = Color(0xFF6B5B4A)
+    val legColor = Color(0xFF4E4136)
+
+    // Barrel body, wider and lower than the horse's oval.
+    val bodyPath = Path().apply {
+        addOval(androidx.compose.ui.geometry.Rect(cx - 62f, cy + 58f, cx + 58f, cy + 132f))
+    }
+    drawStitchedFill(scope, bodyPath, hide)
+    scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+
+    // Shoulder hump — the ox's silhouette read at a glance.
+    val humpPath = Path().apply {
+        moveTo(cx + 10f, cy + 62f)
+        quadraticTo(cx + 30f, cy + 38f, cx + 48f, cy + 66f)
+        close()
+    }
+    drawStitchedFill(scope, humpPath, hide)
+    scope.drawPath(humpPath, ThreadColor, style = StitchedStroke)
+
+    val tailPath = Path().apply {
+        moveTo(cx - 58f, cy + 72f)
+        quadraticTo(cx - 74f, cy + 84f, cx - 70f, cy + 116f + legSwing)
+        quadraticTo(cx - 62f, cy + 108f, cx - 60f, cy + 88f)
+        close()
+    }
+    drawStitchedFill(scope, tailPath, Color(0xFF2C2219))
+    scope.drawPath(tailPath, ThreadColor, style = StitchedStroke)
+
+    // Head hangs low, as a yoked beast carries it.
+    val headPath = Path().apply {
+        moveTo(cx + 48f, cy + 62f)
+        lineTo(cx + 86f, cy + 64f)
+        lineTo(cx + 90f, cy + 84f)
+        lineTo(cx + 66f, cy + 92f)
+        lineTo(cx + 46f, cy + 84f)
+        close()
+    }
+    drawStitchedFill(scope, headPath, hide)
+    scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+    scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(cx + 74f, cy + 72f))
+
+    // Horns, one sweeping each way off the poll. Drawn long and pale on purpose: they are the whole
+    // silhouette cue that this is an ox and not a dark horse, and stubby ones vanish at play scale.
+    val horn = Color(0xFFEFE6D4)
+    listOf(
+        Triple(Offset(cx + 56f, cy + 64f), Offset(cx + 34f, cy + 40f), Offset(cx + 40f, cy + 52f)),
+        Triple(Offset(cx + 74f, cy + 64f), Offset(cx + 96f, cy + 40f), Offset(cx + 90f, cy + 52f))
+    ).forEach { (from, to, ctrl) ->
+        val h = Path().apply {
+            moveTo(from.x, from.y)
+            quadraticTo(ctrl.x, ctrl.y, to.x, to.y)
+        }
+        scope.drawPath(h, horn, style = Stroke(width = 8f, cap = StrokeCap.Round))
+        scope.drawPath(h, ThreadColor, style = Stroke(width = 2f, cap = StrokeCap.Round))
+    }
+
+    drawBeastLegs(scope, cx, cy, legSwing, legColor, Color(0xFF2C2219),
+        topY = cy + 124f, length = 46f, width = 12f, spread = 44f)
+
+    val saddlePath = Path().apply {
+        moveTo(cx - 20f, cy + 62f)
+        lineTo(cx + 18f, cy + 58f)
+        lineTo(cx + 18f, cy + 90f)
+        lineTo(cx - 20f, cy + 94f)
+        close()
+    }
+    drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
+    scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
+
+    // Yoke rope to the muzzle, in place of reins.
+    scope.drawPath(Path().apply {
+        moveTo(cx + 80f, cy + 84f)
+        quadraticTo(cx + 50f, cy + 84f, cx + 2f, cy + 74f)
+    }, Color(0xFF382F22), style = Stroke(width = 3f))
+}
+
+/** A baggage mule: smaller than a horse, long ears, panniers slung either side. */
+internal fun drawPackMule(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+    val anim = fighter.animFrame
+    val walking = !fighter.isDead && !fighter.isDying
+    val legSwing = if (walking) sin(anim) * 14f else 0f
+    val hide = Color(0xFF8A7156)
+    val legColor = Color(0xFF6B573F)
+
+    val bodyPath = Path().apply {
+        addOval(androidx.compose.ui.geometry.Rect(cx - 44f, cy + 72f, cx + 44f, cy + 128f))
+    }
+    drawStitchedFill(scope, bodyPath, hide)
+    scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+
+    val tailPath = Path().apply {
+        moveTo(cx - 40f, cy + 82f)
+        quadraticTo(cx - 54f, cy + 90f, cx - 52f, cy + 112f + legSwing)
+        quadraticTo(cx - 44f, cy + 104f, cx - 42f, cy + 92f)
+        close()
+    }
+    drawStitchedFill(scope, tailPath, Color(0xFF2C2219))
+    scope.drawPath(tailPath, ThreadColor, style = StitchedStroke)
+
+    val neckPath = Path().apply {
+        moveTo(cx + 20f, cy + 90f)
+        lineTo(cx + 42f, cy + 52f)
+        lineTo(cx + 55f, cy + 56f)
+        lineTo(cx + 36f, cy + 98f)
+        close()
+    }
+    drawStitchedFill(scope, neckPath, hide)
+    scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
+
+    val headPath = Path().apply {
+        moveTo(cx + 38f, cy + 44f)
+        lineTo(cx + 66f, cy + 40f)
+        lineTo(cx + 70f, cy + 52f)
+        lineTo(cx + 56f, cy + 64f)
+        lineTo(cx + 36f, cy + 60f)
+        close()
+    }
+    drawStitchedFill(scope, headPath, hide)
+    scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+    scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(cx + 56f, cy + 48f))
+
+    // The ears are the whole joke — absurdly long, and the mule's only dignity.
+    scope.drawLine(hide, Offset(cx + 44f, cy + 42f), Offset(cx + 36f, cy + 10f), strokeWidth = 7f, cap = StrokeCap.Round)
+    scope.drawLine(ThreadColor, Offset(cx + 44f, cy + 42f), Offset(cx + 36f, cy + 10f), strokeWidth = 2f, cap = StrokeCap.Round)
+    scope.drawLine(hide, Offset(cx + 52f, cy + 42f), Offset(cx + 52f, cy + 8f), strokeWidth = 7f, cap = StrokeCap.Round)
+    scope.drawLine(ThreadColor, Offset(cx + 52f, cy + 42f), Offset(cx + 52f, cy + 8f), strokeWidth = 2f, cap = StrokeCap.Round)
+
+    drawBeastLegs(scope, cx, cy, legSwing, legColor, Color(0xFF2C2219),
+        topY = cy + 120f, length = 42f, width = 7f, spread = 30f)
+
+    // Panniers: this is a baggage animal pressed into service, and it should look like one.
+    val pannier = Color(0xFF7A654C)
+    listOf(-1f, 1f).forEach { side ->
+        val p = Path().apply {
+            moveTo(cx + side * 34f - 12f, cy + 88f)
+            lineTo(cx + side * 34f + 12f, cy + 88f)
+            lineTo(cx + side * 34f + 9f, cy + 116f)
+            lineTo(cx + side * 34f - 9f, cy + 116f)
+            close()
+        }
+        drawStitchedFill(scope, p, pannier)
+        scope.drawPath(p, ThreadColor, style = StitchedStroke)
+    }
+
+    val saddlePath = Path().apply {
+        moveTo(cx - 14f, cy + 76f)
+        lineTo(cx + 16f, cy + 73f)
+        lineTo(cx + 16f, cy + 96f)
+        lineTo(cx - 14f, cy + 99f)
+        close()
+    }
+    drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
+    scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
+
+    scope.drawPath(Path().apply {
+        moveTo(cx + 60f, cy + 58f)
+        quadraticTo(cx + 40f, cy + 80f, cx + 2f, cy + 82f)
+    }, Color(0xFF382F22), style = Stroke(width = 3f))
+}
+
+/** A muzzled bear: broad shoulders, heavy forelimbs, a strapped muzzle. Fast and unreliable. */
+internal fun drawWarBear(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+    val anim = fighter.animFrame
+    val walking = !fighter.isDead && !fighter.isDying
+    val legSwing = if (walking) sin(anim) * 20f else 0f // a loping, faster gait
+    val fur = Color(0xFF3A2E24)
+    val legColor = Color(0xFF2E241C)
+
+    val bodyPath = Path().apply {
+        addOval(androidx.compose.ui.geometry.Rect(cx - 56f, cy + 56f, cx + 52f, cy + 126f))
+    }
+    drawStitchedFill(scope, bodyPath, fur)
+    scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+
+    // Shoulder mass, forward and high — the bear leads with it.
+    val shoulderPath = Path().apply {
+        moveTo(cx + 4f, cy + 60f)
+        quadraticTo(cx + 26f, cy + 30f, cx + 46f, cy + 64f)
+        close()
+    }
+    drawStitchedFill(scope, shoulderPath, fur)
+    scope.drawPath(shoulderPath, ThreadColor, style = StitchedStroke)
+
+    // A stub tail, not a horse's fall of hair.
+    scope.drawCircle(Color(0xFF2C2219), radius = 7f, center = Offset(cx - 54f, cy + 84f))
+
+    val headPath = Path().apply {
+        moveTo(cx + 40f, cy + 40f)
+        lineTo(cx + 74f, cy + 38f)
+        lineTo(cx + 84f, cy + 56f)
+        lineTo(cx + 64f, cy + 70f)
+        lineTo(cx + 40f, cy + 64f)
+        close()
+    }
+    drawStitchedFill(scope, headPath, fur)
+    scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+    scope.drawCircle(Color(0xFFEFE6D4), radius = 3f, center = Offset(cx + 62f, cy + 48f))
+    scope.drawCircle(ThreadColor, radius = 1.5f, center = Offset(cx + 62f, cy + 48f))
+
+    // Small round ears.
+    scope.drawCircle(fur, radius = 7f, center = Offset(cx + 46f, cy + 32f))
+    scope.drawCircle(ThreadColor, radius = 7f, center = Offset(cx + 46f, cy + 32f), style = Stroke(width = 2f))
+
+    // The muzzle straps: the only reason anyone would sit on this animal.
+    val iron = Color(0xFF5D666B)
+    scope.drawLine(iron, Offset(cx + 66f, cy + 40f), Offset(cx + 74f, cy + 66f), strokeWidth = 3f)
+    scope.drawLine(iron, Offset(cx + 58f, cy + 44f), Offset(cx + 80f, cy + 50f), strokeWidth = 3f)
+
+    drawBeastLegs(scope, cx, cy, legSwing, legColor, Color(0xFF1F1913),
+        topY = cy + 118f, length = 40f, width = 13f, spread = 40f)
+
+    val saddlePath = Path().apply {
+        moveTo(cx - 18f, cy + 60f)
+        lineTo(cx + 16f, cy + 56f)
+        lineTo(cx + 16f, cy + 88f)
+        lineTo(cx - 18f, cy + 92f)
+        close()
+    }
+    drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
+    scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
+
+    scope.drawPath(Path().apply {
+        moveTo(cx + 78f, cy + 56f)
+        quadraticTo(cx + 46f, cy + 70f, cx + 2f, cy + 72f)
+    }, Color(0xFF382F22), style = Stroke(width = 3f))
+}
+
     // The great wooden decoy: planked angular horse on a wheeled platform
 internal fun drawTrojanHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val wood = Color(0xFF8B5A2B)

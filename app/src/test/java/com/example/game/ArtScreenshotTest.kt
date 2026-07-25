@@ -325,6 +325,45 @@ class ArtScreenshotTest {
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/new_armour_layers.png")
     }
 
+    /**
+     * The three earned mounts, large enough to judge. Asserts nothing — eyeball that the rider sits
+     * on the saddle rather than floating above or sunk into the beast, and that legs reach the ground.
+     */
+    @Test
+    fun newMounts() {
+        fun rider(id: String, ox: Boolean = false, mule: Boolean = false, bear: Boolean = false) =
+            FighterState(
+                id = id, name = id, isPlayer = true, maxHp = 100f, hp = 100f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 150f, targetX = 150f, facingRight = true, size = 1.0f,
+                hairColor = Color(0xFF5A442E), hairStyle = "short",
+                isMounted = true, isOx = ox, isMule = mule, isBear = bear,
+                animFrame = 1.2f // mid-stride, so the walk cycle is visible
+            )
+
+        val cast = listOf(
+            rider("war_ox", ox = true),
+            rider("pack_mule", mule = true),
+            rider("war_bear", bear = true),
+            rider("horse_for_comparison")
+        )
+
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                cast.forEach { f ->
+                    Canvas(modifier = Modifier.width(412.dp).height(230.dp)) {
+                        TapestryRenderer.drawCharacter(this, f, scale = 1.3f, isBattleActive = true)
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/new_mounts.png")
+    }
+
     @Test
     fun productionScaleRendererProducesInk() {
         val monk = EnemyFactory.createArchetype(EnemyArchetype.MONK_MILITIA, 0, 10)

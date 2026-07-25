@@ -66,11 +66,18 @@ enum class Ancillary(
     PLAGUE_PEASANT("anc_plague_peasant", "Wretched Aldwin", "Plague-Bearer", "A dying peasant who sprints at the foe. His pestilence spreads to ALL who come near — there is a small chance YOU catch it too.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF6B7D4A)),
     GREASER("anc_greaser", "Slippery Sam", "Greaser", "Lobs pots of rendered fat from your backline. Foes skid over and flounder in the muck.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD9C77A)),
     FIREBRAND("anc_firebrand", "Cinder Cedric", "Firebrand", "Hurls burning torches from your backline. Foes catch alight, and siege gates burn down far quicker.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFE07020)),
-    BEEKEEPER("anc_beekeeper", "Humble Bede", "Bee Keeper", "Lobs whole hives from your backline, as the siege manuals advise. All who stand near the burst are stung.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD6A420))
+    BEEKEEPER("anc_beekeeper", "Humble Bede", "Bee Keeper", "Lobs whole hives from your backline, as the siege manuals advise. All who stand near the burst are stung.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD6A420)),
+    // Earned mounts (C2). Each is granted by a Milestone, never offered as a level-up card.
+    WAR_OX("anc_mount_ox", "Bregu", "War Ox", "A plough ox in barding. Immensely strong, immensely slow, and entirely unbothered by arrows.", hpBoost = 160f, speedBoost = -0.25f, color = Color(0xFF6B5B4A)),
+    PACK_MULE("anc_mount_mule", "Chestnut", "Pack Mule", "A baggage mule, protesting. A ridiculous mount for a conqueror, and the chroniclers will say so.", hpBoost = 20f, speedBoost = -0.35f, color = Color(0xFF8A7156)),
+    WAR_BEAR("anc_mount_bear", "Grimm", "Muzzled Bear", "A great muzzled bear, ridden. It is fast, it is furious, and it does not always mind whose side it is on.", hpBoost = 110f, speedBoost = 0.7f, color = Color(0xFF3A2E24))
 }
 
 /** Mounts, by ancillary id. Their hp/speed stats apply only when the mount is actually ridden. */
-val MOUNT_ANCILLARY_IDS = setOf("anc_mount_horse", "anc_mount_chariot", "anc_mount_stilts")
+val MOUNT_ANCILLARY_IDS = setOf(
+    "anc_mount_horse", "anc_mount_chariot", "anc_mount_stilts",
+    "anc_mount_ox", "anc_mount_mule", "anc_mount_bear"
+)
 
 /**
  * Ancillaries that never march in the parade line behind the player: mounts, and everyone who
@@ -80,6 +87,7 @@ val MOUNT_ANCILLARY_IDS = setOf("anc_mount_horse", "anc_mount_chariot", "anc_mou
  */
 val NON_PARADE_ANCILLARIES = setOf(
     Ancillary.WARHORSE, Ancillary.CHARIOT, Ancillary.STILTS,
+    Ancillary.WAR_OX, Ancillary.PACK_MULE, Ancillary.WAR_BEAR,
     Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG,
     Ancillary.TROJAN_HORSE, Ancillary.PLAGUE_PEASANT, Ancillary.GREASER,
     Ancillary.FIREBRAND, Ancillary.BEEKEEPER,
@@ -443,6 +451,10 @@ data class FighterState(
     var mountHp: Float = 0f,
     var isChariot: Boolean = false,
     var isStilts: Boolean = false,
+    // Earned mounts (C2), following the same one-flag-per-mount pattern as isChariot/isStilts.
+    var isOx: Boolean = false,
+    var isMule: Boolean = false,
+    var isBear: Boolean = false,
     var isLord: Boolean = false,
     var hasSilkenGarments: Boolean = false, // lightens armour weight without losing protection
     val isWarPriest: Boolean = false, // never attacks; heals the worst-hurt foe near him

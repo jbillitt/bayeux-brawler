@@ -163,6 +163,12 @@ object TapestryRenderer {
                         drawChariot(this, cx, cy, fighter)
                     } else if (fighter.isLord) {
                         drawThrone(this, cx, cy, fighter, isBattleActive)
+                    } else if (fighter.isOx) {
+                        drawWarOx(this, cx, cy, fighter)
+                    } else if (fighter.isMule) {
+                        drawPackMule(this, cx, cy, fighter)
+                    } else if (fighter.isBear) {
+                        drawWarBear(this, cx, cy, fighter)
                     } else {
                         drawHorse(this, cx, cy, fighter)
                     }
@@ -223,7 +229,15 @@ object TapestryRenderer {
                 rotate(rotationAngle, pivot = Offset(cx, cy + 80f))
                 scale(1f, scaleY, pivot = Offset(cx, cy + 80f))
             }) {
-                val mountOffsetY = if (fighter.isChariot) -15f else if (fighter.isMounted && fighter.isLord) -20f else if (fighter.isMounted && fighter.isStilts) -STILTS_LIFT_PX else if (fighter.isMounted) -35f else 0f
+                // The ox and bear are taller through the shoulder than a horse, the mule a good deal
+                // shorter — the rider sits at the saddle each one actually draws.
+                val mountOffsetY = if (fighter.isChariot) -15f
+                    else if (fighter.isMounted && fighter.isLord) -20f
+                    else if (fighter.isMounted && fighter.isStilts) -STILTS_LIFT_PX
+                    else if (fighter.isMounted && fighter.isOx) -38f
+                    else if (fighter.isMounted && fighter.isMule) -22f
+                    else if (fighter.isMounted && fighter.isBear) -40f
+                    else if (fighter.isMounted) -35f else 0f
                 val adjustedMountOffsetY = mountOffsetY / effectiveSize
                 withTransform({ translate(0f, adjustedMountOffsetY) }) {
                     if (fighter.id == "trojan_horse") {

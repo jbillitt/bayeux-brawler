@@ -338,7 +338,8 @@ class GameViewModel : ViewModel() {
             val profile = GameProfile.load()
             _uiState.update { it.copy(
                 unlockedGearIds = poolWithUnlocks(it.unlockedGearIds),
-                highscore = profile.highscore
+                highscore = profile.highscore,
+                clearedMilestones = profile.clearedMilestones
             ) }
         }
         
@@ -1787,8 +1788,11 @@ class GameViewModel : ViewModel() {
                 }
             }
             // The pool is rebuilt from the freshly granted set so the new gear is selectable now,
-            // not only after the next death.
-            _uiState.update { it.copy(unlockedGearIds = poolWithUnlocks(it.unlockedGearIds)) }
+            // not only after the next death. The trophy rows refresh with it.
+            _uiState.update { it.copy(
+                unlockedGearIds = poolWithUnlocks(it.unlockedGearIds),
+                clearedMilestones = GameProfile.cached.clearedMilestones
+            ) }
         }
     }
 

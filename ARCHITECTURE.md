@@ -17,10 +17,10 @@
 | Audio — Music | `AudioTrack` (PCM 16-bit, looped) | Seed-based procedural medieval composer |
 | Speech | Android `TextToSpeech` (Latin locale) | Comedic combat barks |
 | State Mgmt | `StateFlow` + `GameViewModel` | Unidirectional data flow |
-| Persistence | Room (via KSP) | Gear unlocks, high scores |
+| Persistence | DataStore Preferences (`GameProfile`) | Earned gear, cleared milestones, highscore, deaths |
 | Build | Gradle KTS + Version Catalog | AGP with Compose compiler plugin |
 | Testing | Robolectric + Roborazzi | Screenshot + unit tests |
-| Backend | Firebase AI (Gemini API) | Server-side capability declared |
+| Backend | none | The game is entirely offline; no server, no accounts |
 
 ## File Map
 
@@ -32,6 +32,8 @@ app/src/main/java/com/example/
 │   ├── GameViewModel.kt         (52 KB)  — Game loop, combat sim, enemy AI, level-up system
 │   ├── TapestryRenderer.kt      (74 KB)  — Canvas renderer: characters, weapons, shields, horses, VFX
 │   ├── SoundSynth.kt            (43 KB)  — Procedural audio: SFX engine + medieval music composer
+│   ├── GameProfile.kt           — DataStore-backed saved profile: unlocks, milestones, highscore
+│   ├── Milestone.kt             — The table of earnable unlocks and their conditions
 │   ├── MidiTest.kt              (0.2 KB) — Stub for MedievalVocalizer lifecycle
 │   └── ui/
 │       └── theme/

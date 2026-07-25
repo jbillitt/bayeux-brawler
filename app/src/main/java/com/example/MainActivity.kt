@@ -291,6 +291,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
     val projectiles by viewModel.projectilesState.collectAsState()
     val popups by viewModel.popupsState.collectAsState()
     var showPauseMenu by remember { mutableStateOf(false) }
+    var showTrophies by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -349,7 +350,27 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                             .weight(0.58f)
                             .fillMaxHeight()
                     ) {
-                        if (uiState.showMusicDecision) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                        // The trophy case, reachable from every between-battle screen. Without
+                        // somewhere to see them, earned unlocks are invisible and the loop is open.
+                        Text(
+                            text = if (showTrophies) "‹ BACK" else "✦ TROPHIES",
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold,
+                            color = TapestryDark,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showTrophies = !showTrophies
+                                    MedievalAudioSynth.playSound(SoundType.SWOOSH)
+                                }
+                                .padding(vertical = 2.dp, horizontal = 4.dp)
+                        )
+                        if (showTrophies) {
+                            TrophiesPanel(uiState)
+                        } else if (uiState.showMusicDecision) {
                             MusicDecisionScreen(
                                 options = uiState.pendingMusicOptions,
                                 onSelect = { viewModel.selectMusicMood(it) }
@@ -371,6 +392,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                                 onToggleDualWield = { viewModel.toggleDualWield() },
                                 onToggleThroneMode = { viewModel.toggleThroneMode() }
                             )
+                        }
                         }
                     }
 
@@ -1581,6 +1603,68 @@ fun GearSelectionTabs(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Earned and locked milestones. A locked row always states its condition — a trophy nobody can work
+ * out how to earn is not progression, it is a locked door.
+ */
+@Composable
+fun TrophiesPanel(uiState: BattleSimState) {
+    val earnedCount = Milestone.values().count { it.id in uiState.clearedMilestones }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp)
+    ) {
+        Text(
+            "TROPHIES  $earnedCount/${Milestone.values().size}",
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Bold,
+            color = TapestryDark,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        Milestone.values().forEach { m ->
+            val earned = m.id in uiState.clearedMilestones
+            val reward = GameData.WEAPON_HEADS.find { it.id == m.grants }?.itemName
+                ?: GameData.WEAPON_HANDLES.find { it.id == m.grants }?.itemName
+                ?: GameData.ARMOR_PIECES.find { it.id == m.grants }?.itemName
+                ?: GameData.HEADGEAR_PIECES.find { it.id == m.grants }?.itemName
+                ?: m.grants
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        if (earned) Color(0xFFFAF6EB) else Color.Transparent,
+                        RoundedCornerShape(3.dp)
+                    )
+                    .padding(vertical = 3.dp, horizontal = 4.dp)
+            ) {
+                Text(
+                    if (earned) "✦" else "·",
+                    fontSize = 10.sp,
+                    color = if (earned) TapestryMustard else TapestryDark.copy(alpha = 0.4f),
+                    modifier = Modifier.width(16.dp)
+                )
+                Column {
+                    Text(
+                        m.label,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Bold,
+                        color = if (earned) TapestryDark else TapestryDark.copy(alpha = 0.45f)
+                    )
+                    Text(
+                        if (earned) "won: $reward" else m.condition,
+                        fontSize = 8.sp,
+                        color = TapestryDark.copy(alpha = 0.7f)
+                    )
+                }
             }
         }
     }

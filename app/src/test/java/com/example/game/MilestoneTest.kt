@@ -22,8 +22,14 @@ class MilestoneTest {
 
     @Test
     fun everyMilestoneGrantsSomethingThatExists() {
+        // Rewards are not all GearItems: mounts are Ancillary ids and hairstyles are bare strings.
+        val ancillaryIds = Ancillary.values().map { it.id }.toSet()
+        val hairStyles = setOf(
+            "hair_tonsure_norman", "hair_braids", "hair_tonsure_monk", "hair_topknot"
+        )
         Milestone.values().forEach { m ->
-            assertTrue("${m.id} grants ${m.grants}, which is not real gear", m.grants in allGearIds)
+            val known = m.grants in allGearIds || m.grants in ancillaryIds || m.grants in hairStyles
+            assertTrue("${m.id} grants ${m.grants}, which is not real content", known)
         }
     }
 
@@ -82,5 +88,36 @@ class MilestoneAwardTest {
     fun anAwardedMilestonePutsItsItemInThePool() = runTest {
         GameViewModel.awardMilestone(Milestone.BEAT_HARDRADA)
         assertTrue("handle_anchor" in GameViewModel.poolWithUnlocks(emptySet()))
+    }
+
+    @Test
+    fun williamMustFallTwiceBeforeTheWingedHelmIsEarned() = runTest {
+        GameProfile.recordBossKill(GameProfile.WILLIAM_BOSS_ID)
+        assertFalse("one William should not be enough", GameProfile.cached.williamKills >= 2)
+        GameProfile.recordBossKill(GameProfile.WILLIAM_BOSS_ID)
+        assertTrue(GameProfile.cached.williamKills >= 2)
+    }
+
+    @Test
+    fun bothGiantsAreNeededForTheBearMount() = runTest {
+        GameProfile.recordBossKill("boss_gog")
+        assertFalse("boss_magog" in GameProfile.cached.beatenBosses)
+        GameProfile.recordBossKill("boss_magog")
+        assertTrue(GameProfile.cached.beatenBosses.containsAll(listOf("boss_gog", "boss_magog")))
+    }
+
+    /**
+     * The boss id the ViewModel writes must be the one the milestone check looks for. These two
+     * strings are built in different places and a mismatch silently never unlocks the bear.
+     */
+    @Test
+    fun theGiantBossIdsMatchWhatTheMilestoneChecksFor() = runTest {
+        listOf(BossType.GOG, BossType.MAGOG).forEach { boss ->
+            GameProfile.recordBossKill("boss_${boss.name.lowercase()}")
+        }
+        assertTrue(
+            "the ids written on a giant's death do not match the pair the bear milestone wants",
+            GameProfile.cached.beatenBosses.containsAll(listOf("boss_gog", "boss_magog"))
+        )
     }
 }

@@ -108,6 +108,20 @@ class GameDataTest {
     }
 
     @Test
+    fun theFourUnlockableHatsExist() {
+        listOf("helm_antlered", "helm_winged", "helm_wolf", "helm_pot").forEach { id ->
+            assertTrue("$id is granted by a milestone but does not exist",
+                GameData.HEADGEAR_PIECES.any { it.id == id })
+        }
+    }
+
+    @Test
+    fun theCookingPotIsAJokeNotArmour() {
+        val pot = GameData.HEADGEAR_PIECES.first { it.id == "helm_pot" }
+        assertTrue("a cooking pot should protect poorly", pot.defense < 15f)
+    }
+
+    @Test
     fun theThreeNewLayersExistAndAreLight() {
         listOf("armor_greaves", "armor_spaulders", "armor_surcoat").forEach { id ->
             val piece = GameData.ARMOR_PIECES.first { it.id == id }

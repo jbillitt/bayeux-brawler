@@ -1326,6 +1326,52 @@ object TapestryRenderer {
                     lineTo(hx - 6f, hy + 10f)
                     lineTo(hx - 6f, hy + 5f)
                     close()
+                } else if (fighter.hairStyle == "hair_tonsure_norman") {
+                    // The Norman crop: shaved high at the back, a blunt fringe at the front.
+                    moveTo(hx - 12f, hy + 2f)
+                    lineTo(hx - 3f, hy - 9f)
+                    lineTo(hx + 7f, hy - 7f)
+                    lineTo(hx + 4f, hy + 1f)
+                    lineTo(hx - 4f, hy + 2f)
+                    lineTo(hx - 12f, hy + 8f)
+                    close()
+                } else if (fighter.hairStyle == "hair_braids") {
+                    // Two heavy braids falling past the jaw, in the northern manner.
+                    moveTo(hx - 12f, hy)
+                    lineTo(hx - 3f, hy - 11f)
+                    lineTo(hx + 7f, hy - 9f)
+                    lineTo(hx + 4f, hy - 1f)
+                    lineTo(hx - 2f, hy + 3f)
+                    lineTo(hx - 4f, hy + 26f)
+                    lineTo(hx - 10f, hy + 26f)
+                    lineTo(hx - 9f, hy + 4f)
+                    lineTo(hx - 14f, hy + 24f)
+                    lineTo(hx - 19f, hy + 22f)
+                    lineTo(hx - 13f, hy + 4f)
+                    close()
+                } else if (fighter.hairStyle == "hair_tonsure_monk") {
+                    // A monk's tonsure: bare crown, a ring of hair all round.
+                    moveTo(hx - 13f, hy + 1f)
+                    lineTo(hx - 13f, hy + 9f)
+                    lineTo(hx - 5f, hy + 11f)
+                    lineTo(hx + 6f, hy + 8f)
+                    lineTo(hx + 6f, hy + 1f)
+                    lineTo(hx - 2f, hy + 4f)
+                    close()
+                } else if (fighter.hairStyle == "hair_topknot") {
+                    // Shaved sides and a bound knot on top — an old campaigner's affectation.
+                    moveTo(hx - 11f, hy + 1f)
+                    lineTo(hx - 5f, hy - 6f)
+                    lineTo(hx + 5f, hy - 5f)
+                    lineTo(hx + 3f, hy + 2f)
+                    lineTo(hx - 5f, hy + 4f)
+                    close()
+                    // The knot itself.
+                    moveTo(hx - 6f, hy - 6f)
+                    lineTo(hx - 9f, hy - 22f)
+                    lineTo(hx - 1f, hy - 24f)
+                    lineTo(hx + 2f, hy - 6f)
+                    close()
                 } else { // "short" or default bowl cut
                     moveTo(hx - 12f, hy)
                     lineTo(hx - 2f, hy - 10f)
@@ -1590,6 +1636,93 @@ object TapestryRenderer {
             scope.drawCircle(Color(0xFFFFD700), radius = 4f, center = Offset(hx - 30f, hy - 10f))
             scope.drawCircle(Color(0xFFFFD700), radius = 4f, center = Offset(hx, hy - 30f))
             scope.drawCircle(Color(0xFFFFD700), radius = 4f, center = Offset(hx + 30f, hy - 10f))
+        } else if (helmId == "helm_antlered") {
+            // A spangenhelm silhouette, with a rack of antlers off the brow.
+            val cap = Path().apply {
+                moveTo(hx - 16f, hy + 2f)
+                lineTo(hx - 16f, hy - 4f)
+                quadraticTo(hx, hy - 24f, hx + 16f, hy - 4f)
+                lineTo(hx + 16f, hy + 2f)
+                close()
+            }
+            drawStitchedFill(scope, cap, Color(0xFF7A868C))
+            scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+            val antler = Color(0xFFBFA278)
+            listOf(-1f, 1f).forEach { side ->
+                val beam = Path().apply {
+                    moveTo(hx + side * 9f, hy - 16f)
+                    quadraticTo(hx + side * 20f, hy - 34f, hx + side * 15f, hy - 46f)
+                }
+                scope.drawPath(beam, antler, style = Stroke(width = 4f, cap = StrokeCap.Round))
+                // Tines, so it reads as a rack and not a pair of bent wires.
+                scope.drawLine(antler, Offset(hx + side * 16f, hy - 28f), Offset(hx + side * 27f, hy - 33f), strokeWidth = 3f, cap = StrokeCap.Round)
+                scope.drawLine(antler, Offset(hx + side * 16f, hy - 38f), Offset(hx + side * 26f, hy - 45f), strokeWidth = 3f, cap = StrokeCap.Round)
+            }
+        } else if (helmId == "helm_winged") {
+            val cap = Path().apply {
+                moveTo(hx - 15f, hy + 2f)
+                quadraticTo(hx, hy - 24f, hx + 15f, hy + 2f)
+                close()
+            }
+            drawStitchedFill(scope, cap, Color(0xFF8C969E))
+            scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+            // Wings sweeping back from the temples.
+            listOf(-1f, 1f).forEach { side ->
+                val wing = Path().apply {
+                    moveTo(hx + side * 13f, hy - 6f)
+                    quadraticTo(hx + side * 34f, hy - 20f, hx + side * 30f, hy + 2f)
+                    quadraticTo(hx + side * 22f, hy - 4f, hx + side * 13f, hy - 6f)
+                    close()
+                }
+                drawStitchedFill(scope, wing, Color(0xFFD8D2C4))
+                scope.drawPath(wing, ThreadColor, style = StitchedStroke)
+            }
+        } else if (helmId == "helm_wolf") {
+            // A hood of pelt: snout forward over the brow, ears up, pelt falling behind.
+            val cowl = Path().apply {
+                moveTo(hx - 18f, hy + 6f)
+                quadraticTo(hx - 14f, hy - 22f, hx + 8f, hy - 20f)
+                quadraticTo(hx + 20f, hy - 18f, hx + 20f, hy - 4f)
+                lineTo(hx + 12f, hy + 4f)
+                close()
+            }
+            drawStitchedFill(scope, cowl, Color(0xFF5A5048))
+            scope.drawPath(cowl, ThreadColor, style = StitchedStroke)
+            // Ears.
+            listOf(-6f, 8f).forEach { ex ->
+                val ear = Path().apply {
+                    moveTo(hx + ex - 4f, hy - 18f)
+                    lineTo(hx + ex, hy - 30f)
+                    lineTo(hx + ex + 5f, hy - 17f)
+                    close()
+                }
+                drawStitchedFill(scope, ear, Color(0xFF4A4038))
+                scope.drawPath(ear, ThreadColor, style = StitchedStroke)
+            }
+            // The wolf's own eye, on the snout above the wearer's.
+            scope.drawCircle(Color(0xFFD9B871), radius = 2f, center = Offset(hx + 12f, hy - 10f))
+        } else if (helmId == "helm_pot") {
+            // A cauldron, upside down, jammed on. Flat base up, handle out the side.
+            val pot = Path().apply {
+                moveTo(hx - 17f, hy - 20f)
+                lineTo(hx + 17f, hy - 20f)
+                lineTo(hx + 15f, hy + 6f)
+                lineTo(hx - 15f, hy + 6f)
+                close()
+            }
+            drawStitchedFill(scope, pot, Color(0xFF4A4E51))
+            scope.drawPath(pot, ThreadColor, style = StitchedStroke)
+            // Rim (the pot's foot, now its crown) and a soot band.
+            scope.drawLine(Color(0xFF6E7477), Offset(hx - 17f, hy - 18f), Offset(hx + 17f, hy - 18f), strokeWidth = 3f)
+            scope.drawLine(Color(0xFF2C2219), Offset(hx - 16f, hy - 6f), Offset(hx + 16f, hy - 6f), strokeWidth = 2f)
+            // Handle.
+            scope.drawArc(
+                color = Color(0xFF6E7477),
+                startAngle = -90f, sweepAngle = 180f, useCenter = false,
+                topLeft = Offset(hx + 14f, hy - 16f),
+                size = Size(14f, 18f),
+                style = Stroke(width = 3f)
+            )
         }
 
         // A crown is worn by an enemy lord — and by any player who equips one. It used to hang on

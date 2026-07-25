@@ -24,7 +24,11 @@ object GameProfile {
         val clearedMilestones: Set<String> = emptySet(),
         val highscore: Int = 0,
         val totalDeaths: Int = 0,
-        val adFreePurchased: Boolean = false
+        val adFreePurchased: Boolean = false,
+        /** Boss ids ever defeated, across all runs. Drives the "beat both giants" milestone. */
+        val beatenBosses: Set<String> = emptySet(),
+        /** A count, not a set: the winged helm wants William dead twice. */
+        val williamKills: Int = 0
     )
 
     private val KEY_ITEMS = stringSetPreferencesKey("unlocked_item_ids")
@@ -32,6 +36,8 @@ object GameProfile {
     private val KEY_HIGHSCORE = intPreferencesKey("highscore")
     private val KEY_DEATHS = intPreferencesKey("total_deaths")
     private val KEY_AD_FREE = booleanPreferencesKey("ad_free_purchased")
+    private val KEY_BEATEN_BOSSES = stringSetPreferencesKey("beaten_bosses")
+    private val KEY_WILLIAM_KILLS = intPreferencesKey("william_kills")
 
     /**
      * Recorded once, whether or not it grants anything, so the check never runs twice.
@@ -71,7 +77,9 @@ object GameProfile {
             clearedMilestones = prefs[KEY_MILESTONES].orEmpty(),
             highscore = prefs[KEY_HIGHSCORE] ?: 0,
             totalDeaths = prefs[KEY_DEATHS] ?: 0,
-            adFreePurchased = prefs[KEY_AD_FREE] ?: false
+            adFreePurchased = prefs[KEY_AD_FREE] ?: false,
+            beatenBosses = prefs[KEY_BEATEN_BOSSES].orEmpty(),
+            williamKills = prefs[KEY_WILLIAM_KILLS] ?: 0
         ).also { cached = it }
     }
 
@@ -124,6 +132,24 @@ object GameProfile {
         }
         load()
     }
+
+    /**
+     * Remember a boss the player has put down, for milestones that span runs. William gets a counter
+     * as well as a set entry, because "twice" cannot be expressed by a set.
+     */
+    suspend fun recordBossKill(bossId: String) {
+        val ctx = appContext ?: return
+        ctx.profileStore.edit { prefs ->
+            prefs[KEY_BEATEN_BOSSES] = prefs[KEY_BEATEN_BOSSES].orEmpty() + bossId
+            if (bossId == WILLIAM_BOSS_ID) {
+                prefs[KEY_WILLIAM_KILLS] = (prefs[KEY_WILLIAM_KILLS] ?: 0) + 1
+            }
+        }
+        load()
+    }
+
+    /** The one boss id with a counter attached; kept here so callers cannot misspell it. */
+    const val WILLIAM_BOSS_ID = "boss_william_the_bastard"
 
     suspend fun recordDeath() {
         val ctx = appContext ?: return

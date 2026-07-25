@@ -320,7 +320,12 @@ object GameData {
         MITRE("helm_mitre", "Bishop's Mitre", 1.0f, defense = 12f, speedPenalty = 0.0f, description = "Odo himself wore no sword. Cloth of gold turns few blades, but God is watching.", color = Color(0xFFD8C48A)),
         STRAW("helm_straw", "Straw Hat", 0.2f, defense = 3f, speedPenalty = -0.03f, description = "A farmhand's wide straw brim. Keeps the sun off. Keeps nothing else off.", color = Color(0xFFD9B871)),
         JESTER_HAT("helm_jester", "Jester's Cap", 0.1f, defense = 0f, speedPenalty = 0.0f, description = "A colorful motley cap with bells on. Unbelievably foolish. Score x20!", color = Color(0xFFD63C3C)),
-        CROWN("helm_crown", "King's Crown", 0.5f, defense = 10f, speedPenalty = 0.0f, description = "A golden crown fit for a king.", color = Color(0xFFFFD700));
+        CROWN("helm_crown", "King's Crown", 0.5f, defense = 10f, speedPenalty = 0.0f, description = "A golden crown fit for a king.", color = Color(0xFFFFD700)),
+        // Earned headgear (C2). Held out of the base roll; granted by Milestone only.
+        ANTLERED("helm_antlered", "Antlered Helm", 4.6f, defense = 44f, speedPenalty = 0.07f, description = "An iron helm crowned with the antlers of a great hart. Doorways become a problem.", color = Color(0xFF7A868C)),
+        WINGED("helm_winged", "Winged Helm", 4.2f, defense = 46f, speedPenalty = 0.06f, description = "Two iron wings sweeping back from the temples. Utterly impractical and utterly magnificent.", color = Color(0xFF8C969E)),
+        WOLF_COWL("helm_wolf", "Wolf-Head Cowl", 1.6f, defense = 14f, speedPenalty = -0.02f, description = "The head and pelt of a wolf worn as a hood, in the old northern manner.", color = Color(0xFF5A5048)),
+        COOKING_POT("helm_pot", "Cooking Pot", 5.2f, defense = 11f, speedPenalty = 0.12f, description = "A cauldron jammed over your head. It rings like a bell every time somebody hits it, which is often.", color = Color(0xFF4A4E51));
         override val type: ItemType get() = ItemType.HEADGEAR
     }
     val HEADGEAR_PIECES = HeadgearPiece.values().toList()

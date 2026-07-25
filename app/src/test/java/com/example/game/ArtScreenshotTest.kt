@@ -364,6 +364,47 @@ class ArtScreenshotTest {
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/new_mounts.png")
     }
 
+    /** The four earned hats and four earned hairstyles. Asserts nothing — eyeball fit on the skull. */
+    @Test
+    fun newHatsAndHair() {
+        fun head(id: String, helm: String = "helm_none", hair: String = "short") = FighterState(
+            id = id, name = id, isPlayer = true, maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == helm },
+            posX = 110f, targetX = 110f, facingRight = true, size = 1.0f,
+            hairColor = Color(0xFF5A442E), hairStyle = hair
+        )
+
+        val cast = listOf(
+            head("antlered", helm = "helm_antlered"),
+            head("winged", helm = "helm_winged"),
+            head("wolf", helm = "helm_wolf"),
+            head("pot", helm = "helm_pot"),
+            head("hair_norman", hair = "hair_tonsure_norman"),
+            head("hair_braids", hair = "hair_braids"),
+            head("hair_monk", hair = "hair_tonsure_monk"),
+            head("hair_topknot", hair = "hair_topknot")
+        )
+
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                cast.chunked(2).forEach { row ->
+                    Row {
+                        row.forEach { f ->
+                            Canvas(modifier = Modifier.width(206.dp).height(150.dp)) {
+                                TapestryRenderer.drawCharacter(this, f, scale = 1.9f, isBattleActive = false)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/new_hats_and_hair.png")
+    }
+
     @Test
     fun productionScaleRendererProducesInk() {
         val monk = EnemyFactory.createArchetype(EnemyArchetype.MONK_MILITIA, 0, 10)

@@ -1470,20 +1470,39 @@ fun GearSelectionTabs(
                     Column {
                         Text("HAIR STYLE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("short" to "Bowl Cut", "long" to "Long Locks", "bald" to "Bald/Fringe").forEach { (styleVal, label) ->
-                                val isSelected = uiState.hairStyle == styleVal
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .background(if (isSelected) TapestryDark else Color(0xFFFAF6EB), RoundedCornerShape(4.dp))
-                                        .border(if (isSelected) 2.dp else 1.dp, if (isSelected) TapestryMustard else TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
-                                        .clickable { onUpdatePhysical(uiState.characterSize, uiState.hairColor, styleVal) }
-                                        .padding(8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(label, color = if (isSelected) TapestryLight else TapestryDark, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        // The three base cuts, plus any earned by a milestone. Earned styles are
+                        // saved in the profile's item set like gear, so they filter the same way.
+                        val earnedStyles = listOf(
+                            "hair_tonsure_norman" to "✦ Norman Crop",
+                            "hair_braids" to "✦ Braids",
+                            "hair_tonsure_monk" to "✦ Tonsure",
+                            "hair_topknot" to "✦ Topknot"
+                        ).filter { (id, _) -> id in uiState.unlockedGearIds }
+                        val allStyles = listOf(
+                            "short" to "Bowl Cut", "long" to "Long Locks", "bald" to "Bald/Fringe"
+                        ) + earnedStyles
+                        // Chunked: seven cuts in one weighted Row squeezes every label to nothing.
+                        allStyles.chunked(3).forEach { rowStyles ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                            ) {
+                                rowStyles.forEach { (styleVal, label) ->
+                                    val isSelected = uiState.hairStyle == styleVal
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .background(if (isSelected) TapestryDark else Color(0xFFFAF6EB), RoundedCornerShape(4.dp))
+                                            .border(if (isSelected) 2.dp else 1.dp, if (isSelected) TapestryMustard else TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                                            .clickable { onUpdatePhysical(uiState.characterSize, uiState.hairColor, styleVal) }
+                                            .padding(8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(label, color = if (isSelected) TapestryLight else TapestryDark, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
+                                // Keep the last row's cells the same width as a full row's.
+                                repeat(3 - rowStyles.size) { Spacer(modifier = Modifier.weight(1f)) }
                             }
                         }
                     }

@@ -333,7 +333,9 @@ class GameViewModel : ViewModel() {
                         "armor_habit", "armor_apron", "armor_frock", "armor_toga"
                     )
                 }.shuffled().take(2).map { it.id })
-        initialGear.addAll(GameData.HEADGEAR_PIECES.filter { it.id != "helm_jester" }.shuffled().take(2).map { it.id })
+        initialGear.addAll(GameData.HEADGEAR_PIECES.filter {
+                    it.id !in listOf("helm_jester", "helm_antlered", "helm_winged", "helm_wolf", "helm_pot")
+                }.shuffled().take(2).map { it.id })
 
         _uiState.update { it.copy(
             highscore = 0,
@@ -537,6 +539,14 @@ class GameViewModel : ViewModel() {
             listOf("the Bald", "the Shorn", "the Smooth", "Bare-pate").random(rng)
         } else if (hairStyle == "long") {
             listOf("the Wild", "the Mane", "Long-Locks", "the Hairy", "the Untamed").random(rng)
+        } else if (hairStyle == "hair_tonsure_monk") {
+            listOf("the Devout", "the Cloistered", "Brother", "the Pious").random(rng)
+        } else if (hairStyle == "hair_braids") {
+            listOf("the Northman", "Braid-beard", "the Sea-wolf", "the Dane").random(rng)
+        } else if (hairStyle == "hair_tonsure_norman") {
+            listOf("the Norman", "Crop-head", "the Conqueror's Man").random(rng)
+        } else if (hairStyle == "hair_topknot") {
+            listOf("the Veteran", "Knot-hair", "the Old Soldier", "Twice-scarred").random(rng)
         } else {
             when (hairColor) {
                 Color(0xFF888888) -> listOf("the Grey", "the Hoary", "Silver-hair", "the Elder").random(rng)
@@ -1777,24 +1787,40 @@ class GameViewModel : ViewModel() {
      */
     private fun checkMilestones(
         won: Boolean, level: Int, kills: Int, woreNoArmour: Boolean,
-        bossBeaten: BossType?, usedFistsOnly: Boolean, siegesCleared: Int
+        bossBeaten: BossType?, usedFistsOnly: Boolean, siegesCleared: Int,
+        monkInRetinue: Boolean, score: Int, previousBest: Int
     ) {
         if (!won) return
+        val profile = GameProfile.cached
         val earned = buildList {
             if (level >= 5) add(Milestone.REACH_5)
+            if (level >= 10) add(Milestone.REACH_10)
+            if (level >= 15) add(Milestone.REACH_15)
             if (level >= 20) add(Milestone.REACH_20)
+            if (level >= 25) add(Milestone.REACH_25)
+            if (level >= 35) add(Milestone.REACH_35)
             if (kills >= 500) add(Milestone.FIVE_HUNDRED_KILLS)
             if (woreNoArmour) add(Milestone.NAKED_WIN)
             if (siegesCleared >= 1) add(Milestone.FIRST_SIEGE)
             if (siegesCleared >= 3) add(Milestone.THREE_SIEGES)
+            if (siegesCleared >= 5) add(Milestone.FIVE_SIEGES)
+            if (monkInRetinue) add(Milestone.MONK_SURVIVES)
             when (bossBeaten) {
                 BossType.HAROLD_GODWINSON -> add(Milestone.BEAT_HAROLD)
-                BossType.HARALD_HARDRADA -> add(Milestone.BEAT_HARDRADA)
+                BossType.HARALD_HARDRADA -> { add(Milestone.BEAT_HARDRADA); add(Milestone.HARDRADA_BRAIDS) }
                 BossType.WILLIAM_THE_BASTARD -> add(Milestone.BEAT_WILLIAM)
                 BossType.GOG, BossType.MAGOG -> add(Milestone.BEAT_GIANT)
                 null -> {}
             }
             if (bossBeaten != null && usedFistsOnly) add(Milestone.BARE_FISTED_BOSS)
+
+            // Cross-run counters, read from the profile rather than this run's state. recordBossKill
+            // runs before this, so a second William is already counted by the time we look.
+            if (profile.williamKills >= 2) add(Milestone.WILLIAM_TWICE)
+            if (profile.beatenBosses.containsAll(listOf("boss_gog", "boss_magog"))) add(Milestone.BOTH_GIANTS)
+            // Doubling your own best: compared against the score carried INTO this battle, or the
+            // new highscore would already have absorbed it and nothing would ever qualify.
+            if (previousBest > 0 && score >= previousBest * 2) add(Milestone.DOUBLE_BEST)
         }
         if (earned.isEmpty()) return
         viewModelScope.launch {
@@ -2110,20 +2136,43 @@ class GameViewModel : ViewModel() {
 
         // Milestones are checked outside the update lambda above, which can be re-executed.
         val post = _uiState.value
-        checkMilestones(
-            won = won,
-            level = post.level,
-            kills = post.totalKills,
-            woreNoArmour = pre.armor.id == "armor_bare" && pre.extraArmors.isEmpty(),
-            bossBeaten = if (won) pre.bossType else null,
-            usedFistsOnly = pre.weaponHead.id == "head_bare" && pre.weaponHandle.id == "handle_fists",
-            siegesCleared = siegesClearedThisRun
-        )
+        val bossBeaten = if (won) pre.bossType else null
+        val previousBest = pre.highscore
 
-        // The highscore has to outlive the process; a defeat is what C3's ad cadence counts.
+        // Order matters: the cross-run counters (William twice, both giants, 25 deaths) must be
+        // written before the milestone check reads them, so all of it lives in one coroutine.
         viewModelScope.launch {
+            if (bossBeaten != null) {
+                GameProfile.recordBossKill(
+                    if (bossBeaten == BossType.WILLIAM_THE_BASTARD) GameProfile.WILLIAM_BOSS_ID
+                    else "boss_${bossBeaten.name.lowercase()}"
+                )
+            }
             GameProfile.setHighscore(post.highscore)
-            if (!won) GameProfile.recordDeath()
+            if (!won) {
+                GameProfile.recordDeath()
+                // Checked here rather than in checkMilestones, which returns early unless you won.
+                if (GameProfile.cached.totalDeaths >= 25 && awardMilestone(Milestone.DIE_TWENTY_FIVE)) {
+                    addPopup("UNLOCKED: ${Milestone.DIE_TWENTY_FIVE.label}", 400f, 200f, Color(0xFFB08221))
+                    _uiState.update { it.copy(
+                        unlockedGearIds = poolWithUnlocks(it.unlockedGearIds),
+                        clearedMilestones = GameProfile.cached.clearedMilestones
+                    ) }
+                }
+            }
+
+            checkMilestones(
+                won = won,
+                level = post.level,
+                kills = post.totalKills,
+                woreNoArmour = pre.armor.id == "armor_bare" && pre.extraArmors.isEmpty(),
+                bossBeaten = bossBeaten,
+                usedFistsOnly = pre.weaponHead.id == "head_bare" && pre.weaponHandle.id == "handle_fists",
+                siegesCleared = siegesClearedThisRun,
+                monkInRetinue = pre.unlockedAncillaries.contains(Ancillary.MONK),
+                score = post.score,
+                previousBest = previousBest
+            )
         }
 
         // The run's score is NOT cleared here: the defeat card and its shared tapestry are still
@@ -2154,7 +2203,9 @@ class GameViewModel : ViewModel() {
                         "armor_habit", "armor_apron", "armor_frock", "armor_toga"
                     )
                 }.shuffled().take(2).map { it.id })
-                initialGear.addAll(GameData.HEADGEAR_PIECES.filter { it.id != "helm_jester" }.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.HEADGEAR_PIECES.filter {
+                    it.id !in listOf("helm_jester", "helm_antlered", "helm_winged", "helm_wolf", "helm_pot")
+                }.shuffled().take(2).map { it.id })
                 
                 val rng = kotlin.random.Random.Default
                 val size = state.characterSize

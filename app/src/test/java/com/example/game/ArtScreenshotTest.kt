@@ -175,6 +175,7 @@ class ArtScreenshotTest {
             rider("big_chariot", 1.3f, chariot = true),
             rider("small_stilts", 0.65f, stilts = true),
             rider("normal_stilts", 1.0f, stilts = true),
+            rider("large_stilts", 1.4f, stilts = true),
             rider("small_horse", 0.65f),
             rider("crowned", 1.0f, crown = true)
         )

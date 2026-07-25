@@ -147,7 +147,7 @@ object TapestryRenderer {
                 }
             }
 
-            if (fighter.isMounted || fighter.isChariot) {
+            if ((fighter.isMounted && !fighter.isStilts) || fighter.isChariot) {
                 var horseRot = 0f
                 if (fighter.isDead || fighter.isDying) {
                     val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
@@ -163,8 +163,6 @@ object TapestryRenderer {
                         drawChariot(this, cx, cy, fighter)
                     } else if (fighter.isLord) {
                         drawThrone(this, cx, cy, fighter, isBattleActive)
-                    } else if (fighter.isStilts) {
-                        drawStilts(this, cx, cy, fighter)
                     } else {
                         drawHorse(this, cx, cy, fighter)
                     }
@@ -238,6 +236,10 @@ object TapestryRenderer {
                         drawRebelSnail(this, cx, cy, fighter)
                     } else {
                         drawBossSignature(this, cx, cy, fighter)
+                        if (fighter.isStilts) {
+                            // Poles live in the body's space so they scale and swing with the man who is on them.
+                            drawStilts(this, cx, cy, fighter, effectiveSize)
+                        }
                         if (!fighter.isChariot) {
                             drawLegs(this, cx, cy, fighter)
                         }

@@ -303,27 +303,37 @@ internal fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
         scope.drawPath(trimPath, Color(0xFFB08221), style = Stroke(width = 6f))
     }
 
-internal fun drawStilts(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+/**
+ * Top of the poles, in the body's own local space: the sole of the boot drawLegs draws at
+ * cy + 155f, nudged up a touch so the footrest sits under the foot rather than through it.
+ */
+internal fun stiltTopY(cy: Float): Float = cy + 150f
+
+/**
+ * Bottom of the poles. The body is lifted STILTS_LIFT_PX *screen* pixels, which in this local
+ * space (scaled by effectiveSize) is that much divided by the size. Anything else and a small
+ * man's poles stop short of the ground.
+ */
+internal fun stiltGroundY(cy: Float, effectiveSize: Float): Float =
+    cy + 155f + STILTS_LIFT_PX / effectiveSize
+
+internal fun drawStilts(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState, effectiveSize: Float) {
         val wColor = Color(0xFF8B7355) // Wood
-        // Match the leg anim exactly (animFrame * 0.45f)
+        // Match the leg anim exactly (animFrame * 0.45f) — same pivots drawLegs uses, so the poles
+        // swing with the legs instead of being hand-matched to them.
         val angleL = if (fighter.isDead || fighter.isDying) 0f else kotlin.math.sin(fighter.animFrame) * 0.45f
         val angleR = if (fighter.isDead || fighter.isDying) 0f else -kotlin.math.sin(fighter.animFrame) * 0.45f
 
-        // The rider sits STILTS_LIFT_PX higher (mountOffsetY), so his feet are at cy + 105 - lift.
-        // The poles run from there down to the ground line at cy + 220.
-        val footY = cy + 105f - (STILTS_LIFT_PX - 45f)
+        val topY = stiltTopY(cy)
+        val groundY = stiltGroundY(cy, effectiveSize)
 
-        // Draw left stilt (attaches to left foot at cx - 18)
-        scope.withTransform({ rotate(radToDeg(angleL), pivot = Offset(cx - 10f, footY)) }) {
-            drawLine(wColor, Offset(cx - 18f, footY), Offset(cx - 18f, cy + 220f), strokeWidth = 8f)
-            // Footrest
-            drawLine(Color(0xFF4A4A4A), Offset(cx - 25f, footY + 5f), Offset(cx - 5f, footY + 5f), strokeWidth = 4f)
+        scope.withTransform({ rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f)) }) {
+            drawLine(wColor, Offset(cx - 18f, topY), Offset(cx - 18f, groundY), strokeWidth = 8f)
+            drawLine(Color(0xFF4A4A4A), Offset(cx - 25f, topY + 5f), Offset(cx - 5f, topY + 5f), strokeWidth = 4f)
         }
-        // Draw right stilt (attaches to right foot at cx + 18)
-        scope.withTransform({ rotate(radToDeg(angleR), pivot = Offset(cx + 10f, footY)) }) {
-            drawLine(wColor, Offset(cx + 18f, footY), Offset(cx + 18f, cy + 220f), strokeWidth = 8f)
-            // Footrest
-            drawLine(Color(0xFF4A4A4A), Offset(cx + 10f, footY + 5f), Offset(cx + 35f, footY + 5f), strokeWidth = 4f)
+        scope.withTransform({ rotate(radToDeg(angleR), pivot = Offset(cx + 10f, cy + 90f)) }) {
+            drawLine(wColor, Offset(cx + 18f, topY), Offset(cx + 18f, groundY), strokeWidth = 8f)
+            drawLine(Color(0xFF4A4A4A), Offset(cx + 10f, topY + 5f), Offset(cx + 35f, topY + 5f), strokeWidth = 4f)
         }
     }
 

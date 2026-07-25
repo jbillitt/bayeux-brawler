@@ -295,7 +295,13 @@ class GameViewModel : ViewModel() {
         initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
-        initialGear.addAll(GameData.ARMOR_PIECES.filter { it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }.shuffled().take(2).map { it.id })
+        initialGear.addAll(GameData.ARMOR_PIECES.filter {
+                    it.id !in listOf(
+                        "armor_gauntlets", "armor_boots", "armor_coif", "armor_jester",
+                        "armor_greaves", "armor_spaulders", "armor_surcoat",
+                        "armor_habit", "armor_apron", "armor_frock", "armor_toga"
+                    )
+                }.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.HEADGEAR_PIECES.filter { it.id != "helm_jester" }.shuffled().take(2).map { it.id })
 
         _uiState.update { it.copy(
@@ -2002,7 +2008,13 @@ class GameViewModel : ViewModel() {
                 initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.WEAPON_HANDLES.shuffled().take(3).map { it.id })
                 initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
-                initialGear.addAll(GameData.ARMOR_PIECES.filter { it.id !in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_jester") }.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.ARMOR_PIECES.filter {
+                    it.id !in listOf(
+                        "armor_gauntlets", "armor_boots", "armor_coif", "armor_jester",
+                        "armor_greaves", "armor_spaulders", "armor_surcoat",
+                        "armor_habit", "armor_apron", "armor_frock", "armor_toga"
+                    )
+                }.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.HEADGEAR_PIECES.filter { it.id != "helm_jester" }.shuffled().take(2).map { it.id })
                 
                 val rng = kotlin.random.Random.Default

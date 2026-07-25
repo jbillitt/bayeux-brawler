@@ -271,7 +271,17 @@ object GameData {
         GAUNTLETS("armor_gauntlets", "Iron Gauntlets", 1.5f, defense = 15f, speedPenalty = 0.02f, description = "Heavy iron gloves that protect the hands.", color = Color(0xFF6B747A)),
         BOOTS("armor_boots", "Iron-shod Boots", 2.0f, defense = 15f, speedPenalty = 0.03f, description = "Heavy boots protecting the feet from lowly Saxon spears.", color = Color(0xFF5D666B)),
         EXTRA_COIF("armor_coif", "Mail Coif Layer", 2.0f, defense = 20f, speedPenalty = 0.02f, description = "An extra coif draped over your shoulders and neck.", color = Color(0xFF868C91)),
-        JESTER_OUTFIT("armor_jester", "Jester's Motley", 0.5f, defense = 0f, speedPenalty = 0.0f, description = "A full set of colorful motley. Complete lack of protection. High score multi!", color = Color(0xFF3C5CD6));
+        JESTER_OUTFIT("armor_jester", "Jester's Motley", 0.5f, defense = 0f, speedPenalty = 0.0f, description = "A full set of colorful motley. Complete lack of protection. High score multi!", color = Color(0xFF3C5CD6)),
+        BRIGANDINE("armor_brigandine", "Brigandine", 8.0f, defense = 35f, speedPenalty = 0.14f, description = "Small iron plates riveted between layers of canvas. The compromise every sensible man reaches.", color = Color(0xFF6B5544)),
+        BEARSKIN("armor_bearskin", "Bearskin Cloak", 4.0f, defense = 28f, speedPenalty = 0.07f, description = "The hide of a great bear, still bearing its head. Warm, heavy, and alarming.", color = Color(0xFF4A3A2C)),
+        SMOCK("armor_smock", "Old Smock", 0.6f, defense = 5f, speedPenalty = 0.0f, description = "A peasant's linen smock, much mended. It has survived more harvests than you have battles.", color = Color(0xFFCFC3A6)),
+        HABIT("armor_habit", "Monk's Habit", 0.8f, defense = 0f, speedPenalty = 0.0f, description = "Brown wool and a rope belt. God provides no armour class whatsoever.", color = Color(0xFF5E4B3C)),
+        APRON("armor_apron", "Cook's Apron", 0.5f, defense = 0f, speedPenalty = 0.0f, description = "Stained with the grease of a hundred feasts. Offers nothing but a faint smell of onions.", color = Color(0xFFE3DAC4)),
+        FROCK("armor_frock", "Maid's Frock", 0.5f, defense = 0f, speedPenalty = 0.0f, description = "A serving-maid's linen frock. Cuts a dash on the field of slaughter.", color = Color(0xFFA8557B)),
+        TOGA("armor_toga", "Emperor's Toga", 0.7f, defense = 0f, speedPenalty = 0.0f, description = "Draped Roman cloth, a thousand years out of fashion. Fatal, but classical.", color = Color(0xFFF0E6D2)),
+        GREAVES("armor_greaves", "Iron Greaves", 2.2f, defense = 15f, speedPenalty = 0.03f, description = "Shaped iron plates strapped over the shins. Saxon spears aim low.", color = Color(0xFF5D666B)),
+        SPAULDERS("armor_spaulders", "Spaulders", 2.4f, defense = 15f, speedPenalty = 0.03f, description = "Overlapping plates capping the shoulders. Turns an overhead axe aside.", color = Color(0xFF6B747A)),
+        SURCOAT("armor_surcoat", "Surcoat", 0.6f, defense = 3f, speedPenalty = 0.0f, description = "A cloth surcoat worn over the mail, in your own colours. Barely armour. Entirely the point.", color = Color(0xFFB03131));
         override val type: ItemType get() = ItemType.ARMOR
     }
     val ARMOR_PIECES = ArmorPiece.values().toList()
@@ -622,6 +632,11 @@ data class FighterState(
             }
             if (headgear.id == "helm_jester" || armor.id == "armor_jester" || extraArmors.any { it.id == "armor_jester" }) {
                 mult += 20.0f
+            }
+            // Fighting a battle dressed as a cook, a maid, a monk or a Roman senator earns its own
+            // reward. Without this they offer no defence and no upside — strictly worse than naked.
+            if (armor.id in setOf("armor_habit", "armor_apron", "armor_frock", "armor_toga")) {
+                mult += 6.0f
             }
             return mult
         }

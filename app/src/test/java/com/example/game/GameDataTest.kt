@@ -70,4 +70,48 @@ class GameDataTest {
         )
         assertEquals(expected, GameData.UNLOCKABLE_HANDLE_IDS)
     }
+
+    @Test
+    fun theBrigandineFillsTheGapBetweenLeatherAndLamellar() {
+        val leather = GameData.ARMOR_PIECES.first { it.id == "armor_leather" }.defense
+        val lamellar = GameData.ARMOR_PIECES.first { it.id == "armor_lamellar" }.defense
+        val brigandine = GameData.ARMOR_PIECES.first { it.id == "armor_brigandine" }.defense
+        assertTrue("brigandine ($brigandine) must sit between $leather and $lamellar",
+            brigandine > leather && brigandine < lamellar)
+    }
+
+    /** A player in the given body armour, everything else held constant. */
+    private fun playerWearing(armorId: String) = FighterState(
+        id = "p", name = "p", isPlayer = true, maxHp = 100f, hp = 100f,
+        weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
+        weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+        shield = GameData.SHIELDS.first { it.id == "shield_none" },
+        armor = GameData.ARMOR_PIECES.first { it.id == armorId },
+        headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+        posX = 0f, targetX = 0f, size = 1.0f,
+        hairColor = androidx.compose.ui.graphics.Color.Black, hairStyle = "short"
+    )
+
+    @Test
+    fun everyZeroDefenceOutfitPaysAScoreMultiplier() {
+        // armor_smock is the control: also near-worthless, but not a comedy outfit, so it earns
+        // no bonus. Without the bonus these four would be strictly worse than fighting naked.
+        val baseline = playerWearing("armor_smock").scoreMultiplier
+        listOf("armor_habit", "armor_apron", "armor_frock", "armor_toga").forEach { id ->
+            val piece = GameData.ARMOR_PIECES.first { it.id == id }
+            assertEquals("$id should offer no protection", 0f, piece.defense, 0.001f)
+            assertTrue(
+                "$id offers no defence and no score bonus — strictly worse than nothing",
+                playerWearing(id).scoreMultiplier > baseline
+            )
+        }
+    }
+
+    @Test
+    fun theThreeNewLayersExistAndAreLight() {
+        listOf("armor_greaves", "armor_spaulders", "armor_surcoat").forEach { id ->
+            val piece = GameData.ARMOR_PIECES.first { it.id == id }
+            assertTrue("$id is a layer and must not weigh like a hauberk", piece.mass <= 3.0f)
+        }
+    }
 }

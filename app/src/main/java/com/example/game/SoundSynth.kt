@@ -73,10 +73,19 @@ object MedievalAudioSynth {
                 }
                 synthIds[type] = ids
             }
-            for (folder in listOf(
-                "dog", "hag", "drums", "victory", "pain", "armour", "shield", "flesh",
-                "trojan", "bee", "herald", "fanatic", "monk", "plague"
-            )) {
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        // Voices first: SoundPool decodes into a finite native heap, and whatever loads last is
+        // what goes silent when it fills. "victory"/"defeat" are deliberately absent — they are
+        // long one-shots that MainActivity.playRandomVoiceClip streams via MediaPlayer, and
+        // preloading victory alone cost 18MB of the pool that the entourage voices needed.
+        for (folder in listOf(
+            "trojan", "bee", "herald", "fanatic", "monk", "plague",
+            "dog", "hag", "drums", "pain", "armour", "shield", "flesh"
+        )) {
+            // Per-folder, so one unreadable asset cannot silence every folder after it.
+            try {
                 val files = ctx.assets.list(folder)?.toList().orEmpty()
                 val poolable = files.filter {
                     it.endsWith(".wav") || it.endsWith(".ogg") || it.endsWith(".mp3")
@@ -88,9 +97,9 @@ object MedievalAudioSynth {
                 } else if (files.any { it.endsWith(".mid") || it.endsWith(".midi") }) {
                     midiOnlyFolders.add(folder)
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
@@ -161,8 +170,16 @@ object MedievalAudioSynth {
         if (sfxEnabled) playFolder("hag")
     }
 
-    /** The belly of the great horse splitting open. */
-    fun playTrojanBurst() { if (sfxEnabled) playFolder("trojan") }
+    /** The belly of the great horse splitting open — one cry per man tumbling out of it. */
+    fun playTrojanBurst(voices: Int = 3) {
+        if (!sfxEnabled) return
+        scope.launch {
+            repeat(voices) {
+                playFolder("trojan")
+                kotlinx.coroutines.delay(200L)
+            }
+        }
+    }
 
     /** Humble Bede's hive bursting among the enemy. */
     fun playBeeSwarm() { if (sfxEnabled) playFolder("bee") }

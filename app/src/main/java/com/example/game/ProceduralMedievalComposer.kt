@@ -61,6 +61,7 @@ object ProceduralMedievalComposer {
             LineRef.ACCOMP -> accompEvents(spec)
             LineRef.RIFF -> brawlRiffEvents(spec)
             LineRef.FLOURISH -> brawlFlourishEvents(spec, a.voice)
+            LineRef.STRUM -> harpStrumEvents(spec)
             LineRef.TRUMPETER -> trumpeterEvents(spec)
             LineRef.DESTINY_FANFARE -> destinyFanfareEvents(spec)
             LineRef.PADS_FULL -> emptyList()

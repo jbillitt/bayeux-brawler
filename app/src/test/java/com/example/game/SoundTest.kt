@@ -112,6 +112,65 @@ class SoundTest {
         }
     }
 
+    /**
+     * The whole point of building the strum out of degreeToMidi against the bar's own ground
+     * degree: every pitch is a member of the mode by construction, so a rolled chord cannot land
+     * on a note outside the key no matter which family, mode or ground the run rolled.
+     */
+    @Test
+    fun everyHarpStrumPitchBelongsToTheMode() {
+        val specs = (1L..12L).flatMap { seed ->
+            listOf(
+                resolveSongSpec(seed, emptyList()),
+                resolveSongSpec(seed, emptyList(), brawl = true),
+                resolveSongSpec(seed, emptyList(), throne = true)
+            )
+        }
+        for (spec in specs) {
+            val scale = spec.mode.steps.toSet()
+            for (e in harpStrumEvents(spec)) {
+                val pitchClass = Math.floorMod(e.midi - spec.finalMidi, 12)
+                assertTrue(
+                    "${spec.family}/${spec.mode}: midi ${e.midi} is $pitchClass semitones off the " +
+                        "final, which is not in the mode $scale",
+                    pitchClass in scale
+                )
+            }
+        }
+    }
+
+    @Test
+    fun harpStrumsLandOnPhraseEndsAndRollUpward() {
+        val spec = resolveSongSpec(3L, emptyList())
+        val events = harpStrumEvents(spec)
+        assertTrue("a 32-bar piece should get several strums, got ${events.size}", events.size >= 8)
+
+        val bpb = spec.beatsPerBar
+        events.forEach {
+            val bar = (it.startBeat / bpb).toInt()
+            assertEquals("strums belong on the last bar of a four-bar phrase", 3, bar % 4)
+        }
+
+        // Within one roll the pitches ascend and the velocity eases off — a hand dragged across
+        // the strings, thumb first, not a block chord.
+        val firstRoll = events.take(4)
+        firstRoll.zipWithNext().forEach { (a, b) ->
+            assertTrue("strum should roll upward: ${a.midi} then ${b.midi}", b.midi > a.midi)
+            assertTrue("strum should roll in time: ${a.startBeat} then ${b.startBeat}", b.startBeat > a.startBeat)
+            assertTrue("strum should ease off up the roll", b.velocity < a.velocity)
+        }
+    }
+
+    @Test
+    fun theHarpOnlyLearnsToStrumAfterAFewLevels() {
+        val spec = resolveSongSpec(3L, emptyList())
+        val plan = planOrchestration(spec, hasTrumpeter = false, rng = orchRng(3L))
+        assertTrue("no strumming at level one",
+            activeAssignments(plan, 1).none { it.line == LineRef.STRUM })
+        assertTrue("the strum should have arrived by level 6",
+            activeAssignments(plan, 6).any { it.line == LineRef.STRUM })
+    }
+
     @Test
     fun moodsDoNotBendThemedFamilies() {
         val spec = resolveSongSpec(7L, listOf("More Tempo", "More Tempo", "Merrier"), brawl = true)

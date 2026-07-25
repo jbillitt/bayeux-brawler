@@ -4,7 +4,7 @@ import kotlin.random.Random
 
 enum class LineRef {
     MELODY, MELODY_ORN, COUNTER, BASS, PADS_FULL, PADS_ROOT, PADS_FIFTH,
-    DRONE, PERC, SPARKLE, ACCOMP, RIFF, FLOURISH, TRUMPETER, DESTINY_FANFARE
+    DRONE, PERC, SPARKLE, ACCOMP, RIFF, FLOURISH, TRUMPETER, DESTINY_FANFARE, STRUM
 }
 
 data class VoiceAssignment(
@@ -88,6 +88,10 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     val bass = weightedPick(rng, if (bassPool.isEmpty()) listOf(Voice.VIOLA to 1f) else bassPool)
     used += bass
     a += VoiceAssignment(bass, LineRef.BASS, 3, 99, gBass, -0.25f)
+
+    // The soloist starts rolling chords across the phrase ends a few levels in — the single
+    // biggest "the band has grown" cue available, and it costs no extra voice.
+    a += VoiceAssignment(soloist, LineRef.STRUM, 4, 99, gMel * 0.62f, 0.1f)
 
     // L4 percussion I
     val percLevel = 4
@@ -205,6 +209,8 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
     a += VoiceAssignment(Voice.BELLS, LineRef.SPARKLE, 5, 99, 0.10f, 0.7f)
     a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, 5, 99, 0.28f, 0f)
     if (riff != Voice.PSALTERY) a += VoiceAssignment(Voice.PSALTERY, LineRef.RIFF, 6, 99, 0.10f, 0.45f, octave = 1)
+    // Rolled chords on the phrase ends — the lead punctuating its own riff.
+    a += VoiceAssignment(Voice.HARP, LineRef.STRUM, 4, 99, 0.26f, 0.15f)
     // The harp's own divisions an octave up — the lead taking a solo over its own riff.
     a += VoiceAssignment(Voice.HARP, LineRef.MELODY_ORN, 7, 99, 0.18f, 0.25f, octave = 1)
     a += VoiceAssignment(Voice.PANPIPES, LineRef.FLOURISH, 8, 99, 0.11f, 0.6f)
@@ -250,6 +256,8 @@ private fun planThroneOrchestration(spec: SongSpec, hasTrumpeter: Boolean): Orch
     a += VoiceAssignment(Voice.SACKBUT, LineRef.PADS_ROOT, 2, 99, 0.22f, -0.15f)
     a += VoiceAssignment(Voice.HORN, LineRef.PADS_FIFTH, 2, 99, 0.18f, 0.15f)
     a += VoiceAssignment(Voice.CHOIR, LineRef.PADS_FULL, 4, 99, 0.14f, 0f)
+    // Harp rolls across the cadences — a court harper's gesture, and it suits a coronation.
+    a += VoiceAssignment(Voice.HARP, LineRef.STRUM, 3, 99, 0.28f, -0.2f)
     a += VoiceAssignment(Voice.RECORDER, LineRef.MELODY_ORN, 5, 99, 0.18f, 0.5f, octave = 1)
     a += VoiceAssignment(Voice.PSALTERY, LineRef.SPARKLE, 6, 99, 0.14f, 0.45f)
     a += VoiceAssignment(Voice.CHOIR, LineRef.COUNTER, 7, 99, 0.16f, 0.35f)
@@ -489,6 +497,39 @@ fun brawlFlourishEvents(spec: SongSpec, voice: Voice): List<NoteEvent> {
         )
         val start = bar * bpb + bpb - 1f
         for (i in notes.indices) out += NoteEvent(start + i * 0.25f, 0.22f, notes[i], 0.7f + 0.08f * i)
+    }
+    return out
+}
+
+/**
+ * Rolled chords for the harp, landing on phrase ends where the melody is resting anyway.
+ *
+ * Every pitch comes from degreeToMidi() against the bar's own ground degree, so the voicing is
+ * built out of the mode rather than transposed into it — a strum cannot come out discordant, and
+ * the third is minor in aeolian/dorian and major in ionian without anything asking which.
+ * (groundChordMidis is deliberately not used: it gives root-fifth-octave, no third at all, which
+ * strums as a hollow power chord.)
+ *
+ * The roll is ~32ms per string, converted to beats so it stays a hand dragged across the strings
+ * at any tempo instead of scaling into an arpeggio at slow ones.
+ */
+fun harpStrumEvents(spec: SongSpec): List<NoteEvent> {
+    val out = mutableListOf<NoteEvent>()
+    val bpb = spec.beatsPerBar.toFloat()
+    val rollBeats = (0.032f / spec.secondsPerBeat).coerceIn(0.015f, 0.10f)
+    for (bar in 0 until spec.totalBars) {
+        // Last bar of each four-bar phrase; every second one closes a strain and gets more.
+        if (bar % 4 != 3) continue
+        val strainEnd = bar % 8 == 7
+        val g = spec.ground[bar % 8].bassDegree
+        val degrees = if (strainEnd) listOf(0, 2, 4, 7, 9, 11) else listOf(0, 2, 4, 7)
+        val start = bar * bpb + bpb - (if (strainEnd) 1.5f else 1f)
+        val ring = if (strainEnd) 2.6f else 1.4f
+        val lead = if (strainEnd) 0.92f else 0.68f
+        degrees.forEachIndexed { i, d ->
+            // Velocity eases off up the roll: the thumb hits hardest, as on a real harp.
+            out += NoteEvent(start + i * rollBeats, ring, degreeToMidi(spec, g + d), lead - 0.035f * i)
+        }
     }
     return out
 }

@@ -139,6 +139,18 @@ private val DEFEAT = listOf(
     )
     fun defeatQuote(): String = DEFEAT[Random.nextInt(DEFEAT.size)]
 
+    /**
+     * The epitaph: "Slain by Cerdic the Immovable, wielding a Dane Axe on a Hickory Shaft."
+     * Shared by the defeat panel and the shareable tale so the two never disagree.
+     * Null when nothing was recorded — a retirement, or a death with no author.
+     */
+    fun slainByLine(name: String?, weapon: String?): String? = when {
+        name != null && weapon != null -> "Slain by $name, wielding $weapon."
+        name != null -> "Slain by $name."
+        weapon != null -> "Felled by $weapon."
+        else -> null
+    }
+
     private val BARK_VICTORY = listOf("VICTORIA!", "DEUS VULT!", "GLORIA MAXIMA!", "HUZZAH ETERNUM!")
     private val BARK_DEFEAT = listOf("MORTIS!", "LACRIMAE!", "O TEMPORA!", "CATASTROPHUS!")
     private val BARK_LEVEL = listOf("ASCENDIMUS!", "GLORIA CRESCIT!", "SURSUM CORDA!")

@@ -63,14 +63,38 @@ class GameProfileTest {
 
     @Test
     fun theRunPoolIsTheRandomRollPlusEverythingEarned() = runTest {
-        GameProfile.grant("handle_anchor", "defeat_hardrada")
+        GameProfile.grant("head_eel", "naked_win")
         GameProfile.load()
 
         val roll = setOf("head_sword", "handle_medium", "shield_kite")
         val pool = GameViewModel.poolWithUnlocks(roll)
 
-        assertTrue("earned items must always be present", "handle_anchor" in pool)
+        assertTrue("earned items must always be present", "head_eel" in pool)
         assertTrue("the random roll must survive", "head_sword" in pool)
+    }
+
+    /**
+     * Handles are the one exception: an earned haft joins the pool the run ROLLS from, it is not
+     * handed over outright. All seven going straight into unlockedGearIds put nine buttons in a
+     * single-row picker and mangled it, so the run still fields only the two or three it rolled.
+     */
+    @Test
+    fun anEarnedHandleJoinsTheRollPoolRatherThanTheRunOutright() = runTest {
+        GameProfile.grant("handle_anchor", "defeat_hardrada")
+        GameProfile.load()
+
+        assertFalse(
+            "an earned handle must not be handed straight to the run",
+            "handle_anchor" in GameViewModel.poolWithUnlocks(setOf("head_sword"))
+        )
+        assertTrue(
+            "an earned handle must become rollable",
+            GameViewModel.handleRollPool().any { it.id == "handle_anchor" }
+        )
+        assertTrue(
+            "the sixteen base hafts stay rollable regardless",
+            GameViewModel.handleRollPool().any { it.id == "handle_medium" }
+        )
     }
 
     @Test

@@ -67,7 +67,11 @@ internal fun pickTripleCandidate(
     consumedIds: Set<String>,
     random: Random = Random.Default
 ): Ancillary? {
-    val candidates = followers.distinctBy { it.id }.filter { it.id !in consumedIds }
+    // Mounts are excluded outright: you can only ever ride one, so a "Thrice-Blessed" mount is
+    // three cards' worth of nothing. Guarded here rather than at the call site — this is the only
+    // route into the follower_multiply branch.
+    val candidates = followers.distinctBy { it.id }
+        .filter { it.id !in consumedIds && it.id !in MOUNT_ANCILLARY_IDS }
     if (candidates.isEmpty()) return null
     val weights = candidates.map { candidate ->
         1 + 2 * (followers.count { it.id == candidate.id } - 1)
@@ -168,7 +172,21 @@ class GameViewModel : ViewModel() {
          * The gear a run may draw on: this run's random roll, plus everything ever earned. Reads the
          * cached profile so it never suspends on the game loop.
          */
-        fun poolWithUnlocks(roll: Set<String>): Set<String> = roll + GameProfile.cached.unlockedItemIds
+        fun poolWithUnlocks(roll: Set<String>): Set<String> =
+            roll + GameProfile.cached.unlockedItemIds.filterNot { it in GameData.UNLOCKABLE_HANDLE_IDS }
+
+        /**
+         * Handles a run may roll from: the sixteen base hafts, plus every unlockable the profile
+         * has earned. Earned handles join the *pool* rather than being handed over outright —
+         * dumping all seven straight into unlockedGearIds put nine buttons in a single-row picker
+         * and mangled it. You still only ever field the two or three this run rolled.
+         */
+        fun handleRollPool(): List<GameData.WeaponHandle> {
+            val earned = GameProfile.cached.unlockedItemIds
+            return GameData.WEAPON_HANDLES.filter {
+                it.id !in GameData.UNLOCKABLE_HANDLE_IDS || it.id in earned
+            }
+        }
 
         /**
          * Earned mounts are saved as Ancillary ids, but the mount picklist and the stat wiring both
@@ -293,8 +311,7 @@ class GameViewModel : ViewModel() {
             DivineWeather.HAIL -> {
                 // Buffed: hail now bruises as well as knocks down, and holds them longer.
                 foes.forEach {
-                    it.isCrumpled = true
-                    it.crumpleDuration = 3.5f
+                    it.tryCrumple(3.5f)
                     engine.applyFlatDamage(25f, it, isPlayerSource = true)
                 }
                 _screenshake.value = 22f
@@ -303,18 +320,14 @@ class GameViewModel : ViewModel() {
                 // Buffed: longer freeze and more of them go down.
                 foes.forEach {
                     it.slowDuration = 8f
-                    if (Random.nextFloat() < 0.65f) {
-                        it.isCrumpled = true
-                        it.crumpleDuration = 1.6f
-                    }
+                    it.tryCrumple(1.6f, chance = 0.65f)
                 }
             }
             DivineWeather.FROGS -> {
                 // Chronicle-grade chaos: frogs on EVERYONE. Foes go down hard; you and yours
                 // merely stumble. High risk, high comedy.
                 foes.forEach {
-                    it.isCrumpled = true
-                    it.crumpleDuration = 3.2f
+                    it.tryCrumple(3.2f)
                     engine.applyFlatDamage(14f, it, isPlayerSource = true)
                 }
                 _enemiesState.value.filter { it.isPlayer && !it.isDead && !it.isDying }.forEach {
@@ -364,8 +377,7 @@ class GameViewModel : ViewModel() {
         initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
         // The seven unlockables are earned, not rolled — the ✦ marker's promise, now kept. They still
         // reach the pool for anyone who has earned them, via poolWithUnlocks below.
-        initialGear.addAll(GameData.WEAPON_HANDLES.filter { it.id !in GameData.UNLOCKABLE_HANDLE_IDS }
-            .shuffled().take(2).map { it.id })
+        initialGear.addAll(handleRollPool().shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.ARMOR_PIECES.filter {
                     it.id !in listOf(
@@ -434,7 +446,7 @@ class GameViewModel : ViewModel() {
             val newAncs = when (choice.type) {
                 "follower" -> {
                     val anc = GameData.ANCILLARIES.first { it.id == choice.itemId }
-                    state.unlockedAncillaries + List(rollFollowerCopies()) { anc }
+                    state.unlockedAncillaries + List(choice.copies) { anc }
                 }
                 "follower_multiply" -> {
                     val anc = GameData.ANCILLARIES.first { it.id == choice.itemId }
@@ -1244,8 +1256,9 @@ class GameViewModel : ViewModel() {
         // Play battle start timpani roll
         MedievalAudioSynth.playSound(SoundType.DRUM_ROLL)
 
-        // Sir Boast-a-lot announces you over the drums (assets/herald; silent until clips are added)
-        if (_uiState.value.unlockedAncillaries.contains(Ancillary.HERALD)) {
+        // Sir Boast-a-lot announces you over the drums — but only now and then. Every single battle
+        // wore the joke out, and his clips run 4s over the top of the drum roll.
+        if (_uiState.value.unlockedAncillaries.contains(Ancillary.HERALD) && Random.nextFloat() < 0.3f) {
             MedievalAudioSynth.playHeraldBoast()
         }
 
@@ -1489,12 +1502,13 @@ class GameViewModel : ViewModel() {
                         (enemy.isRanged || it.elevated == enemy.elevated)
                 }.minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
             } else {
-                // Enemies ignore the trojan horse decoy until it has rolled past them
+                // Nobody stabs the gift horse. The whole trick is that the host wheels it in
+                // gladly — so it is never a target, at any point, and rolls through untouched.
                 (enemies.filter {
                     !it.isDead && !it.isDying && it.isPlayer && !it.isCombatInactive &&
                         it.climbState == ClimbState.NONE &&
                         (enemy.isRanged || it.elevated == enemy.elevated) &&
-                        (it.id != "trojan_horse" || it.posX > enemy.posX)
+                        it.id != "trojan_horse"
                 } + listOfNotNull(
                     player.takeIf {
                         !it.isDead && !it.isDying && it.climbState == ClimbState.NONE &&
@@ -1505,7 +1519,11 @@ class GameViewModel : ViewModel() {
             }
             // Allied NPCs no longer loiter at the rear while we alone batter the gate — with no
             // reachable foe during a siege they march up and help break it down.
+            // The horse is exempt: it does not batter gates, it is invited through them. Leaving it
+            // in this block also double-moved it (updateFighter already rolls it) and had a wooden
+            // horse punching the oak with its bare fists.
             if (siege != null && !siege.gateBroken && enemy.isPlayer && pTarget == null &&
+                enemy.id != "trojan_horse" &&
                 !enemy.isDead && !enemy.isDying && !enemy.elevated &&
                 enemy.climbState == ClimbState.NONE && enemy.pallbearerIndex < 0
             ) {
@@ -1676,6 +1694,22 @@ class GameViewModel : ViewModel() {
                     // a pincushion.
                     if (proj.velocityX > 0) bgHit.stuckArrowsFromLeft = (bgHit.stuckArrowsFromLeft + 1).coerceAtMost(20)
                     else bgHit.stuckArrowsFromRight = (bgHit.stuckArrowsFromRight + 1).coerceAtMost(20)
+
+                    val impactAngle = kotlin.math.atan2(proj.velocityY.toDouble(), proj.velocityX.toDouble()).toFloat()
+                    val jitteredAngle = impactAngle + (Random.nextFloat() - 0.5f) * 0.16f
+                    val relX = (proj.posX - bgHit.posX).coerceIn(-bgHit.width / 2f + 15f, bgHit.width / 2f - 15f)
+                    val relY = (proj.posY - 200f).coerceIn(-150f, -20f)
+                    if (bgHit.stuckBuildingArrows.size < 30) {
+                        bgHit.stuckBuildingArrows.add(
+                            StuckBuildingArrow(
+                                offsetX = relX,
+                                offsetY = relY,
+                                angle = jitteredAngle,
+                                fromLeft = proj.velocityX >= 0f,
+                                projType = proj.type
+                            )
+                        )
+                    }
                 }
                 if (bgHit.hp <= 0) bgHit.isDestroyed = true
             }
@@ -1762,7 +1796,7 @@ class GameViewModel : ViewModel() {
         }
 
         // The rest of the entourage's voices, same rarity-roll pattern (all silent until clips land)
-        if (enemies.any { it.isKind("fanatic") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.15f) {
+        if (enemies.any { it.isKind("fanatic_boris") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.15f) {
             MedievalAudioSynth.playFanaticScream()
         }
         if (enemies.any { it.isKind("plague_peasant") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.2f) {
@@ -1985,8 +2019,14 @@ class GameViewModel : ViewModel() {
 
                 // 1. Follower option. Stackable pets stay in the pool even once owned, so you can
                 // keep rallying dogs/ravens and field a whole pack; everyone else dedups as before.
+                // A second mount is dead weight: effectiveMount only ever reads one, and the stat
+                // sums skip mounts outright. So once you are astride something, mounts mostly leave
+                // the pool — one still slips through occasionally so a swap stays possible.
+                val ownsMount = state.unlockedAncillaries.any { it.id in MOUNT_ANCILLARY_IDS }
+                val suppressMounts = ownsMount && Random.nextFloat() >= 0.12f
                 val availableAncs = GameData.ANCILLARIES.filter {
-                    it !in state.unlockedAncillaries || it in STACKABLE_ANCILLARIES
+                    (it !in state.unlockedAncillaries || it in STACKABLE_ANCILLARIES) &&
+                        !(suppressMounts && it.id in MOUNT_ANCILLARY_IDS)
                 }
                 // Two distinct follower offers instead of one — the extra card per battle.
                 // First slot favours someone you DON'T yet own: the always-eligible stackable
@@ -1999,12 +2039,19 @@ class GameViewModel : ViewModel() {
                         val owned = state.unlockedAncillaries.count { it == anc }
                         val titleSuffix = if (isObject) "" else " the ${anc.role}"
                         val packNote = if (owned > 0) " You already have $owned — they stack." else ""
+                        // Twin mounts grant nothing — you can only ride one. Never offer them.
+                        val copiesCount = if (anc.id in MOUNT_ANCILLARY_IDS) 1 else rollFollowerCopies()
+                        val isTwins = copiesCount > 1
+                        val twinTitle = if (isTwins) "TWINS! ${anc.ancillaryName}$titleSuffix" else "${anc.ancillaryName}$titleSuffix"
+                        val twinDesc = if (isTwins) "[TWINS! You get TWO of them!] ${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)$packNote"
+                                       else "${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)$packNote"
                         pendingChoices.add(LevelUpChoice(
-                            id = "follower_${anc.id}",
-                            title = "${anc.ancillaryName}$titleSuffix",
-                            description = "${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)$packNote",
+                            id = if (isTwins) "follower_twins_${anc.id}" else "follower_${anc.id}",
+                            title = twinTitle,
+                            description = twinDesc,
                             type = "follower",
-                            itemId = anc.id
+                            itemId = anc.id,
+                            copies = copiesCount
                         ))
                     }
                 } else {
@@ -2184,6 +2231,9 @@ class GameViewModel : ViewModel() {
                 isBattleActive = true, // Keep it active so the tapestry remains drawn with overlays
                 battleWon = won,
                 battleLost = !won,
+                // Recorded by the last damaging hit; a retirement has no killer to name.
+                slainByName = if (won) null else _playerState.value?.slayerName,
+                slainByWeapon = if (won) null else _playerState.value?.slayerWeapon,
                 score = newScore,
                 highscore = newHighscore,
                 level = nextLevel,
@@ -2267,8 +2317,7 @@ class GameViewModel : ViewModel() {
                 initialGear.add("armor_bare")
                 initialGear.add("helm_none")
                 initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
-                initialGear.addAll(GameData.WEAPON_HANDLES.filter { it.id !in GameData.UNLOCKABLE_HANDLE_IDS }
-                    .shuffled().take(3).map { it.id })
+                initialGear.addAll(handleRollPool().shuffled().take(3).map { it.id })
                 initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.ARMOR_PIECES.filter {
                     it.id !in listOf(

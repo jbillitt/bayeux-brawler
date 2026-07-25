@@ -86,8 +86,11 @@ class MilestoneAwardTest {
 
     @Test
     fun anAwardedMilestonePutsItsItemInThePool() = runTest {
+        GameViewModel.awardMilestone(Milestone.NAKED_WIN)
+        assertTrue("head_eel" in GameViewModel.poolWithUnlocks(emptySet()))
+        // A handle instead joins what the next run rolls from — see GameProfileTest.
         GameViewModel.awardMilestone(Milestone.BEAT_HARDRADA)
-        assertTrue("handle_anchor" in GameViewModel.poolWithUnlocks(emptySet()))
+        assertTrue(GameViewModel.handleRollPool().any { it.id == "handle_anchor" })
     }
 
     @Test

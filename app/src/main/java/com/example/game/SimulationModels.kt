@@ -219,9 +219,9 @@ object GameData {
     val WEAPON_HANDLES = WeaponHandle.values().toList()
 
     /**
-     * Handles destined to be earned rather than rolled. For now they roll like anything else and
-     * the picker marks them with a ✦; C1 adds the milestones and filters this set out of the
-     * opening roll, the way STRANGE_HEAD_IDS already holds the relic heads back.
+     * Handles earned rather than rolled, marked with a ✦ in the picker. A milestone grants one for
+     * good, which puts it into the run's roll pool (GameViewModel.handleRollPool) — it does not
+     * hand it over on the spot. Nine permanently-visible hafts overflowed the single-row picker.
      */
     val UNLOCKABLE_HANDLE_IDS = setOf(
         "handle_oar", "handle_femur", "handle_antler", "handle_trumpet",
@@ -340,7 +340,16 @@ data class LevelUpChoice(
     val title: String,       // Human readable option title
     val description: String, // Comedic and informative description
     val type: String,        // "follower", "attachment", "extension", "armor"
-    val itemId: String       // Underlying GearItem or Ancillary ID
+    val itemId: String,      // Underlying GearItem or Ancillary ID
+    val copies: Int = 1      // Number of copies granted (e.g. 2 for Twins!)
+)
+
+data class StuckBuildingArrow(
+    val offsetX: Float,
+    val offsetY: Float,
+    val angle: Float,       // Angle of flight (in radians) when arrow struck
+    val fromLeft: Boolean,
+    val projType: ProjectileType = ProjectileType.ARROW
 )
 
 data class EmbeddedProjectile(
@@ -377,7 +386,8 @@ data class BackgroundObject(
     val seed: Int = Random.nextInt(),
     // Only arrow-like projectile hits leave visible shafts, split by firing direction
     var stuckArrowsFromLeft: Int = 0,
-    var stuckArrowsFromRight: Int = 0
+    var stuckArrowsFromRight: Int = 0,
+    val stuckBuildingArrows: MutableList<StuckBuildingArrow> = mutableListOf()
 )
 
 data class FighterState(
@@ -427,9 +437,12 @@ data class FighterState(
     val warPaint: Int = 0, // 0 none, 1 blue woad
     val level: Int = 1,
 
-    // Death tracking
+    // Death tracking. deathType is only the ragdoll animation; these two are the chronicle's
+    // record of who did it and with what, overwritten by each damaging hit that lands.
     var deathType: DeathType = DeathType.FALL_BACK,
     var deathTime: Long = 0L,
+    var slayerName: String? = null,
+    var slayerWeapon: String? = null,
     
     // Status effects
     var missingArm: Boolean = false,
@@ -698,6 +711,47 @@ val FighterState.wearsMetalArmour: Boolean
  */
 fun FighterState.isKind(kind: String): Boolean = id == kind || id.startsWith("$kind#")
 
+/**
+ * How much crowd control sticks to this fighter, as a multiplier on both the chance and the
+ * duration. Named foes were losing an arm in the opening exchange and then spending the whole
+ * duel flat on their back — a boss with nine times the hp still can't fight from the floor.
+ * Their elite retinue gets a lesser share of the same.
+ */
+val FighterState.ccResist: Float
+    get() = when {
+        bossType != null -> 0.2f
+        isBossRetinue -> 0.55f
+        else -> 1f
+    }
+
+/** The trojan horse is carpentry. It does not bleed, and it has no arm to sever. */
+val FighterState.isInanimate: Boolean get() = id == "trojan_horse"
+
+/** How this fighter's armament reads in a chronicle: "a Dane Axe on a Hickory Shaft". */
+val FighterState.weaponDescription: String
+    get() = when {
+        missingArm -> "a bare stump"
+        weaponHead.id == "head_bare" -> "bare hands"
+        weaponHandle.id == "handle_fists" -> weaponHead.itemName
+        else -> "${weaponHead.itemName} on ${weaponHandle.itemName}"
+    }
+
+/**
+ * The single door for every knockdown. Weather, grapples, wardogs and heavy blunt all came here
+ * by their own path and each one had forgotten boss resistance separately; routing them through
+ * one function is why a boss can no longer be permanently floored by a frog storm.
+ *
+ * Returns true if the target actually went down, so callers can gate their popup/sound on it.
+ */
+fun FighterState.tryCrumple(seconds: Float, chance: Float = 1f): Boolean {
+    if (crumpleDuration > 0f) return false
+    if (Random.nextFloat() >= chance * ccResist) return false
+    // Floor the scaling: a boss still stumbles, it just gets straight back up.
+    crumpleDuration = seconds * ccResist.coerceAtLeast(0.35f)
+    isCrumpled = true
+    return true
+}
+
 // Grapples a bare-fisted brawler can roll on attack
 enum class WrestlingMove { CHOKE_SLAM, BODY_THROW, SUPLEX }
 
@@ -829,6 +883,10 @@ data class BattleSimState(
     val pendingLevelUpChoices: List<LevelUpChoice> = emptyList(),
     val showLevelUpScreen: Boolean = false,
     val totalKills: Int = 0,
+
+    /** Who felled you and with what, for the defeat screen. Null on a victory or a retirement. */
+    val slainByName: String? = null,
+    val slainByWeapon: String? = null,
 
     // Music decision state
     val showMusicDecision: Boolean = false,

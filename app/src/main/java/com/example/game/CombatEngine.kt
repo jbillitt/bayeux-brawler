@@ -107,7 +107,9 @@ class CombatEngine(private val ctx: BattleContext) {
         const val PLANK_POISON_SECONDS = 4f
 
         /** Melee chargers who lead the advance. Backline lobbers are ranged and must keep kiting. */
-        val FRONTLINE_KINDS = setOf("fanatic", "wardog", "plague_peasant", "raven")
+        // These are matched with isKind(), which compares against the spawn id — Boris spawns as
+        // "fanatic_boris#N", so a bare "fanatic" here matched nothing and he alone never got the lead.
+        val FRONTLINE_KINDS = setOf("fanatic_boris", "wardog", "plague_peasant", "raven")
 
         // Greaser (all tunable). He's crowd control, not damage — the trip is the whole point.
         const val GREASE_SLOW_SECS = 2.5f
@@ -154,6 +156,23 @@ class CombatEngine(private val ctx: BattleContext) {
 
     private fun schedule(delay: Float, action: () -> Unit) {
         queuedActions.add(QueuedAction(delay, action))
+    }
+
+    /** The man who loosed it, if he is still on the field — a missile often outlives its archer. */
+    private fun shooterOf(proj: Projectile): FighterState? {
+        val id = proj.sourceFighterId ?: return null
+        return ctx.enemies.firstOrNull { it.id == id } ?: ctx.player?.takeIf { it.id == id }
+    }
+
+    /** What the chronicle calls the thing that hit you. */
+    private fun missileNote(proj: Projectile): String = when (proj.type) {
+        ProjectileType.ARROW -> "an arrow"
+        ProjectileType.BOLT -> "a crossbow bolt"
+        ProjectileType.STONE -> "a slung stone"
+        ProjectileType.JAVELIN -> "a javelin"
+        ProjectileType.ROCK -> "a hurled rock"
+        ProjectileType.DART -> "a dart"
+        ProjectileType.TORCH -> "a firebrand"
     }
 
     private fun followerCatchUpMultiplier(fighter: FighterState, direction: Float): Float {
@@ -222,7 +241,12 @@ class CombatEngine(private val ctx: BattleContext) {
             if (foes.any { it.posX > fighter.posX - 60f } && fighter.posX < ctx.levelWidth - 80f) {
                 // Was 0.7 — slower than the player, who routinely charged past and killed the line
                 // before the decoy ever reached its spot. It must lead the advance, not trail it.
-                fighter.posX += fighter.moveSpeed * TROJAN_ROLL_MULT * dt
+                // A flat multiple of its OWN speed was not enough: every speed upgrade the player
+                // takes widens the gap again, so floor it against the player the same way the
+                // frontline entourage is floored.
+                val ownRoll = fighter.moveSpeed * TROJAN_ROLL_MULT
+                val leadRoll = (ctx.player?.moveSpeed ?: 0f) * FRONTLINE_LEAD
+                fighter.posX += maxOf(ownRoll, leadRoll) * dt
                 fighter.animFrame += dt * 6f
                 fighter.facingRight = true
             } else {
@@ -701,10 +725,10 @@ class CombatEngine(private val ctx: BattleContext) {
                     // We continue into the regular attack loop below to hit them with their own weapon!
                 } else if (attacker.activeWrestlingMove == WrestlingMove.SUPLEX) {
                     val secondTarget = targets.drop(1).firstOrNull() ?: target
-                    applyFlatDamage(60f, target, attacker.isPlayer)
-                    applyFlatDamage(60f, secondTarget, attacker.isPlayer)
-                    if (!target.isPlayer) target.crumpleDuration = 3.5f
-                    if (!secondTarget.isPlayer) secondTarget.crumpleDuration = 3.5f
+                    applyFlatDamage(60f, target, attacker.isPlayer, attacker = attacker)
+                    applyFlatDamage(60f, secondTarget, attacker.isPlayer, attacker = attacker)
+                    if (!target.isPlayer) target.tryCrumple(3.5f)
+                    if (!secondTarget.isPlayer) secondTarget.tryCrumple(3.5f)
                     ctx.popup("SUPLEX!", target.posX, 120f, Color.Red)
                     ctx.sound(SoundType.CRUNCH)
                     return
@@ -716,9 +740,9 @@ class CombatEngine(private val ctx: BattleContext) {
                     val belted = attacker.brawlerUpgrades.contains("champion_belt")
                     val hurlDist = if (belted) 220f else 140f
                     val bowlRadius = if (belted) 110f else 60f
-                    applyFlatDamage(if (belted) 65f else 45f, target, attacker.isPlayer)
+                    applyFlatDamage(if (belted) 65f else 45f, target, attacker.isPlayer, attacker = attacker)
                     if (!target.isPlayer) {
-                        target.crumpleDuration = 3f
+                        target.tryCrumple(3f)
                         target.posX += dir * hurlDist
                         target.targetX = target.posX
                         target.deathType = DeathType.KNOCKED_FLYING
@@ -726,9 +750,9 @@ class CombatEngine(private val ctx: BattleContext) {
                     val skittles = targets.drop(1).filter { abs(it.posX - target.posX) < bowlRadius }
                     val struck = if (belted) skittles else listOfNotNull(skittles.firstOrNull())
                     struck.forEach { second ->
-                        applyFlatDamage(30f, second, attacker.isPlayer)
+                        applyFlatDamage(30f, second, attacker.isPlayer, attacker = attacker)
                         if (!second.isPlayer) {
-                            second.crumpleDuration = 3f
+                            second.tryCrumple(3f)
                             // Bowled off their feet, scattered along the throw
                             second.posX += dir * 40f
                             second.targetX = second.posX
@@ -740,8 +764,8 @@ class CombatEngine(private val ctx: BattleContext) {
                     ctx.sound(SoundType.CRUNCH)
                     return
                 } else if (attacker.activeWrestlingMove == WrestlingMove.CHOKE_SLAM) {
-                    applyFlatDamage(attacker.baseDamage * 3.5f, target, attacker.isPlayer)
-                    if (!target.isPlayer) target.crumpleDuration = 2.5f
+                    applyFlatDamage(attacker.baseDamage * 3.5f, target, attacker.isPlayer, attacker = attacker)
+                    if (!target.isPlayer) target.tryCrumple(2.5f)
                     ctx.popup("-CHOKE SLAM-", target.posX, 120f, Color.Red) // Using hyphens so it passes word filter
                     ctx.sound(SoundType.CRUNCH)
                     return
@@ -859,7 +883,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 // Still take minimal blunt impact damage
                 val bluntDamage = (attacker.damageBlunt * 0.15f * damageFalloff).coerceAtLeast(1f)
                 if (bluntDamage > 5f && Random.nextBoolean()) ctx.sound(SoundType.CRUNCH)
-                applyFlatDamage(bluntDamage, currTarget, attacker.isPlayer)
+                applyFlatDamage(bluntDamage, currTarget, attacker.isPlayer, attacker = attacker)
             } else {
                 // Full hit!
                 var totalDamage = ((slash * armorFactor) + (pierce * (armorFactor + 0.15f).coerceIn(0.1f, 1f)) + blunt) * dmgScale
@@ -873,7 +897,7 @@ class CombatEngine(private val ctx: BattleContext) {
                     totalDamage *= 1.25f // 25% strength boost from wine!
                 }
 
-                applyFlatDamage(totalDamage, currTarget, attacker.isPlayer)
+                applyFlatDamage(totalDamage, currTarget, attacker.isPlayer, attacker = attacker)
 
                 // Rusted nails. Only on a full hit — a blocked swing leaves the nails in the shield.
                 // maxOf rather than += so repeated hits refresh the wound instead of stacking it
@@ -923,10 +947,12 @@ class CombatEngine(private val ctx: BattleContext) {
                         else -> SoundType.FLESH
                     })
 
-                    // Random blood particles
-                    val px = currTarget.posX + (Random.nextFloat() * 20f - 10f)
-                    val py = 120f + (Random.nextFloat() * 60f - 30f)
-                    ctx.particle(BloodParticle(x = px, y = py, vx = (Random.nextFloat() * 200f - 100f), vy = -150f - Random.nextFloat() * 150f, color = Color(0xFF8B0000)))
+                    // Random blood particles (the wooden horse splinters instead of bleeding)
+                    if (!currTarget.isInanimate) {
+                        val px = currTarget.posX + (Random.nextFloat() * 20f - 10f)
+                        val py = 120f + (Random.nextFloat() * 60f - 30f)
+                        ctx.particle(BloodParticle(x = px, y = py, vx = (Random.nextFloat() * 200f - 100f), vy = -150f - Random.nextFloat() * 150f, color = Color(0xFF8B0000)))
+                    }
                 }
 
                 // Brawler Bleeding (Spiked Wraps)
@@ -936,8 +962,11 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
 
                 // Limb loss mechanic! (heavy slash)
-                val canLoseArm = !currTarget.isPlayer || (currTarget.hp / currTarget.maxHp < 0.10f)
-                if (slash > 18f && Random.nextFloat() < 0.2f && !currTarget.missingArm && canLoseArm) {
+                val canLoseArm = (!currTarget.isPlayer || (currTarget.hp / currTarget.maxHp < 0.10f)) &&
+                    !currTarget.isInanimate
+                if (slash > 18f && Random.nextFloat() < 0.2f * currTarget.ccResist &&
+                    !currTarget.missingArm && canLoseArm
+                ) {
                     currTarget.missingArm = true
                     currTarget.bleedDuration = ARM_BLEED_SECONDS // the stump bleeds out
                     // Disarm off-hand/shield logically
@@ -945,7 +974,7 @@ class CombatEngine(private val ctx: BattleContext) {
                         currTarget.isDualWielding = false
                         GameData.SHIELDS.find { it == GameData.Shield.NONE }?.let { currTarget.shield = it }
                     }
-                    applyFlatDamage(totalDamage, currTarget, attacker.isPlayer)
+                    applyFlatDamage(totalDamage, currTarget, attacker.isPlayer, attacker = attacker)
                     ctx.popup("-${totalDamage.toInt()}", currTarget.posX, 140f, Color.Red)
 
                     ctx.sound(SoundType.THWACK)
@@ -955,15 +984,17 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
 
                 // Crumple mechanic! (heavy blunt) - enemies can't knock the player down, only the reverse
-                if (blunt > 18f && !attacker.isKind("raven") && Random.nextFloat() < 0.25f && currTarget.crumpleDuration <= 0f && !currTarget.isPlayer) {
-                    currTarget.crumpleDuration = 2.5f
+                if (blunt > 18f && !attacker.isKind("raven") && !currTarget.isPlayer &&
+                    currTarget.tryCrumple(2.5f, chance = 0.25f)
+                ) {
                     ctx.sound(SoundType.CRUNCH)
                     ctx.popup("-CRUMPLED-", currTarget.posX, 160f, Color.DarkGray)
                 }
 
                 // Wardog trip mechanic!
-                if (attacker.isKind("wardog") && Random.nextFloat() < 0.25f && currTarget.crumpleDuration <= 0f && !currTarget.isPlayer) {
-                    currTarget.crumpleDuration = 2f
+                if (attacker.isKind("wardog") && !currTarget.isPlayer &&
+                    currTarget.tryCrumple(2f, chance = 0.25f)
+                ) {
                     ctx.sound(SoundType.CRUNCH)
                 }
 
@@ -977,7 +1008,7 @@ class CombatEngine(private val ctx: BattleContext) {
                                 enemy.elevated == attacker.elevated &&
                                 abs(enemy.posX - currTarget.posX) < 100f
                             ) {
-                                applyFlatDamage(splashDmg, enemy, attacker.isPlayer)
+                                applyFlatDamage(splashDmg, enemy, attacker.isPlayer, attacker = attacker)
                                 ctx.popup("CLEAVE!", enemy.posX, 120f, Color(0xFF9E3624))
                             }
                         }
@@ -1198,7 +1229,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 if (eyeCrit) 3f else 1f
             // Missile striking home: iron rings, everything else thuds
             ctx.sound(if (defender.wearsMetalArmour) SoundType.ARMOUR_HIT else SoundType.FLESH)
-            applyFlatDamage(totalDamage, defender, proj.isPlayerOwned)
+            applyFlatDamage(totalDamage, defender, proj.isPlayerOwned, attacker = shooterOf(proj), weaponNote = missileNote(proj))
             if (eyeCrit) {
                 defender.arrowEyeCritWindow = 0f
                 defender.arrowEyeCritCooldown = 5f
@@ -1219,7 +1250,7 @@ class CombatEngine(private val ctx: BattleContext) {
             // Bee hive burst: not poison (that's the hag's trade) — stings hurt NOW, and the victim
             // flails at the swarm instead of fighting: slowed, and his next swing is delayed.
             if (proj.id.startsWith("bee_hive_")) {
-                applyFlatDamage(10f, defender, proj.isPlayerOwned)
+                applyFlatDamage(10f, defender, proj.isPlayerOwned, attacker = shooterOf(proj), weaponNote = missileNote(proj))
                 defender.slowDuration = 2.5f
                 defender.attackCooldown = (defender.attackCooldown + 1.2f).coerceAtMost(3f)
                 ctx.popup("STUNG!", defender.posX, 140f, Color(0xFFD6A420))
@@ -1262,9 +1293,8 @@ class CombatEngine(private val ctx: BattleContext) {
             // slip, same rule as the kiting stumble.
             if (proj.id.startsWith("grease_pot_")) {
                 defender.slowDuration = GREASE_SLOW_SECS
-                if (!defender.isMounted && Random.nextFloat() < GREASE_TRIP_CHANCE) {
-                    defender.isCrumpled = true
-                    defender.crumpleDuration = GREASE_TRIP_SECS
+                if (!defender.isMounted) {
+                    defender.tryCrumple(GREASE_TRIP_SECS, chance = GREASE_TRIP_CHANCE)
                 }
             }
 
@@ -1281,14 +1311,14 @@ class CombatEngine(private val ctx: BattleContext) {
                 if (proj.isPlayerOwned) {
                     ctx.enemies.forEach { enemy ->
                         if (enemy != defender && !enemy.isDead && !enemy.isDying && abs(enemy.posX - defender.posX) < 120f) {
-                            applyFlatDamage(splashDmg, enemy, proj.isPlayerOwned)
+                            applyFlatDamage(splashDmg, enemy, proj.isPlayerOwned, attacker = shooterOf(proj), weaponNote = missileNote(proj))
                             ctx.popup("SPLASH!", enemy.posX, 140f, Color(0xFF9E3624))
                         }
                     }
                 } else {
                     ctx.player?.let { player ->
                         if (player != defender && !player.isDead && !player.isDying && abs(player.posX - defender.posX) < 120f) {
-                            applyFlatDamage(splashDmg, player, proj.isPlayerOwned)
+                            applyFlatDamage(splashDmg, player, proj.isPlayerOwned, attacker = shooterOf(proj), weaponNote = missileNote(proj))
                             ctx.popup("SPLASH!", player.posX, 140f, Color(0xFF9E3624))
                         }
                     }
@@ -1298,8 +1328,29 @@ class CombatEngine(private val ctx: BattleContext) {
     }
 
     /** [quiet] = damage-over-time: no blood spray, no screenshake, no decals. They cost frames. */
-    fun applyFlatDamage(dmg: Float, defender: FighterState, isPlayerSource: Boolean = false, quiet: Boolean = false) {
+    /**
+     * @param attacker who swung, when known — recorded on the defender so the defeat screen can
+     *   name the killer. Left null by sources with no author (weather, bleed ticks, collisions),
+     *   which deliberately leaves the last real attacker standing as the attribution.
+     * @param weaponNote overrides the attacker's armament, for missiles that outlive their shooter.
+     */
+    fun applyFlatDamage(
+        dmg: Float,
+        defender: FighterState,
+        isPlayerSource: Boolean = false,
+        quiet: Boolean = false,
+        attacker: FighterState? = null,
+        weaponNote: String? = null
+    ) {
         if (defender.isDead || defender.isDying || defender.climbState != ClimbState.NONE) return
+        if (attacker != null && attacker !== defender) {
+            defender.slayerName = attacker.name
+            defender.slayerWeapon = weaponNote ?: attacker.weaponDescription
+        } else if (weaponNote != null) {
+            // An anonymous missile: better "felled by an arrow" than a stale name from the melee.
+            defender.slayerName = null
+            defender.slayerWeapon = weaponNote
+        }
         var finalDmg = dmg
         if (!defender.isPlayer && defender.armor.id == "armor_bare") {
             finalDmg *= 1.5f
@@ -1329,7 +1380,7 @@ class CombatEngine(private val ctx: BattleContext) {
             }
         } else {
             defender.hp = (defender.hp - finalDmgInt).coerceAtLeast(0f)
-            if (!quiet) {
+            if (!quiet && !defender.isInanimate) {
                 val rx = Random.nextFloat() * 14f - 7f
                 val ry = Random.nextFloat() * 20f - 10f
                 defender.bloodDecals.add(Triple(rx, ry, Random.nextInt(6)))
@@ -1346,7 +1397,9 @@ class CombatEngine(private val ctx: BattleContext) {
             ctx.screenshake((finalDmgInt * shakeMultiplier).coerceIn(4f, 35f))
 
             // Spawn blood particles based on damage
-            ctx.bloodParticles(defender.posX, 160f * defender.size, (finalDmgInt / 4).toInt().coerceIn(3, 10))
+            if (!defender.isInanimate) {
+                ctx.bloodParticles(defender.posX, 160f * defender.size, (finalDmgInt / 4).toInt().coerceIn(3, 10))
+            }
         }
 
         if (defender.hp <= 0f) {

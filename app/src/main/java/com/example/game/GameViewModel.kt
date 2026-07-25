@@ -171,6 +171,16 @@ class GameViewModel : ViewModel() {
         fun poolWithUnlocks(roll: Set<String>): Set<String> = roll + GameProfile.cached.unlockedItemIds
 
         /**
+         * Grant a milestone if it has not been granted before. Returns true only on the first award,
+         * so the caller knows whether to shout about it.
+         */
+        suspend fun awardMilestone(m: Milestone): Boolean {
+            if (m.id in GameProfile.cached.clearedMilestones) return false
+            GameProfile.grant(m.grants, m.id)
+            return true
+        }
+
+        /**
          * Kit one ally out in the retinue panoply. Shared by the start-of-battle pass and the
          * Trojan Horse's spearmen, who spawn long after that pass has run.
          */

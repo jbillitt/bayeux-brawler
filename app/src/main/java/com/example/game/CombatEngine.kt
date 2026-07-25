@@ -103,6 +103,9 @@ class CombatEngine(private val ctx: BattleContext) {
          */
         const val FRONTLINE_LEAD = 1.2f
 
+        /** Rusted nails leave a wound that turns. Seconds of poison per plank hit. */
+        const val PLANK_POISON_SECONDS = 4f
+
         /** Melee chargers who lead the advance. Backline lobbers are ranged and must keep kiting. */
         val FRONTLINE_KINDS = setOf("fanatic", "wardog", "plague_peasant", "raven")
 
@@ -871,6 +874,14 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
 
                 applyFlatDamage(totalDamage, currTarget, attacker.isPlayer)
+
+                // Rusted nails. Only on a full hit — a blocked swing leaves the nails in the shield.
+                // maxOf rather than += so repeated hits refresh the wound instead of stacking it
+                // into an instant kill.
+                if (attacker.weaponHandle.id == "handle_plank") {
+                    currTarget.poisonDuration = maxOf(currTarget.poisonDuration, PLANK_POISON_SECONDS)
+                }
+
                 if (attacker.archetype == EnemyArchetype.DANE_AXE_EXECUTIONER && totalDamage > 0f) {
                     applyArmorShred(currTarget)
                 }

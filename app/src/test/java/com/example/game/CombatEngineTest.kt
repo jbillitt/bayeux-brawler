@@ -186,6 +186,38 @@ class CombatEngineTest {
     }
 
     @Test
+    fun theNailStuddedPlankLeavesAWoundThatGoesBad() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+
+        val attacker = fighter(head = "head_club", handle = "handle_plank", posX = 500f)
+        val victim = fighter(isPlayer = true, posX = 520f).copy(id = "victim")
+        ctx.player = victim
+        ctx.enemies = listOf(victim, attacker)
+
+        repeat(10) { swing(engine, attacker, victim) }
+
+        assertTrue("the plank must poison on hit", victim.poisonDuration > 0f)
+    }
+
+    @Test
+    fun anOrdinaryHaftDoesNotPoison() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+
+        val attacker = fighter(head = "head_club", handle = "handle_medium", posX = 500f)
+        val victim = fighter(isPlayer = true, posX = 520f).copy(id = "victim")
+        ctx.player = victim
+        ctx.enemies = listOf(victim, attacker)
+
+        repeat(10) { swing(engine, attacker, victim) }
+
+        // Proves the swings actually landed, so the zero poison means something.
+        assertTrue("the swings never connected at all", victim.hp < victim.maxHp)
+        assertEquals(0f, victim.poisonDuration, 0.001f)
+    }
+
+    @Test
     fun flatDamageKillsAndCountsForPlayer() {
         val ctx = FakeContext()
         val engine = CombatEngine(ctx)

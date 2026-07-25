@@ -183,6 +183,47 @@ class GameViewModel : ViewModel() {
         }
 
         /**
+         * The rewarded ad's payout, as pure data: two extra cards added to the level-up pool. Kept a
+         * pure function of state so the reward is unit-testable — the SDK's earned callback only
+         * calls this. Never grants a mechanic the player could not otherwise get, only more choice.
+         */
+        fun rewardChoices(state: BattleSimState, random: kotlin.random.Random = kotlin.random.Random.Default): List<LevelUpChoice> {
+            val out = mutableListOf<LevelUpChoice>()
+
+            // An extra attachment, drawn from the same pool the ordinary card uses.
+            val head = GameData.WEAPON_HEADS.filter {
+                it.id !in listOf("head_bare", "head_bow", "head_longbow", "head_slingshot") &&
+                    it.id !in GameData.STRANGE_HEAD_IDS &&
+                    it.id !in state.extraAttachments
+            }.randomOrNull(random)
+            if (head != null) {
+                out.add(LevelUpChoice(
+                    id = "attach_${head.id}",
+                    title = head.itemName,
+                    description = "${head.description} Attached dynamically to weapon, adding +50% of its base damage!",
+                    type = "attachment",
+                    itemId = head.id
+                ))
+            }
+
+            // A wider armour selection: one layer the player is not already wearing.
+            val layer = listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_greaves", "armor_spaulders")
+                .filter { it !in state.extraArmors }
+                .mapNotNull { id -> GameData.ARMOR_PIECES.find { it.id == id } }
+                .randomOrNull(random)
+            if (layer != null) {
+                out.add(LevelUpChoice(
+                    id = "armor_${layer.id}",
+                    title = layer.itemName,
+                    description = "${layer.description} Worn over your existing armour.",
+                    type = "armor",
+                    itemId = layer.id
+                ))
+            }
+            return out
+        }
+
+        /**
          * Grant a milestone if it has not been granted before. Returns true only on the first award,
          * so the caller knows whether to shout about it.
          */
@@ -1212,6 +1253,31 @@ class GameViewModel : ViewModel() {
         startGameLoop()
     }
 
+    /**
+     * Set when a defeat has earned an ad break. The Activity owns the SDK call (it needs a real
+     * Activity), observes this, shows the interstitial and clears it — so the ViewModel stays free of
+     * any ads dependency and this stays testable.
+     */
+    val pendingInterstitial = MutableStateFlow(false)
+    fun clearPendingInterstitial() { pendingInterstitial.value = false }
+
+    /**
+     * Pay out the rewarded ad. Called only from the SDK's *earned* callback. Cards are appended, so
+     * the player keeps every choice they already had.
+     */
+    fun grantAdReward() {
+        _uiState.update { state ->
+            val extra = rewardChoices(state).filter { new ->
+                state.pendingLevelUpChoices.none { it.id == new.id }
+            }
+            if (extra.isEmpty()) state
+            else state.copy(
+                pendingLevelUpChoices = state.pendingLevelUpChoices + extra,
+                adRewardClaimedThisLevel = true
+            )
+        }
+    }
+
     /** True while the pause menu holds the battle. The loop keeps ticking but simulates nothing. */
     val isPaused = MutableStateFlow(false)
     fun setPaused(paused: Boolean) { isPaused.value = paused }
@@ -2123,6 +2189,7 @@ class GameViewModel : ViewModel() {
                 level = nextLevel,
                 pendingLevelUpChoices = pendingChoices,
                 showLevelUpScreen = showLevelUp,
+                adRewardClaimedThisLevel = false, // a fresh level-up screen, a fresh offer
                 performanceScore = newPerf,
                 bandagesCount = newBandagesCount,
                 showMusicDecision = if (won && (state.level % 5 == 0)) true else state.showMusicDecision,
@@ -2151,6 +2218,13 @@ class GameViewModel : ViewModel() {
             GameProfile.setHighscore(post.highscore)
             if (!won) {
                 GameProfile.recordDeath()
+
+                // Ad break, on the defeat screen only — never mid-battle. AdGate is the one place
+                // that knows whether ads are allowed at all.
+                if (AdGate.adsAllowedNow() && AdGate.shouldShowInterstitial(GameProfile.cached.totalDeaths)) {
+                    pendingInterstitial.value = true
+                }
+
                 // Checked here rather than in checkMilestones, which returns early unless you won.
                 if (GameProfile.cached.totalDeaths >= 25 && awardMilestone(Milestone.DIE_TWENTY_FIVE)) {
                     addPopup("UNLOCKED: ${Milestone.DIE_TWENTY_FIVE.label}", 400f, 200f, Color(0xFFB08221))

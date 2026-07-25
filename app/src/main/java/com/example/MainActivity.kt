@@ -74,6 +74,12 @@ class MainActivity : ComponentActivity() {
         // com.example.game.MedievalVocalizer.init(applicationContext)
         com.example.game.MedievalHarpPlayer.init(applicationContext)
 
+        // Billing first: it restores an existing "remove ads" purchase by querying owned products,
+        // which AdGate then reads. Ads.init is a no-op in a debug build or once ads are purchased
+        // away, and gathers UMP consent before initialising the ad SDK.
+        com.example.game.Billing.init(applicationContext)
+        com.example.game.Ads.init(this)
+
         // Let's set the activity orientation request to user's sensor to encourage landscape,
         // but handle layout adaptation gracefully in Compose!
         setContent {
@@ -106,6 +112,17 @@ fun BayeuxAppContent(viewModel: GameViewModel) {
     // Medieval Harp Background Music State
     var musicOn by rememberSaveable { mutableStateOf(true) }
     val uiState by viewModel.uiState.collectAsState()
+
+    // The ad break the ViewModel asked for. It only ever fires on a defeat screen, and the Activity
+    // owns the call because the SDK needs a real Activity.
+    val activity = LocalContext.current as? android.app.Activity
+    val pendingInterstitial by viewModel.pendingInterstitial.collectAsState()
+    LaunchedEffect(pendingInterstitial) {
+        if (pendingInterstitial && activity != null) {
+            com.example.game.Ads.showInterstitial(activity)
+            viewModel.clearPendingInterstitial()
+        }
+    }
     val hasTrumpeter = uiState.unlockedAncillaries.contains(com.example.game.Ancillary.TRUMPETER)
     // Brawl and Throne are first-class themes. Throne takes precedence in resolveSongSpec.
     LaunchedEffect(
@@ -353,21 +370,40 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                         Column(modifier = Modifier.fillMaxSize()) {
                         // The trophy case, reachable from every between-battle screen. Without
                         // somewhere to see them, earned unlocks are invisible and the loop is open.
-                        Text(
-                            text = if (showTrophies) "‹ BACK" else "✦ TROPHIES",
-                            fontSize = 9.sp,
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Bold,
-                            color = TapestryDark,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showTrophies = !showTrophies
-                                    MedievalAudioSynth.playSound(SoundType.SWOOSH)
-                                }
-                                .padding(vertical = 2.dp, horizontal = 4.dp)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            // Only shown while ads are actually in play: hidden in debug builds and
+                            // gone for good once the purchase is owned.
+                            val storeActivity = LocalContext.current as? android.app.Activity
+                            if (com.example.game.AdGate.adsAllowedNow() && storeActivity != null) {
+                                Text(
+                                    text = "REMOVE ADS" + (com.example.game.Billing.removeAdsPrice?.let { " ($it)" } ?: ""),
+                                    fontSize = 9.sp,
+                                    fontFamily = FontFamily.Serif,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TapestryRed,
+                                    modifier = Modifier
+                                        .clickable { com.example.game.Billing.purchaseRemoveAds(storeActivity) }
+                                        .padding(vertical = 2.dp, horizontal = 8.dp)
+                                )
+                            }
+                            Text(
+                                text = if (showTrophies) "‹ BACK" else "✦ TROPHIES",
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Serif,
+                                fontWeight = FontWeight.Bold,
+                                color = TapestryDark,
+                                textAlign = TextAlign.End,
+                                modifier = Modifier
+                                    .clickable {
+                                        showTrophies = !showTrophies
+                                        MedievalAudioSynth.playSound(SoundType.SWOOSH)
+                                    }
+                                    .padding(vertical = 2.dp, horizontal = 4.dp)
+                            )
+                        }
                         if (showTrophies) {
                             TrophiesPanel(uiState)
                         } else if (uiState.showMusicDecision) {
@@ -382,7 +418,8 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                                 onSelectMount = { viewModel.selectMount(it) },
                                 onStartBattle = { viewModel.startBattle() },
                                 onSkipReward = { viewModel.selectLevelUpChoice("") },
-                                onClearSkipBonus = { viewModel.clearSkipBonus() }
+                                onClearSkipBonus = { viewModel.clearSkipBonus() },
+                                onAdReward = { viewModel.grantAdReward() }
                             )
                         } else {
                             GearSelectionTabs(
@@ -1064,7 +1101,8 @@ fun LevelUpScreen(
     onSelectMount: (com.example.game.Ancillary) -> Unit = {},
     onStartBattle: () -> Unit = {},
     onSkipReward: () -> Unit = {},
-    onClearSkipBonus: () -> Unit = {}
+    onClearSkipBonus: () -> Unit = {},
+    onAdReward: () -> Unit = {}
 ) {
     // Skip bonus popup
     var showSkipBonusPopup by remember { mutableStateOf(false) }
@@ -1103,6 +1141,32 @@ fun LevelUpScreen(
             color = TapestryDark.copy(alpha = 0.85f),
             modifier = Modifier.padding(bottom = 12.dp)
         )
+
+        // Opt-in only, and only when an ad is genuinely loaded — offering a reward that cannot be
+        // delivered is worse than not offering it. Absent in debug and for ad-free players.
+        val rewardActivity = LocalContext.current as? android.app.Activity
+        if (!uiState.adRewardClaimedThisLevel &&
+            uiState.pendingLevelUpChoices.isNotEmpty() &&
+            com.example.game.Ads.rewardedReady() &&
+            rewardActivity != null
+        ) {
+            Button(
+                onClick = {
+                    // Paid out on the SDK's earned callback only, never on dismissal.
+                    com.example.game.Ads.showRewarded(rewardActivity) { onAdReward() }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = TapestryMustard),
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier.padding(bottom = 10.dp)
+            ) {
+                Text(
+                    "Watch a herald's message for two more spoils",
+                    color = TapestryDark,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+            }
+        }
 
         if (uiState.pendingLevelUpChoices.isEmpty()) {
             Text(

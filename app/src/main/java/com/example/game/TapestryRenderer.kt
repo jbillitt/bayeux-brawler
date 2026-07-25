@@ -482,6 +482,17 @@ object TapestryRenderer {
                 if (hasBoots) {
                     drawLine(Color(0xFF9EA3A8), Offset(cx - 10f, cy + 145f), Offset(cx - 20f, cy + 145f), strokeWidth = 3f)
                 }
+                // Greaves ride the shin, inside the leg's own rotate, so they swing with it.
+                if (fighter.extraArmors.any { it.id == "armor_greaves" }) {
+                    val greaveL = Path().apply {
+                        moveTo(cx - 22f, cy + 108f)
+                        lineTo(cx - 12f, cy + 108f)
+                        lineTo(cx - 15f, cy + 145f)
+                        lineTo(cx - 24f, cy + 145f)
+                        close()
+                    }
+                    drawStitchedFill(this, greaveL, Color(0xFF5D666B))
+                }
             }
         }
 
@@ -503,6 +514,16 @@ object TapestryRenderer {
             drawStitchedFill(this, bootPathR, bootColorR)
             if (hasBoots) {
                 drawLine(Color(0xFF9EA3A8), Offset(cx + 14f, cy + 145f), Offset(cx + 26f, cy + 145f), strokeWidth = 3f)
+            }
+            if (fighter.extraArmors.any { it.id == "armor_greaves" }) {
+                val greaveR = Path().apply {
+                    moveTo(cx + 12f, cy + 108f)
+                    lineTo(cx + 22f, cy + 108f)
+                    lineTo(cx + 24f, cy + 145f)
+                    lineTo(cx + 15f, cy + 145f)
+                    close()
+                }
+                drawStitchedFill(this, greaveR, Color(0xFF5D666B))
             }
         }
     }
@@ -686,7 +707,41 @@ object TapestryRenderer {
 
         // Extra layered armors on top
         fighter.extraArmors.forEachIndexed { i, extraArmor ->
-            if (extraArmor.id in listOf("armor_gauntlets", "armor_boots", "armor_coif")) return@forEachIndexed
+            // Drawn by hand elsewhere: gauntlets on the arms, boots and greaves on the legs, coif on the head.
+            if (extraArmor.id in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_greaves")) return@forEachIndexed
+            if (extraArmor.id == "armor_spaulders") {
+                // Caps over each shoulder. These bypass the generic tunic path below, which would
+                // otherwise drape a whole extra steel garment over the body.
+                val capL = Path().apply {
+                    moveTo(cx - 34f, cy + 22f)
+                    quadraticTo(cx - 24f, cy + 6f, cx - 10f, cy + 22f)
+                    close()
+                }
+                val capR = Path().apply {
+                    moveTo(cx + 10f, cy + 22f)
+                    quadraticTo(cx + 24f, cy + 6f, cx + 34f, cy + 22f)
+                    close()
+                }
+                drawStitchedFill(scope, capL, extraArmor.color)
+                scope.drawPath(capL, ThreadColor, style = StitchedStroke)
+                drawStitchedFill(scope, capR, extraArmor.color)
+                scope.drawPath(capR, ThreadColor, style = StitchedStroke)
+                return@forEachIndexed
+            }
+            if (extraArmor.id == "armor_surcoat") {
+                // Narrower and shorter than the generic layer tunic on purpose: a surcoat worn over
+                // mail should leave the mail showing at the shoulders and the hem, not replace it.
+                val surcoat = Path().apply {
+                    moveTo(cx - 26f, cy + 24f)
+                    lineTo(cx + 26f, cy + 24f)
+                    lineTo(cx + 20f, cy + 86f)
+                    lineTo(cx - 20f, cy + 86f)
+                    close()
+                }
+                drawStitchedFill(scope, surcoat, extraArmor.color)
+                scope.drawPath(surcoat, ThreadColor, style = StitchedStroke)
+                return@forEachIndexed
+            }
             val dx = 32f + i * 2f
             val dy = 98f + i * 2f
             val extraTunicPath = Path().apply {

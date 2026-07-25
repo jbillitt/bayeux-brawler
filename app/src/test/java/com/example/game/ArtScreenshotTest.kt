@@ -286,6 +286,45 @@ class ArtScreenshotTest {
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/new_handles.png")
     }
 
+    /**
+     * The three new armour layers, each stacked over chainmail the way they are worn in play, plus
+     * all three at once. Asserts nothing — eyeball that greaves sit on the shins, spaulders cap the
+     * shoulders without floating, and the surcoat hangs over the mail without hiding it.
+     */
+    @Test
+    fun newArmourLayers() {
+        fun layered(id: String, layers: List<String>) = FighterState(
+            id = id, name = id, isPlayer = false, maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 90f, targetX = 90f, facingRight = true, size = 1.0f,
+            hairColor = Color(0xFF5A442E), hairStyle = "short",
+            extraArmors = layers.map { l -> GameData.ARMOR_PIECES.first { it.id == l } }
+        )
+
+        val cast = listOf(
+            layered("greaves", listOf("armor_greaves")),
+            layered("spaulders", listOf("armor_spaulders")),
+            layered("surcoat", listOf("armor_surcoat")),
+            layered("all_three", listOf("armor_greaves", "armor_spaulders", "armor_surcoat"))
+        )
+
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                // Rendered large: greaves and spaulders are small plates and cannot be judged at 1.0.
+                cast.forEach { fighter ->
+                    Canvas(modifier = Modifier.width(412.dp).height(300.dp)) {
+                        TapestryRenderer.drawCharacter(this, fighter, scale = 2.2f, isBattleActive = true)
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/new_armour_layers.png")
+    }
+
     @Test
     fun productionScaleRendererProducesInk() {
         val monk = EnemyFactory.createArchetype(EnemyArchetype.MONK_MILITIA, 0, 10)

@@ -56,4 +56,18 @@ class GameDataTest {
             assertTrue("$it is not a real gear id", it in allGearIds)
         }
     }
+
+    @Test
+    fun unlockableHandlesExistAndAreHeldOutOfTheBasePool() {
+        assertTrue("gating set must not be empty", GameData.UNLOCKABLE_HANDLE_IDS.isNotEmpty())
+        GameData.UNLOCKABLE_HANDLE_IDS.forEach { id ->
+            assertTrue("$id is gated but is not a real handle",
+                GameData.WEAPON_HANDLES.any { it.id == id })
+        }
+        val expected = setOf(
+            "handle_oar", "handle_femur", "handle_antler", "handle_trumpet",
+            "handle_wheelbarrow", "handle_anchor", "handle_plank"
+        )
+        assertEquals(expected, GameData.UNLOCKABLE_HANDLE_IDS)
+    }
 }

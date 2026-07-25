@@ -1561,7 +1561,8 @@ fun GearSelectionTabs(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = handle.itemName,
+                            // Marked as a coming unlock: it rolls freely today, C1 makes it something you earn.
+                            text = if (handle.id in GameData.UNLOCKABLE_HANDLE_IDS) "✦ ${handle.itemName}" else handle.itemName,
                             color = if (isHandleSelected) TapestryLight else TapestryDark,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
@@ -1570,6 +1571,13 @@ fun GearSelectionTabs(
                     }
                 }
             }
+            Text(
+                "✦ free for now — earned by deeds in a later age",
+                color = TapestryDark.copy(alpha = 0.6f),
+                fontSize = 7.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+            )
         }
     }
 }

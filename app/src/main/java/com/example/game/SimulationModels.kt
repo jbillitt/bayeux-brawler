@@ -197,10 +197,28 @@ object GameData {
         RAM("handle_ram", "Battering Ram", 8.0f, reach = 1.5f, speedPenalty = 0.8f, blunt = 35f, description = "A solid iron-capped ram log. Swings with glacial speed but catastrophic force.", color = Color(0xFF452E1B)),
         PLOUGH("handle_plough", "Plough Shaft", 3.0f, reach = 1.2f, speedPenalty = 0.25f, blunt = 10f, description = "The splintered wooden shaft of a farming plough.", color = Color(0xFF735835)),
         DAGGER("handle_dagger", "Dagger Grip", 0.2f, reach = 0.1f, speedPenalty = -0.25f, description = "A stubby leather-bound grip. Blindingly fast strikes, but you must be nose-to-nose to land them.", color = Color(0xFF6B4A33)),
-        PIKE_HANDLE("handle_pike_long", "Pike Handle", 3.2f, reach = 2.4f, speedPenalty = 0.55f, description = "A ludicrously long 12-foot pole. Glacial charge-up, but with a spearpoint it skewers whole ranks of Saxons at once.", color = Color(0xFF6E5536));
+        PIKE_HANDLE("handle_pike_long", "Pike Handle", 3.2f, reach = 2.4f, speedPenalty = 0.55f, description = "A ludicrously long 12-foot pole. Glacial charge-up, but with a spearpoint it skewers whole ranks of Saxons at once.", color = Color(0xFF6E5536)),
+        // Unlockable handles — earned by play, never in the opening roll. See UNLOCKABLE_HANDLE_IDS.
+        OAR("handle_oar", "Ship's Oar", 2.6f, reach = 1.4f, speedPenalty = 0.3f, blunt = 12f, description = "A broad ashen oar off a Norman longship. Still smells of the Channel.", color = Color(0xFF9C7D58)),
+        FEMUR("handle_femur", "Thighbone Grip", 0.3f, reach = 0.1f, speedPenalty = -0.22f, description = "Somebody's thighbone, wrapped in cord. Blindingly quick, and deeply unsporting.", color = Color(0xFFE7DCC4)),
+        ANTLER("handle_antler", "Stag Antler", 0.9f, reach = 0.3f, speedPenalty = -0.05f, pierce = 8f, description = "A branching antler off a great hart. The tines catch flesh on the backswing.", color = Color(0xFFBFA278)),
+        TRUMPET("handle_trumpet", "Herald's Trumpet", 1.1f, reach = 0.6f, speedPenalty = 0.1f, blunt = 6f, description = "A flared brass horn swung by its bell. Announces each blow with an appalling parp.", color = Color(0xFFD6A420)),
+        WHEELBARROW("handle_wheelbarrow", "Wheelbarrow", 6.0f, reach = 1.1f, speedPenalty = 0.7f, blunt = 25f, description = "An entire barrow, gripped by the handles. Momentum does the thinking.", color = Color(0xFF7A654C)),
+        ANCHOR("handle_anchor", "Ship's Anchor", 12.0f, reach = 1.3f, speedPenalty = 0.9f, blunt = 45f, description = "A ship's iron anchor. The slowest swing in Christendom and the last one anybody sees.", color = Color(0xFF4C5154)),
+        PLANK("handle_plank", "Nail-Studded Plank", 2.2f, reach = 0.7f, speedPenalty = 0.2f, pierce = 10f, description = "A splintered board bristling with rusted nails. The wounds it leaves go bad.", color = Color(0xFF8A5E38));
         override val type: ItemType get() = ItemType.WEAPON_HANDLE
     }
     val WEAPON_HANDLES = WeaponHandle.values().toList()
+
+    /**
+     * Handles destined to be earned rather than rolled. For now they roll like anything else and
+     * the picker marks them with a ✦; C1 adds the milestones and filters this set out of the
+     * opening roll, the way STRANGE_HEAD_IDS already holds the relic heads back.
+     */
+    val UNLOCKABLE_HANDLE_IDS = setOf(
+        "handle_oar", "handle_femur", "handle_antler", "handle_trumpet",
+        "handle_wheelbarrow", "handle_anchor", "handle_plank"
+    )
 
     enum class Shield(
         override val id: String,

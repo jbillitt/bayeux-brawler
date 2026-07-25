@@ -538,7 +538,7 @@ internal fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
         val tPath = Path().apply {
             moveTo(cx - 30f, cy + 100f)
             lineTo(cx - 30f, cy + 30f)
-            lineTo(cx + 30f, cy + 30f)
+            lineTo(cx + 2.5f, cy + 47.5f)
             lineTo(cx + 30f, cy + 100f)
             moveTo(cx - 30f, cy + 90f)
             lineTo(cx + 30f, cy + 90f)
@@ -547,15 +547,15 @@ internal fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
         
         // Add horizontal pole for pallbearers
         val polePath = Path().apply {
-            moveTo(cx - 70f, cy + 120f) // Reaches the back pallbearers
-            lineTo(cx + 70f, cy + 120f) // Reaches the front pallbearers
+            moveTo(cx - 95.5f, cy + 94f) // Reaches the back pallbearers
+            lineTo(cx + 89f, cy + 94f) // Reaches the front pallbearers
         }
         scope.drawPath(polePath, wColor, style = Stroke(width = 10f))
 
         // Add gold trim
         val trimPath = Path().apply {
-            moveTo(cx - 30f, cy + 30f)
-            lineTo(cx + 30f, cy + 30f)
+            moveTo(cx - 13f, cy + 34.5f)
+            lineTo(cx + 6.5f, cy + 44f)
         }
         scope.drawPath(trimPath, Color(0xFFB08221), style = Stroke(width = 6f))
     }

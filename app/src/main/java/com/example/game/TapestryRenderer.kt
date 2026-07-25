@@ -481,28 +481,28 @@ object TapestryRenderer {
             scope.withTransform({
                 rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f))
             }) {
-                drawStitchedStrap(this, Offset(cx - 10f, cy + 90f), Offset(cx - 18f, cy + 150f), legColorL)
+                drawStitchedStrap(this, Offset(cx - 10f, cy + 90f), Offset(cx - 24.5f, cy + 150.5f), legColorL)
                 val bootPathL = Path().apply {
-                    moveTo(cx - 20f, cy + 145f) // back heel
-                    lineTo(cx - 15f, cy + 155f) // bottom heel
-                    lineTo(cx + 5f, cy + 155f)  // bottom toe
-                    lineTo(cx + 8f, cy + 150f)  // top toe
-                    lineTo(cx - 10f, cy + 145f) // front ankle
+                    moveTo(cx - 23.5f, cy + 145.5f) // back heel
+                    lineTo(cx - 24f, cy + 155f) // bottom heel
+                    lineTo(cx + 3.5f, cy + 155.5f)  // bottom toe
+                    lineTo(cx + 2.5f, cy + 149f)  // top toe
+                    lineTo(cx - 11f, cy + 144.5f) // front ankle
                     close()
                 }
                 val hasBoots = fighter.extraArmors.any { it.id == "armor_boots" }
                 val bootColorL = if (hasBoots) Color(0xFF5D666B) else Color(0xFF382F22)
                 drawStitchedFill(this, bootPathL, bootColorL)
                 if (hasBoots) {
-                    drawLine(Color(0xFF9EA3A8), Offset(cx - 10f, cy + 145f), Offset(cx - 20f, cy + 145f), strokeWidth = 3f)
+                    drawLine(Color(0xFF9EA3A8), Offset(cx - 13f, cy + 144.5f), Offset(cx - 23.5f, cy + 144.5f), strokeWidth = 3f)
                 }
                 // Greaves ride the shin, inside the leg's own rotate, so they swing with it.
                 if (fighter.extraArmors.any { it.id == "armor_greaves" }) {
                     val greaveL = Path().apply {
                         moveTo(cx - 22f, cy + 108f)
                         lineTo(cx - 12f, cy + 108f)
-                        lineTo(cx - 15f, cy + 145f)
-                        lineTo(cx - 24f, cy + 145f)
+                        lineTo(cx - 12.5f, cy + 144.5f)
+                        lineTo(cx - 23.5f, cy + 144.5f)
                         close()
                     }
                     drawStitchedFill(this, greaveL, Color(0xFF5D666B))
@@ -514,12 +514,12 @@ object TapestryRenderer {
         scope.withTransform({
             rotate(radToDeg(angleR), pivot = Offset(cx + 10f, cy + 90f))
         }) {
-            drawStitchedStrap(this, Offset(cx + 10f, cy + 90f), Offset(cx + 18f, cy + 150f), legColorR)
+            drawStitchedStrap(this, Offset(cx + 10f, cy + 90f), Offset(cx + 14.5f, cy + 145.5f), legColorR)
             val bootPathR = Path().apply {
                 moveTo(cx + 14f, cy + 145f) // back heel
-                lineTo(cx + 18f, cy + 155f) // bottom heel
-                lineTo(cx + 38f, cy + 155f)  // bottom toe
-                lineTo(cx + 40f, cy + 150f)  // top toe
+                lineTo(cx + 12f, cy + 155.5f) // bottom heel
+                lineTo(cx + 42f, cy + 155.5f)  // bottom toe
+                lineTo(cx + 40.5f, cy + 149.5f)  // top toe
                 lineTo(cx + 26f, cy + 145f) // front ankle
                 close()
             }
@@ -2446,22 +2446,82 @@ object TapestryRenderer {
                 }
                 headPos = Offset(hx, hy - 60f)
             } else if (fighter.weaponHandle.id == "handle_wheelbarrow") {
-                // Two shafts, a tray, and the wheel out front.
+                // Sideways profile view: wooden shaft, tub/hopper box, front wheel & axle, support leg.
                 scope.withTransform({ translate(hx, hy) }) {
-                    drawStitchedStrap(this, Offset(-6f, 0f), Offset(-6f, -62f), fighter.weaponHandle.color)
-                    drawStitchedStrap(this, Offset(8f, 0f), Offset(8f, -62f), fighter.weaponHandle.color)
-                    val tray = Path().apply {
-                        moveTo(-14f, -34f)
-                        lineTo(16f, -34f)
-                        lineTo(12f, -56f)
-                        lineTo(-10f, -56f)
+                    val frameColor = fighter.weaponHandle.color
+                    // 1. Diagonal main wooden shaft extending towards front wheel
+                    drawStitchedStrap(this, Offset(54.5f, 16.5f), Offset(119.5f, 25f), frameColor, stitched = true)
+
+                    // 2. Support leg angled down near rear of tub
+                    drawLine(Color(0xFF5D4831), Offset(-2.5f, -0.5f), Offset(41.5f, 20.5f), strokeWidth = 5f)
+                    drawLine(ThreadColor, Offset(124.5f, -8.5f), Offset(47.5f, 11.5f), strokeWidth = 1.5f)
+
+                    // 3. Side profile of the wooden tub/hopper
+                    val tubPath = Path().apply {
+                        moveTo(42.5f, 54.5f)
+                        lineTo(137.5f, 19.5f)
+                        lineTo(157.5f, -25.5f)
+                        lineTo(33.5f, 15.5f)
                         close()
                     }
-                    drawStitchedFill(this, tray, fighter.weaponHandle.color)
-                    drawPath(tray, ThreadColor, style = StitchedStroke)
-                    drawCircle(Color(0xFF5D4831), radius = 13f, center = Offset(1f, -68f), style = Stroke(width = 5f))
+                    drawStitchedFill(this, tubPath, Color(0xFF8B6B4A))
+                    drawPath(tubPath, ThreadColor, style = StitchedStroke)
+                    // Wooden plank slats inside tub
+                    drawLine(ThreadColor, Offset(56.5f, 77.5f), Offset(89.5f, 32.5f), strokeWidth = 1f)
+                    drawLine(ThreadColor, Offset(47.5f, 57.5f), Offset(55.5f, 79.5f), strokeWidth = 1f)
+
+                    // 4. Front wheel (spoked wheel at front of frame)
+                    val wheelCenter = Offset(129.5f, 35f)
+                    val wheelRadius = 14f
+                    drawCircle(Color(0xFF4A3B2C), radius = wheelRadius, center = wheelCenter)
+                    drawCircle(Color(0xFF8B6B4A), radius = wheelRadius - 3.5f, center = wheelCenter)
+                    drawCircle(ThreadColor, radius = wheelRadius, center = wheelCenter, style = Stroke(width = 1.5f))
+                    // Spokes
+                    drawLine(ThreadColor, Offset(wheelCenter.x - wheelRadius, wheelCenter.y), Offset(wheelCenter.x + wheelRadius, wheelCenter.y), strokeWidth = 1.5f)
+                    drawLine(ThreadColor, Offset(wheelCenter.x, wheelCenter.y - wheelRadius), Offset(wheelCenter.x, wheelCenter.y + wheelRadius), strokeWidth = 1.5f)
+                    drawCircle(Color(0xFF33261A), radius = 3.5f, center = wheelCenter)
                 }
-                headPos = Offset(hx + 1f, hy - 62f)
+                headPos = Offset(hx + 142.5f, hy + 0.5f)
+            } else if (fighter.weaponHandle.id == "handle_plank") {
+                // Nail-Studded Plank: wide wooden board bristling with rusted iron nails
+                scope.withTransform({ translate(hx, hy) }) {
+                    val plankColor = Color(0xFF8A5E38)
+                    val rustColor = Color(0xFF8B4513)
+                    val darkRust = Color(0xFF5A2A0A)
+                    
+                    // Main plank board path (thick rectangular board)
+                    val plankPath = Path().apply {
+                        moveTo(-12f, 8f)
+                        lineTo(48f, -38f)
+                        lineTo(42f, -46f)
+                        lineTo(-18f, 0f)
+                        close()
+                    }
+                    drawStitchedFill(this, plankPath, plankColor)
+                    drawPath(plankPath, ThreadColor, style = StitchedStroke)
+
+                    // Wood grain lines
+                    drawLine(ThreadColor.copy(alpha = 0.5f), Offset(-13f, 4f), Offset(45f, -42f), strokeWidth = 1f)
+                    drawLine(ThreadColor.copy(alpha = 0.5f), Offset(-16f, 2f), Offset(43f, -44f), strokeWidth = 1f)
+
+                    // Rusted iron nails driven through the board sticking out at sharp angles
+                    val nailOffsets = listOf(
+                        Triple(Offset(0f, -4f), Offset(-8f, -16f), Offset(4f, 2f)),
+                        Triple(Offset(12f, -13f), Offset(18f, -28f), Offset(8f, -4f)),
+                        Triple(Offset(24f, -22f), Offset(14f, -34f), Offset(28f, -14f)),
+                        Triple(Offset(34f, -29f), Offset(44f, -42f), Offset(28f, -22f)),
+                        Triple(Offset(42f, -35f), Offset(54f, -44f), Offset(36f, -30f)),
+                        Triple(Offset(6f, -8f), Offset(14f, -2f), Offset(2f, -14f))
+                    )
+
+                    nailOffsets.forEach { (boardPt, spikeEnd, headPt) ->
+                        drawLine(darkRust, boardPt, spikeEnd, strokeWidth = 3f)
+                        drawLine(rustColor, boardPt, spikeEnd, strokeWidth = 1.5f)
+                        drawLine(darkRust, boardPt, headPt, strokeWidth = 2f)
+                        drawCircle(darkRust, radius = 2f, center = headPt)
+                    }
+                }
+                headPos = Offset(hx + 45f, hy - 42f)
             } else if (fighter.weaponHandle.id == "handle_anchor") {
                 // Iron shank with a stock across it and two hooked flukes at the crown.
                 scope.withTransform({ translate(hx, hy) }) {
@@ -3230,10 +3290,10 @@ object TapestryRenderer {
 
                     when (anc) {
                         com.example.game.Ancillary.SQUIRE -> {
-                        // Drawing spare folded tunics on his shoulder!
+                        // Drawing spare folded tunics on his back at shoulder height
                         val tunicStack = Path().apply {
                             addRoundRect(androidx.compose.ui.geometry.RoundRect(
-                                rect = androidx.compose.ui.geometry.Rect(cx - 22f, cy + 25f, cx - 2f, cy + 45f),
+                                rect = androidx.compose.ui.geometry.Rect(cx - 22f, cy + 65f, cx - 2f, cy + 88f),
                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f)
                             ))
                         }
@@ -3529,7 +3589,7 @@ object TapestryRenderer {
                         moveTo(hx - headRadius, hy)
                         lineTo(hx - headRadius - 3f, hy + 14f)
                         lineTo(hx - headRadius + 6f, hy + 8f)
-                        close()
+                        // No close() — closing creates a filled triangle sticking out the back of the head
                     }
                     drawStitchedFill(this, locks, hairCol)
                     drawPath(locks, ThreadColor, style = Stroke(width = 2f))

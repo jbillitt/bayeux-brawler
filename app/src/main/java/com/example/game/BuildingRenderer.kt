@@ -207,33 +207,55 @@ internal fun drawSiegeLadder(scope: DrawScope, scaledPosX: Float, scaleFactor: F
 }
 
 internal fun drawDamageDecals(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
+    if (bg.stuckBuildingArrows.isNotEmpty()) {
+        for (arrow in bg.stuckBuildingArrows) {
+            val dx = cx + arrow.offsetX
+            val dy = cy + arrow.offsetY
+            val nx = kotlin.math.cos(arrow.angle.toDouble()).toFloat()
+            val ny = kotlin.math.sin(arrow.angle.toDouble()).toFloat()
 
-        val random = kotlin.random.Random(bg.seed)
-        // Only arrow-type hits leave shafts; melee/stones/mud leave no marks.
-        // Arrows embed pointing the way they were actually fired.
-        val fromLeftCount = bg.stuckArrowsFromLeft.coerceAtMost(8)
-        val fromRightCount = bg.stuckArrowsFromRight.coerceAtMost(8)
-        val numDecals = fromLeftCount + fromRightCount
+            val tailX = dx - nx * 32f
+            val tailY = dy - ny * 32f
+            val headX = dx + nx * 10f
+            val headY = dy + ny * 10f
 
-        for (i in 0 until numDecals) {
-            val dx = cx + random.nextFloat() * bg.width - (bg.width / 2f)
-            val dy = cy - 20f - random.nextFloat() * 150f
+            scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 4.5f)
+            scope.drawLine(ThreadColor, Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 1.5f)
 
-            // Shaft angled as if shot in from the side, slight downward arc
-            val fromLeft = i < fromLeftCount
-            val dirX = (if (fromLeft) 1f else -1f) * (0.85f + random.nextFloat() * 0.1f)
-            val dirY = 0.35f + random.nextFloat() * 0.25f
-            val mag = kotlin.math.hypot(dirX.toDouble(), dirY.toDouble()).toFloat()
-            val nx = dirX / mag; val ny = dirY / mag
-            val tailX = dx - nx * 30f; val tailY = dy - ny * 30f
-
-            scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(dx, dy), strokeWidth = 4.5f)
             // Fletching at the tail
             val perpX = -ny; val perpY = nx
-            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 7f + perpX * 6f, tailY - ny * 7f + perpY * 6f), strokeWidth = 3f)
-            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 7f - perpX * 6f, tailY - ny * 7f - perpY * 6f), strokeWidth = 3f)
+            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 8f + perpX * 6f, tailY - ny * 8f + perpY * 6f), strokeWidth = 3f)
+            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 8f - perpX * 6f, tailY - ny * 8f - perpY * 6f), strokeWidth = 3f)
         }
+        return
     }
+
+    val random = kotlin.random.Random(bg.seed)
+    // Only arrow-type hits leave shafts; melee/stones/mud leave no marks.
+    // Arrows embed pointing the way they were actually fired (shallow flight arc within tight distribution).
+    val fromLeftCount = bg.stuckArrowsFromLeft.coerceAtMost(8)
+    val fromRightCount = bg.stuckArrowsFromRight.coerceAtMost(8)
+    val numDecals = fromLeftCount + fromRightCount
+
+    for (i in 0 until numDecals) {
+        val dx = cx + random.nextFloat() * bg.width - (bg.width / 2f)
+        val dy = cy - 20f - random.nextFloat() * 150f
+
+        val fromLeft = i < fromLeftCount
+        val dirX = if (fromLeft) 0.96f else -0.96f
+        val dirY = 0.12f + (random.nextFloat() - 0.5f) * 0.15f
+        val mag = kotlin.math.hypot(dirX.toDouble(), dirY.toDouble()).toFloat()
+        val nx = dirX / mag; val ny = dirY / mag
+        val tailX = dx - nx * 30f; val tailY = dy - ny * 30f
+        val headX = dx + nx * 8f; val headY = dy + ny * 8f
+
+        scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 4.5f)
+        scope.drawLine(ThreadColor, Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 1.5f)
+        val perpX = -ny; val perpY = nx
+        scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 7f + perpX * 6f, tailY - ny * 7f + perpY * 6f), strokeWidth = 3f)
+        scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 7f - perpX * 6f, tailY - ny * 7f - perpY * 6f), strokeWidth = 3f)
+    }
+}
     
 internal fun drawShip(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
         // Deep hull with slight curve
@@ -1005,7 +1027,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
         val hillPath = Path().apply {
             moveTo(cx - 150f, cy + 20f)
             quadraticTo(cx - 95f, cy - 30f, cx - 66f, cy - 58f)
-            lineTo(cx + 66f, cy - 58f) // plateau for the wall to stand on
+            lineTo(cx + 69.5f, cy - 59f) // plateau for the wall to stand on
             quadraticTo(cx + 95f, cy - 30f, cx + 150f, cy + 20f)
             close()
         }
@@ -1017,27 +1039,27 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
         
         // Wooden Tower
         val towerPath = Path().apply {
-            moveTo(cx - 20f, cy - 100f)
+            moveTo(cx - 11f, cy - 57.5f)
             lineTo(cx - 10f, cy - 170f)
             lineTo(cx + 10f, cy - 170f)
-            lineTo(cx + 20f, cy - 100f)
+            lineTo(cx + 15.5f, cy - 58f)
             close()
         }
-        drawStitchedFill(scope, towerPath, Color(0xFF735835))
+        drawStitchedFill(scope, towerPath, Color(0xFFC0C0C0))
         scope.drawPath(towerPath, ThreadColor, style = StitchedStroke)
         
         // Crossbeams
-        scope.drawLine(ThreadColor, Offset(cx - 20f, cy - 100f), Offset(cx + 10f, cy - 170f), strokeWidth = 2f)
-        scope.drawLine(ThreadColor, Offset(cx + 20f, cy - 100f), Offset(cx - 10f, cy - 170f), strokeWidth = 2f)
+        scope.drawLine(ThreadColor, Offset(cx - 10f, cy - 142f), Offset(cx + 10f, cy - 168.5f), strokeWidth = 2f)
+        scope.drawLine(ThreadColor, Offset(cx + 13.5f, cy - 138f), Offset(cx - 10.5f, cy - 107f), strokeWidth = 2f)
         
         // Tower Roof
         val roofPath = Path().apply {
-            moveTo(cx - 25f, cy - 165f)
-            lineTo(cx, cy - 195f)
-            lineTo(cx + 25f, cy - 165f)
+            moveTo(cx, cy - 215f)
+            lineTo(cx - 16.5f, cy - 168.5f)
+            lineTo(cx + 16.5f, cy - 169.5f)
             close()
         }
-        drawStitchedFill(scope, roofPath, Color(0xFF9E3624))
+        drawStitchedFill(scope, roofPath, Color(0xFF0EB4B4))
         scope.drawPath(roofPath, ThreadColor, style = StitchedStroke)
     }
 

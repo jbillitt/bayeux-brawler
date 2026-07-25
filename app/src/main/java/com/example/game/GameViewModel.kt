@@ -288,8 +288,8 @@ class GameViewModel : ViewModel() {
         initialGear.add("head_bare")
         initialGear.add("handle_fists")
         initialGear.add("shield_none")
-        initialGear.add("armor_none")
-        initialGear.add("head_none")
+        initialGear.add("armor_bare")
+        initialGear.add("helm_none")
         
         // Randomly unlock 2 more of each category to start
         initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })

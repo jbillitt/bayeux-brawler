@@ -40,4 +40,20 @@ class GameDataTest {
             assertTrue("Missing weapon head: $id", ids.contains(id))
         }
     }
+
+    private val allGearIds: Set<String> =
+        (GameData.WEAPON_HEADS.map { it.id } +
+         GameData.WEAPON_HANDLES.map { it.id } +
+         GameData.SHIELDS.map { it.id } +
+         GameData.ARMOR_PIECES.map { it.id } +
+         GameData.HEADGEAR_PIECES.map { it.id }).toSet()
+
+    @Test
+    fun everyGuaranteedStartingIdResolvesToRealGear() {
+        // These are the ids startNewGame always seeds. A typo here is silent: the add is a no-op
+        // and the player simply never gets the fallback item in his pool.
+        listOf("head_bare", "handle_fists", "shield_none", "armor_bare", "helm_none").forEach {
+            assertTrue("$it is not a real gear id", it in allGearIds)
+        }
+    }
 }

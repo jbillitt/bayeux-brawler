@@ -74,24 +74,29 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
 
     // L2 second voice
     val second = weightedPick(rng, when (spec.family) {
-        Family.TINTAGEL -> listOf(Voice.VIELLE to 0.6f, Voice.RECORDER to 0.25f, Voice.PANPIPES to 0.15f)
-        Family.MINUET -> listOf(Voice.RECORDER to 0.5f, Voice.VIELLE to 0.3f, Voice.PANPIPES to 0.2f)
-        Family.GREENSLEEVES -> listOf(Voice.RECORDER to 0.4f, Voice.VIELLE to 0.4f, Voice.PANPIPES to 0.2f)
-        Family.ESTAMPIE -> listOf(Voice.PANPIPES to 0.4f, Voice.RECORDER to 0.35f, Voice.VIELLE to 0.25f)
-        else -> listOf(Voice.VIELLE to 0.6f, Voice.RECORDER to 0.4f)
+        Family.TINTAGEL -> listOf(Voice.VIELLE to 0.45f, Voice.OBOE to 0.25f, Voice.RECORDER to 0.18f, Voice.PANPIPES to 0.12f)
+        Family.MINUET -> listOf(Voice.RECORDER to 0.38f, Voice.OBOE to 0.27f, Voice.VIELLE to 0.2f, Voice.PANPIPES to 0.15f)
+        Family.GREENSLEEVES -> listOf(Voice.RECORDER to 0.3f, Voice.VIELLE to 0.3f, Voice.OBOE to 0.25f, Voice.PANPIPES to 0.15f)
+        Family.ESTAMPIE -> listOf(Voice.PANPIPES to 0.34f, Voice.RECORDER to 0.28f, Voice.VIELLE to 0.2f, Voice.OBOE to 0.18f)
+        else -> listOf(Voice.VIELLE to 0.45f, Voice.RECORDER to 0.3f, Voice.OBOE to 0.25f)
     })
     used += second
     a += VoiceAssignment(second, LineRef.COUNTER, 2, 99, gSecond, 0.35f)
 
     // L3 bass takes the ground
-    val bassPool = listOf(Voice.LUTE to 0.4f, Voice.VIOLA to 0.35f, Voice.SACKBUT to 0.25f).filter { it.first !in used }
+    val bassPool = listOf(
+        Voice.CELLO to 0.4f, Voice.LUTE to 0.28f, Voice.VIOLA to 0.2f, Voice.SACKBUT to 0.12f
+    ).filter { it.first !in used }
     val bass = weightedPick(rng, if (bassPool.isEmpty()) listOf(Voice.VIOLA to 1f) else bassPool)
     used += bass
     a += VoiceAssignment(bass, LineRef.BASS, 3, 99, gBass, -0.25f)
 
-    // The soloist starts rolling chords across the phrase ends a few levels in — the single
-    // biggest "the band has grown" cue available, and it costs no extra voice.
-    a += VoiceAssignment(soloist, LineRef.STRUM, 4, 99, gMel * 0.62f, 0.1f)
+    // Not every song's harper strums. Roughly two in three do, and the ones that do have their
+    // own habit about where in the phrase it falls (see strumPlacementFor) — so two runs of the
+    // same family are told apart by it rather than sounding like one another.
+    if (rng.nextFloat() < 0.65f) {
+        a += VoiceAssignment(soloist, LineRef.STRUM, 3 + rng.nextInt(3), 99, gMel * 0.62f, 0.1f)
+    }
 
     // L4 percussion I
     val percLevel = 4
@@ -108,7 +113,7 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     // NOTE: gurdy buzz accents ride the SPARKLE slot pan; the facade maps GURDY+SPARKLE to gurdyBuzzEvents.
 
     // L6 third voice: divisions on the repeats
-    val thirdPool = listOf(Voice.RECORDER, Voice.VIELLE, Voice.PANPIPES, Voice.PSALTERY).filter { it !in used }
+    val thirdPool = listOf(Voice.RECORDER, Voice.VIELLE, Voice.PANPIPES, Voice.PSALTERY, Voice.OBOE).filter { it !in used }
     val third = thirdPool[rng.nextInt(thirdPool.size)]
     used += third
     val thirdOct = if (third == Voice.RECORDER || third == Voice.PANPIPES) 1 else 0
@@ -125,6 +130,9 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     // L8 percussion II
     val tambLevel = (if (merrier) 6 else 8)
     a += VoiceAssignment(Voice.TAMBOURINE, LineRef.PERC, tambLevel, 99, gPerc2, 0.65f)
+    // The shaker rides opposite the tambourine. It is pure treble, so it holds the subdivision
+    // audible on a handset even when the membranes are fighting for room.
+    a += VoiceAssignment(Voice.EGG_SHAKER, LineRef.PERC, if (merrier) 5 else 7, 99, gPerc2 * 0.85f, -0.6f)
 
     // L9 waits band
     val shawmLevel = if (wilder) 7 else 9
@@ -156,7 +164,9 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
 
     // 13+ consort thickening: seconds and thirds of the family
     a += VoiceAssignment(Voice.RECORDER, LineRef.MELODY, 13, 99, 0.16f, 0.5f, transposeDegrees = -2)
+    a += VoiceAssignment(Voice.OBOE, LineRef.COUNTER, 14, 99, 0.17f, 0.45f)
     a += VoiceAssignment(Voice.FIDDLE2, LineRef.MELODY, 15, 99, 0.18f, -0.55f, transposeDegrees = -5)
+    a += VoiceAssignment(Voice.CELLO, LineRef.BASS, 16, 99, 0.20f, -0.35f, octave = -1)
     a += VoiceAssignment(Voice.VIOLA, LineRef.COUNTER, 17, 99, 0.16f, -0.4f, octave = -1)
     a += VoiceAssignment(soloist, LineRef.MELODY, 19, 99, 0.16f, 0.1f, octave = 1)
     a += VoiceAssignment(Voice.FIDDLE2, LineRef.DRONE, 21, 99, 0.10f, 0.75f, octave = 1)
@@ -209,8 +219,10 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
     a += VoiceAssignment(Voice.BELLS, LineRef.SPARKLE, 5, 99, 0.10f, 0.7f)
     a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, 5, 99, 0.28f, 0f)
     if (riff != Voice.PSALTERY) a += VoiceAssignment(Voice.PSALTERY, LineRef.RIFF, 6, 99, 0.10f, 0.45f, octave = 1)
-    // Rolled chords on the phrase ends — the lead punctuating its own riff.
-    a += VoiceAssignment(Voice.HARP, LineRef.STRUM, 4, 99, 0.26f, 0.15f)
+    // Rolled chords punctuating its own riff — in most brawls, but not all of them.
+    if (rng.nextFloat() < 0.7f) {
+        a += VoiceAssignment(Voice.HARP, LineRef.STRUM, 3 + rng.nextInt(3), 99, 0.26f, 0.15f)
+    }
     // The harp's own divisions an octave up — the lead taking a solo over its own riff.
     a += VoiceAssignment(Voice.HARP, LineRef.MELODY_ORN, 7, 99, 0.18f, 0.25f, octave = 1)
     a += VoiceAssignment(Voice.PANPIPES, LineRef.FLOURISH, 8, 99, 0.11f, 0.6f)
@@ -235,6 +247,9 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
     late(Voice.FIDDLE2, LineRef.MELODY_ORN, 0.14f, 0.4f)
     late(Voice.PSALTERY, LineRef.SPARKLE, 0.10f, 0.5f)
     late(Voice.TAMBOURINE, LineRef.PERC, 0.13f, 0.65f)
+    late(Voice.OBOE, LineRef.COUNTER, 0.15f, 0.45f)
+    late(Voice.CELLO, LineRef.BASS, 0.18f, -0.35f)
+    late(Voice.EGG_SHAKER, LineRef.PERC, 0.14f, -0.6f)
     return OrchestrationPlan(a, destinyFanfare = false)
 }
 
@@ -252,17 +267,25 @@ private fun planThroneOrchestration(spec: SongSpec, hasTrumpeter: Boolean): Orch
     a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, 1, 99, 0.52f, 0f)
     a += VoiceAssignment(Voice.BELLS, LineRef.SPARKLE, 1, 99, 0.30f, 0.6f)
     // Herald fanfares: rising horn triads every four bars (the same figure that crowns BRAWL)
-    a += VoiceAssignment(Voice.HORN, LineRef.FLOURISH, 1, 99, 0.30f, 0.2f)
+    a += VoiceAssignment(Voice.HORN, LineRef.FLOURISH, 1, 99, 0.38f, 0.2f)
     a += VoiceAssignment(Voice.SACKBUT, LineRef.PADS_ROOT, 2, 99, 0.22f, -0.15f)
-    a += VoiceAssignment(Voice.HORN, LineRef.PADS_FIFTH, 2, 99, 0.18f, 0.15f)
+    a += VoiceAssignment(Voice.HORN, LineRef.PADS_FIFTH, 2, 99, 0.24f, 0.15f)
+    // A coronation has heralds whether or not you have recruited one, so the trumpet line plays
+    // regardless here — the Trumpeter ancillary below makes it louder and adds a second part,
+    // rather than being the only thing that lets a trumpet into the room at all.
+    a += VoiceAssignment(Voice.HORN, LineRef.TRUMPETER, 1, 99, 0.30f, -0.25f)
     a += VoiceAssignment(Voice.CHOIR, LineRef.PADS_FULL, 4, 99, 0.14f, 0f)
     // Harp rolls across the cadences — a court harper's gesture, and it suits a coronation.
     a += VoiceAssignment(Voice.HARP, LineRef.STRUM, 3, 99, 0.28f, -0.2f)
     a += VoiceAssignment(Voice.RECORDER, LineRef.MELODY_ORN, 5, 99, 0.18f, 0.5f, octave = 1)
     a += VoiceAssignment(Voice.PSALTERY, LineRef.SPARKLE, 6, 99, 0.14f, 0.45f)
+    // A cello under the processional and an oboe answering over it — the court consort proper.
+    a += VoiceAssignment(Voice.CELLO, LineRef.BASS, 5, 99, 0.26f, -0.4f)
+    a += VoiceAssignment(Voice.OBOE, LineRef.COUNTER, 6, 99, 0.20f, 0.4f)
     a += VoiceAssignment(Voice.CHOIR, LineRef.COUNTER, 7, 99, 0.16f, 0.35f)
     a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 9, 99, 0.12f, 0f)
-    if (hasTrumpeter) a += VoiceAssignment(Voice.HORN, LineRef.TRUMPETER, 2, 99, 0.20f, 0.3f)
+    // Your own trumpeter doubles the heralds an octave up — prevalent, as a throne should be.
+    if (hasTrumpeter) a += VoiceAssignment(Voice.HORN, LineRef.TRUMPETER, 1, 99, 0.26f, 0.35f, octave = 1)
     // Deep runs earn the full coronation: massed fanfare on the strain-ends.
     a += VoiceAssignment(Voice.HORN, LineRef.DESTINY_FANFARE, 10, 99, 0.28f, -0.2f)
     a += VoiceAssignment(Voice.BELLS, LineRef.DESTINY_FANFARE, 10, 99, 0.20f, 0.7f)
@@ -315,6 +338,18 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
                 } else {
                     val offs = when (spec.beatsPerBar) { 6 -> listOf(1.5f, 4.5f); 4 -> listOf(1f, 3f); else -> listOf(1f, 2f) }
                     for (o in offs) out += NoteEvent(base + o, 0.25f, 57, 0.8f)
+                }
+            }
+            // The shaker keeps the subdivision the drums cannot: it is all treble, so it stays
+            // legible on a phone under a full mix. Offbeats, so it interlocks with the tabor
+            // rather than doubling it.
+            Voice.EGG_SHAKER -> {
+                val step = if (spec.beatsPerBar == 6) 0.5f else 0.5f
+                var beat = 0f
+                while (beat < bpb - 1e-3f) {
+                    val onBeat = beat % 1f == 0f
+                    out += NoteEvent(base + beat, 0.18f, 57, if (onBeat) 0.5f else 0.8f)
+                    beat += step
                 }
             }
             Voice.NAKERS -> if (spec.family == Family.BRAWL) {
@@ -502,30 +537,75 @@ fun brawlFlourishEvents(spec: SongSpec, voice: Voice): List<NoteEvent> {
 }
 
 /**
- * Rolled chords for the harp, landing on phrase ends where the melody is resting anyway.
+ * Where in a four-bar phrase a given song's harper places their rolled chords. Rolled once per
+ * song so two runs of the same family still strum differently — the harper has a habit, and it
+ * is not the same habit every time.
+ */
+enum class StrumPlacement {
+    /** Under the cadence, where the melody is already resting. The courtly default. */
+    PHRASE_END,
+    /** On the downbeat, announcing the phrase before the tune enters over the top. */
+    PHRASE_START,
+    /** One bar in — answering the melody's opening gesture rather than setting it up. */
+    SECOND_BAR,
+    /** Bookends: opens the strain and closes it, nothing in between. */
+    ANSWER
+}
+
+/** The harper's habit for this song. Deterministic per seed, so a run's theme stays its own. */
+fun strumPlacementFor(spec: SongSpec): StrumPlacement =
+    StrumPlacement.values()[Random(spec.seed xor 0x51EA3F17L).nextInt(StrumPlacement.values().size)]
+
+/**
+ * Rolled chords for the harp.
  *
  * Every pitch comes from degreeToMidi() against the bar's own ground degree, so the voicing is
- * built out of the mode rather than transposed into it — a strum cannot come out discordant, and
- * the third is minor in aeolian/dorian and major in ionian without anything asking which.
- * (groundChordMidis is deliberately not used: it gives root-fifth-octave, no third at all, which
- * strums as a hollow power chord.)
+ * built out of the mode rather than transposed into it — a strum cannot come out discordant
+ * whatever the placement, and the third is minor in aeolian/dorian and major in ionian without
+ * anything asking which. (groundChordMidis is deliberately not used: it gives root-fifth-octave,
+ * no third at all, which strums as a hollow power chord.)
  *
- * The roll is ~32ms per string, converted to beats so it stays a hand dragged across the strings
- * at any tempo instead of scaling into an arpeggio at slow ones.
+ * Placement, roll speed and spread are all drawn from the song's own seed, so two GREENSLEEVES
+ * runs strum in different places. The roll is converted from milliseconds into beats so it stays
+ * a hand dragged across the strings at any tempo instead of stretching into an arpeggio at slow
+ * ones. Whether a song strums *at all* is decided in the orchestration plan, not here.
  */
 fun harpStrumEvents(spec: SongSpec): List<NoteEvent> {
     val out = mutableListOf<NoteEvent>()
     val bpb = spec.beatsPerBar.toFloat()
-    val rollBeats = (0.032f / spec.secondsPerBeat).coerceIn(0.015f, 0.10f)
+    val rng = Random(spec.seed xor 0x7C1D9A03L)
+    val placement = strumPlacementFor(spec)
+    // 26-46ms between strings: a brisk flick or a broad sweep, depending on the run.
+    val rollBeats = ((0.026f + rng.nextFloat() * 0.020f) / spec.secondsPerBeat).coerceIn(0.015f, 0.11f)
+    val wide = rng.nextBoolean()   // does the big roll reach up to the tenth, or stop at the octave
+
     for (bar in 0 until spec.totalBars) {
-        // Last bar of each four-bar phrase; every second one closes a strain and gets more.
-        if (bar % 4 != 3) continue
-        val strainEnd = bar % 8 == 7
+        val inPhrase = bar % 4
+        val hit = when (placement) {
+            StrumPlacement.PHRASE_END -> inPhrase == 3
+            StrumPlacement.PHRASE_START -> inPhrase == 0
+            StrumPlacement.SECOND_BAR -> inPhrase == 1
+            StrumPlacement.ANSWER -> bar % 8 == 0 || bar % 8 == 7
+        }
+        if (!hit) continue
+
+        // The strain's closing bar is the one that earns the full spread, wherever the habit puts
+        // the rest of them.
+        val big = bar % 8 == 7 || (placement == StrumPlacement.PHRASE_START && bar % 8 == 0)
         val g = spec.ground[bar % 8].bassDegree
-        val degrees = if (strainEnd) listOf(0, 2, 4, 7, 9, 11) else listOf(0, 2, 4, 7)
-        val start = bar * bpb + bpb - (if (strainEnd) 1.5f else 1f)
-        val ring = if (strainEnd) 2.6f else 1.4f
-        val lead = if (strainEnd) 0.92f else 0.68f
+        val degrees = when {
+            big && wide -> listOf(0, 2, 4, 7, 9, 11)
+            big -> listOf(0, 2, 4, 7, 9)
+            else -> listOf(0, 2, 4, 7)
+        }
+        // Cadential strums sit late in the bar; announcing ones sit on the downbeat.
+        val start = when (placement) {
+            StrumPlacement.PHRASE_END -> bar * bpb + bpb - (if (big) 1.5f else 1f)
+            StrumPlacement.ANSWER -> if (bar % 8 == 7) bar * bpb + bpb - 1.5f else bar * bpb
+            else -> bar * bpb
+        }
+        val ring = if (big) 2.6f else 1.4f
+        val lead = if (big) 0.92f else 0.68f
         degrees.forEachIndexed { i, d ->
             // Velocity eases off up the roll: the thumb hits hardest, as on a real harp.
             out += NoteEvent(start + i * rollBeats, ring, degreeToMidi(spec, g + d), lead - 0.035f * i)

@@ -14,7 +14,43 @@ internal fun renderPerc(voice: Voice, midi: Int, durSec: Float, velocity: Float,
     Voice.BODHRAN    -> membrane(72.0, durSec, sr, rng, t60 = 0.13f, drop = 0.05, noiseAmp = 0.85f, slapAmp = 1.2f, bodyAmp = 1.5f)
     Voice.TABOR      -> tabor(durSec, sr, rng)
     Voice.TAMBOURINE -> tambourine(durSec, sr, rng)
+    Voice.EGG_SHAKER -> eggShaker(durSec, sr, rng)
     else -> FloatArray((sr * durSec).toInt())
+}
+
+/**
+ * Egg shaker: a fistful of seed against plastic. Entirely high-frequency, which makes it the one
+ * percussion voice that needs no phone-speaker compensation at all — it lives where a handset is
+ * loudest, so it reads clearly even under a full mix where the drums are struggling.
+ *
+ * The gesture is two-part and that is what separates it from a hi-hat or the tambourine's jingles:
+ * the seeds accelerate through the shell (a short noise swell) and then arrive together against
+ * the far wall (a sharp burst). A single decaying noise burst sounds like neither.
+ */
+private fun eggShaker(durSec: Float, sr: Int, rng: Random): FloatArray {
+    val n = (sr * durSec).toInt(); val out = FloatArray(n); if (n == 0) return out
+    // Deliberately pitched ABOVE the tambourine, whose jingles peak at 3.4-6.8kHz: at 3.8/7.2kHz
+    // the two measured as the same instrument. Seeds against plastic are a dry hiss with no
+    // metallic ring, so the top of the spectrum is where it belongs and where it stays legible.
+    // Relative to Nyquist, not absolute: the SFX path renders at 22050Hz, where a fixed 11.5kHz
+    // bandpass is above Nyquist and the biquad returns NaN — silence, and a poisoned mix bus.
+    val shell = Biquad.bandpass(sr, minOf(8500f, sr * 0.30f), 1.0f)
+    val seeds = Biquad.bandpass(sr, minOf(11500f, sr * 0.40f), 0.8f)
+    // A long swish, not a click. The tambourine is a sharp triple-burst of metal; if the shaker
+    // is also a short sharp burst the two are the same event to the ear however their bands are
+    // arranged — the envelope is doing as much of the distinguishing here as the filters.
+    val travel = 0.035f          // how long the seeds take to cross the egg
+    val dt = 1.0 / sr
+    for (i in 0 until n) {
+        val t = (i * dt).toFloat()
+        val noise = rng.nextFloat() * 2f - 1f
+        // Seeds gather speed, arrive, then hiss away against the shell.
+        val env = if (t < travel) (t / travel) * (t / travel) * 0.7f
+                  else Math.exp((-6.907755 * (t - travel) / 0.16f).toDouble()).toFloat()
+        out[i] = (shell.process(noise) * 0.45f + seeds.process(noise) * 1.0f) * env
+    }
+    normalise(out, 0.9f)
+    return out
 }
 
 /** Inharmonic bell partials with independent decays. */
@@ -120,8 +156,10 @@ private fun tambourine(durSec: Float, sr: Int, rng: Random): FloatArray {
         val t = (i * dt).toFloat()
         var exc = 0f
         for (b in bursts) if (t >= b && t < b + 0.05f) exc += (rng.nextFloat() * 2f - 1f) * Math.exp(-(t - b) / 0.02).toFloat()
-        out[i] = frame.process(exc) * 0.25f + jingle0.process(exc) * 0.55f +
-            jingle1.process(exc) * 0.65f + jingle2.process(exc) * 0.45f
+        // The wooden frame carries more weight than it did: the jingles alone put the tambourine
+        // in the same airy band as the egg shaker, and the two measured as one instrument.
+        out[i] = frame.process(exc) * 0.60f + jingle0.process(exc) * 0.70f +
+            jingle1.process(exc) * 0.55f + jingle2.process(exc) * 0.25f
     }
     normalise(out, 0.8f)
     return out

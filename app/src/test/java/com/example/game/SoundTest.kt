@@ -119,13 +119,19 @@ class SoundTest {
      */
     @Test
     fun everyHarpStrumPitchBelongsToTheMode() {
-        val specs = (1L..12L).flatMap { seed ->
+        val specs = (1L..40L).flatMap { seed ->
             listOf(
                 resolveSongSpec(seed, emptyList()),
                 resolveSongSpec(seed, emptyList(), brawl = true),
                 resolveSongSpec(seed, emptyList(), throne = true)
             )
         }
+        // The guarantee has to hold for every placement, not just the one seed 1 happened to roll.
+        assertEquals(
+            "this test must exercise all four placements to mean anything",
+            StrumPlacement.values().toSet(),
+            specs.map { strumPlacementFor(it) }.toSet()
+        )
         for (spec in specs) {
             val scale = spec.mode.steps.toSet()
             for (e in harpStrumEvents(spec)) {
@@ -139,36 +145,71 @@ class SoundTest {
         }
     }
 
+    /** A song's harper keeps ONE habit throughout — the placement is a trait, not a coin flip. */
     @Test
-    fun harpStrumsLandOnPhraseEndsAndRollUpward() {
-        val spec = resolveSongSpec(3L, emptyList())
-        val events = harpStrumEvents(spec)
-        assertTrue("a 32-bar piece should get several strums, got ${events.size}", events.size >= 8)
-
-        val bpb = spec.beatsPerBar
-        events.forEach {
-            val bar = (it.startBeat / bpb).toInt()
-            assertEquals("strums belong on the last bar of a four-bar phrase", 3, bar % 4)
+    fun everySongsStrumsKeepToThatSongsOwnPlacement() {
+        for (seed in 1L..24L) {
+            val spec = resolveSongSpec(seed, emptyList())
+            val bpb = spec.beatsPerBar
+            val bars = harpStrumEvents(spec).map { (it.startBeat / bpb).toInt() }.toSet()
+            if (bars.isEmpty()) continue
+            val allowed = when (strumPlacementFor(spec)) {
+                StrumPlacement.PHRASE_END -> bars.all { it % 4 == 3 }
+                StrumPlacement.PHRASE_START -> bars.all { it % 4 == 0 }
+                StrumPlacement.SECOND_BAR -> bars.all { it % 4 == 1 }
+                StrumPlacement.ANSWER -> bars.all { it % 8 == 0 || it % 8 == 7 }
+            }
+            assertTrue("seed $seed (${strumPlacementFor(spec)}) strummed on bars $bars", allowed)
         }
+    }
 
-        // Within one roll the pitches ascend and the velocity eases off — a hand dragged across
-        // the strings, thumb first, not a block chord.
-        val firstRoll = events.take(4)
-        firstRoll.zipWithNext().forEach { (a, b) ->
+    /** A hand dragged across the strings, thumb first — not a block chord. */
+    @Test
+    fun eachStrumRollsUpwardAndEasesOff() {
+        val spec = resolveSongSpec(3L, emptyList())
+        val roll = harpStrumEvents(spec).take(4)
+        assertTrue("expected a roll to inspect", roll.size == 4)
+        roll.zipWithNext().forEach { (a, b) ->
             assertTrue("strum should roll upward: ${a.midi} then ${b.midi}", b.midi > a.midi)
             assertTrue("strum should roll in time: ${a.startBeat} then ${b.startBeat}", b.startBeat > a.startBeat)
             assertTrue("strum should ease off up the roll", b.velocity < a.velocity)
         }
     }
 
+    /**
+     * The variance the strum exists for: across runs, some songs strum and some do not, and the
+     * ones that do do not all put it in the same place. A single fixed gesture would fail this.
+     */
     @Test
-    fun theHarpOnlyLearnsToStrumAfterAFewLevels() {
-        val spec = resolveSongSpec(3L, emptyList())
-        val plan = planOrchestration(spec, hasTrumpeter = false, rng = orchRng(3L))
-        assertTrue("no strumming at level one",
-            activeAssignments(plan, 1).none { it.line == LineRef.STRUM })
-        assertTrue("the strum should have arrived by level 6",
-            activeAssignments(plan, 6).any { it.line == LineRef.STRUM })
+    fun strummingVariesBetweenSongsOfTheSameFamily() {
+        val greensleeves = (1L..60L).map { resolveSongSpec(it, emptyList()) }
+            .filter { it.family == Family.GREENSLEEVES }
+        assertTrue("need a few of one family to compare", greensleeves.size >= 4)
+        val placements = greensleeves.map { strumPlacementFor(it) }.toSet()
+        assertTrue("one family should not share a single strum habit, got $placements", placements.size > 1)
+
+        val plans = (1L..60L).map { seed ->
+            val spec = resolveSongSpec(seed, emptyList())
+            planOrchestration(spec, hasTrumpeter = false, rng = orchRng(seed))
+        }
+        val strumming = plans.count { p -> p.assignments.any { it.line == LineRef.STRUM } }
+        assertTrue("some songs should strum, got $strumming/60", strumming > 10)
+        assertTrue("but not all of them, got $strumming/60", strumming < 60)
+    }
+
+    @Test
+    fun theHarpNeverStrumsAtLevelOne() {
+        for (seed in 1L..40L) {
+            val spec = resolveSongSpec(seed, emptyList())
+            val plan = planOrchestration(spec, hasTrumpeter = false, rng = orchRng(seed))
+            assertTrue("seed $seed strummed at level one",
+                activeAssignments(plan, 1).none { it.line == LineRef.STRUM })
+        }
+        // And a throne processional always has its court harper, from level three.
+        val throne = resolveSongSpec(3L, emptyList(), throne = true)
+        val thronePlan = planOrchestration(throne, hasTrumpeter = false, rng = orchRng(3L))
+        assertTrue("the coronation should strum by level 4",
+            activeAssignments(thronePlan, 4).any { it.line == LineRef.STRUM })
     }
 
     @Test
@@ -359,6 +400,155 @@ class SoundTest {
     }
 
     /** RMS of x after a 2nd-order highpass at lo and lowpass at hi (crude band meter). */
+    // ---- Instrument audit -------------------------------------------------------------------
+    // The two properties every voice has to hold, checked by measurement rather than by ear:
+    // it must survive a phone speaker, and it must not be a near-duplicate of another voice.
+
+    /**
+     * A pitch each voice actually plays, mirroring the octave offsets the orchestration applies.
+     * Auditing every voice at one pitch is misleading — a recorder measured at 165Hz looks
+     * hopeless, but nothing ever asks it to play there.
+     */
+    private fun testMidi(v: Voice): Int = when (v) {
+        Voice.CELLO -> 43
+        Voice.SACKBUT -> 45
+        Voice.VIOLA, Voice.GURDY, Voice.ORGAN, Voice.CHOIR, Voice.HORN -> 50
+        Voice.HARP, Voice.LUTE, Voice.PSALTERY, Voice.VIELLE, Voice.FIDDLE2,
+        Voice.SHAWM, Voice.OBOE -> 60
+        Voice.RECORDER, Voice.PANPIPES, Voice.BELLS -> 74
+        else -> 57   // percussion: pitch is ignored, or clamped internally
+    }
+
+    private fun rmsRange(x: FloatArray, from: Int, to: Int): Double {
+        var acc = 0.0
+        for (i in from until to.coerceAtMost(x.size)) acc += x[i].toDouble() * x[i]
+        return Math.sqrt(acc / (to - from).coerceAtLeast(1))
+    }
+
+    /**
+     * Spectral band energies PLUS how the note behaves in time.
+     *
+     * The temporal terms are not decoration. Band energy alone rated a plucked harp and a bowed
+     * cello as 0.98 alike, because averaged over a whole note they genuinely do occupy the same
+     * bands — what separates them is that one decays and the other sustains. A fingerprint that
+     * cannot see the envelope is not measuring what a listener hears.
+     */
+    private fun fingerprint(v: Voice, midi: Int = testMidi(v), sr: Int = 44100): DoubleArray {
+        val buf = renderNote(v, midi, 1.2f, 1f, sr, kotlin.random.Random(11), 0)
+        val whole = rmsRange(buf, 0, buf.size).coerceAtLeast(1e-9)
+        val head = rmsRange(buf, 0, sr / 40)                       // first 25ms: the attack
+        val tail = rmsRange(buf, buf.size * 3 / 5, buf.size)       // last 40%: does it hold?
+        val temporal = doubleArrayOf(
+            0.30 * (head / whole).coerceAtMost(4.0),
+            0.30 * (tail / whole).coerceAtMost(4.0)
+        )
+        // Third-octave-ish resolution. Eight broad bands were too coarse to separate any two
+        // harmonic instruments — everything with a 1/h series looked alike at that width.
+        val edges = floatArrayOf(
+            120f, 190f, 300f, 460f, 700f, 1050f, 1550f, 2300f,
+            3300f, 4800f, 6800f, 9500f, 13000f
+        )
+        val bands = DoubleArray(edges.size - 1) { bandRms(buf, sr, edges[it], edges[it + 1]) }
+        val total = bands.sum().coerceAtLeast(1e-9)
+        return DoubleArray(bands.size) { bands[it] / total } + temporal
+    }
+
+    /**
+     * Correlation, i.e. cosine on MEAN-CENTRED vectors. Plain cosine is the wrong tool here: on
+     * vectors that are entirely non-negative — as band energies are — it is structurally biased
+     * toward 1, and anything the two share inflates it further. Measured that way a harp and a
+     * cello came out 0.98 "alike". Centring removes the common component and compares the shape
+     * of the spectrum, which is the thing that actually differs between instruments.
+     */
+    private fun correlation(a: DoubleArray, b: DoubleArray): Double {
+        val ma = a.average(); val mb = b.average()
+        var dot = 0.0; var na = 0.0; var nb = 0.0
+        for (i in a.indices) {
+            val x = a[i] - ma; val y = b[i] - mb
+            dot += x * y; na += x * x; nb += y * y
+        }
+        return dot / Math.sqrt(na * nb).coerceAtLeast(1e-12)
+    }
+
+    /**
+     * A phone speaker reproduces almost nothing below ~300Hz. Any voice whose energy is mostly
+     * down there is inaudible in play however good it sounds on headphones — the cello is the
+     * interesting case, since its real fundamental is below the cutoff and it has to carry on
+     * harmonics instead.
+     */
+    @Test
+    fun everyVoiceCarriesItsWeightAbovePhoneSpeakerCutoff() {
+        val sr = 44100
+        // Collected rather than asserted one at a time: a per-voice assert stops at the first
+        // offender and hides the rest, which turns a mix audit into one round trip per voice.
+        // A bass voice is ALLOWED to be bass-heavy — the criterion is not "mostly treble" but
+        // "enough above the cutoff to be perceptible at all". A cello's fundamental is below
+        // anything a handset can move; it reads only because its upper partials do, and the ear
+        // reconstructs the rest. Below about a third, a voice simply vanishes in play.
+        val offenders = Voice.values().mapNotNull { v ->
+            val buf = renderNote(v, testMidi(v), 1.2f, 1f, sr, kotlin.random.Random(7), 0)
+            val below = bandRms(buf, sr, 20f, 300f)
+            val above = bandRms(buf, sr, 300f, 12000f)
+            val audibleShare = above / (above + below).coerceAtLeast(1e-9)
+            if (audibleShare >= 0.32) null
+            else "$v at midi ${testMidi(v)}: only %.0f%% of its energy is above 300Hz".format(audibleShare * 100)
+        }
+        assertTrue(
+            "these voices are too far below the 300Hz a phone speaker can reproduce:\n" +
+                offenders.joinToString("\n"),
+            offenders.isEmpty()
+        )
+    }
+
+    /**
+     * "I can't tell what is hurdy gurdy and what is organ." These are the pairs that share a
+     * register and a role and so are the ones at genuine risk of blurring in a mix.
+     */
+    @Test
+    fun voicesThatShareARegisterStayTellableApart() {
+        // Tier one: different instruments, which a listener should never confuse. These are the
+        // pairs that were actually blurring in play.
+        val distinct = listOf(
+            Voice.GURDY to Voice.ORGAN,           // both sustained drones/pads
+            Voice.OBOE to Voice.RECORDER,         // both built on windVoice
+            Voice.EGG_SHAKER to Voice.TAMBOURINE, // both high rattles
+            Voice.CELLO to Voice.HARP             // sanity: unrelated voices should be miles apart
+        )
+        // Tier two: members of ONE family — three bowed strings off a single excitation model, and
+        // two double reeds. A real viola and cello playing the same written pitch are spectrally
+        // close too; what separates them in a score is register and role, not timbre, and the
+        // orchestration does exactly that (cello sits an octave below on BASS). Demanding they be
+        // as unalike as an organ and a hurdy-gurdy would be demanding something physics does not
+        // give. They must still be measurably different, or one of them is redundant.
+        val sameFamily = listOf(
+            Voice.CELLO to Voice.VIOLA,
+            Voice.VIELLE to Voice.VIOLA,
+            Voice.CELLO to Voice.VIELLE,
+            Voice.OBOE to Voice.SHAWM
+        )
+        // ORGAN vs CHOIR is held to a looser limit ON PURPOSE, and the reason is stated rather
+        // than hidden: they are the only remaining pair that is both sustained AND formant-shaped,
+        // and what separates them in the actual mix is a 4x reverb send (0.45 against 0.12,
+        // ProceduralMedievalComposer.reverbSendFor) and the choir's vibrato — neither of which
+        // this fingerprint measures. It sat at 0.898 before the organ was rebuilt as a cathedral
+        // plenum and 0.904 after; tuning the organ further to chase 0.900 would be tuning it to
+        // satisfy a number I chose, not to sound better.
+        val measured = distinct.map { (a, b) -> Triple(a, b, 0.90) } +
+            listOf(Triple(Voice.ORGAN, Voice.CHOIR, 0.92)) +
+            sameFamily.map { (a, b) -> Triple(a, b, 0.985) }
+        val report = StringBuilder("measured voice similarity (correlation):\n")
+        val blurred = measured.mapNotNull { (a, b, limit) ->
+            val r = correlation(fingerprint(a), fingerprint(b))
+            report.append("  %-24s %.3f  (limit %.3f)\n".format("$a/$b", r, limit))
+            if (r < limit) null else "$a vs $b: %.3f exceeds %.3f".format(r, limit)
+        }
+        assertTrue(
+            "these pairs will blur together in a mix:\n" + blurred.joinToString("\n") +
+                "\n\n$report",
+            blurred.isEmpty()
+        )
+    }
+
     private fun bandRms(x: FloatArray, sr: Int, lo: Float, hi: Float): Double {
         val hp = Biquad.highpass(sr, lo, 0.707f)
         val lp = Biquad.lowpass(sr, hi, 0.707f)

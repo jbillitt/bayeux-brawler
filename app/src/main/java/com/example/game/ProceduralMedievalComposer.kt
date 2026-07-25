@@ -126,8 +126,13 @@ object ProceduralMedievalComposer {
     }
 
     private fun reverbSendFor(v: Voice): Float = when (v) {
-        Voice.BELLS, Voice.ORGAN -> 0.25f
+        // The cathedral is half the organ: a plenum in a stone building is as much room as pipe,
+        // and this send is what places it there rather than in the same small hall as everyone else.
+        Voice.ORGAN -> 0.45f
+        Voice.BELLS -> 0.25f
+        // Percussion stays dry or the transients smear — and the shaker's whole job is definition.
         Voice.BODHRAN, Voice.TABOR, Voice.TAMBOURINE, Voice.NAKERS -> 0.08f
+        Voice.EGG_SHAKER -> 0.05f
         else -> 0.12f
     }
 }

@@ -129,6 +129,27 @@ class GameViewModelTest {
         assertEquals(!initialState, newState)
     }
 
+    private fun spearman() = FighterState(
+        id = "trojan_knight_1_0", name = "Trojan Spearman", isPlayer = true,
+        maxHp = 45f, hp = 45f,
+        weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_spear" },
+        weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+        shield = GameData.SHIELDS.first { it.id == "shield_none" },
+        armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+        headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_spangen" },
+        posX = 0f, targetX = 0f, size = 0.95f,
+        hairColor = androidx.compose.ui.graphics.Color.Black, hairStyle = "short"
+    )
+
+    @Test
+    fun `panoply arms a fighter in mail and gauntlets`() {
+        val f = spearman()
+        GameViewModel.applyRetinuePanoply(f)
+        assertEquals("armor_chainmail", f.armor.id)
+        assertEquals("helm_spangen", f.headgear.id)
+        assertTrue(f.extraArmors.any { it.id == "armor_gauntlets" })
+    }
+
     private fun mutateState(mutator: (BattleSimState) -> BattleSimState) {
         val field = GameViewModel::class.java.getDeclaredField("_uiState")
         field.isAccessible = true

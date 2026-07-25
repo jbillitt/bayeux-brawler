@@ -164,6 +164,16 @@ class GameViewModel : ViewModel() {
 
         // Every live particle is a draw call per frame, so this is a frame-budget number, not a
         // taste one. 120 still reads as a gout of blood; 250 was costing frames on mid devices.
+        /**
+         * Kit one ally out in the retinue panoply. Shared by the start-of-battle pass and the
+         * Trojan Horse's spearmen, who spawn long after that pass has run.
+         */
+        fun applyRetinuePanoply(fighter: FighterState) {
+            fighter.headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_spangen" }
+            fighter.armor = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" }
+            fighter.extraArmors = fighter.extraArmors + GameData.ARMOR_PIECES.first { it.id == "armor_gauntlets" }
+        }
+
         private const val MAX_PARTICLES = 120
         private const val ARMOR_WEIGHT_LIMIT = 20f
         private const val WEATHER_UNLOCK_LEVEL = 12
@@ -871,7 +881,7 @@ class GameViewModel : ViewModel() {
         // posX is jittered per copy or the pack spawns exactly on top of itself.
         repeat(state.unlockedAncillaries.count { it == Ancillary.WARDOG }) { i ->
             enemies.add(FighterState(
-                id = "wardog#$i", name = "Buster", isPlayer = true, maxHp = 75f, hp = 75f,
+                id = "wardog#$i", name = "Buster", isPlayer = true, maxHp = 150f, hp = 150f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -952,11 +962,7 @@ class GameViewModel : ViewModel() {
             enemies.filter {
                 it.isPlayer && !it.isKind("wardog") && !it.isKind("raven") &&
                     it.id != "trojan_horse" && !it.id.startsWith("pallbearer_")
-            }.forEach { ally ->
-                ally.headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_spangen" }
-                ally.armor = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" }
-                ally.extraArmors = ally.extraArmors + GameData.ARMOR_PIECES.first { it.id == "armor_gauntlets" }
-            }
+            }.forEach { ally -> applyRetinuePanoply(ally) }
         }
 
         _playerState.value = player
@@ -1403,7 +1409,7 @@ class GameViewModel : ViewModel() {
             // Trojan Horse death spawn
             if (!wasDead && enemy.isDead && enemy.id == "trojan_horse") {
                 for (i in 0 until 3) {
-                    newEnemiesToSpawn.add(FighterState(
+                    val spearman = FighterState(
                         id = "trojan_knight_${System.currentTimeMillis()}_$i", name = "Trojan Spearman", isPlayer = true,
                         maxHp = 45f, hp = 45f,
                         weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_spear" },
@@ -1413,7 +1419,10 @@ class GameViewModel : ViewModel() {
                         headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_spangen" },
                         posX = enemy.posX + Random.nextInt(-40, 40),
                         targetX = enemy.posX, facingRight = true, size = 0.95f, hairColor = Color.Black, hairStyle = "short", isDualWielding = false
-                    ))
+                    )
+                    // The men in the belly are retinue too — they just arrive late.
+                    if (_uiState.value.hasRetinuePanoply) applyRetinuePanoply(spearman)
+                    newEnemiesToSpawn.add(spearman)
                 }
                 MedievalAudioSynth.playSound(SoundType.CRUNCH)
             }

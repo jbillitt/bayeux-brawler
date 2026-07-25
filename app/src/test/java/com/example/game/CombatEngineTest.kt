@@ -130,6 +130,61 @@ class CombatEngineTest {
         )
     }
 
+    /**
+     * Drive one complete melee swing to the point of impact. `engine.tick` only drains queued
+     * follow-ups — a strike lands when `updateFighter` carries swingProgress past the threshold.
+     *
+     * Callers repeat this: `meleeSweep` rolls a per-target dodge chance off the target's moveSpeed
+     * (~10% for an unencumbered ally), so a single swing landing on everyone is not guaranteed.
+     */
+    private fun swing(engine: CombatEngine, attacker: FighterState, defender: FighterState) {
+        attacker.isAttacking = true
+        attacker.hasLandedStrike = false
+        attacker.swingProgress = 0.99f
+        engine.updateFighter(attacker, defender, 1f / 60f)
+        engine.tick(1f / 60f)
+    }
+
+    @Test
+    fun aBossSwingCleavesEveryAllyInReach() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+
+        val boss = fighter(head = "head_maul", handle = "handle_iron", posX = 500f)
+            .copy(bossType = BossType.HAROLD_GODWINSON)
+        val allies = listOf(490f, 515f, 540f).mapIndexed { i, x ->
+            fighter(isPlayer = true, posX = x).copy(id = "ally_$i")
+        }
+        ctx.player = allies.first()
+        ctx.enemies = allies + boss
+
+        repeat(10) { swing(engine, boss, allies.first()) }
+
+        val hurt = allies.count { it.hp < it.maxHp }
+        assertEquals("a boss must strike every ally inside its reach", 3, hurt)
+    }
+
+    @Test
+    fun anOrdinaryFighterStillStrikesOnlyItsTarget() {
+        val ctx = FakeContext()
+        val engine = CombatEngine(ctx)
+
+        val saxon = fighter(head = "head_maul", handle = "handle_iron", posX = 500f)
+        val allies = listOf(490f, 515f, 540f).mapIndexed { i, x ->
+            fighter(isPlayer = true, posX = x).copy(id = "ally_$i")
+        }
+        ctx.player = allies.first()
+        ctx.enemies = allies + saxon
+
+        repeat(10) { swing(engine, saxon, allies.first()) }
+
+        // The guard that keeps the cleave scoped to bosses. Asserting the defender IS hurt as well
+        // as the bystanders being untouched, so the test cannot pass by the swing doing nothing.
+        assertTrue("the Saxon never landed on his own target", allies[0].hp < allies[0].maxHp)
+        assertEquals("a common Saxon cleaved a bystander", allies[1].maxHp, allies[1].hp, 0f)
+        assertEquals("a common Saxon cleaved a bystander", allies[2].maxHp, allies[2].hp, 0f)
+    }
+
     @Test
     fun flatDamageKillsAndCountsForPlayer() {
         val ctx = FakeContext()

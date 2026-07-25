@@ -627,7 +627,16 @@ class CombatEngine(private val ctx: BattleContext) {
             val isPiercingWeapon = attacker.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd")
 
             // Gather all targets in a line if we are using a piercing weapon
-            val targets = if (attacker.isPlayer && isPiercingWeapon) {
+            val targets = if (attacker.bossType != null) {
+                // A king does not duel one man at a time. Swarming him with the whole retinue was the
+                // reason bosses fell so easily — every follower in reach now eats the same swing.
+                // Secondary targets are handled by meleeSweep's existing damageFalloff; no new constant.
+                ctx.enemies.filter {
+                    !it.isDead && !it.isDying && !it.isCombatInactive &&
+                    it.climbState == ClimbState.NONE && it.elevated == attacker.elevated &&
+                    it.isPlayer != attacker.isPlayer && abs(attacker.posX - it.posX) <= reachPixels
+                }.sortedBy { abs(attacker.posX - it.posX) }
+            } else if (attacker.isPlayer && isPiercingWeapon) {
                 val dir = if (attacker.facingRight) 1f else -1f
                 ctx.enemies.filter {
                     !it.isDead && !it.isDying && !it.isCombatInactive &&

@@ -58,9 +58,19 @@ object SiegeRules {
                 it.climbState != ClimbState.CLIMBING_DOWN
         }
 
+    /**
+     * Whether a ladder is standing against the wall — the single answer the climb rules and the
+     * renderer both read.
+     *
+     * The renderer used to ask `ladderSpawned` on its own, which is set only by [breakGate]. The
+     * Siege Ladders reward sets `siegeLadders` instead, so buying it let you climb a ladder that
+     * was never drawn: you walked to the wall and rose up an empty patch of linen.
+     */
+    fun ladderStanding(state: SiegeState): Boolean =
+        state.siegeLadders || (state.ladderSpawned && state.gateBroken)
+
     fun ladderActive(state: SiegeState, fighters: List<FighterState>): Boolean =
-        (state.siegeLadders || (state.ladderSpawned && state.gateBroken)) &&
-            livingParapetEnemies(state, fighters).isNotEmpty()
+        ladderStanding(state) && livingParapetEnemies(state, fighters).isNotEmpty()
 
     fun beginClimbUp(state: SiegeState, fighter: FighterState, fighters: List<FighterState>): Boolean {
         if (fighter.elevated || fighter.climbState != ClimbState.NONE || !ladderActive(state, fighters)) return false

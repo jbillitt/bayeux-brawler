@@ -1246,7 +1246,9 @@ class GameViewModel : ViewModel() {
                 BackgroundObjectType.DOMED_TOWER,
                 BackgroundObjectType.ABBEY_NAVE,
                 BackgroundObjectType.ECCLESIA,
-                BackgroundObjectType.PALACE_ARCH
+                BackgroundObjectType.PALACE_ARCH,
+                BackgroundObjectType.BELL_TOWER,
+                BackgroundObjectType.CLOISTER_WALK
             )
             val assetBuildings = VectorAsset.spawnable().filter { state.level >= (it.spawn?.minLevel ?: 2) }
 

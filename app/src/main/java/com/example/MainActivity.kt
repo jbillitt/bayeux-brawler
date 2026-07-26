@@ -2616,7 +2616,7 @@ fun BattlefieldScene(
                             siege?.gateHp ?: gate.hp,
                             siege?.gateMaxHp ?: gate.maxHp
                         )
-                        if (siege?.ladderSpawned == true) {
+                        if (siege != null && com.example.game.SiegeRules.ladderStanding(siege)) {
                             com.example.game.drawSiegeLadder(
                                 this,
                                 gate.posX * playerScaleX,

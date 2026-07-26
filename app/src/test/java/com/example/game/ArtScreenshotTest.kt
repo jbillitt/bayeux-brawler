@@ -89,7 +89,9 @@ class ArtScreenshotTest {
 
     // The set has outgrown a phone screen — the last rows were being clipped away unrendered.
     @Test
-    @Config(qualifiers = "+w440dp-h2000dp")
+    // Tall enough for every row: two more object types pushed the last rows off the bottom, so
+    // the harness was quietly not rendering the things it existed to show.
+    @Config(qualifiers = "+w440dp-h2400dp")
     fun buildings() {
         val types = BackgroundObjectType.values().toList()
         composeTestRule.setContent {

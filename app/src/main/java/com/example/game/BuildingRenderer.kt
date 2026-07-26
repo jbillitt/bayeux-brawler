@@ -142,6 +142,8 @@ internal fun renderBackgroundObject(scope: DrawScope, bg: BackgroundObject, cx: 
         BackgroundObjectType.ABBEY_NAVE -> drawAbbeyNave(scope, cx, cy)
         BackgroundObjectType.ECCLESIA -> drawEcclesia(scope, cx, cy)
         BackgroundObjectType.PALACE_ARCH -> drawPalaceArch(scope, cx, cy)
+        BackgroundObjectType.BELL_TOWER -> drawBellTower(scope, cx, cy)
+        BackgroundObjectType.CLOISTER_WALK -> drawCloisterWalk(scope, cx, cy)
         BackgroundObjectType.CASTLE_WALL -> drawCastleWall(scope, cx, cy, bg)
         BackgroundObjectType.CASTLE_GATE -> drawCastleGate(scope, cx, cy, bg.hp, bg.maxHp)
         BackgroundObjectType.MOTTE -> drawSiegeMotte(scope, cx, cy, bg)
@@ -205,9 +207,28 @@ internal fun drawSiegeLadder(scope: DrawScope, scaledPosX: Float, scaleFactor: F
         val rx = rightBottom + (rightTop - rightBottom) * t
         val y = ground + (top - ground) * t
         scope.drawLine(ThreadColor, Offset(lx - 4f * scaleFactor, y), Offset(rx + 4f * scaleFactor, y), strokeWidth = 4f * scaleFactor)
+        // Rungs are lashed on, not jointed in — a pair of binding turns at each end
+        scope.drawLine(Color(0xFFD1B878), Offset(lx - 2f * scaleFactor, y - 2f * scaleFactor), Offset(lx + 3f * scaleFactor, y + 2f * scaleFactor), strokeWidth = 1.2f * scaleFactor)
+        scope.drawLine(Color(0xFFD1B878), Offset(rx - 3f * scaleFactor, y - 2f * scaleFactor), Offset(rx + 2f * scaleFactor, y + 2f * scaleFactor), strokeWidth = 1.2f * scaleFactor)
     }
     scope.drawLine(Color(0xFFD1B878), Offset(leftBottom, ground), Offset(leftTop, top), strokeWidth = 1.2f * scaleFactor)
     scope.drawLine(Color(0xFFD1B878), Offset(rightBottom, ground), Offset(rightTop, top), strokeWidth = 1.2f * scaleFactor)
+    // Iron hooks over the parapet, so the ladder grips the wall rather than leaning on air
+    listOf(leftTop to leftBottom, rightTop to rightBottom).forEach { (tx, bx) ->
+        val dx = (tx - bx)
+        val len = kotlin.math.hypot(dx.toDouble(), (top - ground).toDouble()).toFloat()
+        val ux = if (len == 0f) 0f else dx / len
+        val uy = if (len == 0f) -1f else (top - ground) / len
+        val hook = Path().apply {
+            moveTo(tx, top)
+            lineTo(tx + ux * 9f * scaleFactor, top + uy * 9f * scaleFactor)
+            quadraticTo(
+                tx + ux * 14f * scaleFactor + 7f * scaleFactor, top + uy * 14f * scaleFactor,
+                tx + ux * 9f * scaleFactor + 9f * scaleFactor, top + uy * 4f * scaleFactor
+            )
+        }
+        scope.drawPath(hook, Color(0xFF4C5154), style = Stroke(width = 3.5f * scaleFactor, cap = StrokeCap.Round))
+    }
 }
 
 internal fun drawDamageDecals(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
@@ -407,20 +428,55 @@ internal fun drawSiegeMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             val y = cy - 4f - i * 10f
             scope.drawLine(Color(0x555D4831), Offset(cx - 118f + i * 8f, y), Offset(cx + 120f - i * 10f, y), 1.5f)
         }
-        drawPalisadeRun(scope, cx - 72f, cx + 72f, cy - 70f, 42f, bg.seed)
+        // No palisade. The keep used to start 38px above the plateau and a procedural fence was
+        // run across the gap to hide the float — which is why the siege motte always wore a
+        // wooden collar that belonged to nothing. The keep stands on the earth it is built on.
+        val stone = Color(0xFFE8DCC0)
+        val band = Color(0xFFB08221)
+        val dark = Color(0xFF3B332A)
         val keep = Path().apply {
-            moveTo(cx - 42f, cy - 110f); lineTo(cx - 34f, cy - 176f)
-            lineTo(cx + 34f, cy - 176f); lineTo(cx + 42f, cy - 110f); close()
+            moveTo(cx - 46f, cy - 72f); lineTo(cx - 38f, cy - 178f)
+            lineTo(cx + 38f, cy - 178f); lineTo(cx + 46f, cy - 72f); close()
         }
-        drawStitchedFill(scope, keep, Color(0xFF795B38))
+        drawStitchedFill(scope, keep, stone)
         scope.drawPath(keep, ThreadColor, style = StitchedStroke)
-        scope.drawLine(ThreadColor, Offset(cx - 38f, cy - 112f), Offset(cx + 32f, cy - 174f), 2f)
-        scope.drawLine(ThreadColor, Offset(cx + 38f, cy - 112f), Offset(cx - 32f, cy - 174f), 2f)
-        val roof = Path().apply {
-            moveTo(cx - 48f, cy - 174f); lineTo(cx, cy - 214f); lineTo(cx + 48f, cy - 174f); close()
+        // String courses divide the tower into storeys, as the tapestry's towers are drawn
+        listOf(cy - 108f, cy - 146f).forEach { y ->
+            scope.drawLine(band, Offset(cx - 44f, y), Offset(cx + 44f, y), strokeWidth = 4f)
+            scope.drawLine(ThreadColor, Offset(cx - 44f, y), Offset(cx + 44f, y), strokeWidth = 1.5f)
         }
-        drawStitchedFill(scope, roof, Color(0xFF265063))
+        // Round-arched door, and a pair of openings in the upper storey
+        val door = Path().apply {
+            moveTo(cx - 13f, cy - 72f); lineTo(cx - 13f, cy - 96f)
+            quadraticTo(cx, cy - 116f, cx + 13f, cy - 96f)
+            lineTo(cx + 13f, cy - 72f); close()
+        }
+        drawStitchedFill(scope, door, dark)
+        scope.drawPath(door, ThreadColor, style = StitchedStroke)
+        for (i in 0 until 2) {
+            val wx = cx - 16f + i * 32f
+            val win = Path().apply {
+                moveTo(wx - 7f, cy - 150f); lineTo(wx - 7f, cy - 164f)
+                quadraticTo(wx, cy - 174f, wx + 7f, cy - 164f)
+                lineTo(wx + 7f, cy - 150f); close()
+            }
+            drawStitchedFill(scope, win, dark)
+            scope.drawPath(win, ThreadColor, style = StitchedStroke)
+        }
+        // Hipped roof with a lozenge lattice, matching the abbey and the palace
+        val roof = Path().apply {
+            moveTo(cx - 54f, cy - 178f); lineTo(cx, cy - 222f); lineTo(cx + 54f, cy - 178f); close()
+        }
+        drawStitchedFill(scope, roof, Color(0xFF6B7882))
         scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        // No lattice on this one: the hatch lines ran past the two top corners of the gable and
+        // stuck out as grey whiskers against the sky. A small hipped roof reads fine plain.
+        scope.drawLine(ThreadColor, Offset(cx, cy - 222f), Offset(cx, cy - 244f), strokeWidth = 3f)
+        val pennant = Path().apply {
+            moveTo(cx, cy - 244f); lineTo(cx + 26f, cy - 237f); lineTo(cx, cy - 230f); close()
+        }
+        drawStitchedFill(scope, pennant, Color(0xFF9E3624))
+        scope.drawPath(pennant, ThreadColor, style = StitchedStroke)
 }
 
 internal fun drawFeastingHall(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
@@ -471,17 +527,63 @@ internal fun drawFeastingHall(scope: DrawScope, cx: Float, cy: Float, bg: Backgr
 }
 
 /** Shared interior shell: plastered gable walls and roof beams, same footprint as the feast hall. */
-private fun drawInteriorShell(scope: DrawScope, cx: Float, cy: Float) {
+/**
+ * The room every interior is staged in: back wall, roof timbers, floor. Shared, so an improvement
+ * here lifts the kitchen and the chamber together rather than being pasted into each.
+ *
+ * It was a bare plaster pentagon with two sloping beams, which gave the furniture nothing to sit
+ * against — the contents read as loose objects floating on a wall. It now has a floor line to
+ * stand on, a blind arcade along the back, and a proper truss, so the props have a room.
+ */
+internal fun drawInteriorShell(scope: DrawScope, cx: Float, cy: Float) {
     val beam = Color(0xFF5C4029)
     val plaster = Color(0xFFD8C49B)
+    val stone = Color(0xFFE8DCC0)
+    val band = Color(0xFFB08221)
+    val floorY = cy + 6f
+
     val back = Path().apply {
         moveTo(cx - 235f, cy + 28f); lineTo(cx - 235f, cy - 145f)
         lineTo(cx, cy - 214f); lineTo(cx + 235f, cy - 145f); lineTo(cx + 235f, cy + 28f); close()
     }
     drawStitchedFill(scope, back, plaster)
     scope.drawPath(back, ThreadColor, style = StitchedStroke)
+
+    // Blind arcade along the back wall — the tapestry never leaves an interior wall blank, and it
+    // gives the eye a depth cue behind the furniture.
+    for (i in 0 until 9) {
+        val ax = cx - 208f + i * 52f
+        val blind = Path().apply {
+            moveTo(ax - 18f, floorY); lineTo(ax - 18f, cy - 60f)
+            quadraticTo(ax, cy - 96f, ax + 18f, cy - 60f)
+            lineTo(ax + 18f, floorY); close()
+        }
+        drawStitchedFill(scope, blind, stone)
+        scope.drawPath(blind, ThreadColor.copy(alpha = 0.55f), style = Stroke(width = 1.5f))
+    }
+
+    // Floor: a band of boards the props stand on, so nothing floats
+    val floor = Path().apply {
+        moveTo(cx - 235f, floorY); lineTo(cx + 235f, floorY)
+        lineTo(cx + 235f, cy + 28f); lineTo(cx - 235f, cy + 28f); close()
+    }
+    drawStitchedFill(scope, floor, Color(0xFF8B6037))
+    scope.drawPath(floor, ThreadColor, style = StitchedStroke)
+    for (i in 0 until 10) {
+        val x = cx - 212f + i * 47f
+        scope.drawLine(ThreadColor.copy(alpha = 0.3f), Offset(x, floorY + 2f), Offset(x - 8f, cy + 26f), strokeWidth = 1.5f)
+    }
+
+    // Roof truss: rafters, a ridge, a tie beam and a king post
     scope.drawLine(beam, Offset(cx - 230f, cy - 143f), Offset(cx, cy - 208f), 8f)
     scope.drawLine(beam, Offset(cx, cy - 208f), Offset(cx + 230f, cy - 143f), 8f)
+    scope.drawLine(beam, Offset(cx - 226f, cy - 150f), Offset(cx + 226f, cy - 150f), 7f)   // tie beam
+    scope.drawLine(beam, Offset(cx, cy - 150f), Offset(cx, cy - 206f), 6f)                 // king post
+    listOf(-1f, 1f).forEach { s ->
+        scope.drawLine(beam, Offset(cx + s * 8f, cy - 176f), Offset(cx + s * 96f, cy - 150f), 5f) // braces
+    }
+    // Wall plate the whole truss lands on
+    scope.drawLine(band, Offset(cx - 235f, cy - 145f), Offset(cx + 235f, cy - 145f), 4f)
 }
 
 internal fun drawInteriorKitchen(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
@@ -767,24 +869,117 @@ internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: Bac
         }
         drawStitchedFill(scope, mount, Color(0xFF73764E))
         scope.drawPath(mount, ThreadColor, style = StitchedStroke)
-        for (tier in 0..2) {
-            val half = 68f - tier * 17f
-            val bottom = cy - 80f - tier * 31f
-            val abbey = Path().apply {
-                addRect(androidx.compose.ui.geometry.Rect(cx - half, bottom - 32f, cx + half, bottom))
+        // Rock strata across the mount, so it reads as a crag and not a green hill
+        for (i in 0..4) {
+            val y = cy - 14f - i * 22f
+            val half = 150f - i * 24f
+            scope.drawLine(ThreadColor.copy(alpha = 0.3f), Offset(cx - half, y), Offset(cx + half - 20f, y - 6f), strokeWidth = 1.5f)
+        }
+
+        val stone = Color(0xFFE8DCC0)
+        val slate = Color(0xFF6B7882)
+        val band = Color(0xFFB08221)
+        val dark = Color(0xFF3B332A)
+
+        // The abbey climbs the rock in three arcaded ranges. It used to be three plain rectangles
+        // with five dots punched in each and a grey triangle on top — the only structure in the set
+        // with no arch, no roof and no string course, which is why it read as a wedding cake.
+        // Ranges are STAGGERED, not stacked concentrically. Three centred boxes of decreasing
+        // width is a wedding cake whatever you decorate it with; the island reads as a town on a
+        // rock because its ranges step sideways as they climb.
+        // (half-width, floor, bays, x-offset)
+        data class Range(val half: Float, val floorY: Float, val bays: Int, val dx: Float)
+        val tiers = listOf(
+            Range(78f, cy - 70f, 6, -14f),
+            Range(54f, cy - 112f, 4, 22f),
+            Range(38f, cy - 150f, 3, -10f)
+        )
+        tiers.forEachIndexed { tier, r ->
+            val mx = cx + r.dx
+            val wallTop = r.floorY - 30f
+            val roofTop = wallTop - 14f
+            val range = Path().apply {
+                moveTo(mx - r.half, r.floorY); lineTo(mx - r.half, wallTop)
+                lineTo(mx + r.half, wallTop); lineTo(mx + r.half, r.floorY); close()
             }
-            drawStitchedFill(scope, abbey, if (tier % 2 == 0) Color(0xFFD3C29D) else Color(0xFFC0AD87))
-            scope.drawPath(abbey, ThreadColor, style = StitchedStroke)
-            for (i in -2..2) {
-                scope.drawCircle(Color(0xFF4A4438), 3.2f, Offset(cx + i * half / 3f, bottom - 16f))
+            drawStitchedFill(scope, range, stone)
+            scope.drawPath(range, ThreadColor, style = StitchedStroke)
+            // Arcade of round-arched openings along the range
+            for (i in 0 until r.bays) {
+                val ax = mx - r.half + (2f * r.half) * (i + 0.5f) / r.bays
+                val op = Path().apply {
+                    moveTo(ax - 6f, r.floorY); lineTo(ax - 6f, wallTop + 14f)
+                    quadraticTo(ax, wallTop + 2f, ax + 6f, wallTop + 14f)
+                    lineTo(ax + 6f, r.floorY); close()
+                }
+                drawStitchedFill(scope, op, dark)
+                scope.drawPath(op, ThreadColor.copy(alpha = 0.7f), style = Stroke(width = 1.2f))
             }
+            // Lean roof over each range, with a gold eaves course under it. The hatch runs only
+            // between the interior bay lines — carried to the ends it overshot the roof's top
+            // corners and stuck out as whiskers.
+            val roof = Path().apply {
+                moveTo(mx - r.half - 7f, wallTop); lineTo(mx - r.half + 4f, roofTop)
+                lineTo(mx + r.half - 4f, roofTop); lineTo(mx + r.half + 7f, wallTop); close()
+            }
+            drawStitchedFill(scope, roof, slate)
+            scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+            for (i in 1..r.bays) {
+                val x = mx - r.half + (2f * r.half) * i / (r.bays + 1f)
+                scope.drawLine(ThreadColor.copy(alpha = 0.45f), Offset(x, wallTop), Offset(x + 8f, roofTop), strokeWidth = 1.3f)
+            }
+            scope.drawLine(band, Offset(mx - r.half - 8f, wallTop), Offset(mx + r.half + 8f, wallTop), strokeWidth = 3.5f)
+            if (tier == 0) {
+                // Gate at the foot of the climb
+                val gate = Path().apply {
+                    moveTo(mx - 13f, r.floorY); lineTo(mx - 13f, r.floorY - 20f)
+                    quadraticTo(mx, r.floorY - 38f, mx + 13f, r.floorY - 20f)
+                    lineTo(mx + 13f, r.floorY); close()
+                }
+                drawStitchedFill(scope, gate, dark)
+                scope.drawPath(gate, ThreadColor, style = StitchedStroke)
+            }
+        }
+
+        // The church on the summit, set off-centre over the topmost range
+        val sx0 = cx - 10f
+        val naveTop = cy - 206f
+        val nave = Path().apply {
+            moveTo(sx0 - 26f, cy - 164f); lineTo(sx0 - 26f, naveTop + 16f)
+            lineTo(sx0, naveTop); lineTo(sx0 + 26f, naveTop + 16f)
+            lineTo(sx0 + 26f, cy - 164f); close()
+        }
+        drawStitchedFill(scope, nave, stone)
+        scope.drawPath(nave, ThreadColor, style = StitchedStroke)
+        for (i in 0 until 2) {
+            val wx = sx0 - 11f + i * 22f
+            val win = Path().apply {
+                moveTo(wx - 5f, cy - 168f); lineTo(wx - 5f, cy - 184f)
+                quadraticTo(wx, cy - 193f, wx + 5f, cy - 184f)
+                lineTo(wx + 5f, cy - 168f); close()
+            }
+            drawStitchedFill(scope, win, dark)
+            scope.drawPath(win, ThreadColor, style = StitchedStroke)
         }
         val spire = Path().apply {
-            moveTo(cx - 14f, cy - 173f); lineTo(cx, cy - 226f); lineTo(cx + 14f, cy - 173f); close()
+            moveTo(sx0 - 20f, naveTop + 4f); lineTo(sx0, cy - 284f); lineTo(sx0 + 20f, naveTop + 4f); close()
         }
-        drawStitchedFill(scope, spire, Color(0xFF5D666B))
+        drawStitchedFill(scope, spire, slate)
         scope.drawPath(spire, ThreadColor, style = StitchedStroke)
-        scope.drawLine(Color(0xFFD6A420), Offset(cx, cy - 226f), Offset(cx, cy - 240f), 2f)
+        // Scale courses up the spire, the same fish-scale the towers wear
+        for (row in 1 until 4) {
+            val t = row / 4f
+            val sy = naveTop + 4f - (naveTop + 4f - (cy - 284f)) * t
+            val halfW = 20f * (1f - t)
+            scope.drawLine(ThreadColor.copy(alpha = 0.5f), Offset(sx0 - halfW, sy), Offset(sx0 + halfW, sy), strokeWidth = 1.3f)
+        }
+        // St Michael himself, in gold, as he stands on the real spire
+        scope.drawLine(band, Offset(sx0, cy - 284f), Offset(sx0, cy - 302f), strokeWidth = 3f)
+        val michael = Path().apply {
+            moveTo(sx0, cy - 302f); lineTo(sx0 + 13f, cy - 296f); lineTo(sx0, cy - 290f); close()
+        }
+        drawStitchedFill(scope, michael, band)
+        scope.drawPath(michael, ThreadColor, style = StitchedStroke)
 }
 
 private fun drawShipBody(scope: DrawScope, cx: Float, cy: Float, hullPath: Path) {
@@ -988,40 +1183,136 @@ internal fun drawFortMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
         scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 5f, cy - 140f), size = androidx.compose.ui.geometry.Size(10f, 12f))
     }
 
+/**
+ * The royal palace, as the tapestry draws one: a hall between two turrets, not a grey box with a
+ * hole in it. It was previously a flat rectangle of masonry hatching with five square merlons and a
+ * plank door — the only building left in the set with no round arch anywhere on it, which made it
+ * read as a cartoon castle beside the traced work.
+ *
+ * Seedless and literal, like the rest of the traced set, so every number here can be dragged in
+ * the vector builder.
+ */
 internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
-        // Stone Keep
-        val keepPath = Path().apply {
-            addRect(androidx.compose.ui.geometry.Rect(cx - 100f, cy - 150f, cx + 100f, cy + 20f))
+        val stone = Color(0xFFE8DCC0)
+        val slate = Color(0xFF6B7882)
+        val band = Color(0xFFB08221)
+        val dark = Color(0xFF3B332A)
+        val domeCol = Color(0xFF9E3624)
+        val hallTop = cy - 118f
+        val roofTop = cy - 156f
+
+        // Hall block between the turrets
+        val hall = Path().apply {
+            moveTo(cx - 96f, cy + 20f); lineTo(cx - 96f, hallTop)
+            lineTo(cx + 96f, hallTop); lineTo(cx + 96f, cy + 20f); close()
         }
-        drawStitchedFill(scope, keepPath, Color(0xFF8C969E))
-        scope.drawPath(keepPath, ThreadColor, style = StitchedStroke)
-        
-        // Crenellations
+        drawStitchedFill(scope, hall, stone)
+        scope.drawPath(hall, ThreadColor, style = StitchedStroke)
+
+        // Lozenge-tiled roof band over the hall
+        val roof = Path().apply {
+            moveTo(cx - 106f, hallTop); lineTo(cx - 106f, roofTop)
+            lineTo(cx + 106f, roofTop); lineTo(cx + 106f, hallTop); close()
+        }
+        drawStitchedFill(scope, roof, slate)
+        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        for (i in 0 until 7) {
+            val x0 = cx - 106f + i * 30f
+            scope.drawLine(ThreadColor.copy(alpha = 0.5f), Offset(x0, hallTop), Offset(x0 + 30f, roofTop), strokeWidth = 1.5f)
+            scope.drawLine(ThreadColor.copy(alpha = 0.5f), Offset(x0 + 30f, hallTop), Offset(x0, roofTop), strokeWidth = 1.5f)
+        }
+        scope.drawLine(band, Offset(cx - 108f, hallTop), Offset(cx + 108f, hallTop), strokeWidth = 5f)
+        scope.drawLine(ThreadColor, Offset(cx - 108f, hallTop), Offset(cx + 108f, hallTop), strokeWidth = 1.5f)
+
+        // The great round-arched gate, its arch picked out in a gold order
+        val gate = Path().apply {
+            moveTo(cx - 30f, cy + 20f); lineTo(cx - 30f, cy - 34f)
+            quadraticTo(cx, cy - 84f, cx + 30f, cy - 34f)
+            lineTo(cx + 30f, cy + 20f); close()
+        }
+        drawStitchedFill(scope, gate, dark)
+        scope.drawPath(gate, ThreadColor, style = StitchedStroke)
+        val order = Path().apply {
+            moveTo(cx - 38f, cy - 32f)
+            quadraticTo(cx, cy - 94f, cx + 38f, cy - 32f)
+        }
+        scope.drawPath(order, band, style = Stroke(width = 5f))
+        scope.drawPath(order, ThreadColor, style = Stroke(width = 1.5f))
+
+        // One blind arch either side of the gate. Two a side overlapped the gate's gold order,
+        // which read as an arch growing out of the doorway: the wall only has 58px of clear
+        // masonry between the order and the turret, and that is one bay, not two.
+        listOf(-67f, 67f).forEach { dx ->
+            val ax = cx + dx
+            val blind = Path().apply {
+                moveTo(ax - 19f, cy + 20f); lineTo(ax - 19f, cy - 24f)
+                quadraticTo(ax, cy - 58f, ax + 19f, cy - 24f)
+                lineTo(ax + 19f, cy + 20f); close()
+            }
+            drawStitchedFill(scope, blind, slate)
+            scope.drawPath(blind, ThreadColor, style = StitchedStroke)
+        }
+        // Upper windows, above the arcade and below the eaves
         for (i in 0 until 5) {
-            val creX = cx - 100f + (i * 40f)
-            val crePath = Path().apply { addRect(androidx.compose.ui.geometry.Rect(creX, cy - 170f, creX + 20f, cy - 150f)) }
-            drawStitchedFill(scope, crePath, Color(0xFF7A868C))
-            scope.drawPath(crePath, ThreadColor, style = StitchedStroke)
+            val wx = cx - 68f + i * 34f
+            val win = Path().apply {
+                moveTo(wx - 7f, cy - 68f); lineTo(wx - 7f, cy - 88f)
+                quadraticTo(wx, cy - 100f, wx + 7f, cy - 88f)
+                lineTo(wx + 7f, cy - 68f); close()
+            }
+            drawStitchedFill(scope, win, dark)
+            scope.drawPath(win, ThreadColor, style = StitchedStroke)
         }
-        
-        // Arched Gate
-        val gatePath = Path().apply {
-            moveTo(cx - 30f, cy + 20f)
-            lineTo(cx - 30f, cy - 50f)
-            arcTo(androidx.compose.ui.geometry.Rect(cx - 30f, cy - 80f, cx + 30f, cy - 20f), 180f, 180f, false)
-            lineTo(cx + 30f, cy + 20f)
-            close()
-        }
-        drawStitchedFill(scope, gatePath, Color(0xFF452E1B))
-        scope.drawPath(gatePath, ThreadColor, style = StitchedStroke)
-        
-        // Hinges
-        scope.drawLine(ThreadColor, Offset(cx - 30f, cy - 30f), Offset(cx + 30f, cy - 30f), strokeWidth = 4f)
-        scope.drawLine(ThreadColor, Offset(cx - 30f, cy), Offset(cx + 30f, cy), strokeWidth = 4f)
-        
-        // Masonry lines
-        for (y in -130..10 step 30) {
-            scope.drawLine(Color(0x33000000), Offset(cx - 100f, cy + y.toFloat()), Offset(cx + 100f, cy + y.toFloat()), strokeWidth = 2f)
+
+        // Two turrets under scaled domes, one at each end
+        listOf(-1f, 1f).forEach { side ->
+            val tx = cx + side * 118f
+            val topY = cy - 178f
+            val turret = Path().apply {
+                moveTo(tx - 30f, cy + 20f); lineTo(tx - 25f, topY)
+                lineTo(tx + 25f, topY); lineTo(tx + 30f, cy + 20f); close()
+            }
+            drawStitchedFill(scope, turret, stone)
+            scope.drawPath(turret, ThreadColor, style = StitchedStroke)
+            listOf(cy - 60f, cy - 126f).forEach { y ->
+                scope.drawLine(band, Offset(tx - 28f, y), Offset(tx + 28f, y), strokeWidth = 4f)
+                scope.drawLine(ThreadColor, Offset(tx - 28f, y), Offset(tx + 28f, y), strokeWidth = 1.5f)
+            }
+            val op = Path().apply {
+                moveTo(tx - 8f, cy - 90f); lineTo(tx - 8f, cy - 108f)
+                quadraticTo(tx, cy - 120f, tx + 8f, cy - 108f)
+                lineTo(tx + 8f, cy - 90f); close()
+            }
+            drawStitchedFill(scope, op, dark)
+            scope.drawPath(op, ThreadColor, style = StitchedStroke)
+            // Fish-scale dome, the tapestry's standard cap for a tower of any importance
+            val dome = Path().apply {
+                moveTo(tx - 32f, topY)
+                quadraticTo(tx - 29f, topY - 28f, tx, topY - 34f)
+                quadraticTo(tx + 29f, topY - 28f, tx + 32f, topY)
+                close()
+            }
+            drawStitchedFill(scope, dome, domeCol)
+            scope.drawPath(dome, ThreadColor, style = StitchedStroke)
+            for (row in 0 until 2) {
+                val sy = topY - 5f - row * 10f
+                val halfW = 26f - row * 11f
+                val count = 4 - row
+                for (i in 0 until count) {
+                    val sx = tx - halfW + i * (2f * halfW / (count - 1))
+                    val scaleArc = Path().apply {
+                        moveTo(sx - 6f, sy)
+                        quadraticTo(sx, sy - 9f, sx + 6f, sy)
+                    }
+                    scope.drawPath(scaleArc, ThreadColor.copy(alpha = 0.8f), style = Stroke(width = 1.5f))
+                }
+            }
+            scope.drawLine(ThreadColor, Offset(tx, topY - 34f), Offset(tx, topY - 56f), strokeWidth = 3f)
+            val pennant = Path().apply {
+                moveTo(tx, topY - 56f); lineTo(tx + side * 24f, topY - 49f); lineTo(tx, topY - 42f); close()
+            }
+            drawStitchedFill(scope, pennant, band)
+            scope.drawPath(pennant, ThreadColor, style = StitchedStroke)
         }
     }
     
@@ -1733,49 +2024,283 @@ internal fun drawSpiralTower(scope: DrawScope, cx: Float, cy: Float, bg: Backgro
     scope.drawPath(flag, ThreadColor, style = StitchedStroke)
 }
 
+/**
+ * Bosham's feast hall — the right-hand building of the AD BOSHAM panel, where Harold dines before
+ * he sails: an open upper storey carried on a round-arched arcade, under a broad hipped roof of
+ * green and gold chequer.
+ *
+ * It used to be a plaster box with three grey posts under a steep grey gable stippled with rows of
+ * overlapping circles, which read as a pile of grapes rather than shingles, and it duplicated
+ * ECCLESIA's silhouette besides. The chequered hip and the open colonnade are what make this
+ * building recognisable, so those are what it is drawn from now. Seedless and literal.
+ */
 internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
-        // Pillared Hall (Bosham church style)
-        val buildingPath = Path().apply {
-            addRect(androidx.compose.ui.geometry.Rect(cx - 80f, cy - 120f, cx + 80f, cy + 20f))
-        }
-        drawStitchedFill(scope, buildingPath, Color(0xFFEFE6D4)) // Plaster
-        scope.drawPath(buildingPath, ThreadColor, style = StitchedStroke)
-        
-        // Pillars and arches
-        val pillarColor = Color(0xFF7D838A)
-        for (i in 0 until 3) {
-            val px = cx - 60f + (i * 50f)
-            val pPath = Path().apply { addRect(androidx.compose.ui.geometry.Rect(px, cy - 100f, px + 20f, cy + 20f)) }
-            drawStitchedFill(scope, pPath, pillarColor)
-            scope.drawPath(pPath, ThreadColor, style = StitchedStroke)
-            
-            // Arch above pillars
-            val archPath = Path().apply {
-                moveTo(px - 15f, cy - 100f)
-                quadraticTo(px + 10f, cy - 140f, px + 35f, cy - 100f)
+        val stone = Color(0xFFE8DCC0)
+        val band = Color(0xFFB08221)
+        val dark = Color(0xFF3B332A)
+        val tileGreen = Color(0xFF4C613D)
+        val tileGold = Color(0xFFC9A227)
+        val deckY = cy - 74f       // floor of the open upper storey
+        val capY = cy - 150f       // top of the upper columns
+        val eaveY = cy - 162f
+
+        // Lower arcade: four round arches on piers, carrying the hall
+        for (i in 0 until 4) {
+            val ax = cx - 84f + i * 56f
+            val arch = Path().apply {
+                moveTo(ax - 21f, cy + 20f); lineTo(ax - 21f, cy - 20f)
+                quadraticTo(ax, cy - 62f, ax + 21f, cy - 20f)
+                lineTo(ax + 21f, cy + 20f); close()
             }
-            scope.drawPath(archPath, ThreadColor, style = Stroke(width = 4f))
+            drawStitchedFill(scope, arch, dark)
+            scope.drawPath(arch, ThreadColor, style = StitchedStroke)
         }
-        
-        // Shingle Roof
-        val roofPath = Path().apply {
-            moveTo(cx - 100f, cy - 120f)
-            lineTo(cx, cy - 200f)
-            lineTo(cx + 100f, cy - 120f)
-            close()
-        }
-        drawStitchedFill(scope, roofPath, Color(0xFF636A6E))
-        scope.drawPath(roofPath, ThreadColor, style = StitchedStroke)
-        
-        // Roof Tiles
-        for (y in -190..-130 step 15) {
-            val widthAtY = (y + 200f) * 1.25f
-            for (x in (-widthAtY.toInt()..widthAtY.toInt() step 20)) {
-                scope.drawCircle(Color(0xFF5D666B), radius = 8f, center = Offset(cx + x.toFloat(), cy + y.toFloat()))
-                scope.drawCircle(ThreadColor, radius = 8f, center = Offset(cx + x.toFloat(), cy + y.toFloat()), style = Stroke(width = 1.5f))
+        // Piers between and either side of the arches
+        for (i in 0 until 5) {
+            val px = cx - 112f + i * 56f
+            val pier = Path().apply {
+                moveTo(px - 7f, cy + 20f); lineTo(px - 7f, deckY)
+                lineTo(px + 7f, deckY); lineTo(px + 7f, cy + 20f); close()
             }
+            drawStitchedFill(scope, pier, stone)
+            scope.drawPath(pier, ThreadColor, style = StitchedStroke)
+        }
+
+        // The deck the feast sits on, a gold-edged sill running the full width
+        val deck = Path().apply {
+            moveTo(cx - 122f, deckY); lineTo(cx + 122f, deckY)
+            lineTo(cx + 122f, deckY + 12f); lineTo(cx - 122f, deckY + 12f); close()
+        }
+        drawStitchedFill(scope, deck, band)
+        scope.drawPath(deck, ThreadColor, style = StitchedStroke)
+
+        // Open upper storey: arched bays first, so the dark of the hall behind shows through, then
+        // the columns over them. Drawn as filled openings rather than stroked curves — as bare
+        // strokes the arches rose past the eaves and read as a row of little bows above the roof.
+        for (i in 0 until 4) {
+            val ax = cx - 72f + i * 48f
+            val bay = Path().apply {
+                moveTo(ax - 24f, deckY); lineTo(ax - 24f, capY + 30f)
+                quadraticTo(ax, capY - 4f, ax + 24f, capY + 30f)
+                lineTo(ax + 24f, deckY); close()
+            }
+            drawStitchedFill(scope, bay, dark)
+            scope.drawPath(bay, ThreadColor, style = StitchedStroke)
+        }
+        // Five slender columns with capitals, the hall standing open between them
+        for (i in 0 until 5) {
+            val px = cx - 96f + i * 48f
+            val col = Path().apply {
+                moveTo(px - 7f, deckY); lineTo(px - 6f, capY + 8f)
+                lineTo(px + 6f, capY + 8f); lineTo(px + 7f, deckY); close()
+            }
+            drawStitchedFill(scope, col, stone)
+            scope.drawPath(col, ThreadColor, style = StitchedStroke)
+            // Capital and base blocks
+            listOf(capY, deckY - 8f).forEach { y ->
+                val blk = Path().apply {
+                    moveTo(px - 11f, y); lineTo(px + 11f, y)
+                    lineTo(px + 11f, y + 8f); lineTo(px - 11f, y + 8f); close()
+                }
+                drawStitchedFill(scope, blk, band)
+                scope.drawPath(blk, ThreadColor, style = StitchedStroke)
+            }
+        }
+
+        // Broad hipped roof of green-and-gold chequer, the panel's most distinctive passage
+        val roof = Path().apply {
+            moveTo(cx - 138f, eaveY); lineTo(cx - 76f, cy - 214f)
+            lineTo(cx + 76f, cy - 214f); lineTo(cx + 138f, eaveY); close()
+        }
+        drawStitchedFill(scope, roof, stone)
+        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        // Chequer, laid in courses that narrow with the hip
+        for (row in 0 until 4) {
+            val t0 = row / 4f
+            val t1 = (row + 1) / 4f
+            val yTop = eaveY + (cy - 214f - eaveY) * t1
+            val yBot = eaveY + (cy - 214f - eaveY) * t0
+            val halfTop = 138f - (138f - 76f) * t1
+            val halfBot = 138f - (138f - 76f) * t0
+            val cells = 8 - row
+            for (i in 0 until cells) {
+                val u0 = i / cells.toFloat()
+                val u1 = (i + 1) / cells.toFloat()
+                val cell = Path().apply {
+                    moveTo(cx - halfBot + 2f * halfBot * u0, yBot)
+                    lineTo(cx - halfBot + 2f * halfBot * u1, yBot)
+                    lineTo(cx - halfTop + 2f * halfTop * u1, yTop)
+                    lineTo(cx - halfTop + 2f * halfTop * u0, yTop)
+                    close()
+                }
+                if ((i + row) % 2 == 0) {
+                    drawStitchedFill(scope, cell, tileGreen)
+                } else {
+                    drawStitchedFill(scope, cell, tileGold)
+                }
+                scope.drawPath(cell, ThreadColor.copy(alpha = 0.55f), style = Stroke(width = 1.2f))
+            }
+        }
+        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        // Ridge, with a beast-head finial at each end — the tapestry's habitual roof furniture
+        scope.drawLine(band, Offset(cx - 78f, cy - 214f), Offset(cx + 78f, cy - 214f), strokeWidth = 5f)
+        scope.drawLine(ThreadColor, Offset(cx - 78f, cy - 214f), Offset(cx + 78f, cy - 214f), strokeWidth = 1.5f)
+        listOf(-1f, 1f).forEach { side ->
+            val hx = cx + side * 78f
+            val beast = Path().apply {
+                moveTo(hx, cy - 214f)
+                quadraticTo(hx + side * 4f, cy - 234f, hx + side * 18f, cy - 236f)
+                quadraticTo(hx + side * 10f, cy - 226f, hx + side * 10f, cy - 214f)
+                close()
+            }
+            drawStitchedFill(scope, beast, Color(0xFF8B6037))
+            scope.drawPath(beast, ThreadColor, style = StitchedStroke)
         }
     }
+
+/**
+ * The campanile from the comet panel (ISTI MIRANT STELLAM): a tall, narrow shaft in three stages,
+ * each stage a little narrower than the one below, under a fish-scale lantern.
+ *
+ * The set had no tall thin silhouette — every tower in it was squat — so a skyline of them all read
+ * as one repeated height. Seedless and literal.
+ */
+internal fun drawBellTower(scope: DrawScope, cx: Float, cy: Float) {
+    val stone = Color(0xFFE8DCC0)
+    val band = Color(0xFFB08221)
+    val dark = Color(0xFF3B332A)
+    val domeCol = Color(0xFF9E3624)
+    val slate = Color(0xFF6B7882)
+
+    // Three stages, each stepping in. Widths and tops read straight down the tower.
+    val stages = listOf(
+        Triple(46f, cy + 20f, cy - 84f),
+        Triple(38f, cy - 84f, cy - 168f),
+        Triple(31f, cy - 168f, cy - 238f)
+    )
+    stages.forEach { (halfW, baseY, topY) ->
+        val shaft = Path().apply {
+            moveTo(cx - halfW, baseY); lineTo(cx - halfW, topY)
+            lineTo(cx + halfW, topY); lineTo(cx + halfW, baseY); close()
+        }
+        drawStitchedFill(scope, shaft, stone)
+        scope.drawPath(shaft, ThreadColor, style = StitchedStroke)
+        // The string course that caps each stage, which is what makes it read as stacked
+        scope.drawLine(band, Offset(cx - halfW - 5f, topY), Offset(cx + halfW + 5f, topY), strokeWidth = 5f)
+        scope.drawLine(ThreadColor, Offset(cx - halfW - 5f, topY), Offset(cx + halfW + 5f, topY), strokeWidth = 1.5f)
+    }
+
+    // Round-arched door at the foot
+    val door = Path().apply {
+        moveTo(cx - 14f, cy + 20f); lineTo(cx - 14f, cy - 20f)
+        quadraticTo(cx, cy - 44f, cx + 14f, cy - 20f)
+        lineTo(cx + 14f, cy + 20f); close()
+    }
+    drawStitchedFill(scope, door, dark)
+    scope.drawPath(door, ThreadColor, style = StitchedStroke)
+
+    // A single tall light in the middle stage, twin belfry openings in the top one
+    val light = Path().apply {
+        moveTo(cx - 9f, cy - 104f); lineTo(cx - 9f, cy - 138f)
+        quadraticTo(cx, cy - 152f, cx + 9f, cy - 138f)
+        lineTo(cx + 9f, cy - 104f); close()
+    }
+    drawStitchedFill(scope, light, slate)
+    scope.drawPath(light, ThreadColor, style = StitchedStroke)
+    for (i in 0 until 2) {
+        val bx = cx - 13f + i * 26f
+        val op = Path().apply {
+            moveTo(bx - 8f, cy - 186f); lineTo(bx - 8f, cy - 210f)
+            quadraticTo(bx, cy - 222f, bx + 8f, cy - 210f)
+            lineTo(bx + 8f, cy - 186f); close()
+        }
+        drawStitchedFill(scope, op, dark)
+        scope.drawPath(op, ThreadColor, style = StitchedStroke)
+    }
+
+    // Fish-scale lantern and cross
+    val lantern = Path().apply {
+        moveTo(cx - 36f, cy - 238f)
+        quadraticTo(cx - 33f, cy - 268f, cx, cy - 276f)
+        quadraticTo(cx + 33f, cy - 268f, cx + 36f, cy - 238f)
+        close()
+    }
+    drawStitchedFill(scope, lantern, domeCol)
+    scope.drawPath(lantern, ThreadColor, style = StitchedStroke)
+    for (row in 0 until 2) {
+        val sy = cy - 243f - row * 11f
+        val halfW = 29f - row * 12f
+        val count = 5 - row
+        for (i in 0 until count) {
+            val sx = cx - halfW + i * (2f * halfW / (count - 1))
+            val scaleArc = Path().apply {
+                moveTo(sx - 6f, sy)
+                quadraticTo(sx, sy - 10f, sx + 6f, sy)
+            }
+            scope.drawPath(scaleArc, ThreadColor.copy(alpha = 0.8f), style = Stroke(width = 1.5f))
+        }
+    }
+    scope.drawLine(ThreadColor, Offset(cx, cy - 276f), Offset(cx, cy - 302f), strokeWidth = 3f)
+    scope.drawLine(ThreadColor, Offset(cx - 9f, cy - 293f), Offset(cx + 9f, cy - 293f), strokeWidth = 3f)
+}
+
+/**
+ * A monastic cloister walk: a long lean-to roof carried on paired columns, with the blank garth
+ * wall behind it. Wide and low, to break up a skyline that was otherwise all towers.
+ */
+internal fun drawCloisterWalk(scope: DrawScope, cx: Float, cy: Float) {
+    val stone = Color(0xFFE8DCC0)
+    val slate = Color(0xFF6B7882)
+    val band = Color(0xFFB08221)
+    val dark = Color(0xFF3B332A)
+    val wallTop = cy - 104f
+    val arcadeTop = cy - 74f
+
+    // Garth wall behind the walk
+    val wall = Path().apply {
+        moveTo(cx - 170f, cy + 20f); lineTo(cx - 170f, wallTop)
+        lineTo(cx + 170f, wallTop); lineTo(cx + 170f, cy + 20f); close()
+    }
+    drawStitchedFill(scope, wall, stone)
+    scope.drawPath(wall, ThreadColor, style = StitchedStroke)
+
+    // Lean-to roof, pitched forward over the walk
+    val roof = Path().apply {
+        moveTo(cx - 182f, arcadeTop - 6f); lineTo(cx - 174f, wallTop - 26f)
+        lineTo(cx + 174f, wallTop - 26f); lineTo(cx + 182f, arcadeTop - 6f); close()
+    }
+    drawStitchedFill(scope, roof, slate)
+    scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+    for (i in 0 until 12) {
+        val x = cx - 176f + i * 30f
+        scope.drawLine(ThreadColor.copy(alpha = 0.45f), Offset(x, wallTop - 26f), Offset(x - 6f, arcadeTop - 6f), strokeWidth = 1.5f)
+    }
+    scope.drawLine(band, Offset(cx - 184f, arcadeTop - 6f), Offset(cx + 184f, arcadeTop - 6f), strokeWidth = 5f)
+    scope.drawLine(ThreadColor, Offset(cx - 184f, arcadeTop - 6f), Offset(cx + 184f, arcadeTop - 6f), strokeWidth = 1.5f)
+
+    // The walk itself: seven tall round arches cut straight through the wall, the same way the
+    // abbey's arcade is drawn. Paired shafts at nine bays read as a dark band behind a picket
+    // fence at this size — the arch has to be big enough to be an arch.
+    for (i in 0 until 7) {
+        val ax = cx - 144f + i * 48f
+        val bay = Path().apply {
+            moveTo(ax - 19f, cy + 20f); lineTo(ax - 19f, cy - 26f)
+            quadraticTo(ax, cy - 72f, ax + 19f, cy - 26f)
+            lineTo(ax + 19f, cy + 20f); close()
+        }
+        drawStitchedFill(scope, bay, dark)
+        scope.drawPath(bay, ThreadColor, style = StitchedStroke)
+        // Gold impost blocks where each arch springs — the one detail worth keeping from the shafts
+        listOf(ax - 19f, ax + 19f).forEach { sx ->
+            val imp = Path().apply {
+                moveTo(sx - 5f, cy - 26f); lineTo(sx + 5f, cy - 26f)
+                lineTo(sx + 5f, cy - 33f); lineTo(sx - 5f, cy - 33f); close()
+            }
+            drawStitchedFill(scope, imp, band)
+            scope.drawPath(imp, ThreadColor, style = Stroke(width = 1.2f))
+        }
+    }
+}
 
 // Timber Manor (Mead Hall) — art now lives in assets/art/building_manor.json, editable in the
 // vector builder. Nothing about it is seeded, so it ports cleanly with no code left behind.

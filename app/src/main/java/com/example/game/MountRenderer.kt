@@ -659,7 +659,7 @@ internal fun drawWardog(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
             scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx - 25f, cy - 5f), androidx.compose.ui.geometry.Offset(cx - 40f, cy - 15f), strokeWidth = 6f, cap = StrokeCap.Round)
             if (fighter.headgear.id != "helm_none") drawBeastHelm(scope, cx + 29f, cy - 18f, 11f)
         }
-        scope.drawCircle(Color(0xFF9E3624), radius = 4f, center = Offset(cx + 32f, cy + 113.5f))
+        scope.drawCircle(Color(0xFF9E3624), radius = 3f, center = Offset(cx + 32f, cy + 113.5f))
         val triangle_1 = Path().apply {
             moveTo(cx + 42.5f, cy + 128f)
             lineTo(cx + 45f, cy + 120f)

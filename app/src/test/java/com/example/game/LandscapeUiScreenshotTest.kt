@@ -1,9 +1,15 @@
 package com.example.game
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -46,6 +52,33 @@ class LandscapeUiScreenshotTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+    /**
+     * The real between-battle composition: three columns at 0.19 / 0.58 / 0.23 with 8dp gaps
+     * (MainBayeuxGameScreen). Panels MUST be rendered inside this, not full-bleed.
+     *
+     * Rendering them full-bleed measures the middle panel at 850dp when it actually gets about
+     * 475dp, and the character card at 850dp when it gets about 156dp. Every judgement about
+     * density, column counts and truncation made at the wrong width is simply wrong — a three
+     * column trophy case looks roomy at 850dp and is 158dp per column in the real layout.
+     */
+    @Composable
+    private fun composed(slot: Int, content: @Composable () -> Unit) {
+        Row(
+            modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E)),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(0.19f, 0.58f, 0.23f).forEachIndexed { index, w ->
+                Box(modifier = Modifier.weight(w).fillMaxHeight()) {
+                    if (index == slot) content()
+                    else Box(
+                        modifier = Modifier.fillMaxSize()
+                            .background(Color(0x22000000), RoundedCornerShape(6.dp))
+                    )
+                }
+            }
+        }
+    }
+
     private fun choice(id: String, type: String, title: String, description: String) =
         LevelUpChoice(id = id, title = title, description = description, type = type, itemId = id)
 
@@ -75,7 +108,7 @@ class LandscapeUiScreenshotTest {
     @Test
     fun rewardScreenWithTheAdOffer() {
         composeTestRule.setContent {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+            composed(slot = 1) {
                 LevelUpScreen(uiState = rewardState(), onSelectChoice = {}, adOfferAvailable = true)
             }
         }
@@ -87,7 +120,7 @@ class LandscapeUiScreenshotTest {
     @Test
     fun rewardScreenWithoutTheAdOffer() {
         composeTestRule.setContent {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+            composed(slot = 1) {
                 LevelUpScreen(uiState = rewardState(), onSelectChoice = {}, adOfferAvailable = false)
             }
         }
@@ -102,7 +135,7 @@ class LandscapeUiScreenshotTest {
             GameData.SHIELDS.take(3) + GameData.ARMOR_PIECES.take(3) + GameData.HEADGEAR_PIECES.take(3))
             .map { it.id }.toSet()
         composeTestRule.setContent {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+            composed(slot = 1) {
                 GearSelectionTabs(
                     uiState = BattleSimState(unlockedGearIds = gear, level = 4),
                     onSelect = {},
@@ -121,7 +154,7 @@ class LandscapeUiScreenshotTest {
     fun gearSelectionPhysicalTab() {
         val gear = (GameData.WEAPON_HEADS.take(6) + GameData.ARMOR_PIECES.take(4)).map { it.id }.toSet()
         composeTestRule.setContent {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+            composed(slot = 1) {
                 GearSelectionTabs(
                     uiState = BattleSimState(unlockedGearIds = gear, level = 4),
                     onSelect = {}, onUpdatePhysical = { _, _, _ -> },
@@ -129,7 +162,7 @@ class LandscapeUiScreenshotTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("Physical 🧍").performClick()
+        composeTestRule.onNodeWithText("PHYSICAL").performClick()
         composeTestRule.onRoot()
             .captureRoboImage(filePath = "src/test/screenshots/landscape_gear_physical.png")
     }
@@ -138,7 +171,7 @@ class LandscapeUiScreenshotTest {
     @Test
     fun characterPreviewWithMounts() {
         composeTestRule.setContent {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+            composed(slot = 0) {
                 CharacterPreviewCard(
                     uiState = BattleSimState(
                         level = 12,
@@ -191,7 +224,7 @@ class LandscapeUiScreenshotTest {
     @Test
     fun trophiesPanel() {
         composeTestRule.setContent {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF1E6CC))) {
+            composed(slot = 1) {
                 TrophiesPanel(
                     BattleSimState(
                         clearedMilestones = setOf("reach_level_5", "first_siege", "beat_harold")
@@ -206,7 +239,7 @@ class LandscapeUiScreenshotTest {
     @Test
     fun musicDecisionScreen() {
         composeTestRule.setContent {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF1E6CC))) {
+            composed(slot = 1) {
                 MusicDecisionScreen(options = listOf("Merrier", "More Solemn", "Wilder"), onSelect = {})
             }
         }

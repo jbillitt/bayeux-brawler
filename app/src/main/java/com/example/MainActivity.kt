@@ -1501,7 +1501,10 @@ fun GearSelectionTabs(
     // Whatever the gloss register is currently showing. Null falls back to the selected item, so
     // the band is never blank and long-press is only ever a shortcut.
     var glossItem by remember { mutableStateOf<GearItem?>(null) }
-    val tabTitles = listOf("Weapon ⚔️", "Shield 🛡️", "Armor 🛡️", "Helm 🪖", "Physical 🧍")
+    // No emoji. The helm glyph rendered as a tofu box on the device font, shield and armour used
+    // the SAME emoji so it carried no information, and the five labels plus the Dual Wield chip
+    // did not fit the 475dp this panel actually gets — "Physical" was clipped. Words only.
+    val tabTitles = listOf("WEAPON", "SHIELD", "ARMOUR", "HELM", "PHYSICAL")
 
     Column(
         modifier = Modifier
@@ -1534,15 +1537,17 @@ fun GearSelectionTabs(
                                 selectedTab = index
                                 MedievalAudioSynth.playSound(SoundType.SWOOSH)
                             }
-                            .padding(horizontal = 12.dp),
+                            .padding(horizontal = 9.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = title,
                             color = if (active) TapestryLight else TapestryDark,
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
+                            letterSpacing = 0.5.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Serif
+                            fontFamily = FontFamily.Serif,
+                            maxLines = 1
                         )
                     }
                 }
@@ -1569,9 +1574,10 @@ fun GearSelectionTabs(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (dual) "⚔ DUAL WIELD · ON" else "⚔ DUAL WIELD · OFF",
+                        text = if (dual) "⚔ DUAL · ON" else "⚔ DUAL · OFF",
                         color = if (dual) TapestryLight else TapestryDark,
                         fontSize = 9.sp,
+                        maxLines = 1,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Serif
                     )
@@ -1886,8 +1892,12 @@ fun TrophiesPanel(uiState: BattleSimState) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Its own linen, as every sibling panel has. Without it the case drew straight onto
+            // the dark backdrop and locked entries — deliberately dimmed to 45% — were illegible.
+            .background(TapestryLinenCard, RoundedCornerShape(8.dp))
+            .border(2.dp, TapestryDark, RoundedCornerShape(8.dp))
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
         Text(
             "TROPHIES  $earnedCount/${Milestone.values().size}",

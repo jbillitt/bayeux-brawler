@@ -15,10 +15,29 @@ fun renderNote(
     velocity: Float,
     sr: Int,
     rng: Random,
-    phraseIndex: Int = 0
+    phraseIndex: Int = 0,
+    /**
+     * How this run's harper is strung and plucked, 0 = harp, 1 = something closer to a gittern.
+     * Fixed per song rather than per note, so one piece keeps one instrument.
+     */
+    timbre: Float = 0f
 ): FloatArray {
     val buf = when (voice) {
-        Voice.HARP     -> karplusStrong(midiHz(midi), durSec, sr, t60 = 3.2f, brightness = 8f,  pickPos = 0.30f, rng = rng)
+        // The old recipe — pickPos 0.30 with brightness 8 — is a steel-strung guitar: plucked
+        // hard, near the bridge, with the upper harmonics that implies. A harp is plucked with
+        // the pad of the finger nearer the middle of the string, so it wants a mellower pluck
+        // position, far less high-harmonic content and a longer ring. The default sits at the
+        // harp end and the composer walks it toward the gittern for some runs.
+        Voice.HARP     -> {
+            val t = timbre.coerceIn(0f, 1f)
+            karplusStrong(
+                midiHz(midi), durSec, sr,
+                t60 = 4.6f - 1.9f * t,          // long ring, shortening toward the gittern
+                brightness = 3.0f + 5.0f * t,   // 8 was the guitar's bite
+                pickPos = 0.46f - 0.17f * t,    // middle of the string, moving toward the bridge
+                rng = rng
+            )
+        }
         Voice.LUTE     -> karplusStrong(midiHz(midi), durSec, sr, t60 = 1.6f, brightness = 5f,  pickPos = 0.22f, rng = rng)
         Voice.PSALTERY -> psaltery(midi, durSec, sr, rng)
         Voice.RECORDER -> windVoice(midi, durSec, sr, rng, breath = 0.05f, chiffSec = 0.04f, chiffAmp = 0.12f,

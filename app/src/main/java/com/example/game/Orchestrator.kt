@@ -102,7 +102,11 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     val percLevel = 4
     val perc1 = weightedPick(rng, listOf(Voice.BODHRAN to 0.6f, Voice.TABOR to 0.4f))
     a += VoiceAssignment(perc1, LineRef.PERC, percLevel, 99, gPerc1, -0.5f)
-    if (spec.family == Family.TINTAGEL || spec.family == Family.ESTAMPIE) a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, percLevel, 99, gPerc1 * 0.7f, 0.5f)
+    // Nakers belong to the dance families, but a quarter of the others get them too — hard-gating
+    // them meant a Greensleeves or a Minuet could never field a pair of kettle drums at all.
+    val nakersHere = spec.family == Family.TINTAGEL || spec.family == Family.ESTAMPIE ||
+        rng.nextFloat() < 0.25f
+    if (nakersHere) a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, percLevel, 99, gPerc1 * 0.7f, 0.5f)
 
     // L5 drone bed
     val drone = weightedPick(rng, listOf(Voice.GURDY to 0.45f, Voice.ORGAN to 0.3f, Voice.VIOLA to 0.25f).filter { it.first != bass }
@@ -148,6 +152,13 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     // L11 timpani
     val timpLevel = if (nobler) 10 else 11
     a += VoiceAssignment(Voice.TIMPANI, LineRef.PERC, timpLevel, 99, gTimp, 0f)
+
+    // The choir was reachable ONLY through the bespoke BRAWL and THRONE plans, so an ordinary run
+    // never heard it however deep it went. Uncommon and late and quiet here — voices entering over
+    // a consort is a large gesture, and it should stay a surprise rather than become the texture.
+    if (rng.nextFloat() < 0.22f) {
+        a += VoiceAssignment(Voice.CHOIR, LineRef.PADS_FULL, 14, 99, gPads * 0.75f, 0.05f)
+    }
 
     // L12 destiny
     val destinyFanfare = rng.nextBoolean()

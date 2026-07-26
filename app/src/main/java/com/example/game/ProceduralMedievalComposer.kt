@@ -28,15 +28,19 @@ object ProceduralMedievalComposer {
         val totalSamples = (spec.totalBars * spec.beatsPerBar * spec.secondsPerBeat * sampleRate).toInt()
         val bus = MixBus(sampleRate, totalSamples)
         val hrng = humaniseRng(seed)
+        // One harper, one instrument, for the whole piece. Skewed toward the harp end: most runs
+        // should sound like a harp, with the occasional gittern-strung one for variety — the
+        // square keeps the middle of the range rare so it lands as one or the other.
+        val harpTimbre = kotlin.random.Random(seed xor 0x2B9A17C5L).nextFloat().let { it * it }
         // Brawl keeps the wilder double-hit drum floor; it's a family now, not a mood.
         val wilder = "Wilder" in moods || spec.family == Family.BRAWL
 
         for (assign in active) {
             when (assign.line) {
-                LineRef.PADS_FULL -> renderChords(bus, spec, assign, song.padChords, sampleRate, duck, hrng)
+                LineRef.PADS_FULL -> renderChords(bus, spec, assign, song.padChords, sampleRate, duck, hrng, harpTimbre)
                 else -> {
                     val events = lineEvents(spec, song, assign, wilder)
-                    renderEvents(bus, spec, assign, events, sampleRate, duck, hrng)
+                    renderEvents(bus, spec, assign, events, sampleRate, duck, hrng, harpTimbre)
                 }
             }
         }
@@ -82,7 +86,7 @@ object ProceduralMedievalComposer {
         }
     }
 
-    private fun renderEvents(bus: MixBus, spec: SongSpec, a: VoiceAssignment, events: List<NoteEvent>, sr: Int, duck: Float, hrng: Random) {
+    private fun renderEvents(bus: MixBus, spec: SongSpec, a: VoiceAssignment, events: List<NoteEvent>, sr: Int, duck: Float, hrng: Random, harpTimbre: Float) {
         val isPerc = a.line == LineRef.PERC
         // Phone speakers reproduce almost nothing below ~400Hz, so a drum's fundamental vanishes
         // and only its brief transient is left competing against held voices that sustain their
@@ -100,18 +104,18 @@ object ProceduralMedievalComposer {
             // the harmony smears. Scale them down with the beat so releases die before the change.
             val tail = releaseTail(a.voice) * (spec.secondsPerBeat * 2f).coerceIn(0.35f, 1f)
             val phraseIndex = (e.startBeat / (spec.beatsPerBar * 4f)).toInt()
-            val note = renderNote(a.voice, e.midi, durSec + tail, vel, sr, hrng, phraseIndex)
+            val note = renderNote(a.voice, e.midi, durSec + tail, vel, sr, hrng, phraseIndex, harpTimbre)
             bus.add(note, offs, a.gain * duck * percBoost, a.pan, reverbSendFor(a.voice))
         }
     }
 
-    private fun renderChords(bus: MixBus, spec: SongSpec, a: VoiceAssignment, chords: List<ChordEvent>, sr: Int, duck: Float, hrng: Random) {
+    private fun renderChords(bus: MixBus, spec: SongSpec, a: VoiceAssignment, chords: List<ChordEvent>, sr: Int, duck: Float, hrng: Random, harpTimbre: Float) {
         for (c in chords) {
             val offs = ((c.startBeat * spec.secondsPerBeat) * sr).toInt()
             val durSec = c.durBeats * spec.secondsPerBeat
             val phraseIndex = (c.startBeat / (spec.beatsPerBar * 4f)).toInt()
             for (m in c.midis) {
-                val note = renderNote(a.voice, m, durSec + 0.05f, 0.8f, sr, hrng, phraseIndex)
+                val note = renderNote(a.voice, m, durSec + 0.05f, 0.8f, sr, hrng, phraseIndex, harpTimbre)
                 bus.add(note, offs, a.gain * duck / c.midis.size * 2f, a.pan, reverbSendFor(a.voice))
             }
         }

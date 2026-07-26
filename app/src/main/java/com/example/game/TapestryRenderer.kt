@@ -2456,18 +2456,46 @@ object TapestryRenderer {
                 }
                 headPos = Offset(hx + 2f, hy - 40f)
             } else if (fighter.weaponHandle.id == "handle_trumpet") {
-                // Gripped by the bell, tube pointing back along the arm.
+                // A herald's straight buisine, gripped by the bell with the tube pointing away.
+                //
+                // Was a drawStitchedStrap — the same primitive that draws arms and straps — in
+                // gold, with a 14px trapezoid stuck on the end. It read as a yellow stitched arm
+                // because that is exactly what it was. A trumpet needs the flare, a tube that
+                // tapers into it, and the ferrule bands, or it is just a stick.
                 scope.withTransform({ translate(hx, hy) }) {
-                    drawStitchedStrap(this, Offset(0f, 0f), Offset(0f, -46f), fighter.weaponHandle.color)
+                    val brass = fighter.weaponHandle.color
+                    // The bell: a real flare, widest at the grip and drawn in two steps so the
+                    // rim reads as a lip rather than a straight cut.
                     val bell = Path().apply {
-                        moveTo(-14f, -46f)
-                        lineTo(14f, -46f)
-                        lineTo(7f, -60f)
-                        lineTo(-7f, -60f)
+                        moveTo(-19f, 4f)
+                        quadraticTo(-16f, -8f, -7f, -17f)
+                        lineTo(7f, -17f)
+                        quadraticTo(16f, -8f, 19f, 4f)
+                        quadraticTo(0f, 10f, -19f, 4f)
                         close()
                     }
-                    drawStitchedFill(this, bell, fighter.weaponHandle.color)
+                    drawStitchedFill(this, bell, brass)
                     drawPath(bell, ThreadColor, style = StitchedStroke)
+
+                    // Tapering tube from the bell throat out to the mouthpiece.
+                    val tube = Path().apply {
+                        moveTo(-6.5f, -17f)
+                        lineTo(6.5f, -17f)
+                        lineTo(3.5f, -56f)
+                        lineTo(-3.5f, -56f)
+                        close()
+                    }
+                    drawStitchedFill(this, tube, brass)
+                    drawPath(tube, ThreadColor, style = StitchedStroke)
+
+                    // Ferrule bands: the join collars. Two short bars are the whole difference
+                    // between "brass instrument" and "yellow pole".
+                    listOf(-27f, -42f).forEach { y ->
+                        drawLine(ThreadColor, Offset(-6f, y), Offset(6f, y), strokeWidth = 2f)
+                    }
+                    // Mouthpiece cup at the far end, where the weapon head is lashed on.
+                    drawCircle(brass, radius = 5f, center = Offset(0f, -58f))
+                    drawCircle(ThreadColor, radius = 5f, center = Offset(0f, -58f), style = StitchedStroke)
                 }
                 headPos = Offset(hx, hy - 60f)
             } else if (fighter.weaponHandle.id == "handle_wheelbarrow") {
@@ -2548,21 +2576,58 @@ object TapestryRenderer {
                 }
                 headPos = Offset(hx + 45f, hy - 42f)
             } else if (fighter.weaponHandle.id == "handle_anchor") {
-                // Iron shank with a stock across it and two hooked flukes at the crown.
+                // An Admiralty-pattern anchor, gripped at the ring with the crown swung outward.
+                //
+                // The old one was a plain bar, a thin crossbar and a shallow blob at the top —
+                // it had no ring, no curved arms and no flukes, so it read as a spanner. An
+                // anchor is recognised by four things and it had one of them.
                 scope.withTransform({ translate(hx, hy) }) {
-                    drawStitchedStrap(this, Offset(0f, 0f), Offset(0f, -70f), fighter.weaponHandle.color)
-                    drawLine(fighter.weaponHandle.color, Offset(-20f, -52f), Offset(20f, -52f), strokeWidth = 7f)
-                    val flukes = Path().apply {
-                        moveTo(-22f, -70f)
-                        quadraticTo(0f, -84f, 22f, -70f)
-                        quadraticTo(14f, -76f, 0f, -76f)
-                        quadraticTo(-14f, -76f, -22f, -70f)
+                    val iron = fighter.weaponHandle.color
+
+                    // Shank, thick enough to carry the crown.
+                    val shank = Path().apply {
+                        moveTo(-4.5f, 2f); lineTo(4.5f, 2f)
+                        lineTo(3.5f, -62f); lineTo(-3.5f, -62f)
                         close()
                     }
-                    drawStitchedFill(this, flukes, fighter.weaponHandle.color)
-                    drawPath(flukes, ThreadColor, style = StitchedStroke)
+                    drawStitchedFill(this, shank, iron)
+                    drawPath(shank, ThreadColor, style = StitchedStroke)
+
+                    // The ring at the grip end — where the cable bends on, and the giveaway
+                    // silhouette detail the old drawing was missing entirely.
+                    drawCircle(iron, radius = 8.5f, center = Offset(0f, 8f), style = Stroke(width = 4f))
+                    drawCircle(ThreadColor, radius = 8.5f, center = Offset(0f, 8f), style = StitchedStroke)
+
+                    // Stock: the crossbar, set near the ring as on a real anchor, with the
+                    // slight taper the forged bar has.
+                    val stock = Path().apply {
+                        moveTo(-25f, -20f); lineTo(25f, -20f)
+                        lineTo(23f, -14f); lineTo(-23f, -14f)
+                        close()
+                    }
+                    drawStitchedFill(this, stock, iron)
+                    drawPath(stock, ThreadColor, style = StitchedStroke)
+
+                    // Crown and arms. The arms sweep out from the crown and curve BACK TOWARD the
+                    // ring — that returning hook is what makes an anchor an anchor, and drawing
+                    // them arcing away from the ring turned the whole thing into a grapnel.
+                    // The ring is at +8 here, so "toward the ring" is downward in this space.
+                    listOf(-1f, 1f).forEach { dir ->
+                        val arm = Path().apply {
+                            moveTo(dir * 4f, -62f)
+                            // Outer edge: out from the crown, then hooking down toward the ring.
+                            quadraticTo(dir * 27f, -63f, dir * 31f, -40f)
+                            lineTo(dir * 40f, -45f)            // fluke palm, outer point
+                            lineTo(dir * 26f, -55f)            // palm's inner corner
+                            // Inner edge back to the crown, leaving a hollow inside the hook.
+                            quadraticTo(dir * 20f, -60f, 0f, -54f)
+                            close()
+                        }
+                        drawStitchedFill(this, arm, iron)
+                        drawPath(arm, ThreadColor, style = StitchedStroke)
+                    }
                 }
-                headPos = Offset(hx, hy - 78f)
+                headPos = Offset(hx, hy - 80f)
             } else if (fighter.weaponHandle.id == "handle_fists") {
                 // Do nothing for fists handle
             } else {

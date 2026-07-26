@@ -214,6 +214,32 @@ class SoundTest {
             activeAssignments(thronePlan, 4).any { it.line == LineRef.STRUM })
     }
 
+    /**
+     * Which voices can actually turn up in each rolled family, over many seeds and deep levels.
+     * Reports the full coverage table so the gaps are visible rather than inferred.
+     */
+    @Test
+    fun everyFamilyCanReachEveryVoice() {
+        val report = StringBuilder("voice coverage by family:" + System.lineSeparator())
+        val gaps = mutableListOf<String>()
+        Family.values().filter { it != Family.BRAWL && it != Family.THRONE }.forEach { family ->
+            val seen = mutableSetOf<Voice>()
+            var sampled = 0
+            for (seed in 1L..4000L) {
+                val spec = resolveSongSpec(seed, emptyList())
+                if (spec.family != family) continue
+                sampled++
+                val plan = planOrchestration(spec, hasTrumpeter = true, rng = orchRng(seed))
+                seen += activeAssignments(plan, 24).map { it.voice }
+                if (sampled >= 200) break
+            }
+            val missing = Voice.values().toSet() - seen
+            report.append("  $family ($sampled songs): missing ${if (missing.isEmpty()) "none" else missing.joinToString()}" + System.lineSeparator())
+            if (missing.isNotEmpty()) gaps += "$family cannot reach $missing"
+        }
+        assertTrue("$report", gaps.isEmpty())
+    }
+
     @Test
     fun moodsDoNotBendThemedFamilies() {
         val spec = resolveSongSpec(7L, listOf("More Tempo", "More Tempo", "Merrier"), brawl = true)

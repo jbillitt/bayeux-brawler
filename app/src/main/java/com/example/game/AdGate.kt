@@ -22,8 +22,20 @@ object AdGate {
     @Volatile
     var testAdsEnabled: Boolean = false
 
-    fun adsAllowed(isDebug: Boolean, purchased: Boolean, enabled: Boolean = testAdsEnabled): Boolean =
-        enabled && !isDebug && !purchased
+    /**
+     * The debug kill switch used to outrank the toggle unconditionally, which made "Enable test
+     * ads" a button that did nothing at all in the only kind of build a tester ever runs. The
+     * switch may now open the debug lock, but ONLY when the build is wired to Google's own test
+     * ad units — those serve fake ads, earn nothing, and are safe to click. A debug build carrying
+     * REAL ad unit ids stays locked shut whatever the toggle says: that is the case the kill
+     * switch exists for, since clicking your own live ads is how AdMob accounts get suspended.
+     */
+    fun adsAllowed(
+        isDebug: Boolean,
+        purchased: Boolean,
+        enabled: Boolean = testAdsEnabled,
+        testAdIds: Boolean = BuildConfig.USING_TEST_AD_IDS
+    ): Boolean = enabled && !purchased && (!isDebug || testAdIds)
 
     fun shouldShowInterstitial(totalDeaths: Int): Boolean =
         totalDeaths > 0 && totalDeaths % ADS_PER_DEATHS == 0

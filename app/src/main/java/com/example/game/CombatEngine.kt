@@ -1278,7 +1278,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 ctx.popup("STUNG!", defender.posX, 140f, Color(0xFFD6A420))
                 // Direct call rather than ctx.sound: that route only carries synth SoundTypes, and
                 // this is a recording folder. Harmless with no app context — playFolder returns false.
-                MedievalAudioSynth.playBeeSwarm()
+                // Keyed to the beekeeper who threw it: one man's hives no longer talk over each
+                // other, but a second beekeeper's swarm still sounds at the same time.
+                MedievalAudioSynth.playBeeSwarm(shooterOf(proj)?.id?.raw ?: "bee")
                 repeat(10) {
                     ctx.particle(
                         BloodParticle(

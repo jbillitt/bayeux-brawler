@@ -325,6 +325,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                 musicOn = musicOn,
                 onToggleMusic = onToggleMusic,
                 playerState = playerFighter,
+                allies = enemies.filter { it.isPlayer },
                 onTriggerWeather = { viewModel.triggerWeather(it) },
                 onOpenMenu = {
                     showPauseMenu = true
@@ -608,12 +609,18 @@ fun PauseMenuOverlay(
                     if (!inBattle) {
                         // Off by default so testers get a build with no ads in it at all. This is
                         // the only way to turn them on, and it lasts until the app is relaunched.
+                        // Flipping the flag was never enough on its own: Ads.init runs once at
+                        // launch and bails while the gate is shut, so the SDK was still
+                        // uninitialised and no placement could ever load. Re-run it here, now
+                        // that the gate is open.
+                        val adActivity = LocalContext.current as? android.app.Activity
                         toggleRow(
                             "ENABLE TEST ADS", "Off for testers; turn on to exercise placements",
                             adsOn, "toggle_test_ads_btn", onWord = "SHOWING", offWord = "HIDDEN"
                         ) {
                             adsOn = !adsOn
                             com.example.game.AdGate.testAdsEnabled = adsOn
+                            if (adsOn && adActivity != null) com.example.game.Ads.init(adActivity)
                         }
 
                         // The trophy case, moved off the between-battle panels where its header
@@ -689,6 +696,8 @@ fun HeaderBar(
     musicOn: Boolean,
     onToggleMusic: () -> Unit,
     playerState: FighterState? = null,
+    /** Everyone fighting on your side who has a body on the field. Their stats are THEIRS. */
+    allies: List<FighterState> = emptyList(),
     onTriggerWeather: (String) -> Unit = {},
     onOpenMenu: () -> Unit = {}
 ) {
@@ -703,7 +712,9 @@ fun HeaderBar(
                 colors = CardDefaults.cardColors(containerColor = TapestryLinenCard)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
@@ -715,12 +726,41 @@ fun HeaderBar(
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                     if (p != null) {
+                        // The panel used to stop at six lines, which left the numbers that decide
+                        // most fights (damage split, attack speed, weight, block) unreadable
+                        // anywhere in a running battle.
+                        StatSectionHeader("THY OWN BODY", uiState.playerName.uppercase())
                         StatText("HP", "${p.hp.toInt()} / ${p.maxHp.toInt()}")
+                        StatText("Damage / swing", "%.1f".format(p.baseDamage))
+                        StatText("  · pierce / slash / blunt",
+                            "%.0f / %.0f / %.0f".format(p.damagePierce, p.damageSlash, p.damageBlunt))
+                        StatText("Attack Speed", "%.2f/s  (%.2fs delay)".format(1f / p.attackSpeedDelay, p.attackSpeedDelay))
                         StatText("DPS", "${"%.1f".format(p.baseDamage / p.attackSpeedDelay)}/s")
-                        StatText("Armor", "${p.totalArmor.toInt()}")
+                        StatText("Armor", "${p.totalArmor.toInt()}${if (p.armorShred > 0f) "  (shred -${p.armorShred.toInt()})" else ""}")
+                        StatText("Carried Weight", "%.1f kg".format(p.totalMass))
                         StatText("Move Speed", "${p.moveSpeed.toInt()} px/s")
                         StatText("Reach", "${"%.1f".format(p.reach)} m")
+                        if (p.shield.id != "shield_none") {
+                            StatText("Shield", "${(p.shield.blockChance * 100).toInt()}% block  ${p.shieldHp.toInt()} hp left")
+                        }
                         StatText("Score Mult", "×${"%.1f".format(p.scoreMultiplier)}")
+
+                        // Companions carry their OWN numbers. Listing them unlabelled beside the
+                        // knight's read as if the Great Horse's 200 hp were somehow his.
+                        val companions = allies.filter { !it.isDead && it.id != p.id }
+                        if (companions.isNotEmpty()) {
+                            StatSectionHeader("THY RETINUE", "these are THEIR stats, not thine")
+                            companions.forEach { c ->
+                                StatText(
+                                    c.name,
+                                    buildList {
+                                        add("${c.hp.toInt()}/${c.maxHp.toInt()} hp")
+                                        if (c.baseDamage > 0f) add("%.0f dmg".format(c.baseDamage))
+                                        if (c.totalArmor > 0f) add("${c.totalArmor.toInt()} arm")
+                                    }.joinToString("  ")
+                                )
+                            }
+                        }
                     } else {
                         Text("No active battle data.", fontSize = 11.sp, color = TapestryDark.copy(alpha = 0.7f))
                     }
@@ -912,7 +952,11 @@ fun CharacterPreviewCard(
             initialValue = 0f, targetValue = (2.0 * Math.PI).toFloat(),
             animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Restart), label = "sway"
         )
-        val auraTier = 1 + minOf(3, uiState.level / 3)
+        // Uncapped: the glow used to stop growing at level 9 and every later level looked
+        // identical. It keeps climbing now. Radius and colour ride the raw tier; the spark COUNT
+        // is the only thing still capped, because sparks are draw calls per frame and a level-60
+        // knight should not cost 400 of them.
+        val auraTier = 1 + uiState.level / 3
 
         Box(
             modifier = Modifier
@@ -947,12 +991,16 @@ fun CharacterPreviewCard(
                     )
                 )
 
-                // Intense Holy Glow from behind
+                // Intense Holy Glow from behind. Radius grows without limit; alpha and heat
+                // approach white asymptotically so a very high level saturates rather than
+                // overflowing into a flat block of colour.
+                val heat = 1f - 1f / (1f + auraTier * 0.25f)   // 0..1, never quite 1
+                val coreColor = androidx.compose.ui.graphics.lerp(TapestryMustard, Color(0xFFFFFBE8), heat)
                 drawRect(
                     brush = androidx.compose.ui.graphics.Brush.radialGradient(
                         colors = listOf(
-                            TapestryMustard.copy(alpha = 0.6f + 0.2f * pulse),
-                            TapestryMustard.copy(alpha = 0.2f),
+                            coreColor.copy(alpha = (0.6f + 0.2f * pulse + 0.15f * heat).coerceAtMost(0.95f)),
+                            TapestryMustard.copy(alpha = 0.2f + 0.25f * heat),
                             Color.Transparent
                         ),
                         center = Offset(centerX, centerY - 20f),
@@ -960,15 +1008,26 @@ fun CharacterPreviewCard(
                     )
                 )
 
+                // Haloes: one more concentric ring every third tier, so the higher levels read as
+                // escalating rank and not just a brighter smear.
+                for (ring in 1..minOf(4, auraTier / 3)) {
+                    drawCircle(
+                        coreColor.copy(alpha = 0.10f + 0.05f * pulse),
+                        radius = 120f + ring * 55f + 10f * pulse,
+                        center = Offset(centerX, centerY - 20f),
+                        style = Stroke(width = 2f + ring)
+                    )
+                }
+
                 // Divine Sparks rising aggressively
-                val sparkCount = 10 + 6 * auraTier
-                val sparkColor = if (auraTier >= 3) Color(0xFFFFFBE8) else Color(0xFFFFF1AA)
+                val sparkCount = (10 + 6 * auraTier).coerceAtMost(64)
+                val sparkColor = androidx.compose.ui.graphics.lerp(Color(0xFFFFF1AA), Color.White, heat)
                 for (i in 0 until sparkCount) {
                     val floatY = (centerY + 160f) - ((risePhase + i * 35f) % 350f)
                     val floatX = centerX + sin(swayPhase * 3f + i) * 110f
-                    val r = 2f + (i % 4)
+                    val r = 2f + (i % 4) + heat * 2f
                     drawCircle(sparkColor.copy(alpha = 0.9f), radius = r, center = Offset(floatX, floatY))
-                    drawLine(sparkColor.copy(alpha = 0.4f), Offset(floatX, floatY + r), Offset(floatX, floatY + r + 15f), strokeWidth = 1.5f)
+                    drawLine(sparkColor.copy(alpha = 0.4f), Offset(floatX, floatY + r), Offset(floatX, floatY + r + 15f + 20f * heat), strokeWidth = 1.5f + heat)
                 }
                 if (uiState.unlockedAncillaries.contains(com.example.game.Ancillary.WARHORSE)) {
                     drawCircle(TapestryMustard.copy(alpha = 0.35f + 0.2f * pulse), radius = 150f + 8f * pulse,
@@ -1322,16 +1381,45 @@ fun LevelUpScreen(
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
-                                    tagLabel,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = titleColor,
-                                    modifier = Modifier
-                                        .background(Color.White, RoundedCornerShape(4.dp))
-                                        .border(1.dp, titleColor, RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                                // A multiple arrives as a sigil, not as the word TWINS shouted in
+                                // the title and again in the body.
+                                val multiple = when {
+                                    choice.type == "follower_multiply" -> "×3"
+                                    choice.copies > 1 -> "+${choice.copies}"
+                                    else -> null
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (multiple != null) {
+                                        Text(
+                                            multiple,
+                                            fontSize = 13.sp,
+                                            fontFamily = FontFamily.Serif,
+                                            fontWeight = FontWeight.Black,
+                                            color = Color.White,
+                                            modifier = Modifier
+                                                .background(TapestryRed, RoundedCornerShape(4.dp))
+                                                .border(1.dp, TapestryDark, RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 7.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    Text(
+                                        tagLabel,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = titleColor,
+                                        modifier = Modifier
+                                            .background(Color.White, RoundedCornerShape(4.dp))
+                                            .border(1.dp, titleColor, RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                    // Keeps the tag optically centred whether or not a badge is present
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                                 Text(
                                     choice.title,
                                     fontWeight = FontWeight.Bold,
@@ -1475,6 +1563,33 @@ fun LevelUpScreen(
 
         // Mount selection lives under the character preview now — see CharacterPreviewCard.
         // It used to sit here as a row of 80dp cards, which squashed the rest of the screen.
+    }
+}
+
+/**
+ * A ruled band naming WHOSE stats follow. The old panel was one undivided list, so a companion's
+ * numbers beside the knight's read as the knight's own.
+ */
+@Composable
+private fun StatSectionHeader(title: String, note: String) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(TapestryDark.copy(alpha = 0.5f)))
+        Text(
+            title,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Black,
+            color = TapestryRed,
+            modifier = Modifier.padding(top = 3.dp)
+        )
+        Text(
+            note,
+            fontSize = 8.sp,
+            fontFamily = FontFamily.Serif,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+            color = TapestryDark.copy(alpha = 0.65f),
+            modifier = Modifier.padding(bottom = 2.dp)
+        )
     }
 }
 
@@ -2144,16 +2259,18 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit, onHol
                 if (!item.isRanged && item.reach > 0f) add("RCH${"%.1f".format(item.reach)}")
                 if (item.isRanged) add("RANGED")
             }.joinToString("  ")
-            if (stats.isNotEmpty()) {
-                Text(
-                    text = stats,
-                    fontSize = 7.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    color = TapestryRed,
-                    maxLines = 1
-                )
-            }
+            // Always rendered, even when empty. The "none/bare" options have no stats at all and
+            // are always sorted first, so dropping the row left exactly the first tile in every
+            // list a line shorter than its neighbours — the two-thirds-height cell. A dash also
+            // states the baseline honestly instead of leaving a blank.
+            Text(
+                text = stats.ifEmpty { "—" },
+                fontSize = 7.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = if (stats.isEmpty()) TapestryDark.copy(alpha = 0.45f) else TapestryRed,
+                maxLines = 1
+            )
         }
     }
 }
@@ -2205,22 +2322,15 @@ fun StatsAndLaunchPanel(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(
-                    text = "KNIGHT BASE STATS",
-                    fontSize = 9.sp,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    color = TapestryDark.copy(alpha = 0.6f)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "v${com.example.BuildConfig.VERSION_NAME}",
-                    fontSize = 7.sp,
-                    fontFamily = FontFamily.Serif,
-                    color = TapestryDark.copy(alpha = 0.4f)
-                )
-            }
+            // No version here: versionName already carries its own "v" (so this read "vv0.8"),
+            // and the header bar states it once beside the level, which is enough.
+            Text(
+                text = "KNIGHT BASE STATS",
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                color = TapestryDark.copy(alpha = 0.6f)
+            )
 
             // Weight Meter
             StatProgressBar(

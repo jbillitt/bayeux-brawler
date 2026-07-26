@@ -27,7 +27,10 @@ object FlavourText {
         "Whatlington", "the Sheep Fold", "Battle Abbey", "the Pig Pen", "Netherfield",
         "the Ford", "Winchelsea", "the Millpond", "Ashburnham", "the Goose Green",
         "the Bishop's Vineyard", "Herstmonceux", "the Charcoal Burn", "the Broken Bridge",
-        "the Abbot's Cabbages", "Icklesham", "the Wash-House", "Fairlight", "the Hollow Way"
+        "the Abbot's Cabbages", "Icklesham", "the Wash-House", "Fairlight", "the Hollow Way",
+        // Not on any map of Sussex, and all the better for it
+        "Wallopham Down", "Knucklington Parish", "Bashington Underbelt",
+        "the Field of Disagreement"
     )
 
     /** Half the places are "the Old Mill" — they need a capital when they open the sentence. */

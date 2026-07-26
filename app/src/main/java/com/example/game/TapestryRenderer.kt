@@ -2406,6 +2406,59 @@ object TapestryRenderer {
                 scope.drawCircle(Color(0xFF3E2723), radius = 2.5f, center = Offset(headPos.x + 15f, headPos.y))
                 scope.drawCircle(Color(0xFF3E2723), radius = 3.5f, center = Offset(headPos.x + 45f, headPos.y - 20f))
             }
+            "head_torch" -> {
+                // The Burning Brand had no case at all here, so the player's torch drew as a bare
+                // haft while the enemy torch bearer (who carries a club plus flame particles) read
+                // correctly as one. It is the same object in both hands now: a pitch-wrapped head
+                // that is actually alight.
+                val dx = 0.894f; val dy = -0.447f      // unit vector along the haft
+                fun at(along: Float, across: Float) = Offset(
+                    headPos.x + dx * along - dy * across,
+                    headPos.y + dy * along + dx * across
+                )
+                // Pitch-soaked rag bound round the head
+                val wrap = Path().apply {
+                    moveTo(at(-2f, -7f).x, at(-2f, -7f).y)
+                    lineTo(at(26f, -8f).x, at(26f, -8f).y)
+                    lineTo(at(26f, 8f).x, at(26f, 8f).y)
+                    lineTo(at(-2f, 7f).x, at(-2f, 7f).y)
+                    close()
+                }
+                drawStitchedFill(scope, wrap, Color(0xFF3E2723))
+                scope.drawPath(wrap, ThreadColor, style = StitchedStroke)
+                // Binding cords
+                for (t in listOf(4f, 12f, 20f)) {
+                    scope.drawLine(ThreadColor, at(t, -8f), at(t, 8f), strokeWidth = 1.8f)
+                }
+                // Flame: three licks that gutter on the idle animation and roar mid-swing.
+                val roar = if (isAttacking) 1f + swingProgress * 0.8f else 1f
+                val flicker = sin(animFrame * 9f) * 3f
+                listOf(
+                    Triple(34f, 0f, 18f), Triple(30f, -7f, 12f), Triple(31f, 7f, 11f)
+                ).forEachIndexed { i, (along, across, len) ->
+                    val wob = sin(animFrame * 9f + i * 2f) * 4f
+                    val lick = Path().apply {
+                        moveTo(at(along - 8f, across - 5f).x, at(along - 8f, across - 5f).y)
+                        quadraticTo(
+                            at(along + len * 0.4f, across - 9f - wob).x, at(along + len * 0.4f, across - 9f - wob).y,
+                            at(along + len * roar + wob, across).x, at(along + len * roar + wob, across).y
+                        )
+                        quadraticTo(
+                            at(along + len * 0.4f, across + 9f + wob).x, at(along + len * 0.4f, across + 9f + wob).y,
+                            at(along - 8f, across + 5f).x, at(along - 8f, across + 5f).y
+                        )
+                        close()
+                    }
+                    scope.drawPath(lick, if (i == 0) Color(0xFFE8A33D) else headColor)
+                    scope.drawPath(lick, ThreadColor, style = Stroke(width = 1.5f))
+                }
+                // Hot heart of the fire
+                scope.drawCircle(
+                    Color(0xFFFFE9A8).copy(alpha = 0.75f),
+                    radius = 7f + flicker * 0.4f,
+                    center = at(30f, 0f)
+                )
+            }
             "head_saw_1", "head_saw_2" -> {
                 val isHeavy = headId == "head_saw_2"
                 val length = if (isHeavy) 55f else 45f

@@ -6,10 +6,33 @@ import org.junit.Test
 
 class AdGateTest {
 
+    /**
+     * The kill switch that protects the AdMob account: a debug build wired to REAL ad units must
+     * never request an ad, whatever the tester toggles. This is the one that must not regress —
+     * clicking your own live ads is how accounts get suspended.
+     */
     @Test
-    fun debugBuildsNeverShowAds() {
-        assertFalse(AdGate.adsAllowed(isDebug = true, purchased = false, enabled = true))
-        assertFalse(AdGate.adsAllowed(isDebug = true, purchased = true, enabled = true))
+    fun debugBuildsWithLiveAdIdsNeverShowAds() {
+        assertFalse(AdGate.adsAllowed(isDebug = true, purchased = false, enabled = true, testAdIds = false))
+        assertFalse(AdGate.adsAllowed(isDebug = true, purchased = true, enabled = true, testAdIds = false))
+    }
+
+    /**
+     * ...but on Google's own test ad units, which serve fakes and earn nothing, the burger-menu
+     * switch has to actually do something. It previously could not: the debug lock outranked it,
+     * so "Enable test ads" was inert in the only build a tester ever runs.
+     */
+    @Test
+    fun theTestAdsSwitchWorksOnADebugBuildUsingTestAdIds() {
+        assertTrue(AdGate.adsAllowed(isDebug = true, purchased = false, enabled = true, testAdIds = true))
+        assertFalse(
+            "the switch is still the master control",
+            AdGate.adsAllowed(isDebug = true, purchased = false, enabled = false, testAdIds = true)
+        )
+        assertFalse(
+            "a purchase still removes ads",
+            AdGate.adsAllowed(isDebug = true, purchased = true, enabled = true, testAdIds = true)
+        )
     }
 
     @Test

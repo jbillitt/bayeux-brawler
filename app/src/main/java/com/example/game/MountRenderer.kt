@@ -610,6 +610,26 @@ internal fun drawStilts(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
         }
     }
 
+/**
+ * A very small spangenhelm, for a head that was never meant to wear one. Drawn only when the
+ * "Arm the Retinue" reward has actually put headgear on the beast, so the dog and the raven kit
+ * up alongside the men rather than trotting into a mailed line bare-headed.
+ */
+private fun drawBeastHelm(scope: DrawScope, hx: Float, hy: Float, r: Float) {
+    val steel = Color(0xFF9AA3AA)
+    val dome = Path().apply {
+        moveTo(hx - r, hy)
+        quadraticTo(hx - r, hy - r * 1.5f, hx, hy - r * 1.6f)
+        quadraticTo(hx + r, hy - r * 1.5f, hx + r, hy)
+        close()
+    }
+    drawStitchedFill(scope, dome, steel)
+    scope.drawPath(dome, ThreadColor, style = StitchedStroke)
+    // Nasal bar and the spangen rib, so it reads as a helm and not a bald patch
+    scope.drawLine(ThreadColor, Offset(hx + r * 0.35f, hy - r * 0.2f), Offset(hx + r * 0.6f, hy + r * 0.5f), strokeWidth = 2f)
+    scope.drawLine(ThreadColor, Offset(hx, hy - r * 1.6f), Offset(hx, hy), strokeWidth = 1.5f)
+}
+
 internal fun drawWardog(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val anim = fighter.animFrame
         val angleF = if (fighter.isDead || fighter.isDying) 0f else Math.sin(anim.toDouble()).toFloat() * 15f
@@ -637,6 +657,7 @@ internal fun drawWardog(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
             scope.drawLine(androidx.compose.ui.graphics.Color.Black, androidx.compose.ui.geometry.Offset(cx + 25f, cy - 15f), androidx.compose.ui.geometry.Offset(cx + 20f, cy - 25f), strokeWidth = 6f, cap = StrokeCap.Round)
             // Tail
             scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx - 25f, cy - 5f), androidx.compose.ui.geometry.Offset(cx - 40f, cy - 15f), strokeWidth = 6f, cap = StrokeCap.Round)
+            if (fighter.headgear.id != "helm_none") drawBeastHelm(scope, cx + 29f, cy - 18f, 11f)
         }
         scope.drawCircle(Color(0xFF9E3624), radius = 4f, center = Offset(cx + 32f, cy + 113.5f))
         val triangle_1 = Path().apply {
@@ -670,6 +691,7 @@ internal fun drawRaven(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
             scope.drawLine(androidx.compose.ui.graphics.Color.Yellow, androidx.compose.ui.geometry.Offset(cx + 21.5f, cy + 0.5f), androidx.compose.ui.geometry.Offset(cx + 25f, cy + 1f), strokeWidth = 4f, cap = StrokeCap.Round)
             // Eye
             scope.drawCircle(androidx.compose.ui.graphics.Color.Red, radius = 2f, center = androidx.compose.ui.geometry.Offset(cx + 15f, cy - 5f))
+            if (fighter.headgear.id != "helm_none") drawBeastHelm(scope, cx + 15f, cy - 9f, 7f)
         }
         val triangle_1 = Path().apply {
             moveTo(cx + 10.5f, cy - 125.5f)

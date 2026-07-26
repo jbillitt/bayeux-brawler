@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
@@ -326,6 +327,55 @@ class ArtScreenshotTest {
             }
         }
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/weapon_heads.png")
+    }
+
+    /**
+     * The beasts of the retinue, bare-headed and in the "Arm the Retinue" spangenhelm. Eyeball that
+     * each helm sits ON the skull — the dog's above the snout and behind the ear, the raven's over
+     * the crown and clear of the beak — rather than floating beside it.
+     */
+    @Test
+    @Config(qualifiers = "+w1100dp-h700dp")
+    fun beastsWithAndWithoutPanoplyHelms() {
+        fun beast(kind: String, helm: String) = FighterState(
+            id = FighterId("$kind#0"), name = kind, isPlayer = true,
+            maxHp = 60f, hp = 60f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == helm },
+            posX = 100f, targetX = 100f, facingRight = true,
+            size = if (kind == "raven") 0.85f else 0.6f,
+            hairColor = Color.Transparent, hairStyle = "none"
+        )
+
+        val cast = listOf(
+            beast("wardog", "helm_none"), beast("wardog", "helm_spangen"),
+            beast("raven", "helm_none"), beast("raven", "helm_spangen")
+        )
+
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                cast.chunked(2).forEach { row ->
+                    Row {
+                        row.forEach { fighter ->
+                            Canvas(modifier = Modifier.width(520.dp).height(330.dp)) {
+                                // Zoomed hard: a wardog's helm is ~11px across at play scale,
+                                // which is far too small to judge placement from. The raven is
+                                // drawn 120px above the ground line, so its cell is shifted down
+                                // to keep the bird inside its own canvas.
+                                val lift = if (fighter.isKind("raven")) 300f else 0f
+                                translate(top = lift) {
+                                    TapestryRenderer.drawCharacter(this, fighter, scale = 3.0f, isBattleActive = true)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/beast_helms.png")
     }
 
     /**

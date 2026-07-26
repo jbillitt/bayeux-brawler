@@ -1156,6 +1156,12 @@ class GameViewModel : ViewModel() {
                 it.isPlayer && !it.isKind("wardog") && !it.isKind("raven") &&
                     !it.isKind("trojan_horse") && !it.id.raw.startsWith("pallbearer_")
             }.forEach { ally -> applyRetinuePanoply(ally) }
+            // The beasts get the helm and nothing else: a dog cannot buckle a gauntlet and a
+            // raven cannot carry mail, but both can be sent a very small spangenhelm.
+            enemies.filter { it.isPlayer && (it.isKind("wardog") || it.isKind("raven")) }
+                .forEach { beast ->
+                    beast.headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_spangen" }
+                }
         }
 
         _playerState.value = player
@@ -1455,7 +1461,9 @@ class GameViewModel : ViewModel() {
         if (incenseTick == 0) {
             _enemiesState.value.forEach { e ->
                 if (e.isPlayer || e.isDead || e.isDying) return@forEach
-                if (e.archetype == EnemyArchetype.TORCH_BEARER) {
+                // The archetype carries a club-and-flame; the Burning Brand weapon head IS a lit
+                // torch. Both burn, whoever is holding them.
+                if (e.archetype == EnemyArchetype.TORCH_BEARER || e.weaponHead.id == "head_torch") {
                     addFlameAndSmokeParticles(e.posX + 16f * e.size, 205f)
                 }
                 // A man alight smokes. Ignition used to show only as a warmer skin tone, which
@@ -1465,6 +1473,9 @@ class GameViewModel : ViewModel() {
             }
             if (player.igniteDuration > 0f && !player.isDead) {
                 addFlameAndSmokeParticles(player.posX, 190f)
+            }
+            if (player.weaponHead.id == "head_torch" && !player.isDead && !player.isDying) {
+                addFlameAndSmokeParticles(player.posX + 16f * player.size, 205f)
             }
         }
 
@@ -1886,26 +1897,29 @@ class GameViewModel : ViewModel() {
             }
         }
 
-        // Buster barks every now and then mid-battle (rare, for comedy)
-        if (enemies.any { it.isKind("wardog") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.2f) {
-            MedievalAudioSynth.playDogBark()
+        // The entourage's voices. Rolled PER BODY, not once for the whole kind, and each body
+        // passes its own id as a voice key: one dog cannot bark over his own bark, but two dogs
+        // can bark together. Rolling once for "any dog alive" is what made a lone beast sound
+        // like a kennel — the roll fired again while his last bark was still sounding.
+        enemies.forEach { e ->
+            if (e.isDead || e.isDying) return@forEach
+            when {
+                // Buster barks every now and then mid-battle (rare, for comedy)
+                e.isKind("wardog") && Random.nextFloat() < dt * 0.2f ->
+                    MedievalAudioSynth.playDogBark(e.id.raw)
+                // Old Maud cackles now and then (assets/hag; silent until clips are added)
+                e.isKind("hag") && Random.nextFloat() < dt * 0.15f ->
+                    MedievalAudioSynth.playHagCackle(e.id.raw)
+                e.isKind("fanatic_boris") && Random.nextFloat() < dt * 0.15f ->
+                    MedievalAudioSynth.playFanaticScream(e.id.raw)
+                e.isKind("plague_peasant") && Random.nextFloat() < dt * 0.2f ->
+                    MedievalAudioSynth.playPlagueCough(e.id.raw)
+            }
         }
-
-        // Old Maud cackles now and then (assets/hag; silent until clips are added)
-        if (enemies.any { it.isKind("hag") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.15f) {
-            MedievalAudioSynth.playHagCackle()
-        }
-
-        // The rest of the entourage's voices, same rarity-roll pattern (all silent until clips land)
-        if (enemies.any { it.isKind("fanatic_boris") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.15f) {
-            MedievalAudioSynth.playFanaticScream()
-        }
-        if (enemies.any { it.isKind("plague_peasant") && !it.isDead && !it.isDying } && Random.nextFloat() < dt * 0.2f) {
-            MedievalAudioSynth.playPlagueCough()
-        }
-        // The Monk is a non-combatant follower, so he is not on the field to be found in `enemies`.
-        if (_uiState.value.unlockedAncillaries.contains(Ancillary.MONK) && Random.nextFloat() < dt * 0.1f) {
-            MedievalAudioSynth.playMonkChant()
+        // The Monk is a non-combatant follower, so he is not on the field to be found in
+        // `enemies` — his bodies are the copies held in unlockedAncillaries.
+        repeat(_uiState.value.unlockedAncillaries.count { it == Ancillary.MONK }) { i ->
+            if (Random.nextFloat() < dt * 0.1f) MedievalAudioSynth.playMonkChant("monk#$i")
         }
 
         // Softlock watchdog: if no hp anywhere (fighters, mounts, shields, gate) has moved for a
@@ -2114,11 +2128,15 @@ class GameViewModel : ViewModel() {
                     val lucky = tripleCandidate
                     pendingChoices.add(LevelUpChoice(
                         id = "triple_${lucky.id}",
-                        title = "Thrice-Blessed: ${lucky.ancillaryName}",
-                        description = if (lucky in STACKABLE_ANCILLARIES)
-                            "Some say the Almighty works in threes. THREE of ${lucky.ancillaryName} take the field."
-                        else
-                            "Some say the Almighty works in threes. ${lucky.ancillaryName}'s effect is TRIPLED (Max HP +${(lucky.hpBoost * 2).toInt()}, speed +${(lucky.speedBoost * 200).toInt()}%).",
+                        // "Thrice-Blessed" is now the ×3 badge on the card, not words in the title.
+                        title = lucky.ancillaryName,
+                        description = when {
+                            lucky == Ancillary.MONK -> "Thy cause be truly righteous."
+                            lucky in STACKABLE_ANCILLARIES ->
+                                "Some say the Almighty works in threes. THREE of ${lucky.ancillaryName} take the field."
+                            else ->
+                                "Some say the Almighty works in threes. ${lucky.ancillaryName}'s effect is TRIPLED (Max HP +${(lucky.hpBoost * 2).toInt()}, speed +${(lucky.speedBoost * 200).toInt()}%)."
+                        },
                         type = "follower_multiply",
                         itemId = lucky.id
                     ))
@@ -2194,13 +2212,18 @@ class GameViewModel : ViewModel() {
                         // Twin mounts grant nothing — you can only ride one. Never offer them.
                         val copiesCount = if (anc.id in MOUNT_ANCILLARY_IDS) 1 else rollFollowerCopies()
                         val isTwins = copiesCount > 1
-                        val twinTitle = if (isTwins) "TWINS! ${anc.ancillaryName}$titleSuffix" else "${anc.ancillaryName}$titleSuffix"
+                        // No shouted "TWINS!" in the title or the body any more — the card wears a
+                        // "+2" badge instead, which says the same thing without eating two lines.
+                        val twinTitle = "${anc.ancillaryName}$titleSuffix"
                         // Objects field their own body, so their hpBoost is that body's — quoting
                         // it as "Max HP +200" read as a player buff the Great Horse never grants.
                         val statLine = if (anc.id in OBJECT_ANCILLARY_IDS) "Fights on its own: ${anc.hpBoost.toInt()} HP of its own"
                                        else "Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%"
-                        val twinDesc = if (isTwins) "[TWINS! You get TWO of them!] ${anc.description} ($statLine)$packNote"
-                                       else "${anc.description} ($statLine)$packNote"
+                        // Two Brothers Tuck censing you at once is not a stat line, it is a verdict
+                        // on the war you are prosecuting.
+                        val body = if (isTwins && anc == Ancillary.MONK) "Thy cause be truly righteous."
+                                   else anc.description
+                        val twinDesc = "$body ($statLine)$packNote"
                         pendingChoices.add(LevelUpChoice(
                             id = if (isTwins) "follower_twins_${anc.id}" else "follower_${anc.id}",
                             title = twinTitle,
@@ -2331,9 +2354,9 @@ class GameViewModel : ViewModel() {
                         )
                     } else {
                         listOf(
-                            LevelUpChoice("ranged_bow_bigger", "Bow: Ballista Spears", "Launch thick spear-shafts instead of arrows! High velocity, +15 damage, and knocks foes back.", "ranged_upgrade", "bow_bigger"),
-                            LevelUpChoice("ranged_bow_spikes", "Bow: Bodkin Barb-Points", "Solder razor-sharp steel claws to your arrowheads. Ignores 50% armor and deals bleeding.", "ranged_upgrade", "bow_spikes"),
-                            LevelUpChoice("ranged_bow_weapon_heads", "Bow: Weapon-Tipped Shafts", "Fletch actual miniature iron morningstars and axes onto your arrows. Complete comedic over-engineering!", "ranged_upgrade", "bow_weapon_heads")
+                            LevelUpChoice("ranged_bow_bigger", "Ranged: Ballista Spears", "Launch thick spear-shafts instead of arrows! High velocity, +15 damage, and knocks foes back.", "ranged_upgrade", "bow_bigger"),
+                            LevelUpChoice("ranged_bow_spikes", "Ranged: Bodkin Barb-Points", "Solder razor-sharp steel claws to your arrowheads. Ignores 50% armor and deals bleeding.", "ranged_upgrade", "bow_spikes"),
+                            LevelUpChoice("ranged_bow_weapon_heads", "Ranged: Weapon-Tipped Shafts", "Fletch actual miniature iron morningstars and axes onto your arrows. Complete comedic over-engineering!", "ranged_upgrade", "bow_weapon_heads")
                         )
                     }
                     

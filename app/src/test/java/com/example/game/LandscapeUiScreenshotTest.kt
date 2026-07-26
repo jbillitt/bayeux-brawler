@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import com.example.GearSelectionTabs
 import com.example.LevelUpScreen
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
@@ -84,6 +85,27 @@ class LandscapeUiScreenshotTest {
         }
         composeTestRule.onRoot()
             .captureRoboImage(filePath = "src/test/screenshots/landscape_reward_no_ad.png")
+    }
+
+    /** The loadout screen: the densest selection surface in the game, and the most squeezed. */
+    @Test
+    fun gearSelectionWeaponTab() {
+        val gear = (GameData.WEAPON_HEADS.take(9) + GameData.WEAPON_HANDLES.take(4) +
+            GameData.SHIELDS.take(3) + GameData.ARMOR_PIECES.take(3) + GameData.HEADGEAR_PIECES.take(3))
+            .map { it.id }.toSet()
+        composeTestRule.setContent {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+                GearSelectionTabs(
+                    uiState = BattleSimState(unlockedGearIds = gear, level = 4),
+                    onSelect = {},
+                    onUpdatePhysical = { _, _, _ -> },
+                    onToggleDualWield = {},
+                    onToggleThroneMode = {}
+                )
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/landscape_gear_weapon.png")
     }
 
     /**

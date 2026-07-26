@@ -1479,6 +1479,9 @@ fun GearSelectionTabs(
     onToggleThroneMode: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
+    // Whatever the gloss register is currently showing. Null falls back to the selected item, so
+    // the band is never blank and long-press is only ever a shortcut.
+    var glossItem by remember { mutableStateOf<GearItem?>(null) }
     val tabTitles = listOf("Weapon ⚔️", "Shield 🛡️", "Armor 🛡️", "Helm 🪖", "Physical 🧍")
 
     Column(
@@ -1489,44 +1492,87 @@ fun GearSelectionTabs(
             .padding(6.dp)
     ) {
 
-        // Tab Headers
-        androidx.compose.material3.ScrollableTabRow(
-            selectedTabIndex = selectedTab,
+        // Tab band. Dual Wield rides at the right-hand end of it rather than in a band of its
+        // own: it is a property of the weapon, so it belongs beside the tabs it modifies, and
+        // reusing this row costs the grid nothing. It kept a full 44dp strip and a sentence of
+        // consequence text permanently on screen for one boolean.
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            containerColor = Color.Transparent,
-            edgePadding = 0.dp,
-            divider = { },
-            indicator = { }
+            verticalAlignment = Alignment.Bottom
         ) {
-            tabTitles.forEachIndexed { index, title ->
-                val active = selectedTab == index
+            Row(modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+                tabTitles.forEachIndexed { index, title ->
+                    val active = selectedTab == index
+                    Box(
+                        modifier = Modifier
+                            .height(28.dp)
+                            .padding(horizontal = 2.dp)
+                            .background(
+                                if (active) TapestryDark else Color(0xFFDCD2B8),
+                                RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)
+                            )
+                            .clickable {
+                                selectedTab = index
+                                MedievalAudioSynth.playSound(SoundType.SWOOSH)
+                            }
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = title,
+                            color = if (active) TapestryLight else TapestryDark,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif
+                        )
+                    }
+                }
+            }
+            if (selectedTab == 0) {
+                val dual = uiState.isDualWielding
+                // State is spelled out, not implied by a tick: it changes how combat works, so
+                // it has to be legible at a glance and not merely on inspection.
                 Box(
                     modifier = Modifier
-                        .height(36.dp)
-                        .padding(horizontal = 2.dp)
+                        .height(28.dp)
                         .background(
-                            if (active) TapestryDark else Color(0xFFDCD2B8),
+                            if (dual) TapestryRed else Color(0xFFDCD2B8),
                             RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)
                         )
-                        .clickable {
-                            selectedTab = index
-                            MedievalAudioSynth.playSound(SoundType.SWOOSH)
-                        }
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                        .border(
+                            1.dp,
+                            if (dual) TapestryRed else TapestryDark.copy(alpha = 0.5f),
+                            RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)
+                        )
+                        .clickable { onToggleDualWield() }
+                        .padding(horizontal = 10.dp)
+                        .testTag("toggle_dual_wield_btn"),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = title,
-                        color = if (active) TapestryLight else TapestryDark,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = if (dual) "⚔ DUAL WIELD · ON" else "⚔ DUAL WIELD · OFF",
+                        color = if (dual) TapestryLight else TapestryDark,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Serif
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        // The consequence, on the same shared band as everything else's detail.
+        if (selectedTab == 0 && uiState.isDualWielding) {
+            Text(
+                "Two blades, no shield. Faster strikes, and one swing in five goes wide.",
+                fontSize = 8.sp,
+                fontFamily = FontFamily.Serif,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                color = TapestryRed,
+                modifier = Modifier.padding(top = 2.dp, start = 2.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(3.dp))
 
         // Tab Content Grid
         Box(
@@ -1655,25 +1701,7 @@ fun GearSelectionTabs(
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    if (selectedTab == 0) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                            .background(TapestryLinenCard, RoundedCornerShape(4.dp))
-                            .border(1.dp, TapestryDark, RoundedCornerShape(4.dp))
-                            .clickable { onToggleDualWield() },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        androidx.compose.material3.Checkbox(
-                            checked = uiState.isDualWielding,
-                            onCheckedChange = { onToggleDualWield() },
-                            modifier = Modifier.scale(0.8f)
-                        )
-                        Text("Dual Wield (Disables shield, faster attacks but 20% miss chance)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
-                    }
-                }
-                
+
                 val itemsToShow = when (selectedTab) {
                     0 -> GameData.WEAPON_HEADS.filter { it.id in uiState.unlockedGearIds }
                     1 -> GameData.SHIELDS.filter { it.id in uiState.unlockedGearIds }
@@ -1688,7 +1716,9 @@ fun GearSelectionTabs(
                     columns = GridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxSize()
+                    // weight, not fillMaxSize: the grid must yield the gloss register its strip
+                    // rather than consuming the column and pushing it off the bottom.
+                    modifier = Modifier.fillMaxWidth().weight(1f)
                 ) {
                     items(itemsToShow) { item ->
                         val isSelected = when (item.type) {
@@ -1702,8 +1732,10 @@ fun GearSelectionTabs(
                         GearItemCell(
                             item = item,
                             isSelected = isSelected,
+                            onHold = { glossItem = item },
                             onClick = {
                                 onSelect(item)
+                                glossItem = item
                                 // Play themed sound effect
                                 val sound = when (item.type) {
                                     ItemType.SHIELD -> SoundType.CLANG
@@ -1711,6 +1743,49 @@ fun GearSelectionTabs(
                                 }
                                 MedievalAudioSynth.playSound(sound)
                             }
+                        )
+                    }
+                }
+
+                // The gloss register. In the tapestry itself the narrow border below a scene is
+                // where the commentary on it runs, so that is where a piece's description lives
+                // now — once, shared, instead of repeated inside all forty tiles.
+                //
+                // It shows the SELECTED item by default and never sits empty, so holding is a
+                // shortcut for reading about something you have not chosen yet, not the only way
+                // to find out what anything does. A hidden gesture must never carry primary
+                // meaning; long-press here only ever previews.
+                val glossed: GearItem? = glossItem ?: when (selectedTab) {
+                    0 -> uiState.weaponHead
+                    1 -> uiState.shield
+                    2 -> uiState.armor
+                    else -> uiState.headgear
+                }
+                if (glossed != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 3.dp)
+                            .background(TapestryLinenBg, RoundedCornerShape(4.dp))
+                            .border(1.dp, TapestryDark.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = glossed.itemName.uppercase(),
+                            fontSize = 8.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Black,
+                            color = TapestryRed
+                        )
+                        Text(
+                            text = "  ·  ${glossed.description}",
+                            fontSize = 8.sp,
+                            lineHeight = 10.sp,
+                            fontFamily = FontFamily.Serif,
+                            color = TapestryDark.copy(alpha = 0.85f),
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1845,27 +1920,32 @@ fun TrophiesPanel(uiState: BattleSimState) {
 }
 
 @Composable
-fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit, onHold: () -> Unit = {}) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) TapestryLinenBg else Color(0xFFFAF6EB)
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp)
+            // 72dp for ~28dp of content: every tile carried two lines of flavour text and a dead
+            // gap, and only two and a half rows fitted on a landscape phone. The description now
+            // lives once, in the gloss register below the grid, so a tile is just its name, its
+            // weight and what it does. 44dp keeps a comfortable touch target.
+            .height(44.dp)
             .border(
                 width = if (isSelected) 3.dp else 1.dp,
                 color = if (isSelected) TapestryRed else TapestryDark,
                 shape = RoundedCornerShape(6.dp)
             )
-            .clickable { onClick() }
+            .combinedClickable(onClick = onClick, onLongClick = onHold)
             .testTag("gear_${item.id}"),
         shape = RoundedCornerShape(6.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp),
+                .padding(horizontal = 5.dp, vertical = 3.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -1879,6 +1959,8 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit) {
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Black,
                     color = TapestryDark,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -1890,16 +1972,6 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit) {
                     color = TapestryDark.copy(alpha = 0.6f)
                 )
             }
-
-            Text(
-                text = item.description,
-                fontSize = 7.5.sp,
-                lineHeight = 9.sp,
-                fontFamily = FontFamily.Serif,
-                color = TapestryDark.copy(alpha = 0.8f),
-                maxLines = 2,
-                modifier = Modifier.weight(1f)
-            )
 
             // Combat stats so you can see what a piece actually does, not just its flavour.
             val stats = buildList {

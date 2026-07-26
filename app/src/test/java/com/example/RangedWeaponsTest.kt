@@ -33,7 +33,7 @@ class RangedWeaponsTest {
         
         // Let's create a custom Player with slingshot and an enemy Saxon
         val player = FighterState(
-            id = "player_test",
+            id = FighterId("player_test"),
             name = "Test Archer",
             isPlayer = true,
             maxHp = 100f,
@@ -50,7 +50,7 @@ class RangedWeaponsTest {
         )
 
         val enemy = FighterState(
-            id = "enemy_test",
+            id = FighterId("enemy_test"),
             name = "Test Enemy",
             isPlayer = false,
             maxHp = 100f,
@@ -117,7 +117,7 @@ class RangedWeaponsTest {
 
         // 5. Test Splash damage calculation
         val secondaryEnemy = FighterState(
-            id = "enemy_secondary",
+            id = FighterId("enemy_secondary"),
             name = "Secondary Enemy",
             isPlayer = false,
             maxHp = 100f,

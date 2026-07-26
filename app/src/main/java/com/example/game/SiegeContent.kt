@@ -8,8 +8,8 @@ enum class ClimbState { NONE, CLIMBING_UP, CLIMBING_DOWN }
 data class SiegeState(
     var gateHp: Float,
     val gateMaxHp: Float,
-    val parapetFighterIds: Set<String>,
-    val queuedFighterIds: Set<String>,
+    val parapetFighterIds: Set<FighterId>,
+    val queuedFighterIds: Set<FighterId>,
     var ladderSpawned: Boolean = false,
     var gateBroken: Boolean = false,
     /** Siege-ladder reward: the ladder is up from the first horn, no broken gate required. */
@@ -47,7 +47,7 @@ object SiegeRules {
                     (it.isRanged || it.archetype == EnemyArchetype.WALL_ARCHER) &&
                     !it.isDead && !it.isDying
             }
-            .sortedBy { it.id }
+            .sortedBy { it.id.raw }
         val descendCount = ceil(eligible.size / 2f).toInt()
         eligible.take(descendCount).forEach { beginClimb(it, ClimbState.CLIMBING_DOWN) }
     }

@@ -82,7 +82,7 @@ class GameDataTest {
 
     /** A player in the given body armour, everything else held constant. */
     private fun playerWearing(armorId: String) = FighterState(
-        id = "p", name = "p", isPlayer = true, maxHp = 100f, hp = 100f,
+        id = FighterId("p"), name = "p", isPlayer = true, maxHp = 100f, hp = 100f,
         weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
         weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
         shield = GameData.SHIELDS.first { it.id == "shield_none" },

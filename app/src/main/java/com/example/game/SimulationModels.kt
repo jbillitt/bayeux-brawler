@@ -408,8 +408,20 @@ data class BackgroundObject(
     val stuckBuildingArrows: MutableList<StuckBuildingArrow> = mutableListOf()
 )
 
+/**
+ * A fighter's unique instance id, e.g. "wardog#1".
+ *
+ * Deliberately not a String: stackable followers carry a "#i" copy suffix, so comparing a whole id
+ * to a bare kind name is always false and silently disables everything keyed off it. Typed, that
+ * mistake will not compile — ask [FighterState.isKind] instead.
+ */
+@JvmInline
+value class FighterId(val raw: String) {
+    override fun toString(): String = raw
+}
+
 data class FighterState(
-    val id: String,
+    val id: FighterId,
     val name: String,
     val isPlayer: Boolean,
     var maxHp: Float,
@@ -500,7 +512,7 @@ data class FighterState(
     var hasSilkenGarments: Boolean = false, // lightens armour weight without losing protection
     val isWarPriest: Boolean = false, // never attacks; heals the worst-hurt foe near him
     var grapplerId: String? = null,
-    var stolenWeaponOwnerId: String? = null, // a brawler holding a foe's stolen weapon; dropped when that foe dies
+    var stolenWeaponOwnerId: FighterId? = null, // a brawler holding a foe's stolen weapon; dropped when that foe dies
     var activeWrestlingMove: WrestlingMove? = null,
     var crumpleDuration: Float = 0f,
     var visualOffsetY: Float = 0f,
@@ -757,7 +769,7 @@ val FighterState.wearsMetalArmour: Boolean
  * renderer and combat rules key off the kind ("wardog" draws a dog, not a man). Always ask with
  * this rather than `id == "wardog"`, or the second dog renders as a human with no bite.
  */
-fun FighterState.isKind(kind: String): Boolean = id == kind || id.startsWith("$kind#")
+fun FighterState.isKind(kind: String): Boolean = id.raw == kind || id.raw.startsWith("$kind#")
 
 /**
  * How much crowd control sticks to this fighter, as a multiplier on both the chance and the
@@ -775,7 +787,7 @@ val FighterState.ccResist: Float
     }
 
 /** The trojan horse is carpentry. It does not bleed, and it has no arm to sever. */
-val FighterState.isInanimate: Boolean get() = id == "trojan_horse"
+val FighterState.isInanimate: Boolean get() = isKind("trojan_horse")
 
 /** How this fighter's armament reads in a chronicle: "a Dane Axe on a Hickory Shaft". */
 val FighterState.weaponDescription: String
@@ -982,7 +994,7 @@ data class BattleSimState(
     val scoreMultiplier: Float
         get() {
             val dummyPlayer = FighterState(
-                id = "dummy", name = "Player", isPlayer = true, 
+                id = FighterId("dummy"), name = "Player", isPlayer = true, 
                 maxHp = 100f, hp = 100f, ghostHp = 100f,
                 weaponHead = weaponHead, weaponHandle = weaponHandle, 
                 shield = shield, armor = armor, headgear = headgear,

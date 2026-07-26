@@ -34,7 +34,7 @@ class CombatEngineTest {
         head: String = "head_sword", handle: String = "handle_medium",
         isPlayer: Boolean = false, posX: Float = 0f, size: Float = 1.0f
     ) = FighterState(
-        id = "f_$head", name = "T", isPlayer = isPlayer, maxHp = 100f, hp = 100f,
+        id = FighterId("f_$head"), name = "T", isPlayer = isPlayer, maxHp = 100f, hp = 100f,
         weaponHead = GameData.WEAPON_HEADS.first { it.id == head },
         weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handle },
         shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -110,7 +110,7 @@ class CombatEngineTest {
 
         val player = fighter(isPlayer = true, posX = 500f).copy(speedBoost = 1.5f)
         val dog = fighter(isPlayer = true, posX = 460f)
-            .copy(id = "wardog#0", weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" })
+            .copy(id = FighterId("wardog#0"), weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" })
         val foe = fighter(posX = 1200f)
         ctx.player = player
         ctx.enemies = listOf(dog, foe)
@@ -153,7 +153,7 @@ class CombatEngineTest {
         val boss = fighter(head = "head_maul", handle = "handle_iron", posX = 500f)
             .copy(bossType = BossType.HAROLD_GODWINSON)
         val allies = listOf(490f, 515f, 540f).mapIndexed { i, x ->
-            fighter(isPlayer = true, posX = x).copy(id = "ally_$i")
+            fighter(isPlayer = true, posX = x).copy(id = FighterId("ally_$i"))
         }
         ctx.player = allies.first()
         ctx.enemies = allies + boss
@@ -171,7 +171,7 @@ class CombatEngineTest {
 
         val saxon = fighter(head = "head_maul", handle = "handle_iron", posX = 500f)
         val allies = listOf(490f, 515f, 540f).mapIndexed { i, x ->
-            fighter(isPlayer = true, posX = x).copy(id = "ally_$i")
+            fighter(isPlayer = true, posX = x).copy(id = FighterId("ally_$i"))
         }
         ctx.player = allies.first()
         ctx.enemies = allies + saxon
@@ -191,7 +191,7 @@ class CombatEngineTest {
         val engine = CombatEngine(ctx)
 
         val attacker = fighter(head = "head_club", handle = "handle_plank", posX = 500f)
-        val victim = fighter(isPlayer = true, posX = 520f).copy(id = "victim")
+        val victim = fighter(isPlayer = true, posX = 520f).copy(id = FighterId("victim"))
         ctx.player = victim
         ctx.enemies = listOf(victim, attacker)
 
@@ -206,7 +206,7 @@ class CombatEngineTest {
         val engine = CombatEngine(ctx)
 
         val attacker = fighter(head = "head_club", handle = "handle_medium", posX = 500f)
-        val victim = fighter(isPlayer = true, posX = 520f).copy(id = "victim")
+        val victim = fighter(isPlayer = true, posX = 520f).copy(id = FighterId("victim"))
         ctx.player = victim
         ctx.enemies = listOf(victim, attacker)
 
@@ -238,7 +238,9 @@ class CombatEngineTest {
         val ctx = FakeContext()
         val engine = CombatEngine(ctx)
         val horse = fighter(head = "head_bare", handle = "handle_fists", isPlayer = true, posX = 200f)
-            .let { it.copy(id = "trojan_horse") }
+            // The real spawn id carries a "#i" copy suffix — use it here so an exact-match
+            // check anywhere in the horse's logic fails this test instead of shipping.
+            .let { it.copy(id = FighterId("trojan_horse#0")) }
         val foe = fighter(posX = 400f)
         ctx.enemies = listOf(foe, horse)
         val startX = horse.posX
@@ -293,7 +295,7 @@ class CombatEngineTest {
             swingProgress = 0.49f
             visualOffsetY = -60f
         }
-        val raven = fighter(isPlayer = true, posX = 140f).copy(id = "raven", speedBoost = -1f)
+        val raven = fighter(isPlayer = true, posX = 140f).copy(id = FighterId("raven"), speedBoost = -1f)
         context.player = raven
         context.enemies = listOf(attacker)
         val hpBefore = raven.hp
@@ -341,8 +343,8 @@ class CombatEngineTest {
         }
         context.enemies = listOf(harold)
         val engine = CombatEngine(context)
-        fun arrow(sourceId: String) = Projectile(
-            id = "arrow_$sourceId",
+        fun arrow(sourceId: FighterId?) = Projectile(
+            id = "arrow_${sourceId?.raw}",
             isPlayerOwned = true,
             posX = harold.posX,
             posY = 150f,
@@ -355,7 +357,8 @@ class CombatEngineTest {
             sourceFighterId = sourceId
         )
 
-        engine.applyProjectileDamage(arrow(Ancillary.ARCHER.id), harold)
+        // An allied archer's arrow — a real follower fighter, not the player.
+        engine.applyProjectileDamage(arrow(FighterId("archer#0")), harold)
         assertEquals(2.5f, harold.arrowEyeCritWindow, 0f)
         engine.applyProjectileDamage(arrow(player.id), harold)
         assertEquals(0f, harold.arrowEyeCritWindow, 0f)

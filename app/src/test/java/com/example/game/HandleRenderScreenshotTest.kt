@@ -41,7 +41,7 @@ class HandleRenderScreenshotTest {
     }
 
     private fun manHolding(handleId: String, headId: String = "head_sword") = FighterState(
-        id = "handle_shot_$handleId", name = "T", isPlayer = true, maxHp = 100f, hp = 100f,
+        id = FighterId("handle_shot_$handleId"), name = "T", isPlayer = true, maxHp = 100f, hp = 100f,
         weaponHead = GameData.WEAPON_HEADS.first { it.id == headId },
         weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handleId },
         shield = GameData.SHIELDS.first { it.id == "shield_none" },

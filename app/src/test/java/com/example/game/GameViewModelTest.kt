@@ -130,7 +130,7 @@ class GameViewModelTest {
     }
 
     private fun spearman() = FighterState(
-        id = "trojan_knight_1_0", name = "Trojan Spearman", isPlayer = true,
+        id = FighterId("trojan_knight_1_0"), name = "Trojan Spearman", isPlayer = true,
         maxHp = 45f, hp = 45f,
         weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_spear" },
         weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
@@ -550,7 +550,7 @@ class GameViewModelTest {
 
         val player = viewModel.playerState.value!!
         val bearers = viewModel.enemiesState.value
-            .filter { it.id.startsWith("pallbearer_") }
+            .filter { it.id.raw.startsWith("pallbearer_") }
             .sortedBy { it.pallbearerIndex }
         for (front in bearers.take(2)) {
             assertEquals(listOf("head_axe"), front.extraAttachments.map { it.id })

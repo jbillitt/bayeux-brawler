@@ -39,7 +39,7 @@ object EnemyFactory {
         val shield = safeShield("shield_tower")
         val hp = baseHpFor(level) * 1.1f
         FighterState(
-            id = "shieldwall_${index}_$i",
+            id = FighterId("shieldwall_${index}_$i"),
             name = if (i == 0) "Wall of Wessex" else "Wall of Kent",
             isPlayer = false,
             maxHp = hp, hp = hp,
@@ -63,7 +63,7 @@ object EnemyFactory {
     fun armouredBrute(index: Int, level: Int): FighterState {
         val hp = baseHpFor(level) * 2.2f
         return FighterState(
-            id = "brute_$index",
+            id = FighterId("brute_$index"),
             name = "Cerdic the Immovable",
             isPlayer = false,
             maxHp = hp, hp = hp,
@@ -87,7 +87,7 @@ object EnemyFactory {
     fun warPriest(index: Int, level: Int): FighterState {
         val hp = baseHpFor(level) * 0.8f
         return FighterState(
-            id = "war_priest_$index",
+            id = FighterId("war_priest_$index"),
             name = "Brother Aethelwulf",
             isPlayer = false,
             maxHp = hp, hp = hp,
@@ -153,7 +153,7 @@ object EnemyFactory {
         }
         val shield = safeShield(kit[2])
         return FighterState(
-            id = "${archetype.name.lowercase()}_$index",
+            id = FighterId("${archetype.name.lowercase()}_$index"),
             name = when (archetype) {
                 EnemyArchetype.WALL_ARCHER -> "Archer of the Wall"
                 EnemyArchetype.TORCH_BEARER -> "Osric the Incendiary"
@@ -186,7 +186,7 @@ object EnemyFactory {
         val scaling = 1f + (level - type.level).coerceAtLeast(0) * 0.05f
         val hp = baseHpFor(level) * (if (isGiant) 13f else 9.5f) * scaling * tier.hpScale
         return base.copy(
-            id = "boss_${type.name.lowercase()}" + if (tier == BossTier.LIVING) "" else "_${tier.name.lowercase()}",
+            id = FighterId("boss_${type.name.lowercase()}" + if (tier == BossTier.LIVING) "" else "_${tier.name.lowercase()}"),
             name = tier.titlePrefix + when (type) {
                 BossType.HAROLD_GODWINSON -> "Harold Godwinson"
                 BossType.HARALD_HARDRADA -> "Harald Hardrada"
@@ -238,7 +238,7 @@ object EnemyFactory {
             val base = createArchetype(retinueType, index, level)
             val eliteHp = base.maxHp * 1.9f
             base.copy(
-                id = "boss_retinue_${type.name.lowercase()}_$index",
+                id = FighterId("boss_retinue_${type.name.lowercase()}_$index"),
                 maxHp = eliteHp, hp = eliteHp, isBossRetinue = true,
                 posX = 850f + index * 85f, targetX = 850f + index * 85f,
                 isCombatInactive = type == BossType.HARALD_HARDRADA && index >= 2
@@ -385,7 +385,7 @@ object EnemyFactory {
         val startX = spawnX(index)
 
         return FighterState(
-            id = "saxon_$index",
+            id = FighterId("saxon_$index"),
             name = saxonName,
             isPlayer = false,
             maxHp = enemyHp,

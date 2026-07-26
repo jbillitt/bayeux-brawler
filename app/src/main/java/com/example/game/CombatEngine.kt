@@ -239,7 +239,7 @@ class CombatEngine(private val ctx: BattleContext) {
         }
 
         // Trojan horse never fights: it rolls right past the enemy line, then bursts open
-        if (fighter.id == "trojan_horse") {
+        if (fighter.isKind("trojan_horse")) {
             val foes = ctx.enemies.filter { !it.isDead && !it.isDying && !it.isPlayer }
             if (foes.any { it.posX > fighter.posX - 60f } && fighter.posX < ctx.levelWidth - 80f) {
                 // Was 0.7 — slower than the player, who routinely charged past and killed the line

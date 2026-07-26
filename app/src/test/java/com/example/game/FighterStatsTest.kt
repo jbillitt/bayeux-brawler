@@ -23,7 +23,7 @@ class FighterStatsTest {
         dualWield: Boolean = false,
         extensions: Int = 0
     ) = FighterState(
-        id = "t", name = "Test", isPlayer = isPlayer, maxHp = 100f, hp = 100f,
+        id = FighterId("t"), name = "Test", isPlayer = isPlayer, maxHp = 100f, hp = 100f,
         weaponHead = GameData.WEAPON_HEADS.first { it.id == head },
         weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handle },
         shield = GameData.SHIELDS.first { it.id == shield },

@@ -96,7 +96,7 @@ class MagazinePreviewTest {
     private fun fighterFrom(spec: JSONObject, fr: JSONObject, w: Int): FighterState {
         fun gear(key: String, fallback: String) = spec.optString(key, fallback).ifEmpty { fallback }
         return FighterState(
-            id = "magazine", name = "Magazine", isPlayer = true, maxHp = 100f, hp = 100f,
+            id = FighterId("magazine"), name = "Magazine", isPlayer = true, maxHp = 100f, hp = 100f,
             // firstOrNull: an unknown id from the magazine falls back rather than killing the render
             weaponHead = GameData.WEAPON_HEADS.firstOrNull { it.id == gear("head", "head_sword") } ?: GameData.WEAPON_HEADS.first(),
             weaponHandle = GameData.WEAPON_HANDLES.firstOrNull { it.id == gear("handle", "handle_medium") } ?: GameData.WEAPON_HANDLES.first(),

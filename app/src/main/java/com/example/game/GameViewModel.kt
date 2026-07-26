@@ -34,7 +34,7 @@ data class Projectile(
     val isBallista: Boolean = false,
     val isIgniting: Boolean = false,
     val gravityMult: Float = 1f,
-    val sourceFighterId: String? = null
+    val sourceFighterId: FighterId? = null
 )
 
 internal fun createLilGuyDart(
@@ -55,7 +55,10 @@ internal fun createLilGuyDart(
         blunt = 4f,
         type = ProjectileType.DART,
         sizeMultiplier = 0.5f,
-        sourceFighterId = Ancillary.LIL_GUY.id
+        // Lil Guy has no FighterState — he is drawn as an ancillary on the player's back — so his
+        // darts have no shooter to trace. This field held "anc_lil_guy", an ancillary id, which
+        // matched no fighter and so always resolved to null anyway.
+        sourceFighterId = null
     )
 }
 
@@ -762,7 +765,7 @@ class GameViewModel : ViewModel() {
         val hair = hairTrait(state.hairStyle)
         val totalPlayerMaxHp = (baseHp + hair.hpBonus) * (0.75f + 0.25f * state.characterSize) * (1f + (1f - state.characterSize).coerceAtLeast(0f) * 0.6f)
         val player = FighterState(
-            id = "player_knight",
+            id = FighterId("player_knight"),
             name = state.playerName,
             isPlayer = true,
             maxHp = totalPlayerMaxHp,
@@ -884,7 +887,7 @@ class GameViewModel : ViewModel() {
         // that cares matches via isKind(). posX jittered per copy or they stand inside each other.
         repeat(state.unlockedAncillaries.count { it == Ancillary.FANATIC }) { i ->
             enemies.add(FighterState(
-                id = "fanatic_boris#$i",
+                id = FighterId("fanatic_boris#$i"),
                 name = "Mad Boris",
                 isPlayer = true,
                 maxHp = 150f,
@@ -945,7 +948,7 @@ class GameViewModel : ViewModel() {
         repeat(state.unlockedAncillaries.count { it == Ancillary.PLAGUE_PEASANT }) { i ->
             enemies.add(FighterState(
                 // Dying already, so he simply runs at the foe and breathes on them until one of them drops
-                id = "plague_peasant#$i",
+                id = FighterId("plague_peasant#$i"),
                 name = "Wretched Aldwin",
                 isPlayer = true,
                 maxHp = 15f,
@@ -970,7 +973,7 @@ class GameViewModel : ViewModel() {
             enemies.add(FighterState(
                 // Same trick as the hag: head_slingshot marks him isRanged, so the AI holds the
                 // backline and lobs instead of charging in. His pots trip rather than wound.
-                id = "greaser#$i", name = "Slippery Sam", isPlayer = true, maxHp = 35f, hp = 35f,
+                id = FighterId("greaser#$i"), name = "Slippery Sam", isPlayer = true, maxHp = 35f, hp = 35f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -985,7 +988,7 @@ class GameViewModel : ViewModel() {
             enemies.add(FighterState(
                 // Backline lobber like the hag; CombatEngine turns his shots into bee hives via
                 // isKind("beekeeper"). The renderer gives him his veiled hat and a live swarm.
-                id = "beekeeper#$i", name = "Humble Bede", isPlayer = true, maxHp = 40f, hp = 40f,
+                id = FighterId("beekeeper#$i"), name = "Humble Bede", isPlayer = true, maxHp = 40f, hp = 40f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1000,7 +1003,7 @@ class GameViewModel : ViewModel() {
             enemies.add(FighterState(
                 // Same trick as the hag/greaser: head_slingshot marks him isRanged so he holds the
                 // backline; CombatEngine turns his shots into igniting torches via isKind("firebrand").
-                id = "firebrand#$i", name = "Cinder Cedric", isPlayer = true, maxHp = 35f, hp = 35f,
+                id = FighterId("firebrand#$i"), name = "Cinder Cedric", isPlayer = true, maxHp = 35f, hp = 35f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1014,7 +1017,7 @@ class GameViewModel : ViewModel() {
         repeat(state.unlockedAncillaries.count { it == Ancillary.HAG }) { i ->
             enemies.add(FighterState(
                 // head_slingshot makes her isRanged, so the AI kites at range and lobs mud instead of rushing to melee
-                id = "hag#$i", name = "Local Hag", isPlayer = true, maxHp = 40f, hp = 40f,
+                id = FighterId("hag#$i"), name = "Local Hag", isPlayer = true, maxHp = 40f, hp = 40f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_slingshot" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1028,7 +1031,7 @@ class GameViewModel : ViewModel() {
         // bows, not parade-line followers conjuring arrows from thin air.
         repeat(state.unlockedAncillaries.count { it == Ancillary.ARCHER }) { i ->
             enemies.add(FighterState(
-                id = "archer#$i", name = "Robin", isPlayer = true, maxHp = 45f, hp = 45f,
+                id = FighterId("archer#$i"), name = "Robin", isPlayer = true, maxHp = 45f, hp = 45f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bow" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1040,7 +1043,7 @@ class GameViewModel : ViewModel() {
         }
         repeat(state.unlockedAncillaries.count { it == Ancillary.CROSSBOWMAN }) { i ->
             enemies.add(FighterState(
-                id = "crossbowman#$i", name = "Gaston", isPlayer = true, maxHp = 50f, hp = 50f,
+                id = FighterId("crossbowman#$i"), name = "Gaston", isPlayer = true, maxHp = 50f, hp = 50f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_crossbow" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1056,7 +1059,7 @@ class GameViewModel : ViewModel() {
         repeat(state.unlockedAncillaries.count { it == Ancillary.TROJAN_HORSE }) { i ->
             enemies.add(FighterState(
                 // 200hp died to the enemy line long before it mattered; it exists to soak.
-                id = "trojan_horse#$i", name = "Trojan Horse", isPlayer = true, maxHp = 450f, hp = 450f,
+                id = FighterId("trojan_horse#$i"), name = "Trojan Horse", isPlayer = true, maxHp = 450f, hp = 450f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1071,7 +1074,7 @@ class GameViewModel : ViewModel() {
         // posX is jittered per copy or the pack spawns exactly on top of itself.
         repeat(state.unlockedAncillaries.count { it == Ancillary.WARDOG }) { i ->
             enemies.add(FighterState(
-                id = "wardog#$i", name = "Buster", isPlayer = true, maxHp = 150f, hp = 150f,
+                id = FighterId("wardog#$i"), name = "Buster", isPlayer = true, maxHp = 150f, hp = 150f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1084,7 +1087,7 @@ class GameViewModel : ViewModel() {
 
         repeat(state.unlockedAncillaries.count { it == Ancillary.RAVEN }) { i ->
             enemies.add(FighterState(
-                id = "raven#$i", name = "Munin", isPlayer = true, maxHp = 20f, hp = 20f,
+                id = FighterId("raven#$i"), name = "Munin", isPlayer = true, maxHp = 20f, hp = 20f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1107,7 +1110,7 @@ class GameViewModel : ViewModel() {
                     GameData.SHIELDS.first { it.id == "shield_none" }
                 }
                 enemies.add(FighterState(
-                    id = "pallbearer_$i", name = "Pallbearer", isPlayer = true,
+                    id = FighterId("pallbearer_$i"), name = "Pallbearer", isPlayer = true,
                     maxHp = 70f, hp = 70f,
                     weaponHead = when {
                         i == 0 -> state.weaponHead
@@ -1151,7 +1154,7 @@ class GameViewModel : ViewModel() {
         if (state.hasRetinuePanoply) {
             enemies.filter {
                 it.isPlayer && !it.isKind("wardog") && !it.isKind("raven") &&
-                    it.id != "trojan_horse" && !it.id.startsWith("pallbearer_")
+                    !it.isKind("trojan_horse") && !it.id.raw.startsWith("pallbearer_")
             }.forEach { ally -> applyRetinuePanoply(ally) }
         }
 
@@ -1606,7 +1609,7 @@ class GameViewModel : ViewModel() {
                     !it.isDead && !it.isDying && it.isPlayer && !it.isCombatInactive &&
                         it.climbState == ClimbState.NONE &&
                         (enemy.isRanged || it.elevated == enemy.elevated) &&
-                        it.id != "trojan_horse"
+                        !it.isKind("trojan_horse")
                 } + listOfNotNull(
                     player.takeIf {
                         !it.isDead && !it.isDying && it.climbState == ClimbState.NONE &&
@@ -1621,7 +1624,7 @@ class GameViewModel : ViewModel() {
             // in this block also double-moved it (updateFighter already rolls it) and had a wooden
             // horse punching the oak with its bare fists.
             if (siege != null && !siege.gateBroken && enemy.isPlayer && pTarget == null &&
-                enemy.id != "trojan_horse" &&
+                !enemy.isKind("trojan_horse") &&
                 !enemy.isDead && !enemy.isDying && !enemy.elevated &&
                 enemy.climbState == ClimbState.NONE && enemy.pallbearerIndex < 0
             ) {
@@ -1658,10 +1661,10 @@ class GameViewModel : ViewModel() {
             }
             
             // Trojan Horse death spawn
-            if (!wasDead && enemy.isDead && enemy.id == "trojan_horse") {
+            if (!wasDead && enemy.isDead && enemy.isKind("trojan_horse")) {
                 for (i in 0 until 3) {
                     val spearman = FighterState(
-                        id = "trojan_knight_${System.currentTimeMillis()}_$i", name = "Trojan Spearman", isPlayer = true,
+                        id = FighterId("trojan_knight_${System.currentTimeMillis()}_$i"), name = "Trojan Spearman", isPlayer = true,
                         maxHp = 45f, hp = 45f,
                         weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_spear" },
                         weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },

@@ -19,7 +19,7 @@ class CrowdControlTest {
         boss: BossType? = null,
         retinue: Boolean = false
     ) = FighterState(
-        id = id, name = "T", isPlayer = false, maxHp = 100f, hp = 100f,
+        id = FighterId(id), name = "T", isPlayer = false, maxHp = 100f, hp = 100f,
         weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
         weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
         shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -66,6 +66,7 @@ class CrowdControlTest {
     @Test
     fun theTrojanHorseIsInanimate() {
         assertTrue(fighter(id = "trojan_horse").isInanimate)
+        assertTrue("a stacked horse is still carpentry", fighter(id = "trojan_horse#1").isInanimate)
         assertFalse(fighter(id = "saxon#3").isInanimate)
     }
 

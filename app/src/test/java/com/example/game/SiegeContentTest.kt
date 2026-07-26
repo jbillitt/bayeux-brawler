@@ -13,7 +13,7 @@ class SiegeContentTest {
         elevated: Boolean = false,
         player: Boolean = false
     ) = FighterState(
-        id = id, name = id, isPlayer = player, maxHp = 100f, hp = 100f,
+        id = FighterId(id), name = id, isPlayer = player, maxHp = 100f, hp = 100f,
         weaponHead = GameData.WeaponHead.SWORD,
         weaponHandle = GameData.WeaponHandle.MEDIUM,
         shield = GameData.Shield.NONE,

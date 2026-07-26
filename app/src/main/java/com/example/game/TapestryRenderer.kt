@@ -85,7 +85,7 @@ object TapestryRenderer {
         }) {
             val cx = fighter.posX
             val cy = 200f
-            val bounceY = -kotlin.math.abs(sin(fighter.animFrame.toDouble())).toFloat() * 10f * (if (fighter.id == "lil_guy") 2f else 1f)
+            val bounceY = -kotlin.math.abs(sin(fighter.animFrame.toDouble())).toFloat() * 10f
 
             // 1. Draw dropped weapon on the ground if dead or dying
             if (fighter.isDead || fighter.isDying) {
@@ -102,9 +102,10 @@ object TapestryRenderer {
 
             // Handle dying fall down rotation
             var rotationAngle = 0f
-            var offsetX = if (fighter.id == "lil_guy") -20f else 0f
-            var offsetY = fighter.visualOffsetY + bounceY +
-                (if (fighter.id == "lil_guy") -40f else 0f)
+            // Lil Guy used to be special-cased here by id, but he has no FighterState at all —
+            // he is drawn by drawAncillaries off the Ancillary enum, so these never fired.
+            var offsetX = 0f
+            var offsetY = fighter.visualOffsetY + bounceY
             var scaleY = 1f
             if (fighter.crumpleDuration > 0f && !fighter.isDead && !fighter.isDying) {
                 // Ragdolled onto the floor
@@ -175,7 +176,7 @@ object TapestryRenderer {
                 }
                 withTransform({ 
                     rotate(horseRot, pivot = Offset(cx, cy + 80f)) 
-                    val rng = kotlin.random.Random(fighter.id.hashCode())
+                    val rng = kotlin.random.Random(fighter.id.raw.hashCode())
                     val horseScale = 0.9f + rng.nextFloat() * 0.2f
                     scale(horseScale / effectiveSize, horseScale / effectiveSize, Offset(cx, cy + 80f))
                 }) {
@@ -260,7 +261,7 @@ object TapestryRenderer {
                     else if (fighter.isMounted) -35f else 0f
                 val adjustedMountOffsetY = mountOffsetY / effectiveSize
                 withTransform({ translate(0f, adjustedMountOffsetY) }) {
-                    if (fighter.id == "trojan_horse") {
+                    if (fighter.isKind("trojan_horse")) {
                         drawTrojanHorse(this, cx, cy, fighter)
                     } else if (fighter.isKind("wardog")) {
                         drawWardog(this, cx, cy, fighter)
@@ -285,7 +286,7 @@ object TapestryRenderer {
                             // It must sit in the same space as the cart body from drawChariot — this
                             // used to be drawn in the rider's own scale, so a small man got a second,
                             // smaller cart bouncing along in front of the real one.
-                            val railRng = kotlin.random.Random(fighter.id.hashCode())
+                            val railRng = kotlin.random.Random(fighter.id.raw.hashCode())
                             val railScale = (0.9f + railRng.nextFloat() * 0.2f) / effectiveSize
                             withTransform({
                                 translate(0f, -adjustedMountOffsetY) // undo the rider's lift
@@ -626,7 +627,7 @@ object TapestryRenderer {
 
         if (isBarechested(fighter)) {
             // Sparse chest thatch. Seeded off the fighter's id so it does not crawl about between frames.
-            val hairRng = Random(fighter.id.hashCode())
+            val hairRng = Random(fighter.id.raw.hashCode())
             repeat(14) {
                 val hx = cx - 18f + hairRng.nextFloat() * 36f
                 val hy = cy + 26f + hairRng.nextFloat() * 44f
@@ -1034,7 +1035,7 @@ object TapestryRenderer {
             val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
             // Head flies up and back — trajectory varies per victim for ragdoll variety:
             // some heads pop straight up, some sail far, spin count differs
-            val seed = kotlin.math.abs(fighter.id.hashCode())
+            val seed = kotlin.math.abs(fighter.id.raw.hashCode())
             val flyDir = if (fighter.facingRight) -1f else 1f
             val dist = 40f + (seed % 121)              // 40..160 px
             val peak = 110f + ((seed / 7) % 91)        // 110..200 px arc height
@@ -1123,7 +1124,7 @@ object TapestryRenderer {
         if (fighter.warPaint == 1) {
             // Woad, daubed straight over the skin: two bars across the eyes and a stripe down the jaw.
             // Deterministic from the id, so a given Saxon wears the same paint every frame.
-            val woadRng = Random(fighter.id.hashCode() * 31)
+            val woadRng = Random(fighter.id.raw.hashCode() * 31)
             scope.drawLine(
                 Woad,
                 Offset(hx - 10f, hy + 2f), Offset(hx + 15f + woadRng.nextFloat() * 4f, hy + 1f),
@@ -1187,7 +1188,7 @@ object TapestryRenderer {
 
 
         // Face RNG for scars/eyepatches
-        val faceRng = kotlin.random.Random(fighter.id.hashCode())
+        val faceRng = kotlin.random.Random(fighter.id.raw.hashCode())
         val hasEyepatch = !fighter.isPlayer && faceRng.nextFloat() < 0.2f
         val hasScars = fighter.level > 1 && faceRng.nextFloat() < 0.5f
         val hasTiredEyes = faceRng.nextFloat() < 0.2f
@@ -1229,7 +1230,7 @@ object TapestryRenderer {
         }
         
         // Eyebrow variants: bushy, angry-slanted, raised, or the classic blocky line
-        when ((kotlin.math.abs(fighter.id.hashCode()) / 13) % 4) {
+        when ((kotlin.math.abs(fighter.id.raw.hashCode()) / 13) % 4) {
             0 -> scope.drawLine(ThreadColor, Offset(hx - 1f, hy - 1f), Offset(hx + 9f, hy + 1f), strokeWidth = 4f, cap = StrokeCap.Round) // bushy
             1 -> scope.drawLine(ThreadColor, Offset(hx, hy + 2f), Offset(hx + 8f, hy - 2f), strokeWidth = 2.5f, cap = StrokeCap.Round) // angry slant
             2 -> scope.drawLine(ThreadColor, Offset(hx, hy - 3f), Offset(hx + 8f, hy - 2f), strokeWidth = 2.5f, cap = StrokeCap.Round) // raised/surprised
@@ -1245,7 +1246,7 @@ object TapestryRenderer {
         }
 
         // Mouth variants: grim line, downturned frown, or slight open gawp
-        when ((kotlin.math.abs(fighter.id.hashCode()) / 29) % 3) {
+        when ((kotlin.math.abs(fighter.id.raw.hashCode()) / 29) % 3) {
             0 -> scope.drawPath(Path().apply {
                 moveTo(hx + 6f, hy + 12f)
                 quadraticTo(hx + 8.5f, hy + 15f, hx + 11f, hy + 12f)
@@ -1274,7 +1275,7 @@ object TapestryRenderer {
         // Buboes: the swellings that make the plague read as bubonic rather than "man painted
         // yellow". Anyone carrying it gets them — the peasant from spawn, his victims once infected.
         if (fighter.diseaseDuration > 0f || fighter.isContagious) {
-            val boRng = kotlin.random.Random(fighter.id.hashCode().toLong() xor 0x8UL.toLong())
+            val boRng = kotlin.random.Random(fighter.id.raw.hashCode().toLong() xor 0x8UL.toLong())
             repeat(5) {
                 val bx = hx - 4f + boRng.nextFloat() * 16f
                 val by = hy + 2f + boRng.nextFloat() * 18f
@@ -1318,7 +1319,7 @@ object TapestryRenderer {
 
         // Accrued Bandages
         if (fighter.bandagesCount > 0) {
-            val bandageRng = kotlin.random.Random(fighter.id.hashCode())
+            val bandageRng = kotlin.random.Random(fighter.id.raw.hashCode())
             for (i in 0 until fighter.bandagesCount) {
                 // Keep bandages up on the forehead/crown most of the time so the face
                 // stays visible on the share screen; only rarely across the face itself
@@ -2255,7 +2256,7 @@ object TapestryRenderer {
             "head_scythe" -> {
                 val path = androidx.compose.ui.graphics.Path().apply {
                     moveTo(headPos.x, headPos.y)
-                    quadraticTo(headPos.x + 20f, headPos.y - 36f, headPos.x + 40f, headPos.y - 18f) // outer curve
+                    quadraticTo(headPos.x + 20f, headPos.y - 36f, headPos.x + 45f, headPos.y - 5f) // outer curve
                     quadraticTo(headPos.x + 15f, headPos.y - 23f, headPos.x, headPos.y + 5f) // inner curve
                     close()
                 }
@@ -2275,7 +2276,7 @@ object TapestryRenderer {
                     close()
                 }
                 drawStitchedFill(scope, square_2, Color(0xFF6B7882))
-                scope.drawPath(square_2, Color(0xFF2C2219), style = StitchedStroke)
+                scope.drawPath(square_2, Color(0xFF2C2219), style = Stroke(width = 0.5f))
                 val square_3 = Path().apply {
                     moveTo(headPos.x + 1.5f, headPos.y - 7f)
                     lineTo(headPos.x + 17.5f, headPos.y - 18f)
@@ -2285,7 +2286,7 @@ object TapestryRenderer {
                     close()
                 }
                 drawStitchedFill(scope, square_3, Color(0xFF8A5E38))
-                scope.drawPath(square_3, Color(0xFF2C2219), style = StitchedStroke)
+                scope.drawPath(square_3, Color(0xFF2C2219), style = Stroke(width = 0.5f))
                 val square_4 = Path().apply {
                     moveTo(headPos.x + 17.5f, headPos.y - 18.5f)
                     lineTo(headPos.x + 25.5f, headPos.y - 20.5f)
@@ -2294,13 +2295,13 @@ object TapestryRenderer {
                     moveTo(headPos.x + 1.5f, headPos.y - 7f)
                     moveTo(headPos.x + 3.5f, headPos.y - 4f)
                     lineTo(headPos.x + 1f, headPos.y - 7f)
-                    moveTo(headPos.x + 9f, headPos.y)
-                    lineTo(headPos.x + 5.5f, headPos.y + 6.5f)
-                    lineTo(headPos.x + 3.5f, headPos.y + 4.5f)
+                    moveTo(headPos.x + 9f, headPos.y - 0.5f)
+                    lineTo(headPos.x + 6f, headPos.y + 5.5f)
+                    lineTo(headPos.x + 3f, headPos.y + 4f)
                     close()
                 }
                 drawStitchedFill(scope, square_4, Color(0xFFBAC5CC))
-                scope.drawPath(square_4, Color(0xFF2C2219), style = StitchedStroke)
+                scope.drawPath(square_4, Color(0xFF2C2219), style = Stroke(width = 0.5f))
 }
             "head_halberd" -> {
                 val path = androidx.compose.ui.graphics.Path().apply {

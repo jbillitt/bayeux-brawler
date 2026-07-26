@@ -21,7 +21,7 @@ internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
         val walking = !fighter.isDead && !fighter.isDying
         val legSwing = if (walking) sin(anim) * 18f else 0f
         
-        val rng = kotlin.random.Random(fighter.id.hashCode())
+        val rng = kotlin.random.Random(fighter.id.raw.hashCode())
         val horseColors = listOf(Color(0xFF6B4F2E), Color(0xFF8B7355), Color(0xFF2C2219), Color(0xFFE4D6B6), Color(0xFF4A4A4A))
         val horseColor = horseColors[rng.nextInt(horseColors.size)]
         val hasSpots = rng.nextFloat() > 0.7f
@@ -33,7 +33,7 @@ internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
         drawStitchedFill(scope, bodyPath, horseColor)
         
         if (hasSpots) {
-            val spotRng = kotlin.random.Random(fighter.id.hashCode() + 1)
+            val spotRng = kotlin.random.Random(fighter.id.raw.hashCode() + 1)
             for (i in 0 until 5) {
                 val sx = cx - 40f + spotRng.nextFloat() * 80f
                 val sy = cy + 70f + spotRng.nextFloat() * 40f

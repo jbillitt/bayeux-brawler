@@ -2,6 +2,7 @@ package com.example
 
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
+import com.example.game.FighterId
 import com.example.game.FighterState
 import com.example.game.GameData
 import org.junit.Assert.assertNotNull
@@ -28,7 +29,7 @@ class MainActivityTest {
         
         // Mock a player state
         val player = FighterState(
-            id = "test_player",
+            id = FighterId("test_player"),
             name = "Test Knight",
             isPlayer = true,
             maxHp = 100f,

@@ -158,7 +158,7 @@ class ArtScreenshotTest {
     fun mounts() {
         fun rider(id: String, size: Float, chariot: Boolean = false, stilts: Boolean = false, crown: Boolean = false) =
             FighterState(
-                id = id, name = id, isPlayer = true, maxHp = 100f, hp = 100f,
+                id = FighterId(id), name = id, isPlayer = true, maxHp = 100f, hp = 100f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -209,7 +209,7 @@ class ArtScreenshotTest {
             contagious: Boolean = false,
             priest: Boolean = false
         ) = FighterState(
-            id = id, name = id, isPlayer = false,
+            id = FighterId(id), name = id, isPlayer = false,
             maxHp = 100f, hp = 100f,
             weaponHead = GameData.WEAPON_HEADS.first { it.id == head },
             weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handle },
@@ -258,7 +258,7 @@ class ArtScreenshotTest {
     @Test
     fun newHandles() {
         fun withHandle(handle: String) = FighterState(
-            id = handle, name = handle, isPlayer = false,
+            id = FighterId(handle), name = handle, isPlayer = false,
             maxHp = 100f, hp = 100f,
             weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_axe" },
             weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handle },
@@ -299,7 +299,7 @@ class ArtScreenshotTest {
     @Config(qualifiers = "+w1100dp-h1400dp")
     fun weaponHeads() {
         fun withHead(head: String) = FighterState(
-            id = head, name = head, isPlayer = false,
+            id = FighterId(head), name = head, isPlayer = false,
             maxHp = 100f, hp = 100f,
             weaponHead = GameData.WEAPON_HEADS.first { it.id == head },
             weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
@@ -336,7 +336,7 @@ class ArtScreenshotTest {
     @Test
     fun newArmourLayers() {
         fun layered(id: String, layers: List<String>) = FighterState(
-            id = id, name = id, isPlayer = false, maxHp = 100f, hp = 100f,
+            id = FighterId(id), name = id, isPlayer = false, maxHp = 100f, hp = 100f,
             weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
             weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
             shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -375,7 +375,7 @@ class ArtScreenshotTest {
     fun newMounts() {
         fun rider(id: String, ox: Boolean = false, mule: Boolean = false, bear: Boolean = false) =
             FighterState(
-                id = id, name = id, isPlayer = true, maxHp = 100f, hp = 100f,
+                id = FighterId(id), name = id, isPlayer = true, maxHp = 100f, hp = 100f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -412,7 +412,7 @@ class ArtScreenshotTest {
     @Config(qualifiers = "+w900dp-h1400dp")
     fun newHatsAndHair() {
         fun head(id: String, helm: String = "helm_none", hair: String = "short") = FighterState(
-            id = id, name = id, isPlayer = true, maxHp = 100f, hp = 100f,
+            id = FighterId(id), name = id, isPlayer = true, maxHp = 100f, hp = 100f,
             weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
             weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
             shield = GameData.SHIELDS.first { it.id == "shield_none" },

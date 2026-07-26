@@ -39,7 +39,7 @@ class NewBackdropContentTest {
             SiegeRules.PARAPET_ELEVATION_OFFSET,
             elevationVisualOffset(
                 FighterState(
-                    id = "wall", name = "wall", isPlayer = false, maxHp = 1f, hp = 1f,
+                    id = FighterId("wall"), name = "wall", isPlayer = false, maxHp = 1f, hp = 1f,
                     weaponHead = GameData.WeaponHead.BOW,
                     weaponHandle = GameData.WeaponHandle.LONG,
                     shield = GameData.Shield.NONE,

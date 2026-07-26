@@ -10,7 +10,7 @@ import org.junit.Test
 
 class NewEnemyBossContentTest {
     private fun fighter(player: Boolean = false, x: Float = 0f) = FighterState(
-        id = if (player) "player" else "foe", name = "fighter", isPlayer = player,
+        id = FighterId(if (player) "player" else "foe"), name = "fighter", isPlayer = player,
         maxHp = 500f, hp = 500f, weaponHead = GameData.WeaponHead.SWORD,
         weaponHandle = GameData.WeaponHandle.MEDIUM, shield = GameData.Shield.NONE,
         armor = GameData.ArmorPiece.CHAINMAIL, headgear = GameData.HeadgearPiece.CONICAL,
@@ -197,12 +197,12 @@ class NewEnemyBossContentTest {
 
     @Test
     fun `throne battle separates rear bearers from foreground actors`() {
-        val rear = fighter().copy(id = "rear", pallbearerIndex = 2)
-        val front = fighter().copy(id = "front", pallbearerIndex = 0)
-        val foe = fighter().copy(id = "foe", pallbearerIndex = -1)
+        val rear = fighter().copy(id = FighterId("rear"), pallbearerIndex = 2)
+        val front = fighter().copy(id = FighterId("front"), pallbearerIndex = 0)
+        val foe = fighter().copy(id = FighterId("foe"), pallbearerIndex = -1)
         val (behindLord, afterLord) = splitThroneBattleActors(listOf(front, rear, foe))
-        assertEquals(listOf("rear"), behindLord.map { it.id })
-        assertEquals(listOf("front", "foe"), afterLord.map { it.id })
+        assertEquals(listOf("rear"), behindLord.map { it.id.raw })
+        assertEquals(listOf("front", "foe"), afterLord.map { it.id.raw })
     }
 }
 

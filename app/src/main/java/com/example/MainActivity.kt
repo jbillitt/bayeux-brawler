@@ -980,7 +980,7 @@ fun CharacterPreviewCard(
                 translate(top = centerY - 280f) {
                     if (uiState.isThroneMode) {
                         val front = com.example.game.FighterState(
-                            id = "front", name = "Front", isPlayer = true,
+                            id = FighterId("front"), name = "Front", isPlayer = true,
                             maxHp = 100f, hp = 100f, posX = centerX + 45f, targetX = centerX + 45f,
                             animFrame = animFrame, facingRight = true,
                             size = uiState.characterSize,
@@ -993,9 +993,9 @@ fun CharacterPreviewCard(
                             hairColor = uiState.hairColor, hairStyle = uiState.hairStyle,
                             faceNoseShape = uiState.faceNoseShape, faceBiteShape = uiState.faceBiteShape, faceForehead = uiState.faceForehead, faceMustache = uiState.faceMustache
                         )
-                        val back = front.copy(id = "back", name = "Back", posX = centerX - 45f, targetX = centerX - 45f)
+                        val back = front.copy(id = FighterId("back"), name = "Back", posX = centerX - 45f, targetX = centerX - 45f)
                         val king = com.example.game.FighterState(
-                            id = "king", name = uiState.playerName, isPlayer = true, isLord = true, isMounted = true,
+                            id = FighterId("king"), name = uiState.playerName, isPlayer = true, isLord = true, isMounted = true,
                             maxHp = 100f, hp = 100f, posX = centerX, targetX = centerX,
                             animFrame = animFrame, facingRight = true,
                             size = uiState.characterSize,
@@ -1015,7 +1015,7 @@ fun CharacterPreviewCard(
                     } else {
                         // Create dummy FighterState mirroring chosen gear
                         val dummyFighter = com.example.game.FighterState(
-                            id = "preview",
+                            id = FighterId("preview"),
                             name = uiState.playerName,
                             isPlayer = true,
                             faceNoseShape = uiState.faceNoseShape,
@@ -2168,7 +2168,7 @@ fun StatsAndLaunchPanel(
     // We compute live stats by spinning up a dummy player FighterState
     val dummyFighter = remember(uiState) {
         FighterState(
-            id = "stat_dummy",
+            id = FighterId("stat_dummy"),
             name = uiState.playerName,
             isPlayer = true,
             faceNoseShape = uiState.faceNoseShape,
@@ -2517,7 +2517,7 @@ fun BattlefieldScene(
 
                 // The great decoy is enormous. Draw it before the player so it stands behind him
                 // instead of hiding him completely.
-                enemies.filter { it.id == "trojan_horse" }.forEach { th ->
+                enemies.filter { it.isKind("trojan_horse") }.forEach { th ->
                     TapestryRenderer.drawCharacter(
                         this,
                         th.copy(posX = th.posX * playerScaleX),
@@ -2570,7 +2570,7 @@ fun BattlefieldScene(
                 // times a second each. Off-screen draws are invisible by definition, so skipping
                 // them changes nothing on screen — it just stops paying for it. The margin is
                 // generous so mounts/tall sprites never pop at the edges.
-                foregroundActors.filter { it.id != "trojan_horse" }.forEach { enemy ->
+                foregroundActors.filter { !it.isKind("trojan_horse") }.forEach { enemy ->
                     if (!isVisible(enemy)) return@forEach
                     val scaledEnemy = enemy.copy(
                         posX = enemy.posX * playerScaleX

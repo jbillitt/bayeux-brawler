@@ -554,7 +554,17 @@ fun PauseMenuOverlay(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     @Composable
-                    fun toggleRow(label: String, sub: String, on: Boolean, tag: String, onFlip: () -> Unit) {
+                    fun toggleRow(
+                        label: String,
+                        sub: String,
+                        on: Boolean,
+                        tag: String,
+                        // The state words belong to the thing being toggled. "SILENCED" ads read
+                        // as nonsense — a control should say what it actually does.
+                        onWord: String = "SOUNDING",
+                        offWord: String = "SILENCED",
+                        onFlip: () -> Unit
+                    ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -576,7 +586,7 @@ fun PauseMenuOverlay(
                                     .padding(horizontal = 8.dp, vertical = 3.dp)
                             ) {
                                 Text(
-                                    if (on) "SOUNDING" else "SILENCED",
+                                    if (on) onWord else offWord,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 9.sp,
@@ -591,22 +601,31 @@ fun PauseMenuOverlay(
                         sfxOn = !sfxOn
                         com.example.game.MedievalAudioSynth.sfxEnabled = sfxOn
                     }
-                    // Off by default so testers get a build with no ads in it at all. This is the
-                    // only way to turn them on, and it lasts until the app is next launched.
-                    toggleRow("ENABLE TEST ADS", "Off for testers; turn on to exercise placements", adsOn, "toggle_test_ads_btn") {
-                        adsOn = !adsOn
-                        com.example.game.AdGate.testAdsEnabled = adsOn
-                    }
+                    // Mid-fight this overlay is a pause and carries only what you need to resume or
+                    // withdraw — adding these two pushed the irreversible Retire rite off the
+                    // bottom edge on a landscape phone, which the harness caught. Out of battle
+                    // there is room, nothing is running, and this is where they belong.
+                    if (!inBattle) {
+                        // Off by default so testers get a build with no ads in it at all. This is
+                        // the only way to turn them on, and it lasts until the app is relaunched.
+                        toggleRow(
+                            "ENABLE TEST ADS", "Off for testers; turn on to exercise placements",
+                            adsOn, "toggle_test_ads_btn", onWord = "SHOWING", offWord = "HIDDEN"
+                        ) {
+                            adsOn = !adsOn
+                            com.example.game.AdGate.testAdsEnabled = adsOn
+                        }
 
-                    // The trophy case, moved off the between-battle panels where its header row
-                    // was stealing height from the reward tiles on a landscape phone.
-                    Button(
-                        onClick = onShowTrophies,
-                        colors = ButtonDefaults.buttonColors(containerColor = TapestryMustard),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("open_trophies_btn")
-                    ) {
-                        Text("✦ Trophies", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryDark)
+                        // The trophy case, moved off the between-battle panels where its header
+                        // row was stealing height from the reward tiles.
+                        Button(
+                            onClick = onShowTrophies,
+                            colors = ButtonDefaults.buttonColors(containerColor = TapestryMustard),
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("open_trophies_btn")
+                        ) {
+                            Text("✦ Trophies", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryDark)
+                        }
                     }
 
                     Button(
@@ -1878,7 +1897,15 @@ fun TrophiesPanel(uiState: BattleSimState) {
             color = TapestryDark,
             modifier = Modifier.padding(bottom = 4.dp)
         )
-        Milestone.values().forEach { m ->
+        // Three abreast. A single column of twenty-two used about a seventh of an 850dp-wide
+        // landscape screen and made the case scroll for no reason; three columns fit almost the
+        // whole thing at once, which is what a trophy case is for.
+        Milestone.values().toList().chunked(3).forEach { row ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+        row.forEach { m ->
             val earned = m.id in uiState.clearedMilestones
             val reward = GameData.WEAPON_HEADS.find { it.id == m.grants }?.itemName
                 ?: GameData.WEAPON_HANDLES.find { it.id == m.grants }?.itemName
@@ -1887,7 +1914,7 @@ fun TrophiesPanel(uiState: BattleSimState) {
                 ?: m.grants
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .background(
                         if (earned) Color(0xFFFAF6EB) else Color.Transparent,
                         RoundedCornerShape(3.dp)
@@ -1911,10 +1938,15 @@ fun TrophiesPanel(uiState: BattleSimState) {
                     Text(
                         if (earned) "won: $reward" else m.condition,
                         fontSize = 8.sp,
+                        lineHeight = 9.sp,
                         color = TapestryDark.copy(alpha = 0.7f)
                     )
                 }
             }
+        }
+        // Keep the last row's cells the same width as a full row's.
+        repeat(3 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
+        }
         }
     }
 }

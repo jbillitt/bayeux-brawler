@@ -5,10 +5,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import com.example.CharacterPreviewCard
 import com.example.GearSelectionTabs
 import com.example.LevelUpScreen
+import com.example.MusicDecisionScreen
+import com.example.PauseMenuOverlay
+import com.example.TrophiesPanel
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
 import org.junit.Test
@@ -106,6 +114,104 @@ class LandscapeUiScreenshotTest {
         }
         composeTestRule.onRoot()
             .captureRoboImage(filePath = "src/test/screenshots/landscape_gear_weapon.png")
+    }
+
+    /** The other four tabs share the grid, but Physical is a different layout entirely. */
+    @Test
+    fun gearSelectionPhysicalTab() {
+        val gear = (GameData.WEAPON_HEADS.take(6) + GameData.ARMOR_PIECES.take(4)).map { it.id }.toSet()
+        composeTestRule.setContent {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+                GearSelectionTabs(
+                    uiState = BattleSimState(unlockedGearIds = gear, level = 4),
+                    onSelect = {}, onUpdatePhysical = { _, _, _ -> },
+                    onToggleDualWield = {}, onToggleThroneMode = {}
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Physical 🧍").performClick()
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/landscape_gear_physical.png")
+    }
+
+    /** The character card and its mount picklist, which now carries the On Foot row. */
+    @Test
+    fun characterPreviewWithMounts() {
+        composeTestRule.setContent {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+                CharacterPreviewCard(
+                    uiState = BattleSimState(
+                        level = 12,
+                        unlockedAncillaries = listOf(
+                            Ancillary.WARHORSE, Ancillary.PACK_MULE, Ancillary.WARDOG, Ancillary.HAG
+                        ),
+                        hasTakenThrone = true
+                    )
+                )
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/landscape_character_preview.png")
+    }
+
+    /** The menu now holds the sound rites, the ad switch and the trophy case. */
+    @Test
+    fun burgerMenuOutOfBattle() {
+        composeTestRule.setContent {
+            PauseMenuOverlay(
+                musicOn = true, onToggleMusic = {}, canRetire = false,
+                inBattle = false, onResume = {}, onRetire = {}
+            )
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/landscape_menu_out_of_battle.png")
+    }
+
+    /**
+     * Mid-battle the same overlay gains the Retire rite, and it must stay on screen. Adding the
+     * trophies button and the ad switch to this menu pushed Retire off the bottom edge on a
+     * landscape phone — it was still reachable by scrolling, but an irreversible action half
+     * off-screen is not "reachable" in any sense that matters. The invariant was a comment in
+     * the source; now it is checked, because a comment does not fail a build.
+     */
+    @Test
+    fun pauseMenuInBattleKeepsTheRetireRiteOnScreen() {
+        composeTestRule.setContent {
+            PauseMenuOverlay(
+                musicOn = true, onToggleMusic = {}, canRetire = true,
+                inBattle = true, onResume = {}, onRetire = {}
+            )
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/landscape_menu_in_battle.png")
+        composeTestRule.onNodeWithTag("retire_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("resume_battle_btn").assertIsDisplayed()
+    }
+
+    @Test
+    fun trophiesPanel() {
+        composeTestRule.setContent {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF1E6CC))) {
+                TrophiesPanel(
+                    BattleSimState(
+                        clearedMilestones = setOf("reach_level_5", "first_siege", "beat_harold")
+                    )
+                )
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/landscape_trophies.png")
+    }
+
+    @Test
+    fun musicDecisionScreen() {
+        composeTestRule.setContent {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF1E6CC))) {
+                MusicDecisionScreen(options = listOf("Merrier", "More Solemn", "Wilder"), onSelect = {})
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/landscape_music_decision.png")
     }
 
     /**

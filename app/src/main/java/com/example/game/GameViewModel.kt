@@ -186,7 +186,11 @@ class GameViewModel : ViewModel() {
          */
         fun headRollPool(random: kotlin.random.Random = kotlin.random.Random.Default): List<GameData.WeaponHead> {
             val earned = GameProfile.cached.unlockedItemIds
-            val base = GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }
+            // head_bare is granted outright; letting it win a rolled slot meant a run could open
+            // with one actual weapon head to choose from.
+            val base = GameData.WEAPON_HEADS.filter {
+                it.id !in GameData.STRANGE_HEAD_IDS && it.id != "head_bare"
+            }
             val relics = GameData.WEAPON_HEADS.filter {
                 it.id in GameData.STRANGE_HEAD_IDS && it.id in earned
             }
@@ -203,9 +207,15 @@ class GameViewModel : ViewModel() {
         fun handleRollPool(): List<GameData.WeaponHandle> {
             val earned = GameProfile.cached.unlockedItemIds
             return GameData.WEAPON_HANDLES.filter {
-                it.id !in GameData.UNLOCKABLE_HANDLE_IDS || it.id in earned
+                // Bare wrists are granted outright and are not a haft you would choose, so they
+                // must not consume one of the rolled slots — rolling it left a single button.
+                it.id != "handle_fists" &&
+                    (it.id !in GameData.UNLOCKABLE_HANDLE_IDS || it.id in earned)
             }
         }
+
+        /** Never fewer than this many real hafts and heads to pick between before a match. */
+        const val MIN_GEAR_CHOICES = 2
 
         /**
          * Earned mounts are saved as Ancillary ids, but the mount picklist and the stat wiring both
@@ -405,10 +415,10 @@ class GameViewModel : ViewModel() {
         initialGear.add("helm_none")
         
         // Randomly unlock 2 more of each category to start
-        initialGear.addAll(headRollPool().shuffled().take(2).map { it.id })
+        initialGear.addAll(headRollPool().shuffled().take(MIN_GEAR_CHOICES).map { it.id })
         // The seven unlockables are earned, not rolled — the ✦ marker's promise, now kept. They still
         // reach the pool for anyone who has earned them, via poolWithUnlocks below.
-        initialGear.addAll(handleRollPool().shuffled().take(2).map { it.id })
+        initialGear.addAll(handleRollPool().shuffled().take(MIN_GEAR_CHOICES).map { it.id })
         initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
         initialGear.addAll(GameData.ARMOR_PIECES.filter {
                     it.id !in listOf(
@@ -2373,8 +2383,8 @@ class GameViewModel : ViewModel() {
                 initialGear.add("shield_none")
                 initialGear.add("armor_bare")
                 initialGear.add("helm_none")
-                initialGear.addAll(headRollPool().shuffled().take(2).map { it.id })
-                initialGear.addAll(handleRollPool().shuffled().take(3).map { it.id })
+                initialGear.addAll(headRollPool().shuffled().take(MIN_GEAR_CHOICES).map { it.id })
+                initialGear.addAll(handleRollPool().shuffled().take(maxOf(3, MIN_GEAR_CHOICES)).map { it.id })
                 initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.ARMOR_PIECES.filter {
                     it.id !in listOf(

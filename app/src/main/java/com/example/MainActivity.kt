@@ -1490,6 +1490,7 @@ private fun StatText(label: String, value: String) {
 }
 
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun GearSelectionTabs(
     uiState: BattleSimState, 
     onSelect: (GearItem) -> Unit, 
@@ -1501,6 +1502,8 @@ fun GearSelectionTabs(
     // Whatever the gloss register is currently showing. Null falls back to the selected item, so
     // the band is never blank and long-press is only ever a shortcut.
     var glossItem by remember { mutableStateOf<GearItem?>(null) }
+    /** Same idea for the body-size row on the Physical tab. Null falls back to the chosen size. */
+    var sizeGloss by remember { mutableStateOf<com.example.game.SizePreset?>(null) }
     // No emoji. The helm glyph rendered as a tofu box on the device font, shield and armour used
     // the SAME emoji so it carried no information, and the five labels plus the Dual Wield chip
     // did not fit the 475dp this panel actually gets — "Physical" was clipped. Words only.
@@ -1651,15 +1654,59 @@ fun GearSelectionTabs(
                                         .weight(1f)
                                         .background(if (isSelected) TapestryDark else Color(0xFFFAF6EB), RoundedCornerShape(4.dp))
                                         .border(if (isSelected) 2.dp else 1.dp, if (isSelected) TapestryMustard else TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
-                                        .clickable { onUpdatePhysical(sizeVal, uiState.hairColor, uiState.hairStyle) }
-                                        .padding(8.dp),
+                                        .combinedClickable(
+                                            onClick = {
+                                                sizeGloss = preset
+                                                onUpdatePhysical(sizeVal, uiState.hairColor, uiState.hairStyle)
+                                            },
+                                            onLongClick = { sizeGloss = preset }
+                                        )
+                                        .padding(vertical = 8.dp, horizontal = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(label, color = if (isSelected) TapestryLight else TapestryDark, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                        Text(preset.description, color = if (isSelected) TapestryLight.copy(alpha = 0.85f) else TapestryDark.copy(alpha = 0.7f), fontSize = 8.sp, lineHeight = 9.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                    }
+                                    // Name only. The descriptions are different lengths, so
+                                    // putting them inside made every box a different height —
+                                    // five buttons that should read as one row of equals.
+                                    Text(
+                                        label,
+                                        color = if (isSelected) TapestryLight else TapestryDark,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 2,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
                                 }
+                            }
+                        }
+                        // The same gloss register the weapon grid uses, for the same reason: the
+                        // detail lives once, below, instead of inside every tile.
+                        val glossedSize = sizeGloss ?: com.example.game.SIZE_PRESETS
+                            .firstOrNull { it.size == uiState.characterSize }
+                        if (glossedSize != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(TapestryLinenBg, RoundedCornerShape(4.dp))
+                                    .border(1.dp, TapestryDark.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    glossedSize.label.uppercase(),
+                                    fontSize = 8.sp,
+                                    fontFamily = FontFamily.Serif,
+                                    fontWeight = FontWeight.Black,
+                                    color = TapestryRed
+                                )
+                                Text(
+                                    "  ·  ${glossedSize.description}",
+                                    fontSize = 8.sp,
+                                    lineHeight = 10.sp,
+                                    fontFamily = FontFamily.Serif,
+                                    color = TapestryDark.copy(alpha = 0.85f),
+                                    maxLines = 2
+                                )
                             }
                         }
                     }
@@ -1974,7 +2021,7 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit, onHol
             // gap, and only two and a half rows fitted on a landscape phone. The description now
             // lives once, in the gloss register below the grid, so a tile is just its name, its
             // weight and what it does. 44dp keeps a comfortable touch target.
-            .height(44.dp)
+            .height(38.dp)
             .border(
                 width = if (isSelected) 3.dp else 1.dp,
                 color = if (isSelected) TapestryRed else TapestryDark,
@@ -1987,8 +2034,10 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit, onHol
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 5.dp, vertical = 3.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 5.dp, vertical = 2.dp),
+            // Packed, not SpaceBetween: pushing the stat row to the far edge left a dead gap
+            // above it and clipped the descenders on "P" and "RCH" against the border.
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

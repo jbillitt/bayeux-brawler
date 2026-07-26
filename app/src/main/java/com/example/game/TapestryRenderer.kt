@@ -2274,8 +2274,17 @@ object TapestryRenderer {
                 "handle_dagger" -> 8f // a grip, barely more than a fist
                 else -> 30f // short, wheel, pick, fists
             }
-            baseLen + fighter.handleExtensionCount * 25f
+            // 25f per extension was barely readable against a 70-210f haft, so a reward that
+            // says "+0.35m reach" looked like it did nothing. Each lashed-on shaft now adds a
+            // clear 48px AND a proportional stretch, so a thrice-extended pike is unmistakably
+            // a longer weapon than a fresh one.
+            (baseLen + fighter.handleExtensionCount * 48f) *
+                (1f + fighter.handleExtensionCount * 0.12f)
         }
+        // The bespoke hafts below (antler, trumpet, wheelbarrow, anchor) draw fixed paths rather
+        // than a shaft of handleLen, so they take the growth as a scale or they alone would show
+        // no sign of an extension the player paid a reward card for.
+        val extScale = 1f + fighter.handleExtensionCount * 0.16f
 
         // Handle shaft (wooden)
         val shaftEnd = androidx.compose.ui.geometry.Offset(hx + handleLen * 0.8f, hy - handleLen * 0.4f)
@@ -2395,7 +2404,7 @@ object TapestryRenderer {
                 // not the generic shaftEnd, which sat ~10px short
                 headPos = Offset(hx + handleLen * 0.894f, hy - handleLen * 0.447f)
             } else if (fighter.weaponHandle.id == "handle_blessed_branch") {
-                scope.withTransform({ translate(hx, hy) }) {
+                scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
                     val path_0 = Path().apply {
                         moveTo(-10f, 20f)
                         lineTo(30f, -40f)
@@ -2444,7 +2453,7 @@ object TapestryRenderer {
                 headPos = Offset(hx + 60f, hy - 80f)
             } else if (fighter.weaponHandle.id == "handle_antler") {
                 // A forked antler: main beam plus two tines off the outside edge.
-                scope.withTransform({ translate(hx, hy) }) {
+                scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
                     val beam = Path().apply {
                         moveTo(0f, 0f)
                         quadraticTo(6f, -18f, 2f, -40f)
@@ -2462,7 +2471,7 @@ object TapestryRenderer {
                 // gold, with a 14px trapezoid stuck on the end. It read as a yellow stitched arm
                 // because that is exactly what it was. A trumpet needs the flare, a tube that
                 // tapers into it, and the ferrule bands, or it is just a stick.
-                scope.withTransform({ translate(hx, hy) }) {
+                scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
                     val brass = fighter.weaponHandle.color
                     // The bell: a real flare, widest at the grip and drawn in two steps so the
                     // rim reads as a lip rather than a straight cut.
@@ -2500,7 +2509,7 @@ object TapestryRenderer {
                 headPos = Offset(hx, hy - 60f)
             } else if (fighter.weaponHandle.id == "handle_wheelbarrow") {
                 // Sideways profile view: wooden shaft, tub/hopper box, front wheel & axle, support leg.
-                scope.withTransform({ translate(hx, hy) }) {
+                scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
                     val frameColor = fighter.weaponHandle.color
                     // 1. Diagonal main wooden shaft extending towards front wheel
                     drawStitchedStrap(this, Offset(54.5f, 16.5f), Offset(119.5f, 25f), frameColor, stitched = true)
@@ -2537,7 +2546,7 @@ object TapestryRenderer {
                 headPos = Offset(hx + 142.5f, hy + 0.5f)
             } else if (fighter.weaponHandle.id == "handle_plank") {
                 // Nail-Studded Plank: wide wooden board bristling with rusted iron nails
-                scope.withTransform({ translate(hx, hy) }) {
+                scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
                     val plankColor = Color(0xFF8A5E38)
                     val rustColor = Color(0xFF8B4513)
                     val darkRust = Color(0xFF5A2A0A)
@@ -2581,7 +2590,7 @@ object TapestryRenderer {
                 // The old one was a plain bar, a thin crossbar and a shallow blob at the top —
                 // it had no ring, no curved arms and no flukes, so it read as a spanner. An
                 // anchor is recognised by four things and it had one of them.
-                scope.withTransform({ translate(hx, hy) }) {
+                scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
                     val iron = fighter.weaponHandle.color
 
                     // Shank, thick enough to carry the crown.

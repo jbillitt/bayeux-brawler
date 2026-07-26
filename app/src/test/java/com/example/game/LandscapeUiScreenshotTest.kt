@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -17,8 +18,12 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import com.example.CharacterPreviewCard
 import com.example.GearSelectionTabs
+import com.example.HeaderBar
 import com.example.LevelUpScreen
 import com.example.MusicDecisionScreen
 import com.example.PauseMenuOverlay
@@ -62,18 +67,26 @@ class LandscapeUiScreenshotTest {
      * column trophy case looks roomy at 850dp and is 158dp per column in the real layout.
      */
     @Composable
-    private fun composed(slot: Int, content: @Composable () -> Unit) {
-        Row(
-            modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E)),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            listOf(0.19f, 0.58f, 0.23f).forEachIndexed { index, w ->
-                Box(modifier = Modifier.weight(w).fillMaxHeight()) {
-                    if (index == slot) content()
-                    else Box(
-                        modifier = Modifier.fillMaxSize()
-                            .background(Color(0x22000000), RoundedCornerShape(6.dp))
-                    )
+    private fun composed(slot: Int, state: BattleSimState = BattleSimState(), content: @Composable () -> Unit) {
+        // The REAL header, not a stub, and the same Column that carries it — the three-column row
+        // is weight(1f) beneath it, so a panel never gets the full screen height. Rendering the
+        // row full-height made the Physical tab look as if it had 40% to spare when in the game
+        // the hairstyle choices are pushed off the bottom.
+        Column(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+            HeaderBar(uiState = state, musicOn = true, onToggleMusic = {})
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(0.19f, 0.58f, 0.23f).forEachIndexed { index, w ->
+                    Box(modifier = Modifier.weight(w).fillMaxHeight()) {
+                        if (index == slot) content()
+                        else Box(
+                            modifier = Modifier.fillMaxSize()
+                                .background(Color(0x22000000), RoundedCornerShape(6.dp))
+                        )
+                    }
                 }
             }
         }
@@ -152,7 +165,9 @@ class LandscapeUiScreenshotTest {
     /** The other four tabs share the grid, but Physical is a different layout entirely. */
     @Test
     fun gearSelectionPhysicalTab() {
-        val gear = (GameData.WEAPON_HEADS.take(6) + GameData.ARMOR_PIECES.take(4)).map { it.id }.toSet()
+        // With every hairstyle earned — the case where the list actually overflows.
+        val gear = (GameData.WEAPON_HEADS.take(6) + GameData.ARMOR_PIECES.take(4)).map { it.id }.toSet() +
+            setOf("hair_tonsure_norman", "hair_braids", "hair_tonsure_monk", "hair_topknot")
         composeTestRule.setContent {
             composed(slot = 1) {
                 GearSelectionTabs(

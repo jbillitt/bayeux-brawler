@@ -154,6 +154,10 @@ object GameData {
         JAVELIN("head_javelin", "Throwing Javelin", 0.6f, pierce = 12f, reach = 7.0f, isRanged = true, description = "A light throwing spear. Short range for a missile, but fast.", color = Color(0xFF8C969E)),
         WAR_FLAIL("head_war_flail", "Twin War Flail", 3.5f, blunt = 22f, pierce = 8f, reach = 1.8f, description = "Two spiked balls on branching chains. Absolute chaos.", color = Color(0xFF535C61)),
         BROADSWORD("head_broadsword", "Broadsword Blade", 1.4f, slash = 18f, pierce = 8f, reach = 1.5f, description = "A wide, brutal iron blade. Chips bones through mail.", color = Color(0xFF949B9E)),
+        // A burning brand. Rare rather than earned: it turns up in the opening roll now and then
+        // and as an occasional reward, without a milestone gating it. It sets FOES alight — the
+        // restriction on fire reaching the player belongs to the torch bearer alone.
+        TORCH("head_torch", "Burning Brand", 0.9f, blunt = 9f, slash = 2f, reach = 1.2f, description = "A pitch-soaked brand, still alight. Sets men on fire, which they dislike.", color = Color(0xFFD4562A)),
         PITCHFORK("head_pitchfork", "Pitchfork", 1.1f, pierce = 16f, slash = 2f, reach = 2.1f, description = "Three rusty tines. Perfect for hay or heathen flesh.", color = Color(0xFF817A73)),
         DAGGER_HILT("head_dagger_hilt", "Pommel", 0.3f, blunt = 12f, reach = 0.6f, description = "Ending them rightly with a solid iron pommel.", color = Color(0xFFC4AD6C)),
         LUCERNE("head_lucerne", "Lucerne Hammer", 3.0f, blunt = 22f, pierce = 18f, reach = 2.3f, description = "A horrific combination of beak and hammer. Punctures anything.", color = Color(0xFF7D838A)),
@@ -175,6 +179,12 @@ object GameData {
     val WEAPON_HEADS = WeaponHead.values().toList()
     /** Attachment-only oddities, kept out of the normal pools; offered by the rare relic card. */
     val STRANGE_HEAD_IDS = setOf("head_eel", "head_femur", "head_goose", "head_cheese")
+
+    /**
+     * Heads that exist in the ordinary pool but should be uncommon, not one-in-thirty like every
+     * other head. Unlike the Strange Relics these need no milestone — they simply turn up rarely.
+     */
+    val RARE_HEAD_IDS = setOf("head_torch")
 
     enum class WeaponHandle(
         override val id: String,

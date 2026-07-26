@@ -112,8 +112,11 @@ object EnemyFactory {
         val kit = when (archetype) {
             EnemyArchetype.WALL_ARCHER, EnemyArchetype.ARCHER ->
                 listOf("head_longbow", "handle_fists", "shield_none", "armor_leather", "helm_kettle")
+            // A brand in the hand, not a sling. He is the one enemy who can set the player
+            // alight, and that must be something you can see coming and back away from — a
+            // ranged igniter is unavoidable chip damage, which is not a fight.
             EnemyArchetype.TORCH_BEARER ->
-                listOf("head_slingshot", "handle_fists", "shield_none", "armor_padded", "helm_none")
+                listOf("head_club", "handle_short", "shield_none", "armor_padded", "helm_none")
             EnemyArchetype.DANE_AXE_EXECUTIONER ->
                 listOf("head_axe", "handle_pike_long", "shield_none", "armor_chainmail", "helm_conical")
             EnemyArchetype.MONK_MILITIA ->
@@ -342,7 +345,7 @@ object EnemyFactory {
                 safeHead("head_longbow"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_leather"), safeHelm("helm_kettle")
             )
             EnemyArchetype.TORCH_BEARER -> listOf(
-                safeHead("head_slingshot"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_padded"), safeHelm("helm_none")
+                safeHead("head_club"), safeHandle("handle_short"), safeShield("shield_none"), safeArmor("armor_padded"), safeHelm("helm_none")
             )
             EnemyArchetype.DANE_AXE_EXECUTIONER -> listOf(
                 safeHead("head_axe"), safeHandle("handle_pike_long"), safeShield("shield_none"), safeArmor("armor_chainmail"), safeHelm("helm_conical")

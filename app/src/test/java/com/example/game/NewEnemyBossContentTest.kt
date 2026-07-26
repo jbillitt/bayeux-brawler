@@ -47,16 +47,45 @@ class NewEnemyBossContentTest {
     }
 
     @Test
-    fun `torch bearer fires an igniting torch`() {
+    fun `torch bearer carries a brand in hand rather than throwing fire`() {
+        // He is the ONE thing that can set the player alight, so it must be a melee threat you
+        // can see coming and back away from. A ranged igniter is unavoidable chip damage.
         val torch = EnemyFactory.createArchetype(EnemyArchetype.TORCH_BEARER, 0, 10)
+        assertFalse("the torch bearer must not be ranged", torch.isRanged)
         val player = fighter(player = true, x = 100f)
         val context = NoOpBattleContext(player, listOf(torch))
         val engine = CombatEngine(context)
         torch.isAttacking = true
         torch.swingProgress = 0.99f
         engine.updateFighter(torch, player, 0.1f)
-        assertTrue(context.spawnedProjectiles.single().isIgniting)
-        assertEquals(ProjectileType.TORCH, context.spawnedProjectiles.single().type)
+        assertTrue("he throws nothing", context.spawnedProjectiles.isEmpty())
+    }
+
+    /** Burning the player must always end, and must never re-arm while it is still running. */
+    @Test
+    fun `the player's burn is survivable and never stacks`() {
+        val torch = EnemyFactory.createArchetype(EnemyArchetype.TORCH_BEARER, 0, 10)
+        val player = fighter(player = true, x = 100f)
+        val context = NoOpBattleContext(player, listOf(torch))
+        val engine = CombatEngine(context)
+
+        engine.applyIgnite(player, onPlayer = true)
+        val lit = player.igniteDuration
+        assertTrue("the torch bearer must be able to light the player", lit > 0f)
+
+        // A second brand while already alight must not extend it — that is the death sentence.
+        engine.applyIgnite(player, onPlayer = true)
+        assertEquals("burn must not stack", lit, player.igniteDuration, 1e-4f)
+
+        // And nothing else in the game may light him at all.
+        player.igniteDuration = 0f
+        engine.applyIgnite(player)
+        assertEquals("only the brand burns the player", 0f, player.igniteDuration, 1e-4f)
+
+        // The whole burn costs well under a full bar, and it runs out.
+        engine.applyIgnite(player, onPlayer = true)
+        val burnTotal = player.igniteDuration * CombatEngine.PLAYER_IGNITE_DPS
+        assertTrue("a burn worth $burnTotal is a death sentence, not a scare", burnTotal < 30f)
     }
 
     @Test

@@ -1923,15 +1923,39 @@ object TapestryRenderer {
                 )
             }
             "head_axe" -> {
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(headPos.x, headPos.y - 5f)
-                    lineTo(headPos.x + 15f, headPos.y - 20f)
-                    quadraticTo(headPos.x + 28f, headPos.y - 5f, headPos.x + 18f, headPos.y + 25f) // bearded curved edge
-                    quadraticTo(headPos.x + 10f, headPos.y + 15f, headPos.x, headPos.y + 15f) // hollow of the beard back to haft
+                // A bearded Dane axe: a socket gripping the haft, a narrow neck, then a blade
+                // that flares to a broad crescent edge with the beard hanging below the socket.
+                // It was one lopsided quadratic blob with no socket and no neck, so it read as a
+                // lump on a stick — the crescent edge and the gap behind it are the whole shape.
+                val dx = 0.894f; val dy = -0.447f      // along the haft
+                val px = -dy; val py = dx              // across it
+                // Rotated a quarter turn from the thrusting heads: an axe blade stands out
+                // SIDEWAYS from its haft, it does not point along it like a spear. Built the
+                // other way up first, which put the edge where the spear's point goes.
+                fun at(along: Float, across: Float): Offset {
+                    val u = across            // the blade's length now runs across the haft
+                    val v = -along            // and its width along it
+                    return Offset(headPos.x + dx * u + px * v, headPos.y + dy * u + py * v)
+                }
+                val blade = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(at(-4f, -7f).x, at(-4f, -7f).y)      // socket, top of the haft
+                    lineTo(at(9f, -7f).x, at(9f, -7f).y)        // narrow neck, only slightly proud
+                    // Top of the blade: a modest flare, NOT a fan — the axe is asymmetric, and
+                    // flaring both ways equally is what made it read as a spade.
+                    quadraticTo(at(22f, -13f).x, at(22f, -13f).y, at(27f, -6f).x, at(27f, -6f).y)
+                    // The cutting edge: a long crescent sweeping down and back to the beard's toe
+                    quadraticTo(at(31f, 12f).x, at(31f, 12f).y, at(19f, 27f).x, at(19f, 27f).y)
+                    // The beard proper — it hooks back UNDER the haft, which is the silhouette
+                    // detail that names the weapon.
+                    quadraticTo(at(9f, 22f).x, at(9f, 22f).y, at(1f, 12f).x, at(1f, 12f).y)
+                    lineTo(at(-4f, 7f).x, at(-4f, 7f).y)        // socket, bottom of the haft
                     close()
                 }
-                scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawPath(blade, headColor)
+                scope.drawPath(blade, ThreadColor, style = StitchedStroke)
+                // Langets: the iron straps binding the socket to the haft.
+                scope.drawLine(ThreadColor, at(-4f, -7f), at(-4f, 7f), strokeWidth = 2f)
+                scope.drawLine(ThreadColor, at(4f, -8f), at(4f, 11f), strokeWidth = 1.5f)
             }
             "head_sword", "head_claymore", "head_dagger" -> {
                 val isClaymore = headId == "head_claymore"
@@ -2012,13 +2036,27 @@ object TapestryRenderer {
                 scope.drawLine(Color(0xFFCFB53B), Offset(headPos.x, headPos.y - 8f), Offset(headPos.x, headPos.y + 8f), strokeWidth = 4f)
             }
             "head_pitchfork" -> {
-                // Base bar
-                scope.drawLine(headColor, Offset(headPos.x + 2f, headPos.y - 10f), Offset(headPos.x + 2f, headPos.y + 10f), strokeWidth = 4f)
-                // Three tines
-                val tineLen = 25f
-                scope.drawLine(headColor, Offset(headPos.x + 2f, headPos.y - 10f), Offset(headPos.x + 2f + tineLen, headPos.y - 12f), strokeWidth = 3f)
-                scope.drawLine(headColor, Offset(headPos.x + 2f, headPos.y), Offset(headPos.x + 2f + tineLen + 5f, headPos.y), strokeWidth = 3f)
-                scope.drawLine(headColor, Offset(headPos.x + 2f, headPos.y + 10f), Offset(headPos.x + 2f + tineLen, headPos.y + 12f), strokeWidth = 3f)
+                // Along the haft, not along the screen axis.
+                //
+                // The shaft runs to (hx + len*0.8, hy - len*0.4), i.e. about 27 degrees above
+                // horizontal, and every other thrusting head is drawn tilted to match — the
+                // spear's point goes (0,0) to (+35,-15). The pitchfork was the one left flat, so
+                // its tines pointed 27 degrees off the pole they are lashed to, at every size
+                // and on every fighter. Built from the shaft's own direction here rather than
+                // hand-tilted, so it cannot drift out of agreement with it again.
+                val dx = 0.894f; val dy = -0.447f      // unit vector of (0.8, -0.4)
+                val px = -dy; val py = dx              // perpendicular, for the head bar
+                fun at(along: Float, across: Float) = Offset(
+                    headPos.x + dx * along + px * across,
+                    headPos.y + dy * along + py * across
+                )
+                // Head bar, square across the haft
+                scope.drawLine(headColor, at(2f, -10f), at(2f, 10f), strokeWidth = 4f)
+                // Three tines, running straight out along the haft's line
+                val tineLen = 26f
+                scope.drawLine(headColor, at(2f, -10f), at(2f + tineLen, -11f), strokeWidth = 3f)
+                scope.drawLine(headColor, at(2f, 0f), at(2f + tineLen + 5f, 0f), strokeWidth = 3f)
+                scope.drawLine(headColor, at(2f, 10f), at(2f + tineLen, 11f), strokeWidth = 3f)
             }
             "head_maul" -> {
                 scope.drawRect(

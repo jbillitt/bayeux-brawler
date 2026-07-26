@@ -250,6 +250,7 @@ class GameViewModel : ViewModel() {
             val head = GameData.WEAPON_HEADS.filter {
                 it.id !in listOf("head_bare", "head_bow", "head_longbow", "head_slingshot") &&
                     it.id !in GameData.STRANGE_HEAD_IDS &&
+                    (it.id !in GameData.RARE_HEAD_IDS || random.nextFloat() < 0.17f) &&
                     it.id !in state.extraAttachments
             }.randomOrNull(random)
             if (head != null) {
@@ -1433,6 +1434,19 @@ class GameViewModel : ViewModel() {
         if (incenseTick == 0 && _uiState.value.unlockedAncillaries.contains(Ancillary.MONK)) {
             addIncenseParticles(player.posX - (40f * player.size), 190f, count = 1)
         }
+        // Every torch bearer carries a visible flame. It was a red line on the haft, which read
+        // as nothing at all — and he is now the one enemy who can set the player alight, so he
+        // has to be identifiable across the field before he is in reach. Same tick budget as the
+        // incense for the same reason: particles are draw calls.
+        if (incenseTick == 0) {
+            _enemiesState.value.forEach { e ->
+                if (!e.isPlayer && !e.isDead && !e.isDying &&
+                    e.archetype == EnemyArchetype.TORCH_BEARER
+                ) {
+                    addTorchFlameParticles(e.posX + 16f * e.size, 205f)
+                }
+            }
+        }
 
         // Weather charges come back over time
         if (_uiState.value.weatherCooldowns.any { it.value > 0f }) {
@@ -1927,6 +1941,35 @@ class GameViewModel : ViewModel() {
         particleBuffer.addAll(newParticles)
     }
 
+    /**
+     * A burning brand: a couple of short-lived flame licks with a longer grey plume above them,
+     * the same shape as the monk's censer but hot. The flame rises fast and dies fast; the smoke
+     * drifts and lingers, which is what makes it read as fire rather than as coloured confetti.
+     */
+    private fun addTorchFlameParticles(x: Float, y: Float) {
+        val flame = List(2) {
+            BloodParticle(
+                x = x + Random.nextInt(-3, 4),
+                y = y - Random.nextInt(0, 6),
+                vx = Random.nextFloat() * 22f - 11f,
+                vy = Random.nextFloat() * -70f - 30f,
+                color = if (Random.nextBoolean()) Color(0xFFE8A33A) else Color(0xFFD4562A),
+                isSmoke = true,
+                maxAge = 0.5f + Random.nextFloat() * 0.4f
+            )
+        }
+        val smoke = BloodParticle(
+            x = x + Random.nextInt(-4, 5),
+            y = y - 14f,
+            vx = Random.nextFloat() * 26f - 13f,
+            vy = Random.nextFloat() * -42f - 16f,
+            color = Color(0xFF6E6A63),
+            isSmoke = true,
+            maxAge = 1.8f + Random.nextFloat() * 1.2f
+        )
+        particleBuffer.addAll(flame + smoke)
+    }
+
     private fun addIncenseParticles(x: Float, y: Float, count: Int = 2) {
         val newParticles = List(count) {
             BloodParticle(
@@ -2174,7 +2217,9 @@ class GameViewModel : ViewModel() {
                     val weaponHead = if (strange) strangeAvailable.random() else {
                         GameData.WEAPON_HEADS.filter {
                             it.id !in listOf("head_bare", "head_bow", "head_longbow", "head_slingshot") &&
-                                it.id !in GameData.STRANGE_HEAD_IDS
+                                it.id !in GameData.STRANGE_HEAD_IDS &&
+                                // The brand is in the reward pool, but only one round in six.
+                                (it.id !in GameData.RARE_HEAD_IDS || Random.nextFloat() < 0.17f)
                         }.random()
                     }
                     pendingChoices.add(LevelUpChoice(

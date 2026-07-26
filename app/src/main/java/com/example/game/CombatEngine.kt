@@ -77,6 +77,9 @@ class CombatEngine(private val ctx: BattleContext) {
         const val BLEED_DPS = 10f
         const val IGNITE_DPS = 12f
         const val IGNITE_DURATION = 5f
+        /** The player burns briefly and coolly: ~3.5s at PLAYER_IGNITE_DPS is a scare, not a death. */
+        const val PLAYER_IGNITE_DURATION = 3.5f
+        const val PLAYER_IGNITE_DPS = 5f
         const val ARMOR_SHRED_PER_HIT = 15f
         const val MONK_AURA_RADIUS_PX = 240f
         const val MONK_AURA_ATTACK_DELAY_MULT = 0.8f
@@ -303,7 +306,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 if (Random.nextFloat() < dt * 1.5f) {
                     ctx.popup("ARDENS!", fighter.posX, 130f, Color(0xFFE07020))
                 }
-                applyDotDamage(IGNITE_DPS, dt, fighter)
+                applyDotDamage(if (fighter === ctx.player) PLAYER_IGNITE_DPS else IGNITE_DPS, dt, fighter)
             }
         }
         if (fighter.arrowEyeCritWindow > 0f) {
@@ -968,6 +971,12 @@ class CombatEngine(private val ctx: BattleContext) {
                     }
                 }
 
+                // The torch bearer's brand, and nothing else in the game, can set the player
+                // alight — see applyIgnite. Melee only, by construction: this is the swing path.
+                if (attacker.archetype == EnemyArchetype.TORCH_BEARER && totalDamage > 0f) {
+                    applyIgnite(currTarget, onPlayer = true)
+                }
+
                 // Brawler Bleeding (Spiked Wraps)
                 if (attacker.brawlerUpgrades.contains("spiked_wraps") && totalDamage > 0f && Random.nextFloat() < 0.5f) {
                     currTarget.bleedDuration = 4.0f
@@ -1460,11 +1469,21 @@ class CombatEngine(private val ctx: BattleContext) {
         }
     }
 
-    fun applyIgnite(defender: FighterState) {
-        // Burn-over-time on the player was simply too punishing — the lord does not catch fire.
-        if (defender === ctx.player) return
-        if (defender.igniteDuration > 0f) return
-        defender.igniteDuration = IGNITE_DURATION
+    /**
+     * @param onPlayer whether this source is allowed to set the PLAYER alight. Only the torch
+     *   bearer's brand passes true, and only in melee: an unavoidable ranged igniter is chip
+     *   damage you cannot answer, whereas a man walking at you with a burning brand is a threat
+     *   you can read and back away from.
+     *
+     * Burning the player is deliberately survivable. The existing guard — no re-ignite while
+     * already alight — is what stops a pack of them chaining it into a death sentence, and the
+     * player's burn is shorter and cooler than an enemy's on top of that. It always runs out.
+     */
+    fun applyIgnite(defender: FighterState, onPlayer: Boolean = false) {
+        val isPlayer = defender === ctx.player
+        if (isPlayer && !onPlayer) return
+        if (defender.igniteDuration > 0f) return          // never stacks, never re-arms mid-burn
+        defender.igniteDuration = if (isPlayer) PLAYER_IGNITE_DURATION else IGNITE_DURATION
         ctx.popup("IGNIS!", defender.posX, 120f, Color(0xFFE07020))
     }
 

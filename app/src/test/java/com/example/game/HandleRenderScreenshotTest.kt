@@ -40,9 +40,9 @@ class HandleRenderScreenshotTest {
         VectorAsset.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())
     }
 
-    private fun manHolding(handleId: String) = FighterState(
+    private fun manHolding(handleId: String, headId: String = "head_sword") = FighterState(
         id = "handle_shot_$handleId", name = "T", isPlayer = true, maxHp = 100f, hp = 100f,
-        weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
+        weaponHead = GameData.WEAPON_HEADS.first { it.id == headId },
         weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handleId },
         shield = GameData.SHIELDS.first { it.id == "shield_none" },
         armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
@@ -73,6 +73,31 @@ class HandleRenderScreenshotTest {
         }
         composeTestRule.onRoot()
             .captureRoboImage(filePath = "src/test/screenshots/handles_earned.png")
+    }
+
+    /**
+     * Thrusting heads on a long haft. The pitchfork was drawn along the SCREEN axis while the
+     * shaft runs about 27 degrees above horizontal, so its tines never lined up with the pole.
+     * The spear beside it is the reference: it has always been tilted to match.
+     */
+    @Test
+    fun thrustingHeadsFollowTheHaft() {
+        composeTestRule.setContent {
+            Row(modifier = Modifier.fillMaxSize().background(Color(0xFFF1E6CC))) {
+                listOf("head_pitchfork", "head_axe", "head_spear").forEach { head ->
+                    Canvas(modifier = Modifier.width(283.dp).height(393.dp)) {
+                        translate(left = size.width / 2f - 70f, top = 95f) {
+                            TapestryRenderer.drawCharacter(
+                                this, manHolding("handle_medium", head),
+                                scale = 0.85f, isBattleActive = false
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/handles_thrusting_heads.png")
     }
 
     /** The two that were wrong, large, so the flare, ring, stock and flukes are unambiguous. */

@@ -68,6 +68,20 @@ private val BRAWL_PHRYGIAN_GROUNDS = listOf(
     listOf(0, 6, 0, 6, 0, 1, 6, 0),
     listOf(0, 1, 0, 1, 0, 6, 1, 0)
 )
+// The heroic half of the brawl. Dorian is the fighting mode — minor, but with the bright
+// natural 6 that keeps a riff from sulking (the whole NWOBHM sound). Mixolydian is the
+// flat-7 major of a power-metal chorus: this is where the organ gets to be triumphant
+// instead of ominous. Both climb to bVII/IV and cadence home rather than circling the tonic.
+private val BRAWL_DORIAN_GROUNDS = listOf(
+    listOf(0, 6, 3, 0, 0, 6, 3, 0),   // i bVII IV i — the gallop that goes somewhere
+    listOf(0, 3, 6, 0, 0, 3, 4, 0),   // i IV bVII i / i IV v i
+    listOf(0, 0, 6, 3, 0, 6, 3, 0)    // double-tonic hammer, then the lift
+)
+private val BRAWL_MIXO_GROUNDS = listOf(
+    listOf(0, 6, 3, 0, 0, 6, 4, 0),   // I bVII IV I — the entrance-music cadence
+    listOf(0, 3, 0, 6, 0, 3, 6, 0),   // I IV I bVII, hands in the air
+    listOf(0, 6, 0, 3, 4, 3, 6, 0)    // a full turn that lands on the tonic
+)
 private val THRONE_GROUNDS = listOf(
     // Rising, cadential progressions — a coronation, not a cortege. Both of the old grounds
     // opened on a descending tetrachord (0-6-5-4), which is the lamento bass: the stock
@@ -121,13 +135,29 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
             groundDegrees = ESTAMPIE_GROUNDS[rng.nextInt(ESTAMPIE_GROUNDS.size)]
         }
         Family.BRAWL -> {                        // medieval speed metal — fists only
-            mode = if (rng.nextInt(10) < 4) Mode.PHRYGIAN else Mode.AEOLIAN  // more flat-2 sting
+            // The hero is winning. Phrygian is the mode of menace — its flat 2 is what every
+            // horror cue is built on — and at 40% of rolls it was setting the tone for the
+            // whole mode, which came out oppressive rather than exciting. It survives as a
+            // rare villain colour; the bulk is now Dorian (heroic minor) and Mixolydian
+            // (triumphant flat-7 major), the two modes wrestling entrances actually live in.
+            mode = when (rng.nextInt(10)) {
+                0 -> Mode.PHRYGIAN               // 10% — the heel's theme
+                in 1..2 -> Mode.AEOLIAN          // 20% — straight minor heavy
+                in 3..6 -> Mode.DORIAN           // 40% — the fighting mode
+                else -> Mode.MIXOLYDIAN          // 30% — organ gets to be triumphant
+            }
             // 180-200 was a thrash gallop. Wrestling-entrance metal is slower and heavier — the
             // riff wants room to land, and at 180 the 16th-note double kick was a blur rather
-            // than two distinct feet. (The clamp below must move with this or it does nothing.)
-            bpm = 118 + rng.nextInt(19)          // 118-136
+            // than two distinct feet. Nudged up from 118-136: a hero smashing things has a
+            // bounce to it. (The clamp below must move with this or it does nothing.)
+            bpm = 128 + rng.nextInt(19)          // 128-146
             beatsPerBar = 4; totalBars = 16
-            val grounds = if (mode == Mode.PHRYGIAN) BRAWL_PHRYGIAN_GROUNDS else BRAWL_AEOLIAN_GROUNDS
+            val grounds = when (mode) {
+                Mode.PHRYGIAN -> BRAWL_PHRYGIAN_GROUNDS
+                Mode.DORIAN -> BRAWL_DORIAN_GROUNDS
+                Mode.MIXOLYDIAN -> BRAWL_MIXO_GROUNDS
+                else -> BRAWL_AEOLIAN_GROUNDS
+            }
             groundDegrees = grounds[rng.nextInt(grounds.size)]
         }
         Family.THRONE -> {                       // royal processional — throne mode only
@@ -165,7 +195,7 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
     // chord changes and everything reads as discord. Nobler stacks -3 each pick; below MIDI 39
     // the counter-voice falls out of its playable register.
     bpm = bpm.coerceIn(40, when {
-        family == Family.BRAWL -> 136
+        family == Family.BRAWL -> 146   // moves with the 128-146 roll above, or it caps it
         family == Family.THRONE -> 98
         beatsPerBar == 6 -> 84
         else -> 150

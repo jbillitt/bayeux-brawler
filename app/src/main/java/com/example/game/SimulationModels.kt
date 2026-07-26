@@ -80,6 +80,14 @@ val MOUNT_ANCILLARY_IDS = setOf(
 )
 
 /**
+ * Kit rather than entourage: things that roll onto the field with their own body and their own
+ * hit points, so their hpBoost/speedBoost describe THAT body and must never be added to the
+ * player's. Mounts are all here via [MOUNT_ANCILLARY_IDS]; the Great Horse is the one that isn't
+ * a mount, which is how a 450hp decoy was also quietly granting the player +200 max HP.
+ */
+val OBJECT_ANCILLARY_IDS = MOUNT_ANCILLARY_IDS + "anc_trojan_horse"
+
+/**
  * Ancillaries that never march in the parade line behind the player: mounts, and everyone who
  * spawns (or is drawn as) his own body on the field. One list, shared by the renderer and any
  * combat logic that mirrors the parade — two hand-kept copies is how the firebrand and beekeeper
@@ -940,11 +948,11 @@ data class BattleSimState(
         get() = if (isThroneMode) null else activeMount
 
     val totalHpBoost: Float
-        get() = unlockedAncillaries.filter { it.id !in MOUNT_ANCILLARY_IDS }.sumOf { it.hpBoost.toDouble() }.toFloat() +
+        get() = unlockedAncillaries.filter { it.id !in OBJECT_ANCILLARY_IDS }.sumOf { it.hpBoost.toDouble() }.toFloat() +
             (effectiveMount?.hpBoost ?: 0f)
 
     val totalSpeedBoost: Float
-        get() = unlockedAncillaries.filter { it.id !in MOUNT_ANCILLARY_IDS }.sumOf { it.speedBoost.toDouble() }.toFloat() +
+        get() = unlockedAncillaries.filter { it.id !in OBJECT_ANCILLARY_IDS }.sumOf { it.speedBoost.toDouble() }.toFloat() +
             (effectiveMount?.speedBoost ?: 0f)
 
     val scoreMultiplier: Float

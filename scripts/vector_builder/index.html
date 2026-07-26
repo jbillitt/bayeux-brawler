@@ -64,12 +64,40 @@
   button:disabled { opacity:.4; cursor:default; }
   .spin { font-family:Georgia, serif; color:var(--red); }
 
-  details.quickcanvas { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:8px 10px; }
-  details.quickcanvas summary { cursor:pointer; font-weight:bold; font-family:Georgia, serif; }
-  #canvas { background:#fffaf0; border:1px solid var(--ink); border-radius:4px; cursor:crosshair; margin-top:8px; }
-  .qc-tools { display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; align-items:center; }
-  .swatch { width:20px; height:20px; border:2px solid var(--ink); border-radius:50%; cursor:pointer; display:inline-block; }
-  .swatch.sel { outline:3px solid var(--red); }
+  #canvas { background:#fffaf0; border:1px solid var(--ink); border-radius:4px; cursor:crosshair; max-width:100%; }
+  .qc-tools { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
+  /* --- editor chrome --- */
+  .tabs { display:flex; gap:2px; border-bottom:2px solid var(--line); margin-bottom:2px; }
+  .tabs button {
+    background:transparent; color:var(--ink); border-radius:4px 4px 0 0; padding:7px 16px;
+    font-family:Georgia, serif; font-size:13px; opacity:.55; border-bottom:3px solid transparent;
+  }
+  .tabs button.on { opacity:1; background:var(--panel); border-bottom-color:var(--red); }
+  .tabs .hint { margin-left:auto; align-self:center; font-size:11px; opacity:.6; padding-right:4px; }
+
+  .modebar { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+  .mode {
+    display:flex; align-items:center; gap:7px; padding:6px 11px; border:1px solid var(--line);
+    background:var(--panel2); color:var(--ink); border-radius:4px; font-weight:600; font-size:12px;
+  }
+  .mode:hover { filter:none; background:#fff; }
+  .mode.on { background:var(--ink); color:var(--linen); border-color:var(--ink); }
+  .mode.on:hover { background:var(--ink); }
+  .mode kbd { font:11px Consolas, monospace; border:1px solid currentColor; border-radius:3px; padding:0 4px; opacity:.55; }
+  .mode .gl { font-size:14px; line-height:1; }
+
+  .pal { display:flex; align-items:center; gap:3px; }
+  .pal > b { font-size:10px; text-transform:uppercase; letter-spacing:1px; opacity:.7; margin-right:3px; }
+  .pal .sw { width:16px; height:16px; border-radius:50%; border:1px solid var(--ink); cursor:pointer; display:inline-block; }
+  .pal .sw.on { outline:2px solid var(--red); outline-offset:1px; }
+  .pal input[type=color] { width:24px; height:20px; padding:0; border:1px solid var(--line); background:none; cursor:pointer; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:4px; overflow:hidden; }
+  .seg button { background:var(--panel2); color:var(--ink); border-radius:0; padding:5px 10px; font-size:11.5px; font-weight:600; }
+  .seg button.on { background:var(--mustard); color:var(--linen); }
+  .divider { width:1px; align-self:stretch; background:var(--line); margin:0 4px; }
+  #tip { font-size:11px; opacity:.75; font-style:italic; }
+  #sceneStat { font-size:11px; font-family:Consolas, monospace; opacity:.7; margin-left:auto; }
 
   .editor { grid-area:editor; display:flex; flex-direction:column; gap:8px; padding:12px; border-left:2px solid var(--line); background:var(--panel); overflow:hidden; }
   .editor .head { display:flex; align-items:center; gap:8px; }
@@ -129,23 +157,73 @@
       <button class="forge" id="forgeBtn">&#9874; Forge true render</button>
     </div>
 
-    <div class="viewer">
-      <div class="true-view" id="trueView">
-        <div class="placeholder">The real game renderer draws here.<br>
-          Compose a loadout above, then <b>Forge true render</b> (&asymp;40s — it runs the actual Kotlin).<br>
-          Edits saved in the panel on the right are picked up by the next forge.</div>
-      </div>
-    </div>
-    <div class="anim-row">
-      <button class="ghost" id="playBtn" disabled>&#9658; Play</button>
-      <input type="range" id="frameScrub" min="0" max="0" value="0" disabled>
-      <span id="frameLabel"></span>
+    <div class="tabs">
+      <button id="tabEditor" class="on">Vector editor</button>
+      <button id="tabTrue">True render</button>
+      <span class="hint">The editor draws live from the Kotlin. The true render runs the real game code.</span>
     </div>
 
-    <details class="quickcanvas">
-      <summary>Quick canvas — instant preview &amp; point-editing for simple paths, and forging brand-new items</summary>
-      <div class="qc-tools">
-        <label>New item type
+    <div id="paneTrue" style="display:none">
+      <div class="viewer">
+        <div class="true-view" id="trueView">
+          <div class="placeholder">The real game renderer draws here.<br>
+            Compose a loadout above, then <b>Forge true render</b> (&asymp;40s — it runs the actual Kotlin).<br>
+            Edits saved in the panel on the right are picked up by the next forge.</div>
+        </div>
+      </div>
+      <div class="anim-row">
+        <button class="ghost" id="playBtn" disabled>&#9658; Play</button>
+        <input type="range" id="frameScrub" min="0" max="0" value="0" disabled>
+        <span id="frameLabel"></span>
+      </div>
+    </div>
+
+    <div id="paneEditor">
+      <div class="bar" style="flex-direction:column; align-items:stretch; gap:7px;">
+        <div class="modebar" id="modeBar">
+          <button class="mode on" data-mode="drag"><span class="gl">&#10021;</span>Drag<kbd>V</kbd></button>
+          <button class="mode" data-mode="add"><span class="gl">&#43;</span>Add point<kbd>A</kbd></button>
+          <button class="mode" data-mode="delete"><span class="gl">&minus;</span>Delete point<kbd>D</kbd></button>
+          <div class="divider"></div>
+          <button class="mode" data-mode="fill"><span class="gl">&#9679;</span>Fill<kbd>F</kbd></button>
+          <button class="mode" data-mode="unfill"><span class="gl">&#9711;</span>Remove fill<kbd>X</kbd></button>
+          <button class="mode" data-mode="line"><span class="gl">&#9585;</span>Line colour<kbd>L</kbd></button>
+          <div class="divider"></div>
+          <button class="mode" data-mode="shape"><span class="gl">&#9633;</span>Add shape<kbd>S</kbd></button>
+          <span id="sceneStat"></span>
+        </div>
+
+        <div class="qc-tools">
+          <span class="pal" id="palFill"><b>Fill</b></span>
+          <div class="divider"></div>
+          <span class="pal" id="palLine"><b>Line</b></span>
+        </div>
+
+        <div class="qc-tools">
+          <span id="ctxAdd" style="display:none">
+            <span class="seg">
+              <button id="linkOn" class="on">&#8722;&#8722; Linked</button>
+              <button id="linkOff">&#8901;&#8901; New subpath</button>
+            </span>
+          </span>
+          <span id="ctxShape" style="display:none">
+            <span class="seg">
+              <button id="shapeCircle" class="on">&#9679; Circle</button>
+              <button id="shapeSquare">&#9632; Square</button>
+            </span>
+            <label style="font-size:11px">size <input type="number" id="shapeSize" value="14" min="2" max="200" step="1" style="width:56px;padding:3px;border:1px solid var(--line);border-radius:3px;"></label>
+          </span>
+          <span id="tip"></span>
+        </div>
+      </div>
+
+      <canvas id="canvas" width="700" height="520"></canvas>
+
+      <div class="qc-tools" style="margin-top:8px">
+        <button class="ghost" id="undoBtn">&#8630; Undo</button>
+        <button class="ghost" id="fitBtn">Fit to view</button>
+        <div class="divider"></div>
+        <label style="font-size:11px">New item type
           <select id="itemType">
             <option value="WeaponHead">Weapon Head</option>
             <option value="Shield">Shield</option>
@@ -155,16 +233,10 @@
           </select>
         </label>
         <input type="text" id="itemName" value="my_epic_item" style="padding:5px;border:1px solid var(--line);border-radius:3px;">
-        <label class="chk"><input type="checkbox" id="fillShape" checked> fill</label>
-        <span id="palette"></span>
-        <button class="ghost" id="newPathBtn">New path</button>
-        <button class="ghost" id="undoBtn">Undo pt</button>
-        <button class="ghost" id="clearBtn">Clear</button>
-        <button class="ghost" id="syncBtn">Canvas &rarr; text</button>
-        <button id="injectBtn" class="save">Inject NEW item</button>
+        <button class="ghost" id="blankBtn">Start blank</button>
+        <button id="injectBtn" class="save">Inject as NEW item</button>
       </div>
-      <canvas id="canvas" width="520" height="420"></canvas>
-    </details>
+    </div>
   </main>
 
   <aside class="editor">
@@ -175,7 +247,6 @@
     <div class="btnrow">
       <button class="save" id="saveBtn" disabled>Save asset back</button>
       <button class="ghost" id="revertBtn" disabled>Revert</button>
-      <button class="ghost" id="toCanvasBtn" disabled>Load into canvas</button>
     </div>
   </aside>
 
@@ -190,6 +261,7 @@ let current = null;         // {type, id}
 let originalSource = '';
 let frames = [];            // true-render frame urls
 let playing = null;
+let gearColors = {};        // gear id -> "#rrggbb", from SimulationModels (see /api/gear)
 
 const GROUP_LABELS = {
   body: 'Body & pose', weaponhead: 'Weapon heads', handle: 'Handles & shafts',
@@ -203,8 +275,16 @@ async function boot() {
     const [aRes, gRes] = await Promise.all([fetch(API + '/api/assets'), fetch(API + '/api/gear')]);
     const aData = await aRes.json(); const gData = await gRes.json();
     assets = aData.assets || [];
+    gearColors = gData.colors || {};
     fillGear(gData);
     renderRail('');
+    // No colour table means an older server.js is still running: every named colour
+    // (headColor, brass, sColor) would then miss and fall back, painting the whole
+    // canvas in the fallback tint. Say so rather than let it look deliberate.
+    if (!gData.colors) {
+      $('serverBanner').textContent = 'Server is out of date — colours will render wrong. Close it, double-click scripts\\vector_builder\\magazine.bat again, then reload.';
+      $('serverBanner').style.display = 'block';
+    }
   } catch (e) {
     $('serverBanner').style.display = 'block';
   }
@@ -266,7 +346,7 @@ function selectAsset(key, el) {
   $('source').value = a.source;
   $('saveBtn').disabled = false; $('revertBtn').disabled = false;
   $('msg').textContent = '';
-  editPts = []; scene = []; dragIdx = null;
+  undoStack = [];
   buildColorPickers();
   highlightActive();
 
@@ -286,9 +366,9 @@ function selectAsset(key, el) {
   }
   stage.dispatchEvent(new Event('change'));
 
-  // The live canvas can hold anything with at least one literal point; parseScene
-  // decides what draws live vs. what only Forge can show.
-  $('toCanvasBtn').disabled = false;
+  // The canvas is the source of truth's mirror: parse now, frame it, and every
+  // later edit re-parses in place without moving the view out from under you.
+  refresh(true);
 }
 
 $('stageMode').onchange = () => {
@@ -406,30 +486,136 @@ function stopPlay() {
 $('playBtn').onclick = () => playing ? stopPlay() : startPlay();
 $('frameScrub').oninput = e => { stopPlay(); showFrame(Number(e.target.value)); };
 
-// ---------- quick canvas (instant path editing + forging new items) ----------
+// ---------- vector editor ----------
+// One model, one renderer. The Kotlin in the textarea IS the drawing: every tool
+// (drag, add, delete, fill, colour, shape) rewrites that text and re-parses, so the
+// canvas always shows what the file says. There is no second "sketch" layer drawn
+// in dotted lines that behaves differently from the finished art.
 const canvas = $('canvas'), ctx = canvas.getContext('2d');
-const cx = canvas.width/2, cy = canvas.height/2;
+const cx = canvas.width / 2, cy = canvas.height / 2;
+
 const PALETTE = [
-  { name:'Thread', hex:'#2C2219', kt:'0xFF2C2219' }, { name:'Red', hex:'#9E3624', kt:'0xFF9E3624' },
-  { name:'Mustard', hex:'#B08221', kt:'0xFFB08221' }, { name:'Green', hex:'#4C613D', kt:'0xFF4C613D' },
-  { name:'Navy', hex:'#265063', kt:'0xFF265063' }, { name:'Leather', hex:'#8A5E38', kt:'0xFF8A5E38' },
-  { name:'Steel', hex:'#BAC5CC', kt:'0xFFBAC5CC' }, { name:'Mail', hex:'#6B7882', kt:'0xFF6B7882' },
-  { name:'White', hex:'#FAF6EB', kt:'0xFFFAF6EB' }, { name:'Skin', hex:'#E8C5A4', kt:'0xFFE8C5A4' }
+  ['Thread', '#2C2219'], ['Red', '#9E3624'], ['Mustard', '#B08221'], ['Green', '#4C613D'],
+  ['Navy', '#265063'], ['Leather', '#8A5E38'], ['Steel', '#BAC5CC'], ['Mail', '#6B7882'],
+  ['White', '#FAF6EB'], ['Skin', '#E8C5A4'], ['Brass', '#D6A420'], ['Blood', '#7A1F14']
 ];
-let selColor = PALETTE[0], paths = [], currentPoints = [];
-PALETTE.forEach(c => {
-  const s = document.createElement('span');
-  s.className = 'swatch' + (c === selColor ? ' sel' : ''); s.style.background = c.hex; s.title = c.name;
-  s.onclick = () => { document.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel')); s.classList.add('sel'); selColor = c; };
-  $('palette').appendChild(s);
-});
-// ---- live vector layer: interpret the Kotlin, draw it, drag it ----
-// A tiny evaluator + statement parser cover the declarative subset the art uses
-// (val defs, Path blocks, drawLine/drawCircle/drawRect/drawOval, stitched fills).
-// Shapes render live on the canvas; dragging a point reshapes them in real time and
-// writes the numbers back into the source on release. Procedural pieces (loops,
-// transforms, animation maths) are skipped here and only visible via Forge.
-let editPts = [], dragIdx = null, scene = [], sceneEnv = {}, sceneSkipped = 0;
+let fillColor = '#9E3624', lineColor = '#2C2219';
+
+function buildPalette(hostId, setC) {
+  const host = $(hostId);
+  PALETTE.forEach(([name, hex]) => {
+    const s = document.createElement('span');
+    s.className = 'sw'; s.style.background = hex; s.title = name; s.dataset.hex = hex;
+    s.onclick = () => { setC(hex); paintPalettes(); };
+    host.appendChild(s);
+  });
+  const inp = document.createElement('input');
+  inp.type = 'color'; inp.title = 'Any other colour';
+  inp.oninput = () => { setC(inp.value.toUpperCase()); paintPalettes(); };
+  host.appendChild(inp);
+}
+function paintPalettes() {
+  [['palFill', fillColor], ['palLine', lineColor]].forEach(([id, val]) => {
+    $(id).querySelectorAll('.sw').forEach(s => s.classList.toggle('on', s.dataset.hex === val));
+    const inp = $(id).querySelector('input'); if (inp) inp.value = val;
+  });
+}
+buildPalette('palFill', v => fillColor = v);
+buildPalette('palLine', v => lineColor = v);
+paintPalettes();
+
+const ktColor = hex => `Color(0xFF${hex.replace('#', '').toUpperCase()})`;
+
+// ---- interpreter state ----
+let editPts = [], dragIdx = null, dragKind = null, scene = [], sceneEnv = {};
+let sceneSkipped = 0, sceneDark = 0, kpathsByName = {}, colorEnv = {};
+let selPath = null, undoStack = [], hoverShape = null, mouseModel = null;
+
+// Colours the renderer uses by name. Without these every named colour fell through
+// to thread-black, which is why a brass trumpet drew as a black one.
+const NAMED_COLORS = {
+  ThreadColor: '#2C2219', LinenColor: '#F1E6CC',
+  'Color.Black': '#000000', 'Color.White': '#FFFFFF', 'Color.Red': '#FF0000',
+  'Color.Green': '#00FF00', 'Color.Blue': '#0000FF', 'Color.Yellow': '#FFFF00',
+  'Color.Cyan': '#00FFFF', 'Color.Magenta': '#FF00FF', 'Color.Gray': '#888888',
+  'Color.DarkGray': '#444444', 'Color.LightGray': '#CCCCCC', 'Color.Transparent': null
+};
+// fighter.<slot>.color is whatever the composer bar has equipped — the same value the
+// real renderer passes in. headColor/sColor are the parameter names those arrive under.
+const SLOT_SELECT = {
+  weaponHead: 'headSel', weaponHandle: 'handleSel', shield: 'shieldSel',
+  armor: 'armorSel', headgear: 'helmSel'
+};
+const slotColor = slot => (SLOT_SELECT[slot] && gearColors[$(SLOT_SELECT[slot]).value]) || null;
+
+function resolveColor(expr) {
+  if (!expr) return null;
+  expr = expr.trim().replace(/^androidx\.compose\.ui\.graphics\./, '');
+  let m = expr.match(/0x[0-9A-Fa-f]{2}([0-9A-Fa-f]{6})/);
+  if (m) return '#' + m[1].toUpperCase();
+  m = expr.match(/\bfighter\.(\w+)\.color\b/);
+  if (m) { const c = slotColor(m[1]); if (c) return c; }
+  if (/\b(headColor|attachment\.color)\b/.test(expr)) return slotColor('weaponHead');
+  if (/\bhandleColor\b/.test(expr)) return slotColor('weaponHandle');
+  if (/\bsColor\b/.test(expr)) return slotColor('shield');
+  m = expr.match(/^([A-Za-z_][\w.]*)/);
+  if (m) {
+    if (colorEnv[m[1]]) return colorEnv[m[1]];
+    if (m[1] in NAMED_COLORS) return NAMED_COLORS[m[1]];
+  }
+  return null;
+}
+// An unresolved colour used to fall back to mustard, which reads as a real choice — a rack
+// of grey weapon heads all came up yellow and looked intentional. Unknown now draws in a
+// flat neutral, and the count is reported in the status line so it can't pass unnoticed.
+const UNKNOWN_COLOR = '#9AA0A3';
+function colorOrDefault(expr, fallback) {
+  const c = resolveColor(expr);
+  if (c) return c;
+  if (expr) sceneDark++;
+  return expr ? UNKNOWN_COLOR : fallback;
+}
+
+// ---- argument splitting: positional args matter here, not just named ones ----
+// `drawLine(c, headPos, tip)` is the commonest form in this codebase; reading only
+// start=/end=/center= dropped those calls entirely (the slingshot lost both prongs).
+function splitArgs(inner, base) {
+  const out = []; let d = 0, start = 0;
+  const push = (t, st) => {
+    const lead = t.length - t.replace(/^\s+/, '').length;
+    if (t.trim()) out.push({ text: t.trim(), at: base + st + lead });
+  };
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i];
+    if (c === '(' || c === '[') d++;
+    else if (c === ')' || c === ']') d--;
+    else if (c === ',' && d === 0) { push(inner.slice(start, i), start); start = i + 1; }
+  }
+  push(inner.slice(start), start);
+  return out;
+}
+function callArgs(line, name) {
+  const m = new RegExp('\\b' + name + '\\s*\\(').exec(line);
+  if (!m) return null;
+  const open = line.indexOf('(', m.index + m[0].length - 1);
+  let d = 0;
+  for (let i = open; i < line.length; i++) {
+    if (line[i] === '(') d++;
+    else if (line[i] === ')') { d--; if (!d) return { args: splitArgs(line.slice(open + 1, i), open + 1), open, close: i }; }
+  }
+  return null;
+}
+const NAMED_ARG = /^(\w+)\s*=\s*([\s\S]+)$/;
+function argOf(args, name, pos) {
+  if (name) {
+    for (const a of args) {
+      const m = a.text.match(NAMED_ARG);
+      if (m && m[1] === name) return { text: m[2].trim(), at: a.at + a.text.length - m[2].length };
+    }
+  }
+  if (pos === undefined || pos === null) return null;
+  return args.filter(a => !NAMED_ARG.test(a.text))[pos] || null;
+}
 
 function parseArgExpr(s) {
   s = s.trim();
@@ -442,13 +628,15 @@ function parseArgExpr(s) {
   return m ? { base: null, off: parseFloat(m[1]) } : null;
 }
 // Evaluates the Kotlin expression subset the art actually uses: numbers, known idents
-// (dotted ok), + - * / %, parens, sin/cos/abs, comparisons, `if (c) a else b`.
+// (dotted ok), + - * / %, parens, && || !, sin/cos/abs/sqrt, comparisons, `if (c) a else b`.
 // Animation inputs are seeded to rest pose, so anim terms collapse to constants.
 // `fb(ident)` supplies a fallback for unknown idents (axis-defaults for dotted anchors);
 // returns null when anything is genuinely unknown.
 function evalExpr(s, env, fb) {
-  s = s.replace(/\.toFloat\(\)/g, '').replace(/kotlin\.math\./g, '');
-  const toks = s.match(/[A-Za-z_][\w.]*|\d*\.?\d+f?|==|!=|>=|<=|[()+\-*\/%><]/g);
+  if (s == null) return null;
+  if (s.includes('"')) return null;   // string comparisons aren't numbers
+  s = s.replace(/\.to(Float|Int|Double)\(\)/g, '').replace(/kotlin\.math\./g, '').replace(/\bMath\.(?=[a-z])/g, '');
+  const toks = s.match(/[A-Za-z_][\w.]*|\d*\.?\d+f?|&&|\|\||==|!=|>=|<=|[()+\-*\/%><!]/g);
   if (!toks || !toks.length) return null;
   let i = 0, bad = false;
   function prim() {
@@ -457,6 +645,7 @@ function evalExpr(s, env, fb) {
     if (t === '(') { const v = expr(); if (toks[i++] !== ')') bad = true; return v; }
     if (t === '-') return -prim();
     if (t === '+') return prim();
+    if (t === '!') return prim() ? 0 : 1;
     if (t === 'if') {
       if (toks[i++] !== '(') { bad = true; return 0; }
       const c = expr();
@@ -466,11 +655,11 @@ function evalExpr(s, env, fb) {
       const b = expr();
       return c !== 0 ? a : b;
     }
-    if (t === 'sin' || t === 'cos' || t === 'abs') {
+    if (t === 'sin' || t === 'cos' || t === 'abs' || t === 'sqrt') {
       if (toks[i++] !== '(') { bad = true; return 0; }
       const v = expr();
       if (toks[i++] !== ')') { bad = true; return 0; }
-      return t === 'sin' ? Math.sin(v) : t === 'cos' ? Math.cos(v) : Math.abs(v);
+      return t === 'sin' ? Math.sin(v) : t === 'cos' ? Math.cos(v) : t === 'abs' ? Math.abs(v) : Math.sqrt(v);
     }
     if (t === 'true') return 1;
     if (t === 'false') return 0;
@@ -481,7 +670,7 @@ function evalExpr(s, env, fb) {
   }
   function prod() { let v = prim(); while (toks[i] === '*' || toks[i] === '/' || toks[i] === '%') { const op = toks[i++], r = prim(); v = op === '*' ? v * r : op === '/' ? v / r : v % r; } return v; }
   function sum() { let v = prod(); while (toks[i] === '+' || toks[i] === '-') { const op = toks[i++], r = prod(); v = op === '+' ? v + r : v - r; } return v; }
-  function expr() {
+  function cmp() {
     let v = sum();
     const t = toks[i];
     if (t === '>' || t === '<' || t === '>=' || t === '<=' || t === '==' || t === '!=') {
@@ -490,23 +679,23 @@ function evalExpr(s, env, fb) {
     }
     return v;
   }
+  function expr() {
+    let v = cmp();
+    while (toks[i] === '&&' || toks[i] === '||') {
+      const op = toks[i++], r = cmp();
+      v = (op === '&&' ? (v && r) : (v || r)) ? 1 : 0;
+    }
+    return v;
+  }
   const v = expr();
   return bad || i !== toks.length ? null : v;
 }
 // Unknown dotted anchors (headPos.x) default to the canvas anchor of their axis letter
 const dottedFb = ident => ident.endsWith('.x') ? cx : ident.endsWith('.y') ? cy : null;
-function colorOf(expr) {
-  const m = expr.match(/0x[0-9A-Fa-f]{2}([0-9A-Fa-f]{6})/);
-  return m ? '#' + m[1] : '#2C2219'; // ThreadColor & friends
-}
+
 // {pt: editPt} or {sx, sy} static → canvas coords. Unknown bases (vars defined
 // outside the region, like a helm's hx/hy) anchor to the canvas centre; points
 // inside a translate() transform anchor at that transform's origin instead.
-const baseVal = (name, axis) => {
-  if (name === null) return axis === 'x' ? cx : cy;
-  const v = sceneEnv[name];
-  return v !== undefined ? v : (axis === 'x' ? cx : cy);
-};
 function ptAxis(p, axis) {
   const a = p[axis];                       // {base, off}
   const anchor = p.t ? p.t[axis] : (axis === 'x' ? cx : cy);
@@ -522,19 +711,59 @@ function resolvePt(h) {
 }
 
 function parseScene(code) {
-  editPts = []; scene = []; sceneSkipped = 0; dragIdx = null;
-  const lines = code.split('\n');
+  editPts = []; scene = []; sceneSkipped = 0; sceneDark = 0; dragIdx = null;
+  colorEnv = {}; kpathsByName = {};
+  const raw = code.split('\n');
+  // Trailing line comments are stripped for parsing only. Everything before them
+  // keeps its index, so point spans still line up with the real text.
+  const lines = raw.map(l => {
+    let q = false;
+    for (let i = 0; i < l.length - 1; i++) {
+      if (l[i] === '"') q = !q;
+      else if (!q && l[i] === '/' && l[i + 1] === '/') return l.slice(0, i);
+    }
+    return l;
+  });
+
   // Rest-pose seeding: anim terms (sin(animFrame…), if (isAttacking)…) collapse to constants
   const env = { cx: cx, cy: cy, 'Math.PI': Math.PI, PI: Math.PI,
                 animFrame: 0, swingProgress: 0, isAttacking: 0, wrecked: 0, dir: 1,
-                handleLen: 60 };  // typical shaft length so handle art previews at sane proportions
+                handleLen: 60,  // typical shaft length so handle art previews at sane proportions
+                'headPos.x': cx, 'headPos.y': cy };
   sceneEnv = env;
+  const offsetVals = { headPos: { x: cx, y: cy } };
+
+  const braces = s => (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length;
+  const parenDebt = s => (s.match(/\(/g) || []).length - (s.match(/\)/g) || []).length;
+  function blockEnd(li) {
+    let d = 0, seen = false;
+    for (let j = li; j < lines.length; j++) {
+      const o = (lines[j].match(/\{/g) || []).length;
+      if (o) seen = true;
+      d += o - (lines[j].match(/\}/g) || []).length;
+      if (seen && d <= 0) return j;
+    }
+    return lines.length - 1;
+  }
+
+  const FOR_RE = /\bfor\s*\(\s*(\w+)\s+in\s+(.+?)\s*\)\s*\{\s*$/;
+  const FOREACH_RE = /listOf\(([^()]*)\)\s*\.forEach(?:Indexed)?\s*\{\s*(?:\(?\s*(\w+))?/;
+  const REPEAT_RE = /\brepeat\s*\(\s*([^()]+?)\s*\)\s*\{\s*$/;
+  // Loop bodies are drawn once per iteration from one source line, so their points
+  // can't be individually dragged — pass 1 skips registering them.
+  const inLoop = new Set();
+  lines.forEach((l, li) => {
+    if (!FOR_RE.test(l) && !FOREACH_RE.test(l) && !REPEAT_RE.test(l)) return;
+    for (let j = li + 1, e = blockEnd(li); j <= e; j++) inLoop.add(j);
+  });
 
   // pass 1: every draggable coordinate pair, indexed by line:char for pass 2
   const ptIndex = {};
   const pairRe = /\b(moveTo|lineTo|Offset)\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)/g;
   lines.forEach((line, li) => {
+    if (inLoop.has(li)) return;
     let m;
+    pairRe.lastIndex = 0;
     while ((m = pairRe.exec(line)) !== null) {
       const xp = parseArgExpr(m[2]), yp = parseArgExpr(m[3]);
       if (xp && yp) {
@@ -545,126 +774,133 @@ function parseScene(code) {
     }
   });
 
-  // An Offset(...) at a known position → draggable pt, else static eval, else null
-  function offsetAt(li, idx, xExpr, yExpr) {
-    const p = ptIndex[li + ':' + idx];
-    if (p) {
-      const t = curT();
-      if (t) p.t = { x: t.x, y: t.y };
-      return { pt: p };
-    }
-    const vx = evalExpr(xExpr, env, dottedFb), vy = evalExpr(yExpr, env, dottedFb);
-    return (vx !== null && vy !== null) ? { sx: vx, sy: vy } : null;
-  }
-
-  // pass 2: statements → shapes. Indexed loop so multi-line calls can be joined
-  // and withTransform translate() origins tracked by brace depth.
+  // pass 2: statements → shapes. Loops unroll, multi-line calls join, and
+  // withTransform translate() origins are tracked by brace depth.
   let cur = null, curDepth = 0, depth = 0;
-  const kpaths = {}, offsetVals = {}, tstack = [];
+  const kpaths = {}, tstack = [];
   const curT = () => tstack.length ? tstack[tstack.length - 1] : null;
 
-  // Line/circle/rect/oval from a (possibly joined) call. li >= 0 keeps draggable points.
-  function handleDrawCall(line, li) {
-    let m;
+  // Inside a transform, coordinates are local — but expressions that already resolved
+  // through cx/cy (or dotted anchors) are absolute; don't double-shift those.
+  const cxIfAbs = e => /\bcx\b|\.x\b/.test(e) ? cx : 0;
+  const cyIfAbs = e => /\bcy\b|\.y\b/.test(e) ? cy : 0;
+  function staticAdj(expr, v, axis) {
     const t = curT();
-    const offs = [];
-    // Literal Offset(x, y) args — draggable when on a known line, else computed
-    const ore = /Offset\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)/g;
-    let om;
-    while ((om = ore.exec(line)) !== null) {
-      if (/Offset\.Zero/.test(line.slice(Math.max(0, om.index - 8), om.index))) continue;
-      const o = li >= 0 ? offsetAt(li, om.index, om[1], om[2]) : offsetStatic(om[1], om[2]);
-      if (o) offs.push({ at: om.index, o });
-    }
-    // Named ident args: start = headPos, end = bladeEnd — resolved Offset vals or anchor default
-    const ire = /(?:start|end|center)\s*=\s*([A-Za-z_][\w.]*)\s*[,)\s]/g;
-    while ((om = ire.exec(line)) !== null) {
-      if (om[1] === 'Offset') continue;
-      const v = offsetVals[om[1]];
-      offs.push({ at: om.index, o: v ? { sx: v.x, sy: v.y } : { sx: t ? t.x : cx, sy: t ? t.y : cy } });
-    }
-    offs.sort((a, b) => a.at - b.at);
-    const list = offs.map(e => e.o);
+    if (!t || v === null) return v;
+    return v + t[axis] - (axis === 'x' ? cxIfAbs(expr) : cyIfAbs(expr));
+  }
+  // A coordinate expression inside the current transform, axis-aware
+  function axisVal(pe, axis) {
+    const t = curT();
+    const anchor = t ? t[axis] : (axis === 'x' ? cx : cy);
+    if (pe.base === null) return anchor + pe.off;
+    const v = env[pe.base];
+    if (v === undefined) return anchor + pe.off;
+    return v + (t ? t[axis] : 0) + pe.off;
+  }
 
-    if (/\bdrawLine\(/.test(line)) {
-      const wm = line.match(/strokeWidth\s*=\s*([\d.]+)f/);
-      if (list.length >= 2) scene.push({ type: 'line', a: list[0], b: list[1], color: colorOf(line), width: wm ? +wm[1] : 3 });
-      else sceneSkipped++;
-      return true;
+  // Any argument that names a point: literal Offset(x, y), Offset.Zero, or a val.
+  // A literal on its own line becomes a draggable handle; everything else resolves fixed.
+  function resolveOffsetArg(arg, li, single) {
+    if (!arg) return null;
+    const om = arg.text.match(/^(?:[\w.]*\.)?Offset\(([\s\S]*)\)$/);
+    if (om) {
+      const p = (single && li >= 0) ? ptIndex[li + ':' + arg.at] : null;
+      if (p) { const t = curT(); if (t) p.t = { x: t.x, y: t.y }; return { pt: p }; }
+      const parts = splitArgs(om[1], 0);
+      if (parts.length !== 2) return null;
+      const vx = staticAdj(parts[0].text, evalExpr(parts[0].text, env, dottedFb), 'x');
+      const vy = staticAdj(parts[1].text, evalExpr(parts[1].text, env, dottedFb), 'y');
+      return (vx !== null && vy !== null) ? { sx: vx, sy: vy } : null;
     }
-    if (/\bdrawCircle\(/.test(line)) {
-      const rm = line.match(/radius\s*=\s*([^,)]+)/) || line.match(/drawCircle\([^,]+,\s*([\d.]+)f\s*,/);
-      const r = rm ? evalExpr(rm[1], env, null) : null;
-      if (list.length >= 1 && r !== null) scene.push({ type: 'circle', c: list[0], r, color: colorOf(line), fill: !/style\s*=\s*Stroke/.test(line) });
-      else sceneSkipped++;
-      return true;
+    if (/^(?:[\w.]*\.)?Offset\.Zero$/.test(arg.text)) {
+      const t = curT(); return { sx: t ? t.x : cx, sy: t ? t.y : cy };
     }
-    m = line.match(/draw(Rect|Oval)\(\s*.*Size\(\s*([^,()]+?)\s*,\s*([^()]+?)\s*\)/);
-    if (m) {
-      const w = evalExpr(m[2], env, null), h = evalExpr(m[3], env, null);
-      if (list.length >= 1 && w !== null && h !== null) scene.push({ type: m[1] === 'Rect' ? 'rect' : 'oval', c: list[0], w, h, color: colorOf(line), fill: !/style\s*=\s*Stroke/.test(line) });
+    const v = offsetVals[arg.text];
+    if (v) return { sx: v.x + (curT() ? 0 : 0), sy: v.y };
+    const vx = evalExpr(arg.text + '.x', env, null), vy = evalExpr(arg.text + '.y', env, null);
+    if (vx !== null && vy !== null) return { sx: vx, sy: vy };
+    return null;
+  }
+  // A rewritable span in the real source — only when the whole call sits on one line.
+  const spanOf = (arg, li, single) =>
+    (single && li >= 0 && arg && arg.at + arg.text.length <= lines[li].length)
+      ? { line: li, at: arg.at, len: arg.text.length } : null;
+
+  const DRAW_PRIMS = ['drawLine', 'drawCircle', 'drawRect', 'drawOval'];
+  function handleDrawCall(line, li, single) {
+    for (const fn of DRAW_PRIMS) {
+      if (!new RegExp('\\b' + fn + '\\s*\\(').test(line)) continue;
+      const call = callArgs(line, fn);
+      if (!call) continue;
+      const A = call.args;
+      const cArg = argOf(A, 'color', 0);
+      const stroked = /style\s*=\s*[\w.]*Stroke/.test(line);
+      const wm = line.match(/(?:strokeWidth|width)\s*=\s*([\d.]+)f/);
+      const width = wm ? +wm[1] : (/StitchedStroke/.test(line) ? 1.5 : 3);
+      const common = {
+        color: colorOrDefault(cArg && cArg.text, '#2C2219'), width,
+        srcLine: single ? li : -1, fn, colRef: spanOf(cArg, li, single), stroked
+      };
+      if (fn === 'drawLine') {
+        const a = resolveOffsetArg(argOf(A, 'start', 1), li, single);
+        const b = resolveOffsetArg(argOf(A, 'end', 2), li, single);
+        if (a && b) scene.push({ type: 'line', a, b, ...common }); else sceneSkipped++;
+        return true;
+      }
+      if (fn === 'drawCircle') {
+        const c = resolveOffsetArg(argOf(A, 'center', 2), li, single);
+        const rArg = argOf(A, 'radius', 1);
+        const r = rArg ? evalExpr(rArg.text, env, null) : null;
+        if (c && r !== null) scene.push({ type: 'circle', c, r, fill: !stroked, ...common,
+                                          rRef: /^[\d.]+f$/.test(rArg.text) ? spanOf(rArg, li, single) : null });
+        else sceneSkipped++;
+        return true;
+      }
+      const tl = resolveOffsetArg(argOf(A, 'topLeft', 1), li, single);
+      const szArg = argOf(A, 'size', 2);
+      const sm = szArg && szArg.text.match(/^(?:[\w.]*\.)?Size\(([\s\S]*)\)$/);
+      const parts = sm ? splitArgs(sm[1], 0) : null;
+      const w = parts && parts.length === 2 ? evalExpr(parts[0].text, env, null) : null;
+      const h = parts && parts.length === 2 ? evalExpr(parts[1].text, env, null) : null;
+      if (tl && w !== null && h !== null) scene.push({ type: fn === 'drawRect' ? 'rect' : 'oval', c: tl, w, h, fill: !stroked, ...common });
       else sceneSkipped++;
       return true;
     }
     return false;
   }
 
-  function offsetStatic(xExpr, yExpr) {
-    const t = curT();
-    const vx = evalExpr(xExpr, env, dottedFb), vy = evalExpr(yExpr, env, dottedFb);
-    if (vx === null || vy === null) return null;
-    return { sx: vx + (t ? t.x - cxIfAbs(xExpr) : 0), sy: vy + (t ? t.y - cyIfAbs(yExpr) : 0) };
-  }
-  // Inside a transform, coordinates are local — but expressions that already resolved
-  // through cx/cy (or dotted anchors) are absolute; don't double-shift those.
-  const cxIfAbs = e => /\bcx\b|\.x\b/.test(e) ? cx : 0;
-  const cyIfAbs = e => /\bcy\b|\.y\b/.test(e) ? cy : 0;
-
-  // A coordinate expression inside the current transform, axis-aware
-  function axisVal(pe, axis) {
-    const t = curT();
-    const anchor = t ? t[axis] : (axis === 'x' ? cx : cy);
-    if (pe.base === null) return (t ? t[axis] : (axis === 'x' ? cx : cy)) + pe.off;
-    const v = env[pe.base];
-    if (v === undefined) return anchor + pe.off;
-    return v + (t ? t[axis] : 0) + pe.off;
-  }
-  function staticAdj(expr, v, axis) {
-    const t = curT();
-    if (!t || v === null) return v;
-    return v + t[axis] - (axis === 'x' ? cxIfAbs(expr) : cyIfAbs(expr));
-  }
-
-  function processLine(line, li) {
+  function processLine(line, li, single) {
     let m;
     if (cur) {
-      curDepth += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+      curDepth += braces(line);
       const cm = line.match(/\b(moveTo|lineTo)\s*\(/);
       if (cm) {
-        const p = ptIndex[li + ':' + cm.index];
+        const p = single ? ptIndex[li + ':' + cm.index] : null;
         if (p) {
           const t = curT();
           if (t) p.t = { x: t.x, y: t.y };
           cur.cmds.push({ op: cm[1] === 'moveTo' ? 'M' : 'L', pt: p });
+          cur.lastPtLine = li;
         } else {
-          const am = line.slice(cm.index).match(/\(([^()]*)\)/);
-          const parts = am ? am[1].split(',') : [];
-          const vx = parts.length === 2 ? staticAdj(parts[0], evalExpr(parts[0], env, dottedFb), 'x') : null;
-          const vy = parts.length === 2 ? staticAdj(parts[1], evalExpr(parts[1], env, dottedFb), 'y') : null;
-          if (vx !== null && vy !== null) cur.cmds.push({ op: cm[1] === 'moveTo' ? 'M' : 'L', sx: vx, sy: vy });
+          const call = callArgs(line, cm[1]);
+          const parts = call ? call.args : [];
+          const vx = parts.length === 2 ? staticAdj(parts[0].text, evalExpr(parts[0].text, env, dottedFb), 'x') : null;
+          const vy = parts.length === 2 ? staticAdj(parts[1].text, evalExpr(parts[1].text, env, dottedFb), 'y') : null;
+          if (vx !== null && vy !== null) { cur.cmds.push({ op: cm[1] === 'moveTo' ? 'M' : 'L', sx: vx, sy: vy }); cur.lastPtLine = li; }
           else cur.bad = true;
         }
       }
-      const qm = line.match(/\bquadratic(?:Bezier)?To\s*\(([^()]*)\)/);
+      const qm = line.match(/\bquadratic(?:Bezier)?To\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/);
       if (qm) {
         // Control points aren't draggable but resolve with the same base-defaulting as handles
-        const a = qm[1].split(',').map((s, ai) => {
+        const a = splitArgs(qm[1], 0).map((s, ai) => {
           const axis = ai % 2 === 0 ? 'x' : 'y';
-          const pe = parseArgExpr(s);
+          const pe = parseArgExpr(s.text);
           if (pe) return axisVal(pe, axis);
-          return staticAdj(s, evalExpr(s, env, dottedFb), axis);
+          return staticAdj(s.text, evalExpr(s.text, env, dottedFb), axis);
         });
-        if (a.length === 4 && a.every(v => v !== null)) cur.cmds.push({ op: 'Q', pts: a });
+        if (a.length === 4 && a.every(v => v !== null)) { cur.cmds.push({ op: 'Q', pts: a }); cur.lastPtLine = li; }
         else cur.bad = true;
       }
       const am = line.match(/\badd(Arc|Oval|Rect)\(\s*(?:[\w.]+\.)?Rect\(\s*([^()]*?)\s*\)\s*(?:,\s*([-\d.]+)f\s*,\s*([-\d.]+)f\s*)?\)/);
@@ -675,8 +911,8 @@ function parseScene(code) {
                           start: am[3] !== undefined ? +am[3] : 0, sweep: am[4] !== undefined ? +am[4] : 360 });
         } else cur.arcs = (cur.arcs || 0) + 1;  // unresolvable arc: partial, Forge shows it
       }
-      if (/\bclose\s*\(\s*\)/.test(line)) cur.cmds.push({ op: 'Z' });
-      if (curDepth <= 0) { kpaths[cur.name] = cur; cur = null; }
+      if (/\bclose\s*\(\s*\)/.test(line)) { cur.cmds.push({ op: 'Z' }); cur.closeLine = li; }
+      if (curDepth <= 0) { cur.endLine = li; kpaths[cur.name] = cur; kpathsByName[cur.name] = cur; cur = null; }
       return;
     }
     // withTransform({ translate(x, y) … }): drawing inside is in local coordinates
@@ -692,67 +928,140 @@ function parseScene(code) {
       return;
     }
     m = line.match(/val\s+(\w+)\s*=\s*(?:[\w.]+\.)?Path\(\)\.apply\s*\{/);
-    if (m) { cur = { name: m[1], cmds: [], bad: false }; curDepth = 1; return; }
-    // val X = Offset(...): a named point later used as start=/end=/center=
-    m = line.match(/val\s+(\w+)\s*=\s*(?:[\w.]+\.)?Offset\(\s*([^,()]+?)\s*,\s*([^()]+?)\s*\)\s*$/);
+    if (m) { cur = { name: m[1], cmds: [], bad: false, startLine: li, lastPtLine: li }; curDepth = 1; return; }
+    // val X = Offset(...): a named point later used positionally or as start=/end=/center=
+    m = line.match(/val\s+(\w+)\s*=\s*(?:[\w.]+\.)?Offset\(([\s\S]*)\)\s*$/);
     if (m) {
-      const vx = evalExpr(m[2], env, dottedFb), vy = evalExpr(m[3], env, dottedFb);
-      if (vx !== null && vy !== null) offsetVals[m[1]] = { x: vx, y: vy };
-      return;
-    }
-    // val X = when (...) { — take the first branch value that evaluates (variant 0)
-    m = line.match(/val\s+(\w+)\s*=\s*when\s*\(.*\{\s*$/);
-    if (m) {
-      for (let j = li + 1; j < Math.min(li + 30, lines.length); j++) {
-        if (/^\s*\}/.test(lines[j])) break;
-        const bm = lines[j].match(/->\s*([^{].*)$/);
-        if (bm) { const v = evalExpr(bm[1], env, null); if (v !== null) { env[m[1]] = v; break; } }
+      const parts = splitArgs(m[2], 0);
+      if (parts.length === 2) {
+        const vx = staticAdj(parts[0].text, evalExpr(parts[0].text, env, dottedFb), 'x');
+        const vy = staticAdj(parts[1].text, evalExpr(parts[1].text, env, dottedFb), 'y');
+        if (vx !== null && vy !== null) {
+          offsetVals[m[1]] = { x: vx, y: vy };
+          env[m[1] + '.x'] = vx; env[m[1] + '.y'] = vy;   // so ballPos.x resolves downstream
+        }
       }
       return;
     }
-    m = line.match(/val\s+(\w+)\s*=\s*(.+)$/);
-    if (m && !/Path\(/.test(m[2])) { const v = evalExpr(m[2], env, null); if (v !== null) env[m[1]] = v; return; }
-    m = line.match(/drawStitchedFill\(\s*(?:this|scope|drawScope)\s*,\s*(\w+)\s*,\s*([^)]+)\)/);
+    // val X = when { … }: rest pose is the else branch, then any branch whose
+    // condition is true, then whatever evaluates at all.
+    m = line.match(/val\s+(\w+)\s*(?::\s*[\w.<>?]+\s*)?=\s*when\s*(?:\([^()]*\))?\s*\{\s*$/);
     if (m) {
-      if (kpaths[m[1]] && !kpaths[m[1]].bad) {
-        scene.push({ type: 'fill', cmds: kpaths[m[1]].cmds, color: colorOf(m[2]) });
-        if (kpaths[m[1]].arcs) sceneSkipped++;  // arc segments in it only show via Forge
+      const end = blockEnd(li);
+      let elseV = null, trueV = null, anyV = null;
+      for (let j = li + 1; j <= end; j++) {
+        const bm = lines[j].match(/^\s*(.*?)\s*->\s*(.*)$/);
+        if (!bm) continue;
+        let rhs = bm[2].trim();
+        if (!rhs && j + 1 <= end) rhs = lines[j + 1].trim();
+        const v = evalExpr(rhs, env, null);
+        if (v === null) continue;
+        if (/^else$/.test(bm[1])) { if (elseV === null) elseV = v; continue; }
+        const cond = evalExpr(bm[1], env, null);
+        if (cond !== null && cond !== 0 && trueV === null) trueV = v;
+        if (anyV === null) anyV = v;
+      }
+      const pick = elseV !== null ? elseV : trueV !== null ? trueV : anyV;
+      if (pick !== null) env[m[1]] = pick;
+      return;
+    }
+    m = line.match(/val\s+(\w+)\s*(?::\s*[\w.<>?]+\s*)?=\s*(.+?)\s*$/);
+    if (m && !/Path\(/.test(m[2])) {
+      const v = evalExpr(m[2], env, null);
+      if (v !== null) { env[m[1]] = v; return; }
+      const c = resolveColor(m[2]);
+      if (c) { colorEnv[m[1]] = c; return; }
+      return;
+    }
+    m = line.match(/\bdrawStitchedFill\s*\(/);
+    if (m) {
+      const call = callArgs(line, 'drawStitchedFill');
+      const A = call ? call.args : [];
+      const pArg = argOf(A, null, 1), cArg = argOf(A, null, 2);
+      const kp = pArg && kpaths[pArg.text];
+      if (kp && !kp.bad) {
+        scene.push({ type: 'fill', cmds: kp.cmds, path: pArg.text, srcLine: single ? li : -1,
+                     color: colorOrDefault(cArg && cArg.text, '#B08221'), colRef: spanOf(cArg, li, single),
+                     fn: 'drawStitchedFill', stitched: true });
+        if (kp.arcs) sceneSkipped++;  // arc segments in it only show via Forge
       } else sceneSkipped++;
       return;
     }
-    m = line.match(/drawPath\(\s*(\w+)\s*,\s*([^,)]+)/);
+    m = line.match(/\bdrawPath\s*\(/);
     if (m) {
-      if (kpaths[m[1]] && !kpaths[m[1]].bad) {
+      const call = callArgs(line, 'drawPath');
+      const A = call ? call.args : [];
+      const pArg = argOf(A, null, 0), cArg = argOf(A, 'color', 1);
+      const kp = pArg && kpaths[pArg.text];
+      if (kp && !kp.bad) {
+        // drawPath with no style = is a FILL in Compose. Treating it as a stroke is
+        // why the scythe, halberd and winged axe drew as bare outlines here.
+        const stroked = /style\s*=\s*[\w.]*Stroke/.test(line);
         const wm = line.match(/width\s*=\s*([\d.]+)f/);
-        scene.push({ type: 'stroke', cmds: kpaths[m[1]].cmds, color: colorOf(m[2]), width: wm ? +wm[1] : 3 });
+        scene.push({ type: stroked ? 'stroke' : 'fill', cmds: kp.cmds, path: pArg.text,
+                     color: colorOrDefault(cArg && cArg.text, stroked ? '#2C2219' : '#B08221'),
+                     width: wm ? +wm[1] : (/StitchedStroke/.test(line) ? 1.5 : 3),
+                     srcLine: single ? li : -1, colRef: spanOf(cArg, li, single), fn: 'drawPath', stroked });
       } else sceneSkipped++;
       return;
     }
-    if (handleDrawCall(line, li)) return;
+    if (handleDrawCall(line, li, single)) return;
     if (/drawArc|drawPoints|drawImage/.test(line)) sceneSkipped++;
   }
 
-  // Main walk — last so every helper (incl. const axis helpers) is initialised
-  for (let li = 0; li < lines.length; li++) {
-    const line = lines[li];
-
-    // Multi-line draw call: join lines until parens balance so named args resolve
-    if (!cur && /\bdraw(Line|Circle|Rect|Oval)\(/.test(line) &&
-        (line.match(/\(/g) || []).length > (line.match(/\)/g) || []).length) {
-      let joined = line, j = li;
-      while (j + 1 < lines.length && (joined.match(/\(/g) || []).length > (joined.match(/\)/g) || []).length && j - li < 10) {
-        j++; joined += ' ' + lines[j].trim();
-      }
-      depth += (joined.match(/\{/g) || []).length - (joined.match(/\}/g) || []).length;
-      li = j;
-      handleDrawCall(joined, -1);   // -1: no per-line pt lookup; offsets resolve statically
-      continue;
-    }
-
-    processLine(line, li);
-    depth += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
-    while (tstack.length && depth < tstack[tstack.length - 1].depth) tstack.pop();
+  function loopRange(spec) {
+    let m = spec.match(/^(.+?)\s+until\s+(.+)$/);
+    if (m) { const a = evalExpr(m[1], env, null), b = evalExpr(m[2], env, null);
+             return a === null ? null : [a, b === null ? a + 1 : b]; }
+    m = spec.match(/^(.+?)\s*\.\.\s*(.+)$/);
+    if (m) { const a = evalExpr(m[1], env, null), b = evalExpr(m[2], env, null);
+             return a === null ? null : [a, (b === null ? a : b) + 1]; }
+    return null;
   }
+
+  function walk(from, to) {
+    for (let li = from; li <= to; li++) {
+      const line = lines[li];
+      // Loops: unrolled so the pieces they draw (flail spikes, mace studs, ferrule
+      // bands) actually appear. An unresolvable bound still draws one iteration —
+      // one spike beats none.
+      if (!cur) {
+        let bodyVar = null, values = null, end = -1;
+        let lm = line.match(FOR_RE);
+        if (lm) {
+          end = blockEnd(li); bodyVar = lm[1];
+          const rng = loopRange(lm[2]);
+          if (!rng) { sceneSkipped++; values = [0]; }
+          else { values = []; for (let k = rng[0]; k < Math.min(rng[1], rng[0] + 32); k++) values.push(k); }
+        } else if ((lm = line.match(FOREACH_RE))) {
+          end = blockEnd(li); bodyVar = lm[2] || 'it';
+          values = splitArgs(lm[1], 0).map(a => evalExpr(a.text, env, null)).filter(v => v !== null);
+          if (!values.length) values = [0];
+        } else if ((lm = line.match(REPEAT_RE))) {
+          end = blockEnd(li); bodyVar = 'it';
+          const n = evalExpr(lm[1], env, null);
+          values = []; for (let k = 0; k < Math.min(n === null ? 1 : n, 32); k++) values.push(k);
+          if (!values.length) values = [0];
+        }
+        if (values) {
+          const saved = env[bodyVar];
+          for (const v of values) { env[bodyVar] = v; walk(li + 1, end - 1); }
+          if (saved === undefined) delete env[bodyVar]; else env[bodyVar] = saved;
+          depth += braces(lines.slice(li, end + 1).join('\n'));
+          li = end;
+          continue;
+        }
+      }
+      // Multi-line calls join until the parens balance, so named args and Offsets resolve
+      let joined = line, j = li;
+      while (parenDebt(joined) > 0 && j + 1 < lines.length && j - li < 12) { j++; joined += ' ' + lines[j].trim(); }
+      processLine(joined, li, j === li);
+      depth += braces(joined);
+      li = j;
+      while (tstack.length && depth < tstack[tstack.length - 1].depth) tstack.pop();
+    }
+  }
+  walk(0, lines.length - 1);
 }
 
 // ---- view transform: zoom the shape to fill the canvas, all edits stay in model units ----
@@ -779,176 +1088,538 @@ function fitView() {
   view.ty = canvas.height / 2 - (miny + maxy) / 2 * view.k;
 }
 
+// ---- writing edits back into the Kotlin ----
 function fmtNum(n) { const r = Math.round(n * 2) / 2; return (r % 1 === 0 ? r.toFixed(0) : r.toFixed(1)); }
 function argText(p) {
   if (!p.base) return fmtNum(p.off) + 'f';
   if (p.off === 0) return p.base;
   return `${p.base} ${p.off < 0 ? '-' : '+'} ${fmtNum(Math.abs(p.off))}f`;
 }
+function say(t) { $('msg').textContent = t; }
+function pushUndo() { undoStack.push($('source').value); if (undoStack.length > 60) undoStack.shift(); }
+function commit(text, note) {
+  $('source').value = text;
+  refresh(false);
+  buildColorPickers();
+  if (note) say(note);
+}
+function refresh(refit) {
+  parseScene($('source').value);
+  if (refit) fitView();
+  const bits = [`${scene.length} shapes`, `${editPts.length} points`];
+  if (sceneSkipped) bits.push(`${sceneSkipped} procedural (Forge only)`);
+  if (sceneDark) bits.push(`⚠ ${sceneDark} unresolved colour${sceneDark > 1 ? 's' : ''} (drawn flat grey)`);
+  $('sceneStat').textContent = bits.join(' · ');
+}
 function writePointsBack() {
   const lines = $('source').value.split('\n');
   // Rewrite right-to-left within each line so earlier offsets stay valid
-  [...editPts].sort((a,b) => b.line - a.line || b.start - a.start).forEach(p => {
+  [...editPts].sort((a, b) => b.line - a.line || b.start - a.start).forEach(p => {
     const line = lines[p.line];
     lines[p.line] = line.slice(0, p.start) + `${p.kind}(${argText(p.x)}, ${argText(p.y)})` + line.slice(p.end);
   });
-  $('source').value = lines.join('\n');
-  parseScene($('source').value); // re-sync spans + live shapes after rewrite
+  commit(lines.join('\n'), 'Point written into the Kotlin — Save asset back, then Forge to confirm.');
 }
+function replaceSpan(ref, text) {
+  const lines = $('source').value.split('\n');
+  const l = lines[ref.line];
+  lines[ref.line] = l.slice(0, ref.at) + text + l.slice(ref.at + ref.len);
+  return lines.join('\n');
+}
+const indentOf = l => (l.match(/^\s*/) || [''])[0];
+function insertLine(src, at, text) {
+  const lines = src.split('\n');
+  lines.splice(at, 0, text);
+  return lines.join('\n');
+}
+// Which receiver this region draws through — some bodies use `scope.drawX`, some are
+// already inside a DrawScope and call `drawX` bare.
+function receiver() {
+  const s = $('source').value;
+  return /\bscope\.draw/.test(s) ? { call: 'scope.', self: 'scope' } : { call: '', self: 'this' };
+}
+// Replace or append a named argument on a call, without disturbing the rest of the line.
+function setArg(line, fn, name, value) {
+  const call = callArgs(line, fn);
+  if (!call) return line;
+  const a = argOf(call.args, name);
+  if (a) return line.slice(0, a.at) + value + line.slice(a.at + a.text.length);
+  return line.slice(0, call.close) + `, ${name} = ${value}` + line.slice(call.close);
+}
+function removeArg(line, fn, name) {
+  const call = callArgs(line, fn);
+  if (!call) return line;
+  const full = call.args.find(x => { const m = x.text.match(NAMED_ARG); return m && m[1] === name; });
+  if (!full) return line;
+  let from = full.at, to = full.at + full.text.length;
+  while (from > call.open + 1 && /[\s,]/.test(line[from - 1])) from--;
+  if (line[from - 1] === ',' ) from--;
+  else { while (to < call.close && /[\s,]/.test(line[to])) to++; }
+  return line.slice(0, from) + line.slice(to);
+}
+
+// ---- tools ----
+let mode = 'drag', linked = true, shapeKind = 'circle';
+const TIPS = {
+  drag: 'Drag any handle. Squares are lineTo, diamonds are moveTo, rings are circle centres — the small ring on a circle sets its radius.',
+  add: 'Click to add a point to the selected path. Linked continues the outline; New subpath lifts the pen (moveTo).',
+  delete: 'Click a handle to remove that point from the path.',
+  fill: 'Click a shape to fill it with the fill colour.',
+  unfill: 'Click a filled shape to strip its fill and leave the outline.',
+  line: 'Click a shape to give its outline the line colour.',
+  shape: 'Click to drop a circle or square at that spot, sized by the size box.'
+};
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  $('ctxAdd').style.display = m === 'add' ? '' : 'none';
+  $('ctxShape').style.display = m === 'shape' ? '' : 'none';
+  $('tip').textContent = TIPS[m] || '';
+  canvas.style.cursor = m === 'drag' ? 'grab' : 'crosshair';
+}
+document.querySelectorAll('.mode').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+$('linkOn').onclick = () => { linked = true; $('linkOn').classList.add('on'); $('linkOff').classList.remove('on'); };
+$('linkOff').onclick = () => { linked = false; $('linkOff').classList.add('on'); $('linkOn').classList.remove('on'); };
+$('shapeCircle').onclick = () => { shapeKind = 'circle'; $('shapeCircle').classList.add('on'); $('shapeSquare').classList.remove('on'); };
+$('shapeSquare').onclick = () => { shapeKind = 'square'; $('shapeSquare').classList.add('on'); $('shapeCircle').classList.remove('on'); };
+setMode('drag');
+
+document.addEventListener('keydown', e => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+  const k = { v: 'drag', a: 'add', d: 'delete', f: 'fill', x: 'unfill', l: 'line', s: 'shape' }[e.key.toLowerCase()];
+  if (k) { setMode(k); e.preventDefault(); }
+});
+function undo() {
+  if (!undoStack.length) return say('Nothing left to undo.');
+  commit(undoStack.pop(), 'Undone.');
+}
+$('undoBtn').onclick = undo;
+$('fitBtn').onclick = () => { fitView(); };
+
+// The point closest to the cursor, in screen space, within grab range.
+function hitPoint(mx, my) {
+  let best = null, bd = 9;
+  editPts.forEach((p, i) => {
+    const s = resolvePt({ pt: p }); if (!s) return;
+    const sc = toScr(s);
+    const d = Math.max(Math.abs(sc.x - mx), Math.abs(sc.y - my));
+    if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+}
+// Circle radius handles ride on the right edge of each circle.
+function hitRadius(mx, my) {
+  for (let i = scene.length - 1; i >= 0; i--) {
+    const s = scene[i];
+    if (s.type !== 'circle' || !s.rRef) continue;
+    const c = resolvePt(s.c); if (!c) continue;
+    const sc = toScr({ x: c.x + s.r, y: c.y });
+    if (Math.hypot(sc.x - mx, sc.y - my) < 7) return i;
+  }
+  return null;
+}
+// Canvas does the geometry: trace each shape in model space and ask if the point is
+// inside it (or on its stroke). Topmost wins.
+function hitShape(m) {
+  for (let i = scene.length - 1; i >= 0; i--) {
+    const s = scene[i];
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.beginPath();
+    if (s.cmds) tracePath(s.cmds);
+    else if (s.type === 'line') {
+      const a = resolvePt(s.a), b = resolvePt(s.b);
+      if (a && b) { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
+    } else if (s.type === 'circle') {
+      const c = resolvePt(s.c); if (c) ctx.arc(c.x, c.y, s.r, 0, Math.PI * 2);
+    } else {
+      const c = resolvePt(s.c);
+      if (c) { if (s.type === 'rect') ctx.rect(c.x, c.y, s.w, s.h); else ctx.ellipse(c.x + s.w / 2, c.y + s.h / 2, Math.abs(s.w / 2), Math.abs(s.h / 2), 0, 0, Math.PI * 2); }
+    }
+    ctx.lineWidth = Math.max((s.width || 3), 8 / view.k);
+    const hit = ctx.isPointInPath(m.x, m.y) || ctx.isPointInStroke(m.x, m.y);
+    ctx.restore();
+    if (hit) return i;
+  }
+  return null;
+}
+
+// A new point inherits the anchoring of its neighbour, so fresh geometry stays
+// attached to headPos/hx/hy like the rest of the piece instead of to raw canvas numbers.
+function anchorSample(pathObj) {
+  if (pathObj) {
+    const ref = [...pathObj.cmds].reverse().find(c => c.pt);
+    if (ref) return ref.pt;
+  }
+  const tally = {};
+  editPts.forEach(p => { const k = (p.x.base || '') + '|' + (p.y.base || ''); tally[k] = (tally[k] || 0) + 1; });
+  const best = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
+  if (!best || best[0] === '|') return null;
+  return editPts.find(p => (p.x.base || '') + '|' + (p.y.base || '') === best[0]) || null;
+}
+function pointArgs(pathObj, mx, my) {
+  const src = anchorSample(pathObj);
+  const mk = (axis, v) => {
+    const base = src ? src[axis].base : null;
+    const anchor = src ? ptAxis(src, axis) - src[axis].off : (axis === 'x' ? cx : cy);
+    return argText({ base, off: v - anchor });
+  };
+  return [mk('x', mx), mk('y', my)];
+}
+function activePath() {
+  if (selPath && kpathsByName[selPath]) return kpathsByName[selPath];
+  const names = Object.keys(kpathsByName);
+  return names.length ? kpathsByName[names[names.length - 1]] : null;
+}
+
+function addPoint(m) {
+  const p = activePath();
+  if (!p) return newPath(m);
+  const [xa, ya] = pointArgs(p, m.x, m.y);
+  const src = $('source').value.split('\n');
+  const at = (p.closeLine !== undefined && p.closeLine > p.lastPtLine) ? p.closeLine : p.lastPtLine + 1;
+  pushUndo();
+  commit(insertLine($('source').value, at, indentOf(src[p.lastPtLine]) + `${linked ? 'lineTo' : 'moveTo'}(${xa}, ${ya})`),
+         `${linked ? 'Linked' : 'Unlinked'} point added to ${p.name}.`);
+  selPath = p.name;
+}
+function newPath(m) {
+  const r = receiver();
+  const src = $('source').value;
+  const name = 'path_' + (Object.keys(kpathsByName).length + 1);
+  const ind = indentOf(src.split('\n').filter(l => l.trim()).pop() || '    ');
+  const [xa, ya] = pointArgs(null, m.x, m.y);
+  const block = [
+    `${ind}val ${name} = Path().apply {`,
+    `${ind}    moveTo(${xa}, ${ya})`,
+    `${ind}}`,
+    `${ind}drawStitchedFill(${r.self}, ${name}, ${ktColor(fillColor)})`,
+    `${ind}${r.call}drawPath(${name}, ${ktColor(lineColor)}, style = StitchedStroke)`
+  ].join('\n');
+  pushUndo();
+  commit(src.replace(/\s*$/, '') + '\n' + block + '\n', `Started ${name}. Keep clicking to add points.`);
+  selPath = name;
+}
+function deletePoint(i) {
+  const p = editPts[i];
+  const lines = $('source').value.split('\n');
+  const line = lines[p.line];
+  const rest = (line.slice(0, p.start) + line.slice(p.end)).trim();
+  pushUndo();
+  if (!rest) {
+    lines.splice(p.line, 1);
+    // A path can't start with lineTo — promote the next point so the shape survives.
+    const owner = Object.values(kpathsByName).find(k => p.line > k.startLine && p.line <= k.endLine);
+    if (owner && p.kind === 'moveTo') {
+      for (let j = p.line; j <= owner.endLine && j < lines.length; j++) {
+        if (/\blineTo\s*\(/.test(lines[j])) { lines[j] = lines[j].replace(/\blineTo\s*\(/, 'moveTo('); break; }
+      }
+    }
+  } else {
+    lines[p.line] = line.slice(0, p.start) + line.slice(p.end);
+  }
+  commit(lines.join('\n'), 'Point removed.');
+}
+
+// Fill / no-fill / line colour all work the same way: find the call that decides it,
+// and rewrite that one argument. Paths get a companion drawStitchedFill; primitives
+// just gain or lose their `style = Stroke(...)`.
+function siblingOf(shape, type) {
+  return scene.find(s => s !== shape && s.path && s.path === shape.path && s.type === type);
+}
+function applyFill(shape) {
+  const kt = ktColor(fillColor);
+  if (shape.path) {
+    const filled = shape.type === 'fill' ? shape : siblingOf(shape, 'fill');
+    if (filled && filled.colRef) { pushUndo(); return commit(replaceSpan(filled.colRef, kt), 'Fill recoloured.'); }
+    if (shape.srcLine < 0) return say('That call spans several lines — edit it in the text panel.');
+    const r = receiver();
+    const lines = $('source').value.split('\n');
+    pushUndo();
+    return commit(insertLine($('source').value, shape.srcLine,
+      indentOf(lines[shape.srcLine]) + `drawStitchedFill(${r.self}, ${shape.path}, ${kt})`), 'Fill added under the outline.');
+  }
+  if (shape.srcLine < 0) return say('That call spans several lines — edit it in the text panel.');
+  const lines = $('source').value.split('\n');
+  if (shape.type === 'line') return say('A line has no inside to fill — use Line colour instead.');
+  let line = removeArg(lines[shape.srcLine], shape.fn, 'style');
+  line = shape.colRef ? line.slice(0, shape.colRef.at) + kt + line.slice(shape.colRef.at + shape.colRef.len) : line;
+  lines[shape.srcLine] = line;
+  pushUndo();
+  commit(lines.join('\n'), 'Shape filled.');
+}
+function applyUnfill(shape) {
+  if (shape.path) {
+    const filled = shape.type === 'fill' ? shape : siblingOf(shape, 'fill');
+    if (!filled) return say('That shape has no fill to remove.');
+    if (filled.srcLine < 0) return say('That call spans several lines — edit it in the text panel.');
+    const lines = $('source').value.split('\n');
+    pushUndo();
+    if (filled.stitched) {
+      lines.splice(filled.srcLine, 1);           // drop the drawStitchedFill line entirely
+      return commit(lines.join('\n'), 'Fill removed — outline kept.');
+    }
+    lines[filled.srcLine] = setArg(lines[filled.srcLine], 'drawPath', 'style', 'Stroke(width = 3f)');
+    return commit(lines.join('\n'), 'Fill removed — now an outline.');
+  }
+  if (shape.srcLine < 0) return say('That call spans several lines — edit it in the text panel.');
+  if (shape.type === 'line') return say('A line is already only an outline.');
+  const lines = $('source').value.split('\n');
+  pushUndo();
+  lines[shape.srcLine] = setArg(lines[shape.srcLine], shape.fn, 'style', 'Stroke(width = 2f)');
+  commit(lines.join('\n'), 'Fill removed.');
+}
+function applyLineColor(shape) {
+  const kt = ktColor(lineColor);
+  const outline = (shape.type === 'stroke' || shape.type === 'line' || !shape.fill && !shape.path)
+    ? shape : (shape.path ? siblingOf(shape, 'stroke') : null);
+  if (outline && outline.colRef) { pushUndo(); return commit(replaceSpan(outline.colRef, kt), 'Outline recoloured.'); }
+  if (shape.srcLine < 0) return say('That call spans several lines — edit it in the text panel.');
+  const lines = $('source').value.split('\n');
+  const ind = indentOf(lines[shape.srcLine]);
+  const r = receiver();
+  pushUndo();
+  if (shape.path) {
+    return commit(insertLine($('source').value, shape.srcLine + 1,
+      `${ind}${r.call}drawPath(${shape.path}, ${kt}, style = StitchedStroke)`), 'Outline added in the line colour.');
+  }
+  // A filled primitive gets a companion stroked copy — the same pairing the renderer uses.
+  const copy = lines[shape.srcLine].replace(/^\s*/, '');
+  const stroked = setArg(copy.replace(/(\(\s*)[^,]+/, `$1${kt}`), shape.fn, 'style', 'Stroke(width = 2f)');
+  commit(insertLine($('source').value, shape.srcLine + 1, ind + stroked), 'Outline added in the line colour.');
+}
+
+function addShape(m) {
+  const size = Math.max(2, parseFloat($('shapeSize').value) || 14);
+  const r = receiver();
+  const src = $('source').value;
+  const ind = indentOf(src.split('\n').filter(l => l.trim()).pop() || '    ');
+  pushUndo();
+  if (shapeKind === 'circle') {
+    const [xa, ya] = pointArgs(null, m.x, m.y);
+    const body = `${ind}${r.call}drawCircle(${ktColor(fillColor)}, radius = ${fmtNum(size)}f, center = Offset(${xa}, ${ya}))\n`
+               + `${ind}${r.call}drawCircle(${ktColor(lineColor)}, radius = ${fmtNum(size)}f, center = Offset(${xa}, ${ya}), style = StitchedStroke)`;
+    return commit(src.replace(/\s*$/, '') + '\n' + body + '\n', 'Circle added — drag its centre or edge handle to adjust.');
+  }
+  const h = size / 2, name = 'square_' + (Object.keys(kpathsByName).length + 1);
+  const corners = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([dx, dy]) => pointArgs(null, m.x + dx, m.y + dy));
+  const block = [
+    `${ind}val ${name} = Path().apply {`,
+    `${ind}    moveTo(${corners[0][0]}, ${corners[0][1]})`,
+    ...corners.slice(1).map(c => `${ind}    lineTo(${c[0]}, ${c[1]})`),
+    `${ind}    close()`,
+    `${ind}}`,
+    `${ind}drawStitchedFill(${r.self}, ${name}, ${ktColor(fillColor)})`,
+    `${ind}${r.call}drawPath(${name}, ${ktColor(lineColor)}, style = StitchedStroke)`
+  ].join('\n');
+  commit(src.replace(/\s*$/, '') + '\n' + block + '\n', 'Square added — all four corners are draggable.');
+  selPath = name;
+}
+
+// ---- pointer ----
 canvas.onmousedown = e => {
   const r = canvas.getBoundingClientRect();
   const mx = e.clientX - r.left, my = e.clientY - r.top;
-  dragIdx = null;
-  editPts.forEach((p, i) => {
-    const s = resolvePt({ pt: p });
-    if (!s) return;
-    const sc = toScr(s);
-    if (Math.abs(sc.x - mx) < 8 && Math.abs(sc.y - my) < 8) dragIdx = i;
-  });
-  if (dragIdx !== null) return;
   const m = toModel(mx, my);
-  currentPoints.push({ x: Math.round(m.x/5)*5, y: Math.round(m.y/5)*5 });
+  dragIdx = null; dragKind = null;
+
+  if (mode === 'drag') {
+    const ri = hitRadius(mx, my);
+    if (ri !== null) { dragIdx = ri; dragKind = 'r'; return; }
+    const pi = hitPoint(mx, my);
+    if (pi !== null) { dragIdx = pi; dragKind = 'pt'; return; }
+    const si = hitShape(m);
+    if (si !== null && scene[si].path) { selPath = scene[si].path; say(`Selected ${selPath}.`); }
+    return;
+  }
+  if (mode === 'add') return addPoint(m);
+  if (mode === 'shape') return addShape(m);
+  if (mode === 'delete') {
+    const pi = hitPoint(mx, my);
+    return pi === null ? say('Click directly on a handle to delete it.') : deletePoint(pi);
+  }
+  const si = hitShape(m);
+  if (si === null) return say('No shape there — click on the shape you want to change.');
+  const shape = scene[si];
+  if (shape.path) selPath = shape.path;
+  if (mode === 'fill') return applyFill(shape);
+  if (mode === 'unfill') return applyUnfill(shape);
+  if (mode === 'line') return applyLineColor(shape);
 };
 canvas.onmousemove = e => {
-  if (dragIdx === null) return;
   const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  mouseModel = toModel(mx, my);
+  if (dragIdx === null) {
+    hoverShape = (mode === 'fill' || mode === 'unfill' || mode === 'line') ? hitShape(mouseModel) : null;
+    return;
+  }
+  if (dragKind === 'r') {
+    const s = scene[dragIdx], c = resolvePt(s.c);
+    if (c) s.r = Math.max(1, Math.hypot(mouseModel.x - c.x, mouseModel.y - c.y));
+    return;
+  }
   const p = editPts[dragIdx];
-  const m = toModel(e.clientX - r.left, e.clientY - r.top);
   // Mirror ptAxis: subtract the same effective base (incl. transform origin) that rendering adds
-  p.x.off = m.x - (ptAxis(p, 'x') - p.x.off);
-  p.y.off = m.y - (ptAxis(p, 'y') - p.y.off);
+  p.x.off = mouseModel.x - (ptAxis(p, 'x') - p.x.off);
+  p.y.off = mouseModel.y - (ptAxis(p, 'y') - p.y.off);
 };
 canvas.onmouseup = () => {
   if (dragIdx === null) return;
-  writePointsBack();
-  dragIdx = null;
-  $('msg').textContent = 'Point written into the Kotlin — Save asset back, then Forge to confirm in the real renderer.';
+  if (dragKind === 'r') {
+    const s = scene[dragIdx];
+    pushUndo();
+    commit(replaceSpan(s.rRef, fmtNum(s.r) + 'f'), 'Radius written into the Kotlin.');
+  } else {
+    pushUndo();
+    writePointsBack();
+  }
+  dragIdx = null; dragKind = null;
 };
-$('newPathBtn').onclick = commitPath;
-$('clearBtn').onclick = () => { paths = []; currentPoints = []; };
-$('undoBtn').onclick = () => {
-  if (currentPoints.length) currentPoints.pop();
-  else if (paths.length) { currentPoints = paths.pop().points; currentPoints.pop(); }
+canvas.onmouseleave = () => { if (dragIdx !== null) canvas.onmouseup(); mouseModel = null; hoverShape = null; };
+
+// ---- new items ----
+$('blankBtn').onclick = () => {
+  if (!confirm('Replace the code in the editor panel with an empty canvas?')) return;
+  pushUndo();
+  commit('', 'Blank canvas. Pick Add point or Add shape to start drawing.');
+  selPath = null;
 };
-function commitPath() {
-  if (currentPoints.length > 1) paths.push({ points:[...currentPoints], color: selColor, isFilled: $('fillShape').checked });
-  currentPoints = [];
-}
-function generateCodeSnippet() {
-  let code = '';
-  paths.forEach((p, idx) => {
-    if (!p.points.length) return;
-    code += `    val path_${idx} = Path().apply {\n        moveTo(${p.points[0].x-cx}f, ${p.points[0].y-cy}f)\n`;
-    for (let i=1; i<p.points.length; i++) code += `        lineTo(${p.points[i].x-cx}f, ${p.points[i].y-cy}f)\n`;
-    code += `        close()\n    }\n`;
-    code += p.isFilled
-      ? `    drawStitchedFill(scope, path_${idx}, Color(${p.color.kt}))\n    scope.drawPath(path_${idx}, ThreadColor, style = StitchedStroke)\n`
-      : `    scope.drawPath(path_${idx}, Color(${p.color.kt}), style = Stroke(width = 4f))\n`;
-  });
-  return code;
-}
-$('toCanvasBtn').onclick = () => {
-  paths = []; currentPoints = [];
-  parseScene($('source').value);
-  fitView();
-  $('canvas').closest('details').open = true;
-  $('msg').textContent = scene.length
-    ? `Live vectors: ${scene.length} shapes, ${editPts.length} draggable points.` +
-      (sceneSkipped ? ` ${sceneSkipped} procedural piece(s) only show via Forge.` : '')
-    : 'Nothing here is drawable live (fully procedural) — use the Kotlin text + Forge.';
-};
-$('syncBtn').onclick = () => { commitPath(); $('source').value = generateCodeSnippet(); buildColorPickers(); };
 $('injectBtn').onclick = async () => {
-  commitPath();
   try {
     const r = await fetch(API + '/api/inject', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ itemType: $('itemType').value, itemName: $('itemName').value, codeSnippet: generateCodeSnippet() })
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemType: $('itemType').value, itemName: $('itemName').value, codeSnippet: $('source').value })
     });
     const d = await r.json();
-    $('msg').textContent = d.success ? d.message : ('INJECT FAILED: ' + d.message);
+    say(d.success ? d.message : ('INJECT FAILED: ' + d.message));
     if (d.success) boot();
-  } catch (e) { $('msg').textContent = 'Server unreachable.'; }
+  } catch (e) { say('Server unreachable.'); }
 };
 
-// ghost manikin + path render loop for the quick canvas
+// ---- tabs ----
+function showTab(which) {
+  $('paneEditor').style.display = which === 'editor' ? '' : 'none';
+  $('paneTrue').style.display = which === 'true' ? '' : 'none';
+  $('tabEditor').classList.toggle('on', which === 'editor');
+  $('tabTrue').classList.toggle('on', which === 'true');
+}
+$('tabEditor').onclick = () => showTab('editor');
+$('tabTrue').onclick = () => showTab('true');
+
+// Editing the Kotlin by hand redraws immediately — the text and the canvas are one thing.
+$('source').addEventListener('input', () => refresh(false));
+// Re-equipping changes what fighter.<slot>.color resolves to, so colours follow the loadout
+['headSel', 'handleSel', 'shieldSel', 'armorSel', 'helmSel'].forEach(id => $(id).addEventListener('change', () => refresh(false)));
+
+// ---- render loop ----
 const qcBg = new Image();  // last forged frame, drawn behind the handles for context
+function tracePath(cmds) {
+  for (const c of cmds) {
+    if (c.op === 'Z') { ctx.closePath(); continue; }
+    if (c.op === 'Q') { ctx.quadraticCurveTo(c.pts[0], c.pts[1], c.pts[2], c.pts[3]); continue; }
+    if (c.op === 'ARC') {
+      // Compose addArc/addOval: degrees, 0° at 3 o'clock, positive sweep clockwise — same as canvas
+      ctx.ellipse((c.l + c.r) / 2, (c.t + c.b) / 2, Math.abs(c.r - c.l) / 2, Math.abs(c.b - c.t) / 2,
+                  0, c.start * Math.PI / 180, (c.start + c.sweep) * Math.PI / 180);
+      continue;
+    }
+    if (c.op === 'RECTP') { ctx.rect(c.l, c.t, c.r - c.l, c.b - c.t); continue; }
+    const p = resolvePt(c); if (!p) continue;
+    if (c.op === 'M') ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+}
 function qcLoop() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = '#e5dcc8'; ctx.lineWidth = 1;
-  for (let i=0;i<canvas.width;i+=20){ ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,canvas.height);ctx.stroke(); }
-  for (let i=0;i<canvas.height;i+=20){ ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(canvas.width,i);ctx.stroke(); }
+  for (let i = 0; i < canvas.width; i += 20) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+  for (let i = 0; i < canvas.height; i += 20) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
   // Everything from here draws in model space, zoomed by the view transform
   ctx.save();
   ctx.setTransform(view.k, 0, 0, view.k, view.tx, view.ty);
-  ctx.strokeStyle='#c9b895'; ctx.lineWidth = 1/view.k;
-  ctx.beginPath();ctx.moveTo(cx,-2000);ctx.lineTo(cx,2000);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(-2000,cy);ctx.lineTo(2000,cy);ctx.stroke();
+  ctx.strokeStyle = '#c9b895'; ctx.lineWidth = 1 / view.k;
+  ctx.beginPath(); ctx.moveTo(cx, -2000); ctx.lineTo(cx, 2000); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-2000, cy); ctx.lineTo(2000, cy); ctx.stroke();
   // Forged model as a dim ghost for context; the live vectors draw on top of it.
   // Game anchor (w/2, 200) maps onto (cx, cy).
   if (qcBg.complete && qcBg.naturalWidth) {
     ctx.globalAlpha = 0.25;
-    ctx.drawImage(qcBg, cx - qcBg.naturalWidth/2, cy - 200);
+    ctx.drawImage(qcBg, cx - qcBg.naturalWidth / 2, cy - 200);
     ctx.globalAlpha = 1;
   }
 
-  // Live-interpreted Kotlin shapes — these reshape in real time as points drag
-  const tracePath = cmds => {
+  scene.forEach((s, i) => {
     ctx.beginPath();
-    for (const c of cmds) {
-      if (c.op === 'Z') { ctx.closePath(); continue; }
-      if (c.op === 'Q') { ctx.quadraticCurveTo(c.pts[0], c.pts[1], c.pts[2], c.pts[3]); continue; }
-      if (c.op === 'ARC') {
-        // Compose addArc/addOval: degrees, 0° at 3 o'clock, positive sweep clockwise — same as canvas
-        ctx.ellipse((c.l + c.r) / 2, (c.t + c.b) / 2, Math.abs(c.r - c.l) / 2, Math.abs(c.b - c.t) / 2,
-                    0, c.start * Math.PI / 180, (c.start + c.sweep) * Math.PI / 180);
-        continue;
-      }
-      if (c.op === 'RECTP') { ctx.rect(c.l, c.t, c.r - c.l, c.b - c.t); continue; }
-      const p = resolvePt(c); if (!p) continue;
-      if (c.op === 'M') ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
-    }
-  };
-  for (const s of scene) {
-    if (s.type === 'fill') { tracePath(s.cmds); ctx.fillStyle = s.color; ctx.fill(); ctx.strokeStyle = '#2C2219'; ctx.lineWidth = 2; ctx.stroke(); }
-    else if (s.type === 'stroke') { tracePath(s.cmds); ctx.strokeStyle = s.color; ctx.lineWidth = s.width; ctx.stroke(); }
+    if (s.type === 'fill' || s.type === 'stroke') tracePath(s.cmds);
     else if (s.type === 'line') {
-      const a = resolvePt(s.a), b = resolvePt(s.b); if (!a || !b) continue;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = s.color; ctx.lineWidth = s.width; ctx.stroke();
+      const a = resolvePt(s.a), b = resolvePt(s.b); if (!a || !b) return;
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
     } else if (s.type === 'circle') {
-      const c = resolvePt(s.c); if (!c) continue;
-      ctx.beginPath(); ctx.arc(c.x, c.y, s.r, 0, Math.PI*2);
-      if (s.fill) { ctx.fillStyle = s.color; ctx.fill(); } else { ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.stroke(); }
-    } else if (s.type === 'rect' || s.type === 'oval') {
-      const c = resolvePt(s.c); if (!c) continue;
-      ctx.beginPath();
-      if (s.type === 'rect') ctx.rect(c.x, c.y, s.w, s.h); else ctx.ellipse(c.x + s.w/2, c.y + s.h/2, s.w/2, s.h/2, 0, 0, Math.PI*2);
-      if (s.fill) { ctx.fillStyle = s.color; ctx.fill(); } else { ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.stroke(); }
+      const c = resolvePt(s.c); if (!c) return;
+      ctx.arc(c.x, c.y, s.r, 0, Math.PI * 2);
+    } else {
+      const c = resolvePt(s.c); if (!c) return;
+      if (s.type === 'rect') ctx.rect(c.x, c.y, s.w, s.h);
+      else ctx.ellipse(c.x + s.w / 2, c.y + s.h / 2, Math.abs(s.w / 2), Math.abs(s.h / 2), 0, 0, Math.PI * 2);
     }
+    const filled = s.type === 'fill' || (s.fill && s.type !== 'line');
+    if (filled) { ctx.fillStyle = s.color; ctx.fill(); }
+    else { ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 2; ctx.stroke(); }
+    if (i === hoverShape) { ctx.strokeStyle = '#9E3624'; ctx.lineWidth = 2 / view.k; ctx.stroke(); }
+    else if (s.path && s.path === selPath) { ctx.strokeStyle = 'rgba(176,130,33,.9)'; ctx.lineWidth = 1.5 / view.k; ctx.stroke(); }
+  });
+
+  // Where the next point would land, drawn in the real line colour so the geometry
+  // reads exactly as it will once committed — no dotted stand-in.
+  if (mode === 'add' && mouseModel) {
+    const p = activePath();
+    const last = p && [...p.cmds].reverse().find(c => c.pt || c.sx !== undefined);
+    ctx.globalAlpha = 0.5;
+    if (last && linked) {
+      const lp = resolvePt(last);
+      if (lp) { ctx.beginPath(); ctx.moveTo(lp.x, lp.y); ctx.lineTo(mouseModel.x, mouseModel.y); ctx.strokeStyle = lineColor; ctx.lineWidth = 2 / view.k; ctx.stroke(); }
+    }
+    ctx.beginPath(); ctx.arc(mouseModel.x, mouseModel.y, 3 / view.k, 0, Math.PI * 2);
+    ctx.fillStyle = linked ? lineColor : '#9E3624'; ctx.fill();
+    ctx.globalAlpha = 1;
   }
-  const draw = (pts, filled, color, active) => {
-    if (!pts.length) return;
-    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
-    if (active) { ctx.setLineDash([5,5]); ctx.strokeStyle = '#9E3624'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); }
-    else if (filled) { ctx.fillStyle = color.hex; ctx.fill(); ctx.strokeStyle = '#2C2219'; ctx.lineWidth = 1; ctx.stroke(); }
-    else { ctx.strokeStyle = color.hex; ctx.lineWidth = 4; ctx.stroke(); }
-    ctx.fillStyle = active ? '#9E3624' : '#2C2219';
-    pts.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI*2); ctx.fill(); });
-  };
-  paths.forEach(p => draw(p.points, p.isFilled, p.color, false));
-  draw(currentPoints, $('fillShape').checked, selColor, true);
+  if (mode === 'shape' && mouseModel) {
+    const size = Math.max(2, parseFloat($('shapeSize').value) || 14);
+    ctx.globalAlpha = 0.45; ctx.fillStyle = fillColor;
+    ctx.beginPath();
+    if (shapeKind === 'circle') ctx.arc(mouseModel.x, mouseModel.y, size, 0, Math.PI * 2);
+    else ctx.rect(mouseModel.x - size / 2, mouseModel.y - size / 2, size, size);
+    ctx.fill(); ctx.strokeStyle = lineColor; ctx.lineWidth = 2 / view.k; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
   ctx.restore();
-  // Amber squares: the draggable points of the live shapes above — fixed screen
-  // size regardless of zoom, drawn outside the transform.
+
+  // Handles: fixed screen size regardless of zoom, drawn outside the transform.
+  // Square = lineTo, diamond = moveTo (the pen lifted here), ring = a circle centre.
   editPts.forEach((p, i) => {
     const s = resolvePt({ pt: p }); if (!s) return;
     const sc = toScr(s);
-    ctx.fillStyle = i === dragIdx ? '#9E3624' : '#B08221';
+    const on = i === dragIdx && dragKind === 'pt';
+    ctx.fillStyle = on ? '#9E3624' : p.kind === 'Offset' ? '#4C613D' : '#B08221';
     ctx.strokeStyle = '#2C2219'; ctx.lineWidth = 1;
-    ctx.fillRect(sc.x - 4, sc.y - 4, 8, 8);
-    ctx.strokeRect(sc.x - 4, sc.y - 4, 8, 8);
+    if (p.kind === 'moveTo') {
+      ctx.beginPath();
+      ctx.moveTo(sc.x, sc.y - 5); ctx.lineTo(sc.x + 5, sc.y); ctx.lineTo(sc.x, sc.y + 5); ctx.lineTo(sc.x - 5, sc.y);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if (p.kind === 'Offset') {
+      ctx.beginPath(); ctx.arc(sc.x, sc.y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    } else {
+      ctx.fillRect(sc.x - 4, sc.y - 4, 8, 8);
+      ctx.strokeRect(sc.x - 4, sc.y - 4, 8, 8);
+    }
+  });
+  scene.forEach(s => {
+    if (s.type !== 'circle' || !s.rRef) return;
+    const c = resolvePt(s.c); if (!c) return;
+    const sc = toScr({ x: c.x + s.r, y: c.y });
+    ctx.beginPath(); ctx.arc(sc.x, sc.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#EFE4CB'; ctx.fill(); ctx.strokeStyle = '#4C613D'; ctx.lineWidth = 1.5; ctx.stroke();
   });
   requestAnimationFrame(qcLoop);
 }

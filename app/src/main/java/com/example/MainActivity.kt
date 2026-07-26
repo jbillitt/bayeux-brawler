@@ -2020,8 +2020,13 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit, onHol
             // 72dp for ~28dp of content: every tile carried two lines of flavour text and a dead
             // gap, and only two and a half rows fitted on a landscape phone. The description now
             // lives once, in the gloss register below the grid, so a tile is just its name, its
-            // weight and what it does. 44dp keeps a comfortable touch target.
-            .height(38.dp)
+            // weight and what it does. 38dp keeps a comfortable touch target.
+            //
+            // heightIn, not height: the tile is sized in dp but its contents are in sp, which
+            // grows with the phone's font-size setting. At a fixed 38dp anything past the first
+            // line was clipped away, which is why the S/P/B/RCH row vanished on real devices
+            // while the weight badge (same row as the name) survived.
+            .heightIn(min = 38.dp)
             .border(
                 width = if (isSelected) 3.dp else 1.dp,
                 color = if (isSelected) TapestryRed else TapestryDark,
@@ -2033,7 +2038,7 @@ fun GearItemCell(item: GearItem, isSelected: Boolean, onClick: () -> Unit, onHol
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = 5.dp, vertical = 2.dp),
             // Packed, not SpaceBetween: pushing the stat row to the far edge left a dead gap
             // above it and clipped the descenders on "P" and "RCH" against the border.

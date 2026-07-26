@@ -1880,11 +1880,11 @@ object TapestryRenderer {
             }
             "head_javelin" -> {
                 // Light throwing spear held in hand (was missing — javelineers looked empty-handed)
-                scope.drawLine(Color(0xFF6E5536), Offset(headPos.x - 30f, headPos.y + 15f), Offset(headPos.x + 22f, headPos.y - 11f), strokeWidth = 5f, cap = StrokeCap.Round)
+                scope.drawLine(Color(0xFF6E5536), Offset(headPos.x - 40.5f, headPos.y + 23f), Offset(headPos.x + 21.5f, headPos.y - 9.5f), strokeWidth = 5f, cap = StrokeCap.Round)
                 val tip = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(headPos.x + 20f, headPos.y - 10f)
-                    lineTo(headPos.x + 34f, headPos.y - 17f)
-                    lineTo(headPos.x + 26f, headPos.y - 4f)
+                    moveTo(headPos.x + 19.5f, headPos.y - 12f)
+                    lineTo(headPos.x + 46f, headPos.y - 24f)
+                    lineTo(headPos.x + 23f, headPos.y - 7f)
                     close()
                 }
                 scope.drawPath(tip, headColor)
@@ -1934,7 +1934,11 @@ object TapestryRenderer {
                 // other way up first, which put the edge where the spear's point goes.
                 fun at(along: Float, across: Float): Offset {
                     val u = across            // the blade's length now runs across the haft
-                    val v = -along            // and its width along it
+                    val v = along             // and its width along it
+                    // +along, not -along: negated, the crescent stood out on the BACK of the
+                    // haft, so the edge pointed at the wearer's own legs in both facings (the
+                    // whole fighter is mirrored by scale(hFlip), so a backwards head stays
+                    // backwards whichever way he turns).
                     return Offset(headPos.x + dx * u + px * v, headPos.y + dy * u + py * v)
                 }
                 val blade = androidx.compose.ui.graphics.Path().apply {

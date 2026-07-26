@@ -1048,19 +1048,21 @@ class GameViewModel : ViewModel() {
             ))
         }
 
-        if (state.unlockedAncillaries.contains(Ancillary.TROJAN_HORSE)) {
+        // One horse per copy, like the pets below — a `contains` check meant a TWINS
+        // card handed you two entries in the list and still rolled out a single horse.
+        repeat(state.unlockedAncillaries.count { it == Ancillary.TROJAN_HORSE }) { i ->
             enemies.add(FighterState(
                 // 200hp died to the enemy line long before it mattered; it exists to soak.
-                id = "trojan_horse", name = "Trojan Horse", isPlayer = true, maxHp = 450f, hp = 450f,
+                id = "trojan_horse#$i", name = "Trojan Horse", isPlayer = true, maxHp = 450f, hp = 450f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
-                posX = 180f, targetX = 180f, facingRight = true, size = 1.8f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = false
+                posX = 180f - i * 40f, targetX = 180f - i * 40f, facingRight = true, size = 1.8f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = false
             ))
         }
-        
+
         // Pets stack: rally Buster twice and you get two dogs. Ids stay unique ("wardog#0") and
         // everything that cares asks isKind("wardog"), so each one still renders as a dog and bites.
         // posX is jittered per copy or the pack spawns exactly on top of itself.
@@ -2171,8 +2173,12 @@ class GameViewModel : ViewModel() {
                         val copiesCount = if (anc.id in MOUNT_ANCILLARY_IDS) 1 else rollFollowerCopies()
                         val isTwins = copiesCount > 1
                         val twinTitle = if (isTwins) "TWINS! ${anc.ancillaryName}$titleSuffix" else "${anc.ancillaryName}$titleSuffix"
-                        val twinDesc = if (isTwins) "[TWINS! You get TWO of them!] ${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)$packNote"
-                                       else "${anc.description} (Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%)$packNote"
+                        // Objects field their own body, so their hpBoost is that body's — quoting
+                        // it as "Max HP +200" read as a player buff the Great Horse never grants.
+                        val statLine = if (anc.id in OBJECT_ANCILLARY_IDS) "Fights on its own: ${anc.hpBoost.toInt()} HP of its own"
+                                       else "Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%"
+                        val twinDesc = if (isTwins) "[TWINS! You get TWO of them!] ${anc.description} ($statLine)$packNote"
+                                       else "${anc.description} ($statLine)$packNote"
                         pendingChoices.add(LevelUpChoice(
                             id = if (isTwins) "follower_twins_${anc.id}" else "follower_${anc.id}",
                             title = twinTitle,

@@ -485,9 +485,16 @@ app.get('/api/gear', (req, res) => {
     try {
         const content = fs.readFileSync(SIMULATION_MODELS_PATH, 'utf-8');
         const buckets = { head: [], handle: [], shield: [], armor: [], helm: [] };
-        const re = /\("((?:head|handle|shield|armor|helm)_\w+)",\s*"([^"]+)"/g;
-        let m;
-        while ((m = re.exec(content)) !== null) {
+        // Each enum entry is one line, so its `color = Color(0xAARRGGBB)` is on that line
+        // too. The editor needs these: `fighter.weaponHead.color` is an identifier, and
+        // without the real value every named colour previewed as thread-black.
+        const colors = {};
+        const re = /\("((?:head|handle|shield|armor|helm|anc)_\w+)",\s*"([^"]+)"/;
+        for (const line of content.split('\n')) {
+            const m = re.exec(line);
+            if (!m) continue;
+            const cm = line.match(/color\s*=\s*Color\(0x[0-9A-Fa-f]{2}([0-9A-Fa-f]{6})\)/);
+            if (cm) colors[m[1]] = '#' + cm[1].toUpperCase();
             const prefix = m[1].split('_')[0];
             if (buckets[prefix] && !buckets[prefix].some(g => g.id === m[1])) {
                 buckets[prefix].push({ id: m[1], name: m[2] });
@@ -502,7 +509,7 @@ app.get('/api/gear', (req, res) => {
             for (const bm of body.matchAll(/\b([A-Z][A-Z0-9_]+)\b/g)) backgrounds.push(bm[1]);
         }
         const ancillaries = [...content.matchAll(/^\s*([A-Z][A-Z0-9_]+)\("anc_/gm)].map(m => m[1]);
-        res.json({ success: true, gear: buckets, backgrounds, ancillaries });
+        res.json({ success: true, gear: buckets, backgrounds, ancillaries, colors });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }

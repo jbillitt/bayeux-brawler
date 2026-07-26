@@ -21,21 +21,33 @@ class Biquad private constructor(
         private fun norm(b0: Double, b1: Double, b2: Double, a0: Double, a1: Double, a2: Double) =
             Biquad((b0 / a0).toFloat(), (b1 / a0).toFloat(), (b2 / a0).toFloat(), (a1 / a0).toFloat(), (a2 / a0).toFloat())
 
+        /**
+         * Every filter's centre frequency passes through here, because a frequency at or above
+         * Nyquist does not merely sound wrong — it produces NaN coefficients, and a single NaN
+         * entering the reverb's feedback path turns the ENTIRE remaining track to silence.
+         *
+         * That is exactly what the tambourine did: its jingles sit at 5200 and 6800Hz, which are
+         * fine at 44100 and above Nyquist at the 8000Hz the composer also runs at. Guarding here
+         * rather than at each call site means no future instrument can reintroduce it.
+         */
+        private fun safeFc(sr: Int, fc: Float): Double =
+            fc.toDouble().coerceIn(10.0, sr * 0.45)
+
         fun lowpass(sr: Int, fc: Float, q: Float): Biquad {
-            val w = 2.0 * Math.PI * fc / sr; val c = Math.cos(w); val s = Math.sin(w); val alpha = s / (2 * q)
+            val w = 2.0 * Math.PI * safeFc(sr, fc) / sr; val c = Math.cos(w); val s = Math.sin(w); val alpha = s / (2 * q)
             return norm((1 - c) / 2, 1 - c, (1 - c) / 2, 1 + alpha, -2 * c, 1 - alpha)
         }
         fun highpass(sr: Int, fc: Float, q: Float): Biquad {
-            val w = 2.0 * Math.PI * fc / sr; val c = Math.cos(w); val s = Math.sin(w); val alpha = s / (2 * q)
+            val w = 2.0 * Math.PI * safeFc(sr, fc) / sr; val c = Math.cos(w); val s = Math.sin(w); val alpha = s / (2 * q)
             return norm((1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + alpha, -2 * c, 1 - alpha)
         }
         fun bandpass(sr: Int, fc: Float, q: Float): Biquad {
-            val w = 2.0 * Math.PI * fc / sr; val c = Math.cos(w); val s = Math.sin(w); val alpha = s / (2 * q)
+            val w = 2.0 * Math.PI * safeFc(sr, fc) / sr; val c = Math.cos(w); val s = Math.sin(w); val alpha = s / (2 * q)
             return norm(alpha, 0.0, -alpha, 1 + alpha, -2 * c, 1 - alpha)
         }
         fun peakEq(sr: Int, fc: Float, q: Float, gainDb: Float): Biquad {
             val a = Math.pow(10.0, gainDb / 40.0)
-            val w = 2.0 * Math.PI * fc / sr; val c = Math.cos(w); val s = Math.sin(w); val alpha = s / (2 * q)
+            val w = 2.0 * Math.PI * safeFc(sr, fc) / sr; val c = Math.cos(w); val s = Math.sin(w); val alpha = s / (2 * q)
             return norm(1 + alpha * a, -2 * c, 1 - alpha * a, 1 + alpha / a, -2 * c, 1 - alpha / a)
         }
     }

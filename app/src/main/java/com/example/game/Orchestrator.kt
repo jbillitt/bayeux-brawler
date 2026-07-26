@@ -206,7 +206,7 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
 
     // Kit: kick and snare are fixed — it is metal — but the third drum and its entry vary.
     // Centre-panned and the loudest thing in the kit, as a kick drum is.
-    a += VoiceAssignment(Voice.KICK, LineRef.PERC, 1, 99, 0.72f, 0f)       // double kick
+    a += VoiceAssignment(Voice.KICK, LineRef.PERC, 1, 99, 0.42f, 0f)       // double kick
     a += VoiceAssignment(Voice.TABOR, LineRef.PERC, 1, 99, 0.50f, -0.45f)  // snare
     a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, 2, 99, 0.34f, 0.4f)   // tom accents
     val thirdDrum = weightedPick(rng, listOf(Voice.BODHRAN to 0.6f, Voice.TAMBOURINE to 0.4f))
@@ -378,7 +378,9 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
                     val onBeat = b % 1f == 0f
                     out += NoteEvent(
                         base + b,
-                        0.14f,
+                        // Was 0.14 — shorter than the drum's own decay, so every hit was cut off
+                        // mid-body and what was left was the attack. That is the rattle.
+                        0.30f,
                         36,
                         when {
                             barAccent -> 1f

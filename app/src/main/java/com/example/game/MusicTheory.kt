@@ -125,7 +125,7 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
             // 180-200 was a thrash gallop. Wrestling-entrance metal is slower and heavier — the
             // riff wants room to land, and at 180 the 16th-note double kick was a blur rather
             // than two distinct feet. (The clamp below must move with this or it does nothing.)
-            bpm = 138 + rng.nextInt(19)          // 138-156
+            bpm = 118 + rng.nextInt(19)          // 118-136
             beatsPerBar = 4; totalBars = 16
             val grounds = if (mode == Mode.PHRYGIAN) BRAWL_PHRYGIAN_GROUNDS else BRAWL_AEOLIAN_GROUNDS
             groundDegrees = grounds[rng.nextInt(grounds.size)]
@@ -165,7 +165,7 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
     // chord changes and everything reads as discord. Nobler stacks -3 each pick; below MIDI 39
     // the counter-voice falls out of its playable register.
     bpm = bpm.coerceIn(40, when {
-        family == Family.BRAWL -> 156
+        family == Family.BRAWL -> 136
         family == Family.THRONE -> 98
         beatsPerBar == 6 -> 84
         else -> 150

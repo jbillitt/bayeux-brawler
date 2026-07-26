@@ -33,26 +33,38 @@ private fun kick(durSec: Float, sr: Int, rng: Random): FloatArray {
     val n = (sr * durSec).toInt(); val out = FloatArray(n); if (n == 0) return out
     val dt = 1.0 / sr
     var phase = 0.0
-    val click = Biquad.bandpass(sr, minOf(3400f, sr * 0.35f), 1.0f)
-    val thwack = Biquad.bandpass(sr, 950f, 1.1f)
-    val punch = Biquad.bandpass(sr, 420f, 1.3f)
+    // A short, quiet beater click ONLY. The previous version ran a 30ms noise burst at 1.6x the
+    // body's amplitude to satisfy a "must have energy above 300Hz" check — which made it a snare
+    // with a hard attack, exactly as it sounded. Noise is the wrong way to make a kick carry.
+    val click = Biquad.bandpass(sr, minOf(2200f, sr * 0.3f), 0.9f)
+
     for (i in 0 until n) {
         val t = i * dt
-        val f = 48.0 + 82.0 * Math.exp(-t / 0.035)     // the classic kick drop
+        // Pitch envelope: ~115Hz down to 47Hz. The drop is what the ear reads as "kick" rather
+        // than "low tone", and it is the one part that must not be rushed.
+        val f = 47.0 + 68.0 * Math.exp(-t / 0.042)
         phase += 2.0 * Math.PI * f * dt
-        // Short body. A long low tail is inaudible on a handset AND masks the click that isn't.
-        val body = Math.sin(phase) * Math.exp(-t / 0.045)
-        var v = (body * 0.45).toFloat()
-        // Beater against the head. Measured, the first version put 88% of its energy below the
-        // 300Hz a phone cannot reproduce — i.e. it was the same silent kick the kit already had.
-        // The click and the 950Hz beater thwack are what actually make it audible in play.
-        val noise = rng.nextFloat() * 2f - 1f
-        if (t < 0.030) {
-            val g = 1f - (t / 0.030f).toFloat()
-            v += click.process(noise) * 1.6f * g * g
-            v += thwack.process(noise) * 1.2f * g
+
+        // Body with a real tail — 0.045s before, which is a click's length, not a drum's.
+        val env = Math.exp(-t / 0.16) * (1.0 - Math.exp(-t / 0.0015))  // 1.5ms attack, no thump
+        var v = (Math.sin(phase) * env).toFloat()
+
+        // Saturation, which is how a kick survives a small speaker. tanh folds the sine into odd
+        // harmonics at 2f/3f/4f — 95-350Hz here — and the ear reconstructs the fundamental it
+        // cannot actually hear from them. This is the trick that makes an 808 translate on a
+        // phone, and it costs none of the weight that piling on noise does.
+        // Scaled to land near full scale: normalise() below only ever attenuates, so a sample
+        // that peaks at 0.6 stays at 0.6 and the drum arrives at the mix quieter than every
+        // other one before its gain is even applied. Prominence is set by the mix gain, once,
+        // not by leaving the sample short.
+        v = Math.tanh(v * 2.6).toFloat() * 0.92f
+
+        // Beater: 4ms, well under the body. Present, not the event.
+        if (t < 0.004) {
+            val g = 1f - (t / 0.004f).toFloat()
+            v += click.process(rng.nextFloat() * 2f - 1f) * 0.20f * g
         }
-        out[i] = v + punch.process(v) * 0.9f
+        out[i] = v
     }
     normalise(out, 0.95f)
     return out

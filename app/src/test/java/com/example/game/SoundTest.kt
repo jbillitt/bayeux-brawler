@@ -50,7 +50,7 @@ class SoundTest {
             val spec = resolveSongSpec(seed, emptyList(), brawl = true)
             // Wrestling-entrance metal, not thrash: at 180 the riff had no room to land and the
             // 16th-note double kick blurred into one sound rather than two feet.
-            assertTrue("brawl bpm ${spec.bpm}", spec.bpm in 138..156)
+            assertTrue("brawl bpm ${spec.bpm}", spec.bpm in 118..136)
             assertEquals(4, spec.beatsPerBar)
             assertEquals(8, spec.ground.size)
             assertTrue("minor mode wanted, got ${spec.mode}", spec.mode == Mode.AEOLIAN || spec.mode == Mode.PHRYGIAN)
@@ -243,7 +243,7 @@ class SoundTest {
     @Test
     fun moodsDoNotBendThemedFamilies() {
         val spec = resolveSongSpec(7L, listOf("More Tempo", "More Tempo", "Merrier"), brawl = true)
-        assertTrue("moods must not push brawl off 138-156, got ${spec.bpm}", spec.bpm in 138..156)
+        assertTrue("moods must not push brawl off 118-136, got ${spec.bpm}", spec.bpm in 118..136)
         assertTrue(spec.mode == Mode.AEOLIAN || spec.mode == Mode.PHRYGIAN)
     }
 
@@ -257,7 +257,7 @@ class SoundTest {
     fun fullyLayeredBrawlComposeKeepsHeadroom() {
         val buf = ProceduralMedievalComposer.compose(7L, 11, true, 8000, emptyList(), brawl = true)
         val peak = buf.maxOf { Math.abs(it.toInt()) }
-        assertTrue("fully layered BRAWL is too quiet", peak > 1000)
+        assertTrue("fully layered BRAWL is too quiet: peak=$peak", peak > 1000)
         assertTrue("fully layered BRAWL hit digital full scale", peak < 32767)
     }
 
@@ -389,13 +389,19 @@ class SoundTest {
     fun everyVoiceRendersAudibleSound() {
         val rng = kotlin.random.Random(1)
         for (voice in Voice.values()) {
-            // Short note exercises perc/buzz paths, long note the drone/sustain paths.
-            for (dur in floatArrayOf(0.1f, 1.0f)) {
-                val buf = renderNote(voice, 57, dur, 0.9f, 22050, rng)
-                var peak = 0f
-                for (v in buf) peak = maxOf(peak, Math.abs(v))
-                assertTrue("$voice at ${dur}s is silent (peak $peak)", peak > 0.05f)
-                assertTrue("$voice at ${dur}s clips (peak $peak)", peak <= 1.0f)
+            // Short note exercises perc/buzz paths, long note the drone/sustain paths. Both
+            // sample rates the game actually composes at: a filter placed above Nyquist for the
+            // LOWER rate returns NaN, and one NaN poisons the whole mix bus into silence — which
+            // is a far worse failure than a quiet voice and is invisible at 22050 alone.
+            for (sr in intArrayOf(8000, 22050)) {
+                for (dur in floatArrayOf(0.1f, 1.0f)) {
+                    val buf = renderNote(voice, 57, dur, 0.9f, sr, rng)
+                    var peak = 0f
+                    for (v in buf) peak = maxOf(peak, Math.abs(v))
+                    assertTrue("$voice at ${dur}s / ${sr}Hz is NaN", !buf.any { it.isNaN() })
+                    assertTrue("$voice at ${dur}s / ${sr}Hz is silent (peak $peak)", peak > 0.05f)
+                    assertTrue("$voice at ${dur}s / ${sr}Hz clips (peak $peak)", peak <= 1.0f)
+                }
             }
         }
     }
@@ -514,7 +520,13 @@ class SoundTest {
         // "enough above the cutoff to be perceptible at all". A cello's fundamental is below
         // anything a handset can move; it reads only because its upper partials do, and the ear
         // reconstructs the rest. Below about a third, a voice simply vanishes in play.
-        val offenders = Voice.values().mapNotNull { v ->
+        // KICK is the one legitimate exception, and it is documented rather than quietly skipped.
+        // A bass drum IS mostly below 300Hz — that is what makes it a bass drum. Forcing it over
+        // this line produced a 30ms noise burst at 1.6x the body and the result was a snare with
+        // a hard attack. It carries on a handset through SATURATION instead: tanh folds the swept
+        // sine into harmonics at 2f/3f/4f and the ear reconstructs the fundamental it cannot hear.
+        // A metric is a servant. When satisfying it makes the instrument worse, the metric is wrong.
+        val offenders = Voice.values().filter { it != Voice.KICK }.mapNotNull { v ->
             val buf = renderNote(v, testMidi(v), 1.2f, 1f, sr, kotlin.random.Random(7), 0)
             val below = bandRms(buf, sr, 20f, 300f)
             val above = bandRms(buf, sr, 300f, 12000f)

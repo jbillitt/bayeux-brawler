@@ -210,8 +210,14 @@
             <span class="seg">
               <button id="shapeCircle" class="on">&#9679; Circle</button>
               <button id="shapeSquare">&#9632; Square</button>
+              <button id="shapeTriangle">&#9650; Triangle</button>
             </span>
             <label style="font-size:11px">size <input type="number" id="shapeSize" value="14" min="2" max="200" step="1" style="width:56px;padding:3px;border:1px solid var(--line);border-radius:3px;"></label>
+          </span>
+          <span id="ctxSel" style="display:none">
+            <label style="font-size:11px">stroke width <input type="number" id="selWidth" min="0.5" max="40" step="0.5" style="width:60px;padding:3px;border:1px solid var(--line);border-radius:3px;"></label>
+            <button class="ghost" id="selWidthApply" style="padding:4px 9px;font-size:11px">Apply</button>
+            <span id="selLabel" style="font-size:11px;opacity:.7"></span>
           </span>
           <span id="tip"></span>
         </div>
@@ -550,7 +556,9 @@ const slotColor = slot => (SLOT_SELECT[slot] && gearColors[$(SLOT_SELECT[slot]).
 
 function resolveColor(expr) {
   if (!expr) return null;
-  expr = expr.trim().replace(/^androidx\.compose\.ui\.graphics\./, '');
+  // `.copy(alpha = 0.5f)` is how the art fades a named colour; the suffix used to defeat
+  // the lookup entirely, so faded grain lines and shadows came out unresolved.
+  expr = expr.trim().replace(/^androidx\.compose\.ui\.graphics\./, '').replace(/\.copy\([^()]*\)/g, '');
   let m = expr.match(/0x[0-9A-Fa-f]{2}([0-9A-Fa-f]{6})/);
   if (m) return '#' + m[1].toUpperCase();
   m = expr.match(/\bfighter\.(\w+)\.color\b/);
@@ -732,6 +740,72 @@ function parseScene(code) {
                 'headPos.x': cx, 'headPos.y': cy };
   sceneEnv = env;
   const offsetVals = { headPos: { x: cx, y: cy } };
+  const listVals = {};   // val nails = listOf(Triple(Offset..), ..) → iterable elements
+
+  // Local helper functions. Several heads build their geometry off the haft's own basis
+  // with `fun at(along, across) = Offset(...)` and then call at(2f, -10f) everywhere; with
+  // no notion of a user function every one of those coordinates was unresolvable, so the
+  // axe and the pitchfork rendered nothing at all.
+  const funcs = {};
+  function scanFuncs(lines) {
+    for (let li = 0; li < lines.length; li++) {
+      const m = lines[li].match(/\bfun\s+(\w+)\s*\(([^()]*)\)\s*(?::\s*[\w.]+\s*)?(=|\{)\s*$|\bfun\s+(\w+)\s*\(([^()]*)\)\s*(?::\s*[\w.]+\s*)?=\s*(.+)$/);
+      if (!m) continue;
+      const name = m[1] || m[4];
+      const params = (m[2] || m[5] || '').split(',').map(s => s.trim().split(':')[0].trim()).filter(Boolean);
+      // Body is either an expression (possibly continuing over lines) or a brace block
+      let text, body = [];
+      // `= Offset(` continues onto the next lines; join until the parens close
+      if (m[6] !== undefined) {
+        text = m[6];
+        for (let j = li + 1; j < lines.length && parenDebt(text) > 0 && j - li < 10; j++) text += ' ' + lines[j].trim();
+      }
+      else if (m[3] === '=') { text = ''; for (let j = li + 1; j < lines.length; j++) { text += ' ' + lines[j].trim(); if (parenDebt(text) <= 0 && text.trim()) break; } }
+      else {
+        const end = blockEnd(li);
+        for (let j = li + 1; j <= end; j++) body.push(lines[j]);
+        const ret = body.map(b => b.match(/\breturn\s+(.+)$/)).find(Boolean);
+        text = ret ? ret[1] : '';
+        // a multi-line `return Offset(` needs its continuation joined too
+        if (text && parenDebt(text) > 0) {
+          const at = body.findIndex(b => /\breturn\s+/.test(b));
+          for (let j = at + 1; j < body.length && parenDebt(text) > 0; j++) text += ' ' + body[j].trim();
+        }
+      }
+      const om = text && text.trim().match(/^(?:[\w.]*\.)?Offset\(([\s\S]*)\)\s*$/);
+      if (!om) continue;
+      const parts = splitArgs(om[1], 0);
+      if (parts.length !== 2) continue;
+      funcs[name] = { params, body, xExpr: parts[0].text, yExpr: parts[1].text, raw: text };
+    }
+  }
+  // Evaluates a call to one of those helpers. Local vals in a block body are folded in
+  // first; the prototype chain keeps the enclosing scope visible.
+  function callUserFn(name, argTexts, env) {
+    const f = funcs[name];
+    if (!f || argTexts.length < f.params.length) return null;
+    const local = Object.create(env);
+    for (let i = 0; i < f.params.length; i++) {
+      const v = evalExpr(argTexts[i], env, dottedFb);
+      if (v === null) return null;
+      local[f.params[i]] = v;
+    }
+    for (const b of f.body) {
+      const vm = b.match(/\bval\s+(\w+)\s*(?::\s*[\w.]+\s*)?=\s*(.+?)\s*$/);
+      if (vm) { const v = evalExpr(vm[2], local, dottedFb); if (v !== null) local[vm[1]] = v; }
+    }
+    const x = evalExpr(f.xExpr, local, dottedFb), y = evalExpr(f.yExpr, local, dottedFb);
+    return (x === null || y === null) ? null : { x, y };
+  }
+  // A coordinate that may be `helper(a, b).x` rather than a plain expression.
+  function coordVal(text, axis, env) {
+    const m = String(text).trim().match(/^(\w+)\(([\s\S]*)\)\.(x|y)$/);
+    if (m && funcs[m[1]]) {
+      const p = callUserFn(m[1], splitArgs(m[2], 0).map(a => a.text), env);
+      return p ? p[m[3]] : null;
+    }
+    return evalExpr(text, env, dottedFb);
+  }
 
   const braces = s => (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length;
   const parenDebt = s => (s.match(/\(/g) || []).length - (s.match(/\)/g) || []).length;
@@ -747,7 +821,8 @@ function parseScene(code) {
   }
 
   const FOR_RE = /\bfor\s*\(\s*(\w+)\s+in\s+(.+?)\s*\)\s*\{\s*$/;
-  const FOREACH_RE = /listOf\(([^()]*)\)\s*\.forEach(?:Indexed)?\s*\{\s*(?:\(?\s*(\w+))?/;
+  // listOf(...).forEach {v ->}  |  namedList.forEach { (a, b, c) ->}
+  const FOREACH_RE = /(?:listOf\(([\s\S]*)\)|(\w+))\s*\.forEach(?:Indexed)?\s*\{\s*(?:\(([\w,\s]+)\)|(\w+))\s*->/;
   const REPEAT_RE = /\brepeat\s*\(\s*([^()]+?)\s*\)\s*\{\s*$/;
   // Loop bodies are drawn once per iteration from one source line, so their points
   // can't be individually dragged — pass 1 skips registering them.
@@ -756,6 +831,15 @@ function parseScene(code) {
     if (!FOR_RE.test(l) && !FOREACH_RE.test(l) && !REPEAT_RE.test(l)) return;
     for (let j = li + 1, e = blockEnd(li); j <= e; j++) inLoop.add(j);
   });
+  // Offsets inside a `val x = listOf(...)` table are data, not a drawn point: the shape
+  // they end up in is decided later by whatever iterates them. Registering them as
+  // draggable put 19 handles on the plank that answered to nothing and sat away from the
+  // nails they described — the same lie as a handle that has lost its transform.
+  for (let li = 0; li < lines.length; li++) {
+    if (!/\bval\s+\w+\s*(?::[^=]*)?=\s*listOf\(/.test(lines[li])) continue;
+    let debt = parenDebt(lines[li]);
+    for (let j = li + 1; j < lines.length && debt > 0; j++) { inLoop.add(j); debt += parenDebt(lines[j]); }
+  }
 
   // pass 1: every draggable coordinate pair, indexed by line:char for pass 2
   const ptIndex = {};
@@ -780,14 +864,16 @@ function parseScene(code) {
   const kpaths = {}, tstack = [];
   const curT = () => tstack.length ? tstack[tstack.length - 1] : null;
 
-  // Inside a transform, coordinates are local — but expressions that already resolved
-  // through cx/cy (or dotted anchors) are absolute; don't double-shift those.
-  const cxIfAbs = e => /\bcx\b|\.x\b/.test(e) ? cx : 0;
-  const cyIfAbs = e => /\bcy\b|\.y\b/.test(e) ? cy : 0;
+  // translate() is a DELTA, not an origin: everything inside the block is shifted by it.
+  // This used to treat it as an absolute anchor and then subtract cx back off again for
+  // expressions that "looked absolute" — a guess that disagreed with how draggable handles
+  // were placed, so the wardog drew its body in one corner and its handles in another.
+  // Both paths now simply add the delta, which is right for a local-coordinate block
+  // (the trumpet's translate(hx, hy)) and for an absolute one (the dog's translate(0f, 130f)).
   function staticAdj(expr, v, axis) {
     const t = curT();
     if (!t || v === null) return v;
-    return v + t[axis] - (axis === 'x' ? cxIfAbs(expr) : cyIfAbs(expr));
+    return v + t[axis];
   }
   // A coordinate expression inside the current transform, axis-aware
   function axisVal(pe, axis) {
@@ -805,16 +891,27 @@ function parseScene(code) {
     if (!arg) return null;
     const om = arg.text.match(/^(?:[\w.]*\.)?Offset\(([\s\S]*)\)$/);
     if (om) {
-      const p = (single && li >= 0) ? ptIndex[li + ':' + arg.at] : null;
+      // Points are indexed at the `Offset(` token, but a fully-qualified
+      // androidx.compose.ui.geometry.Offset(...) starts the argument several characters
+      // earlier. Keying on the argument start missed every one of those, so the handle
+      // never learned its transform and sat 130px away from the shape it belonged to.
+      const tok = arg.text.search(/\bOffset\(/);
+      const p = (single && li >= 0) ? ptIndex[li + ':' + (arg.at + (tok < 0 ? 0 : tok))] : null;
       if (p) { const t = curT(); if (t) p.t = { x: t.x, y: t.y }; return { pt: p }; }
       const parts = splitArgs(om[1], 0);
       if (parts.length !== 2) return null;
-      const vx = staticAdj(parts[0].text, evalExpr(parts[0].text, env, dottedFb), 'x');
-      const vy = staticAdj(parts[1].text, evalExpr(parts[1].text, env, dottedFb), 'y');
+      const vx = staticAdj(parts[0].text, coordVal(parts[0].text, 'x', env), 'x');
+      const vy = staticAdj(parts[1].text, coordVal(parts[1].text, 'y', env), 'y');
       return (vx !== null && vy !== null) ? { sx: vx, sy: vy } : null;
     }
     if (/^(?:[\w.]*\.)?Offset\.Zero$/.test(arg.text)) {
       const t = curT(); return { sx: t ? t.x : cx, sy: t ? t.y : cy };
+    }
+    // at(2f, -10f) — a local helper used directly as a point
+    const fm = arg.text.match(/^(\w+)\(([\s\S]*)\)$/);
+    if (fm && funcs[fm[1]]) {
+      const p = callUserFn(fm[1], splitArgs(fm[2], 0).map(a => a.text), env);
+      if (p) return { sx: staticAdj(funcs[fm[1]].xExpr, p.x, 'x'), sy: staticAdj(funcs[fm[1]].yExpr, p.y, 'y') };
     }
     const v = offsetVals[arg.text];
     if (v) return { sx: v.x + (curT() ? 0 : 0), sy: v.y };
@@ -837,7 +934,13 @@ function parseScene(code) {
       const cArg = argOf(A, 'color', 0);
       const stroked = /style\s*=\s*[\w.]*Stroke/.test(line);
       const wm = line.match(/(?:strokeWidth|width)\s*=\s*([\d.]+)f/);
-      const width = wm ? +wm[1] : (/StitchedStroke/.test(line) ? 1.5 : 3);
+      // drawLine's 4th positional argument IS strokeWidth. The buildings pass it that way —
+      // drawLine(beam, a, b, 8f) — so reading only the named form left every one of the
+      // feasting hall's roof beams at the 3px default instead of the 8px it asks for, which is
+      // what made its diagonals look wrong in the editor but right in the real render.
+      const wPosArg = fn === 'drawLine' && !wm ? argOf(A, 'strokeWidth', 3) : null;
+      const wPos = wPosArg ? evalExpr(wPosArg.text, env, null) : null;
+      const width = wm ? +wm[1] : (wPos !== null ? wPos : (/StitchedStroke/.test(line) ? 1.5 : 3));
       const common = {
         color: colorOrDefault(cArg && cArg.text, '#2C2219'), width,
         srcLine: single ? li : -1, fn, colRef: spanOf(cArg, li, single), stroked
@@ -885,8 +988,8 @@ function parseScene(code) {
         } else {
           const call = callArgs(line, cm[1]);
           const parts = call ? call.args : [];
-          const vx = parts.length === 2 ? staticAdj(parts[0].text, evalExpr(parts[0].text, env, dottedFb), 'x') : null;
-          const vy = parts.length === 2 ? staticAdj(parts[1].text, evalExpr(parts[1].text, env, dottedFb), 'y') : null;
+          const vx = parts.length === 2 ? staticAdj(parts[0].text, coordVal(parts[0].text, 'x', env), 'x') : null;
+          const vy = parts.length === 2 ? staticAdj(parts[1].text, coordVal(parts[1].text, 'y', env), 'y') : null;
           if (vx !== null && vy !== null) { cur.cmds.push({ op: cm[1] === 'moveTo' ? 'M' : 'L', sx: vx, sy: vy }); cur.lastPtLine = li; }
           else cur.bad = true;
         }
@@ -898,7 +1001,7 @@ function parseScene(code) {
           const axis = ai % 2 === 0 ? 'x' : 'y';
           const pe = parseArgExpr(s.text);
           if (pe) return axisVal(pe, axis);
-          return staticAdj(s.text, evalExpr(s.text, env, dottedFb), axis);
+          return staticAdj(s.text, coordVal(s.text, axis, env), axis);
         });
         if (a.length === 4 && a.every(v => v !== null)) { cur.cmds.push({ op: 'Q', pts: a }); cur.lastPtLine = li; }
         else cur.bad = true;
@@ -917,14 +1020,17 @@ function parseScene(code) {
     }
     // withTransform({ translate(x, y) … }): drawing inside is in local coordinates
     if (/withTransform\s*\(\s*\{/.test(line)) {
-      let tx = null, ty = null;
+      let tx = null, ty = null, seen = false;
       for (let j = li; j < Math.min(li + 6, lines.length); j++) {
         const tm = lines[j].match(/\btranslate\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)/);
-        if (tm) { tx = evalExpr(tm[1], env, dottedFb); ty = evalExpr(tm[2], env, dottedFb); break; }
+        if (tm) { seen = true; tx = evalExpr(tm[1], env, dottedFb); ty = evalExpr(tm[2], env, dottedFb); break; }
         if (j > li && /\}\s*\)\s*\{/.test(lines[j])) break;
       }
-      // rotate-only transforms (walk cycles) draw at rest pose: origin stays put
-      if (tx !== null || ty !== null) tstack.push({ depth: depth + 1, x: tx !== null ? tx : cx, y: ty !== null ? ty : cy });
+      // rotate-only transforms (walk cycles) draw at rest pose: origin stays put.
+      // A translate whose arguments we can't evaluate (hx, hy for a handle) still gets a
+      // delta of the canvas centre, so a local-coordinate block lands with everything else
+      // instead of stranding itself around 0,0 in the top-left.
+      if (seen) tstack.push({ depth: depth + 1, x: tx !== null ? tx : cx, y: ty !== null ? ty : cy });
       return;
     }
     m = line.match(/val\s+(\w+)\s*=\s*(?:[\w.]+\.)?Path\(\)\.apply\s*\{/);
@@ -941,6 +1047,15 @@ function parseScene(code) {
           env[m[1] + '.x'] = vx; env[m[1] + '.y'] = vy;   // so ballPos.x resolves downstream
         }
       }
+      return;
+    }
+    // val X = listOf(...): a table of points the art then iterates. Elements may be bare
+    // Offsets or Pair/Triple of them — the nail-studded plank keeps all six nails this way,
+    // and without it none of them drew.
+    m = line.match(/val\s+(\w+)\s*(?::\s*[\w.<>,?\s]+\s*)?=\s*listOf\(([\s\S]*)\)\s*$/);
+    if (m) {
+      const els = splitArgs(m[2], 0).map(a => listElement(a.text)).filter(Boolean);
+      if (els.length) listVals[m[1]] = els;
       return;
     }
     // val X = when { … }: rest pose is the else branch, then any branch whose
@@ -965,13 +1080,18 @@ function parseScene(code) {
       if (pick !== null) env[m[1]] = pick;
       return;
     }
-    m = line.match(/val\s+(\w+)\s*(?::\s*[\w.<>?]+\s*)?=\s*(.+?)\s*$/);
-    if (m && !/Path\(/.test(m[2])) {
-      const v = evalExpr(m[2], env, null);
-      if (v !== null) { env[m[1]] = v; return; }
-      const c = resolveColor(m[2]);
-      if (c) { colorEnv[m[1]] = c; return; }
-      return;
+    // `val dx = 0.894f; val dy = -0.447f` — two declarations share a line all over the
+    // renderer. Reading only the first left dy undefined, and with it every coordinate
+    // built from the haft basis: that alone is why the axe and pitchfork drew nothing.
+    if (/\bval\s+\w+\s*(?::[^=]*)?=/.test(line) && !/Path\(/.test(line)) {
+      let handled = false;
+      for (const vm of line.matchAll(/\bval\s+(\w+)\s*(?::\s*[\w.<>?]+\s*)?=\s*([^;]+?)(?=;|$)/g)) {
+        const v = evalExpr(vm[2], env, null);
+        if (v !== null) { env[vm[1]] = v; handled = true; continue; }
+        const c = resolveColor(vm[2]);
+        if (c) { colorEnv[vm[1]] = c; handled = true; }
+      }
+      if (handled) return;
     }
     m = line.match(/\bdrawStitchedFill\s*\(/);
     if (m) {
@@ -1009,6 +1129,27 @@ function parseScene(code) {
     if (/drawArc|drawPoints|drawImage/.test(line)) sceneSkipped++;
   }
 
+  // One entry of a listOf: a point, a tuple of points, or a plain number.
+  function listElement(text) {
+    text = text.trim();
+    const tm = text.match(/^(?:Pair|Triple)\(([\s\S]*)\)$/);
+    if (tm) return { tuple: splitArgs(tm[1], 0).map(a => listElement(a.text)) };
+    const om = text.match(/^(?:[\w.]*\.)?Offset\(([\s\S]*)\)$/);
+    if (om) {
+      const parts = splitArgs(om[1], 0);
+      if (parts.length !== 2) return null;
+      const x = coordVal(parts[0].text, 'x', env), y = coordVal(parts[1].text, 'y', env);
+      return (x === null || y === null) ? null : { pt: { x, y } };
+    }
+    const v = evalExpr(text, env, null);
+    return v === null ? null : { num: v };
+  }
+  // Binds one element to a lambda parameter, so the body can use it as a point or a number.
+  function bindElement(name, el) {
+    if (!el) return;
+    if (el.pt) { offsetVals[name] = el.pt; env[name + '.x'] = el.pt.x; env[name + '.y'] = el.pt.y; }
+    else if (el.num !== undefined) env[name] = el.num;
+  }
   function loopRange(spec) {
     let m = spec.match(/^(.+?)\s+until\s+(.+)$/);
     if (m) { const a = evalExpr(m[1], env, null), b = evalExpr(m[2], env, null);
@@ -1034,9 +1175,26 @@ function parseScene(code) {
           if (!rng) { sceneSkipped++; values = [0]; }
           else { values = []; for (let k = rng[0]; k < Math.min(rng[1], rng[0] + 32); k++) values.push(k); }
         } else if ((lm = line.match(FOREACH_RE))) {
-          end = blockEnd(li); bodyVar = lm[2] || 'it';
-          values = splitArgs(lm[1], 0).map(a => evalExpr(a.text, env, null)).filter(v => v !== null);
-          if (!values.length) values = [0];
+          // `listOf(...).forEach { v ->` or `nailOffsets.forEach { (board, spike, head) ->`.
+          // Destructured tuples are how the art tables multi-point features, so the names
+          // are bound one per component rather than the element as a whole.
+          end = blockEnd(li);
+          const els = lm[1] ? splitArgs(lm[1], 0).map(a => listElement(a.text)).filter(Boolean)
+                            : (listVals[lm[2]] || []);
+          const names = (lm[3] || lm[4] || 'it').split(',').map(s => s.trim()).filter(Boolean);
+          if (els.length) {
+            const savedOff = names.map(n => offsetVals[n]);
+            for (const el of els) {
+              if (names.length > 1 && el.tuple) el.tuple.forEach((c, k) => bindElement(names[k], c));
+              else bindElement(names[0], el);
+              walk(li + 1, end - 1);
+            }
+            names.forEach((n, k) => { if (savedOff[k] === undefined) delete offsetVals[n]; else offsetVals[n] = savedOff[k]; });
+            depth += braces(lines.slice(li, end + 1).join('\n'));
+            li = end;
+            continue;
+          }
+          sceneSkipped++; bodyVar = names[0]; values = [0];
         } else if ((lm = line.match(REPEAT_RE))) {
           end = blockEnd(li); bodyVar = 'it';
           const n = evalExpr(lm[1], env, null);
@@ -1061,6 +1219,7 @@ function parseScene(code) {
       while (tstack.length && depth < tstack[tstack.length - 1].depth) tstack.pop();
     }
   }
+  scanFuncs(lines);
   walk(0, lines.length - 1);
 }
 
@@ -1097,7 +1256,36 @@ function argText(p) {
 }
 function say(t) { $('msg').textContent = t; }
 function pushUndo() { undoStack.push($('source').value); if (undoStack.length > 60) undoStack.shift(); }
+// Every edit funnels through here, so this is the one place that can stop a malformed write
+// reaching the file. Two saves have already landed Kotlin that would not compile — a call left
+// referencing a `val` the same save had deleted, and `center = ,` with its value dropped. Both
+// only surfaced as a failed gradle build much later, with nothing to say which edit did it.
+function sourceFault(text, prev) {
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].replace(/\/\/.*$/, '');
+    if (/\w+\s*=\s*[,)]/.test(l)) return `line ${i + 1}: an argument lost its value — "${lines[i].trim()}"`;
+    if (/\(\s*,|,\s*,|,\s*\)/.test(l)) return `line ${i + 1}: an empty argument — "${lines[i].trim()}"`;
+    // A fully-qualified argument whose value was cut off, leaving only the package it lived in:
+    // `androidx.compose.ui.geometry., strokeWidth = 4f`. Three saves have done this.
+    if (/[\w)]\.\s*[,)]/.test(l)) return `line ${i + 1}: an argument was cut off after its package name — "${lines[i].trim()}"`;
+  }
+  // The crossbow bug: a save replaced a shape and deleted its `val`, but left the drawPath that
+  // used it. Judged against the previous text, not in the abstract — a Path can also arrive as a
+  // function parameter (drawShipBody takes its hull as one) and the region never shows the
+  // signature, so "undeclared here" on its own is not evidence of anything.
+  if (prev) {
+    const declaredIn = s => new Set([...s.matchAll(/\bval\s+(\w+)\s*=\s*(?:androidx[\w.]*\.)?Path\(\)/g)].map(m => m[1]));
+    const before = declaredIn(prev), after = declaredIn(text);
+    for (const m of text.matchAll(/\bdrawPath\(\s*(\w+)\s*,/g)) {
+      if (before.has(m[1]) && !after.has(m[1])) return `"${m[1]}" is still drawn, but this edit removed the val that declares it`;
+    }
+  }
+  return null;
+}
 function commit(text, note) {
+  const fault = sourceFault(text, $('source').value);
+  if (fault) return say(`Not saved — that edit would not compile (${fault}). Nothing changed.`);
   $('source').value = text;
   refresh(false);
   buildColorPickers();
@@ -1105,8 +1293,13 @@ function commit(text, note) {
 }
 function refresh(refit) {
   parseScene($('source').value);
+  if (selShapeIdx !== null && selShapeIdx >= scene.length) selectShape(null);
   if (refit) fitView();
-  const bits = [`${scene.length} shapes`, `${editPts.length} points`];
+  const bits = [`${scene.length} shapes`, `${editPts.length} draggable points`];
+  // Coordinates built through a helper (at(2f, -10f)) or a loop are computed, not literal,
+  // so there is no single number in the file to drag. Say it, rather than leave a shape
+  // that draws correctly but refuses to be grabbed looking broken.
+  if (scene.length && !editPts.length) bits.push('coordinates are computed — edit the numbers in the text panel');
   if (sceneSkipped) bits.push(`${sceneSkipped} procedural (Forge only)`);
   if (sceneDark) bits.push(`⚠ ${sceneDark} unresolved colour${sceneDark > 1 ? 's' : ''} (drawn flat grey)`);
   $('sceneStat').textContent = bits.join(' · ');
@@ -1166,8 +1359,8 @@ const TIPS = {
   delete: 'Click a handle to remove that point from the path.',
   fill: 'Click a shape to fill it with the fill colour.',
   unfill: 'Click a filled shape to strip its fill and leave the outline.',
-  line: 'Click a shape to give its outline the line colour.',
-  shape: 'Click to drop a circle or square at that spot, sized by the size box.'
+  line: 'Click one edge of a path to recolour just that edge; click a plain line or a curve to recolour the whole outline.',
+  shape: 'Click to drop a circle, square or triangle at that spot, sized by the size box. Each one gets its own fill and outline colour, independent of the item it lands on.'
 };
 function setMode(m) {
   mode = m;
@@ -1180,8 +1373,13 @@ function setMode(m) {
 document.querySelectorAll('.mode').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 $('linkOn').onclick = () => { linked = true; $('linkOn').classList.add('on'); $('linkOff').classList.remove('on'); };
 $('linkOff').onclick = () => { linked = false; $('linkOff').classList.add('on'); $('linkOn').classList.remove('on'); };
-$('shapeCircle').onclick = () => { shapeKind = 'circle'; $('shapeCircle').classList.add('on'); $('shapeSquare').classList.remove('on'); };
-$('shapeSquare').onclick = () => { shapeKind = 'square'; $('shapeSquare').classList.add('on'); $('shapeCircle').classList.remove('on'); };
+const SHAPE_BTNS = { circle: 'shapeCircle', square: 'shapeSquare', triangle: 'shapeTriangle' };
+Object.entries(SHAPE_BTNS).forEach(([kind, id]) => {
+  $(id).onclick = () => {
+    shapeKind = kind;
+    Object.values(SHAPE_BTNS).forEach(o => $(o).classList.toggle('on', o === id));
+  };
+});
 setMode('drag');
 
 document.addEventListener('keydown', e => {
@@ -1370,8 +1568,78 @@ function applyUnfill(shape) {
   lines[shape.srcLine] = setArg(lines[shape.srcLine], shape.fn, 'style', 'Stroke(width = 2f)');
   commit(lines.join('\n'), 'Fill removed.');
 }
-function applyLineColor(shape) {
+// A Path's outline is a single drawPath call, so Line colour could only ever repaint the whole
+// shape — clicking one edge of a square recoloured all four. These pick out the one straight
+// edge under the cursor so it can be repainted on its own.
+//
+// Only edges with a draggable point at each end are offered. Those carry the expression they
+// were written as (headPos.x + 19f), so the overdraw can be emitted in the same terms as the
+// path itself and lands in the same transform. Curve ends and computed coordinates have no
+// such text, so they fall back to recolouring the whole outline, as before.
+function pathSegments(shape) {
+  if (!shape.cmds) return [];
+  const segs = [];
+  let prev = null, start = null;
+  for (const c of shape.cmds) {
+    if (c.op === 'M') { prev = start = c; continue; }
+    if (c.op === 'L') { if (prev) segs.push({ a: prev, b: c }); prev = c; continue; }
+    if (c.op === 'Z') { if (prev && start && prev !== start) segs.push({ a: prev, b: start }); prev = start; continue; }
+    // The pen still moves for a curve, so a following lineTo is a real edge — it just has no
+    // draggable start, and the filter below drops it.
+    if (c.op === 'Q') { prev = { sx: c.pts[2], sy: c.pts[3] }; continue; }
+    prev = null;
+  }
+  return segs.filter(s => s.a.pt && s.b.pt);
+}
+function distToSeg(p, a, b) {
+  const vx = b.x - a.x, vy = b.y - a.y;
+  const len2 = vx * vx + vy * vy;
+  const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / len2)) : 0;
+  return Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy));
+}
+function nearestSegment(shape, m) {
+  const segs = pathSegments(shape);
+  if (segs.length < 2) return null;   // a one-edge path IS the whole outline
+  let best = null, bd = Infinity;
+  for (const s of segs) {
+    const a = resolvePt(s.a), b = resolvePt(s.b);
+    if (!a || !b) continue;
+    const d = distToSeg(m, a, b);
+    if (d < bd) { bd = d; best = s; }
+  }
+  // Same slack hitShape allows, in model units so it holds at any zoom.
+  return best && bd <= 8 / view.k ? best : null;
+}
+function freeName(stem) {
+  let n = 1;
+  while (kpathsByName[`${stem}${n}`]) n++;
+  return `${stem}${n}`;
+}
+function applyLineColor(shape, m) {
   const kt = ktColor(lineColor);
+  // One edge if the click landed on one; the whole outline otherwise.
+  const seg = shape.path && m ? nearestSegment(shape, m) : null;
+  if (seg) {
+    const host = shape.type === 'stroke' ? shape : (siblingOf(shape, 'stroke') || shape);
+    if (host.srcLine < 0) return say('That call spans several lines — edit it in the text panel.');
+    const src = $('source').value;
+    const ind = indentOf(src.split('\n')[host.srcLine]);
+    const r = receiver();
+    const name = freeName(shape.path + '_edge');
+    const pt = (c, axis) => argText(c.pt[axis]);
+    pushUndo();
+    // Overdrawn on top of the outline rather than cut out of it: the path stays one object,
+    // so the shape keeps its fill and its corner handles.
+    const block = [
+      `${ind}val ${name} = Path().apply {`,
+      `${ind}    moveTo(${pt(seg.a, 'x')}, ${pt(seg.a, 'y')})`,
+      `${ind}    lineTo(${pt(seg.b, 'x')}, ${pt(seg.b, 'y')})`,
+      `${ind}}`,
+      `${ind}${r.call}drawPath(${name}, ${kt}, style = StitchedStroke)`
+    ].join('\n');
+    return commit(insertLine(src, host.srcLine + 1, block),
+      'That edge recoloured. It is drawn over the outline, so move the corners first, then recolour.');
+  }
   const outline = (shape.type === 'stroke' || shape.type === 'line' || !shape.fill && !shape.path)
     ? shape : (shape.path ? siblingOf(shape, 'stroke') : null);
   if (outline && outline.colRef) { pushUndo(); return commit(replaceSpan(outline.colRef, kt), 'Outline recoloured.'); }
@@ -1390,6 +1658,37 @@ function applyLineColor(shape) {
   commit(insertLine($('source').value, shape.srcLine + 1, ind + stroked), 'Outline added in the line colour.');
 }
 
+// Selecting a shape exposes its stroke width. It lives in `strokeWidth = 4f` on a line/circle
+// or `Stroke(width = 4f)` inside a style argument, and neither was reachable before: the
+// javelin's shaft was a fixed 5f you could only change by hand in the text.
+let selShapeIdx = null;
+function selectShape(i) {
+  selShapeIdx = i;
+  const s = i === null ? null : scene[i];
+  $('ctxSel').style.display = s ? '' : 'none';
+  if (!s) return;
+  $('selWidth').value = s.width != null ? s.width : 3;
+  $('selLabel').textContent = `${s.type}${s.path ? ' · ' + s.path : ''}` + (s.srcLine < 0 ? ' (multi-line — edit in text)' : '');
+}
+function applyWidth() {
+  if (selShapeIdx === null) return say('Select a shape first (Drag mode, click it).');
+  const s = scene[selShapeIdx];
+  if (s.srcLine < 0) return say('That call spans several lines — edit it in the text panel.');
+  const w = Math.max(0.5, parseFloat($('selWidth').value) || 3);
+  const lines = $('source').value.split('\n');
+  let line = lines[s.srcLine];
+  if (/\bstrokeWidth\s*=/.test(line)) line = line.replace(/\bstrokeWidth\s*=\s*[\d.]+f/, `strokeWidth = ${fmtNum(w)}f`);
+  else if (/\bStroke\s*\(\s*width\s*=/.test(line)) line = line.replace(/(\bStroke\s*\(\s*width\s*=\s*)[\d.]+f/, `$1${fmtNum(w)}f`);
+  else if (s.type === 'line') line = setArg(line, s.fn, 'strokeWidth', `${fmtNum(w)}f`);
+  else if (s.stroked || s.type === 'stroke') line = setArg(line, s.fn, 'style', `Stroke(width = ${fmtNum(w)}f)`);
+  else return say('That shape is filled, so it has no stroke width — give it an outline first (Line colour).');
+  lines[s.srcLine] = line;
+  pushUndo();
+  commit(lines.join('\n'), `Stroke width set to ${fmtNum(w)}.`);
+}
+$('selWidthApply').onclick = applyWidth;
+$('selWidth').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applyWidth(); } });
+
 function addShape(m) {
   const size = Math.max(2, parseFloat($('shapeSize').value) || 14);
   const r = receiver();
@@ -1402,8 +1701,18 @@ function addShape(m) {
                + `${ind}${r.call}drawCircle(${ktColor(lineColor)}, radius = ${fmtNum(size)}f, center = Offset(${xa}, ${ya}), style = StitchedStroke)`;
     return commit(src.replace(/\s*$/, '') + '\n' + body + '\n', 'Circle added — drag its centre or edge handle to adjust.');
   }
-  const h = size / 2, name = 'square_' + (Object.keys(kpathsByName).length + 1);
-  const corners = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([dx, dy]) => pointArgs(null, m.x + dx, m.y + dy));
+  // Square and triangle differ only in their corner list. Both emit a named Path of their own
+  // with its own drawStitchedFill and its own drawPath outline, both written as literal
+  // Color(0x..) values — so a shape dropped onto an existing item never shares, or steals, the
+  // colour of whatever it lands on. That is the whole reason to reach for one of these instead
+  // of building the same outline out of drawLine calls.
+  const h = size / 2;
+  const OUTLINES = {
+    square: [[-h, -h], [h, -h], [h, h], [-h, h]],
+    triangle: [[0, -h], [h, h], [-h, h]]   // apex up, flat base
+  };
+  const name = shapeKind + '_' + (Object.keys(kpathsByName).length + 1);
+  const corners = OUTLINES[shapeKind].map(([dx, dy]) => pointArgs(null, m.x + dx, m.y + dy));
   const block = [
     `${ind}val ${name} = Path().apply {`,
     `${ind}    moveTo(${corners[0][0]}, ${corners[0][1]})`,
@@ -1413,7 +1722,8 @@ function addShape(m) {
     `${ind}drawStitchedFill(${r.self}, ${name}, ${ktColor(fillColor)})`,
     `${ind}${r.call}drawPath(${name}, ${ktColor(lineColor)}, style = StitchedStroke)`
   ].join('\n');
-  commit(src.replace(/\s*$/, '') + '\n' + block + '\n', 'Square added — all four corners are draggable.');
+  commit(src.replace(/\s*$/, '') + '\n' + block + '\n',
+    `${shapeKind === 'triangle' ? 'Triangle' : 'Square'} added — every corner is draggable.`);
   selPath = name;
 }
 
@@ -1430,7 +1740,9 @@ canvas.onmousedown = e => {
     const pi = hitPoint(mx, my);
     if (pi !== null) { dragIdx = pi; dragKind = 'pt'; return; }
     const si = hitShape(m);
-    if (si !== null && scene[si].path) { selPath = scene[si].path; say(`Selected ${selPath}.`); }
+    selectShape(si);
+    if (si !== null && scene[si].path) { selPath = scene[si].path; }
+    if (si !== null) say(`Selected ${scene[si].type}${scene[si].path ? ' ' + scene[si].path : ''} — stroke width is editable above.`);
     return;
   }
   if (mode === 'add') return addPoint(m);
@@ -1445,7 +1757,7 @@ canvas.onmousedown = e => {
   if (shape.path) selPath = shape.path;
   if (mode === 'fill') return applyFill(shape);
   if (mode === 'unfill') return applyUnfill(shape);
-  if (mode === 'line') return applyLineColor(shape);
+  if (mode === 'line') return applyLineColor(shape, m);
 };
 canvas.onmousemove = e => {
   const r = canvas.getBoundingClientRect();

@@ -381,7 +381,7 @@ data class EmbeddedProjectile(
 
 enum class BackgroundObjectType {
     SHIP, FORT_PALACE, FORT_DINAN, BUILDING_BOSHAM, BUILDING_MANOR, FORT_TOWER, FORT_MOTTE, BROKEN_CHARIOT,
-    BUILDING_BAYEUX, TOWER_SPIRAL,
+    BUILDING_BAYEUX, TOWER_SPIRAL, DOMED_TOWER, ABBEY_NAVE, ECCLESIA, PALACE_ARCH,
     CASTLE_WALL, CASTLE_GATE, MOTTE,
     FEASTING_HALL, FLEET_CROSSING, MONT_SAINT_MICHEL, STAMFORD_BRIDGE,
     INTERIOR_KITCHEN, INTERIOR_CHAMBER,
@@ -703,6 +703,30 @@ data class FighterState(
  * They drifted, so the preselected colour matched no swatch and read as "nothing selected". Every
  * site reads this list now — add a colour here and it appears everywhere at once.
  */
+/**
+ * What a haircut does to you. Small deltas on purpose — a hairstyle is a look you earned, not a
+ * build-defining pick, so nothing here should be worth wearing a cut you dislike for. Both numbers
+ * and the sentence live in one row, so the tooltip can never drift from the effect it describes.
+ */
+data class HairTrait(val hpBonus: Float, val speedBonus: Float, val effect: String)
+
+val HAIR_TRAITS: Map<String, HairTrait> = mapOf(
+    "short" to HairTrait(0f, 0f, "A plain bowl crop. No advantage, no penalty."),
+    "long" to HairTrait(2f, -0.02f, "Long hair pads a blow to the head, and catches on everything."),
+    "bald" to HairTrait(0f, 0.03f, "Nothing for a hand to grab, and nothing to slow you."),
+    "hair_tonsure_norman" to HairTrait(0f, 0.02f, "Shaved at the neck in the Norman fashion. Lighter on the move."),
+    "hair_braids" to HairTrait(3f, -0.02f, "Heavy braids in the northern manner. They soak up a glancing cut."),
+    "hair_tonsure_monk" to HairTrait(4f, -0.03f, "A brother's tonsure. Providence favours you; haste does not."),
+    "hair_topknot" to HairTrait(1f, 0.01f, "An old campaigner's knot. Tidy, and out of your eyes."),
+    "hair_mystic" to HairTrait(-2f, 0.05f, "Uncut since a vow was made. Frail of body, but quick as a rumour."),
+    "hair_germanic" to HairTrait(5f, -0.04f, "Bound pigtails over a thick neck. You take a hit; you do not dodge it."),
+    // The one loud row in the table. Samson's whole story is that the strength is IN the hair, so
+    // a subtle nudge would read as a bug — this is meant to be worth wearing.
+    "hair_samson" to HairTrait(25f, -0.08f, "Locks no razor has touched. The strength is in the hair — and so is the weight.")
+)
+
+fun hairTrait(style: String): HairTrait = HAIR_TRAITS[style] ?: HAIR_TRAITS.getValue("short")
+
 val HAIR_COLORS: List<Color> = listOf(
     Color(0xFF888888), // grey
     Color(0xFFC08030), // ginger

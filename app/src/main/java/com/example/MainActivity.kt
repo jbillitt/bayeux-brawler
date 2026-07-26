@@ -1644,7 +1644,14 @@ fun GearSelectionTabs(
                         }
                         Text("BODY SIZE (Affects Mass/Speed)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TapestryDark)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // IntrinsicSize.Min measures the tallest tile first and hands that height
+                        // to all of them. Without it each box sizes to its own label, and the ones
+                        // whose name wraps to two lines stand taller than the rest — five buttons
+                        // that should read as one row of equals, again.
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.height(IntrinsicSize.Min)
+                        ) {
                             com.example.game.SIZE_PRESETS.forEach { preset ->
                                 val sizeVal = preset.size
                                 val label = preset.label
@@ -1652,6 +1659,7 @@ fun GearSelectionTabs(
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
+                                        .fillMaxHeight()
                                         .background(if (isSelected) TapestryDark else Color(0xFFFAF6EB), RoundedCornerShape(4.dp))
                                         .border(if (isSelected) 2.dp else 1.dp, if (isSelected) TapestryMustard else TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
                                         .combinedClickable(
@@ -1690,11 +1698,12 @@ fun GearSelectionTabs(
                                     .background(TapestryLinenBg, RoundedCornerShape(4.dp))
                                     .border(1.dp, TapestryDark.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
                                     .padding(horizontal = 6.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.Top   // see the weapon gloss below
                             ) {
                                 Text(
                                     glossedSize.label.uppercase(),
                                     fontSize = 8.sp,
+                                    lineHeight = 10.sp,
                                     fontFamily = FontFamily.Serif,
                                     fontWeight = FontWeight.Black,
                                     color = TapestryRed
@@ -1740,7 +1749,10 @@ fun GearSelectionTabs(
                             "hair_tonsure_norman" to "✦ Norman Crop",
                             "hair_braids" to "✦ Braids",
                             "hair_tonsure_monk" to "✦ Tonsure",
-                            "hair_topknot" to "✦ Topknot"
+                            "hair_topknot" to "✦ Topknot",
+                            "hair_mystic" to "✦ Mystic",
+                            "hair_germanic" to "✦ Germanic",
+                            "hair_samson" to "✦ Samsonite"
                         ).filter { (id, _) -> id in uiState.unlockedGearIds }
                         val allStyles = listOf(
                             "short" to "Bowl Cut", "long" to "Long Locks", "bald" to "Bald/Fringe"
@@ -1749,25 +1761,70 @@ fun GearSelectionTabs(
                         allStyles.chunked(3).forEach { rowStyles ->
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).height(IntrinsicSize.Min)
                             ) {
                                 rowStyles.forEach { (styleVal, label) ->
                                     val isSelected = uiState.hairStyle == styleVal
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
+                                            .fillMaxHeight()
                                             .background(if (isSelected) TapestryDark else Color(0xFFFAF6EB), RoundedCornerShape(4.dp))
                                             .border(if (isSelected) 2.dp else 1.dp, if (isSelected) TapestryMustard else TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
                                             .clickable { onUpdatePhysical(uiState.characterSize, uiState.hairColor, styleVal) }
-                                            .padding(8.dp),
+                                            .padding(horizontal = 4.dp, vertical = 8.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(label, color = if (isSelected) TapestryLight else TapestryDark, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        // A third of a phone's width is ~100dp; "✦ Norman Crop" at
+                                        // 11sp is wider than that, and with nothing bounding it the
+                                        // label ran out of its tile. It wraps to two lines now, and
+                                        // IntrinsicSize.Min above keeps the row level when it does.
+                                        Text(
+                                            label,
+                                            color = if (isSelected) TapestryLight else TapestryDark,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 2,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
                                     }
                                 }
                                 // Keep the last row's cells the same width as a full row's.
                                 repeat(3 - rowStyles.size) { Spacer(modifier = Modifier.weight(1f)) }
                             }
+                        }
+                        // What the cut actually does. The same gloss register the weapon and size
+                        // grids use, reading straight off HAIR_TRAITS so the sentence and the
+                        // numbers can never disagree.
+                        val hairTrait = com.example.game.hairTrait(uiState.hairStyle)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(TapestryLinenBg, RoundedCornerShape(4.dp))
+                                .border(1.dp, TapestryDark.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            val deltas = buildList {
+                                if (hairTrait.hpBonus != 0f) add("${if (hairTrait.hpBonus > 0) "+" else ""}${hairTrait.hpBonus.toInt()} HP")
+                                if (hairTrait.speedBonus != 0f) add("${if (hairTrait.speedBonus > 0) "+" else ""}${(hairTrait.speedBonus * 100).toInt()}% SPEED")
+                            }
+                            Text(
+                                if (deltas.isEmpty()) "NO EFFECT" else deltas.joinToString("  "),
+                                fontSize = 8.sp,
+                                lineHeight = 10.sp,
+                                fontFamily = FontFamily.Serif,
+                                fontWeight = FontWeight.Black,
+                                color = TapestryRed
+                            )
+                            Text(
+                                "  ·  ${hairTrait.effect}",
+                                fontSize = 8.sp,
+                                lineHeight = 10.sp,
+                                fontFamily = FontFamily.Serif,
+                                color = TapestryDark.copy(alpha = 0.85f),
+                                maxLines = 2
+                            )
                         }
                     }
                 }
@@ -1841,11 +1898,16 @@ fun GearSelectionTabs(
                             .background(TapestryLinenBg, RoundedCornerShape(4.dp))
                             .border(1.dp, TapestryDark.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
                             .padding(horizontal = 6.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        // Top, not centre: the description runs to two lines and the name to one,
+                        // so centring pushed the "·" down to the midpoint of the taller block and
+                        // left it sitting below the name it separates. Matching lineHeight lines
+                        // the two first lines up exactly.
+                        verticalAlignment = Alignment.Top
                     ) {
                         Text(
                             text = glossed.itemName.uppercase(),
                             fontSize = 8.sp,
+                            lineHeight = 10.sp,
                             fontFamily = FontFamily.Serif,
                             fontWeight = FontWeight.Black,
                             color = TapestryRed

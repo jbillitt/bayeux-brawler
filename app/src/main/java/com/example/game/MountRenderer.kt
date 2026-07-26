@@ -312,6 +312,19 @@ internal fun drawPackMule(scope: DrawScope, cx: Float, cy: Float, fighter: Fight
         moveTo(cx + 60f, cy + 58f)
         quadraticTo(cx + 40f, cy + 80f, cx + 2f, cy + 82f)
     }, Color(0xFF382F22), style = Stroke(width = 3f))
+    val square_7 = Path().apply {
+        moveTo(cx + 62f, cy + 57.5f)
+        lineTo(cx + 65.5f, cy + 56.5f)
+        lineTo(cx + 66f, cy + 68.5f)
+        lineTo(cx + 62f, cy + 67.5f)
+        moveTo(cx + 64f, cy + 58f)
+        lineTo(cx + 64.5f, cy + 68f)
+        close()
+    }
+    drawStitchedFill(scope, square_7, Color(0xFF9E3624))
+    scope.drawPath(square_7, Color(0xFF7A1F14), style = StitchedStroke)
+    scope.drawCircle(Color(0xFF7A1F14), radius = 2f, center = Offset(cx + 64f, cy + 69f))
+    scope.drawCircle(Color(0xFF7A1F14), radius = 1.5f, center = Offset(cx + 64f, cy + 69f), style = StitchedStroke)
 }
 
 /** A muzzled bear: broad shoulders, heavy forelimbs, a strapped muzzle. Fast and unreliable. */
@@ -537,9 +550,7 @@ internal fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
         // Draw a basic wooden throne
         val tPath = Path().apply {
             moveTo(cx - 30f, cy + 100f)
-            lineTo(cx - 30f, cy + 30f)
-            lineTo(cx + 2.5f, cy + 47.5f)
-            lineTo(cx + 30f, cy + 100f)
+            lineTo(cx - 29f, cy + 35.5f)
             moveTo(cx - 30f, cy + 90f)
             lineTo(cx + 30f, cy + 90f)
         }
@@ -554,11 +565,16 @@ internal fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
 
         // Add gold trim
         val trimPath = Path().apply {
-            moveTo(cx - 13f, cy + 34.5f)
-            lineTo(cx + 6.5f, cy + 44f)
+            moveTo(cx - 24.5f, cy + 69f)
+            lineTo(cx + 2f, cy + 69.5f)
+            lineTo(cx + 2f, cy + 85f)
         }
-        scope.drawPath(trimPath, Color(0xFFB08221), style = Stroke(width = 6f))
-    }
+        scope.drawPath(trimPath, Color(0xFF7A1F14), style = Stroke(width = 6f))
+        scope.drawCircle(Color(0xFFB08221), radius = 8f, center = Offset(cx - 95f, cy + 94f))
+        scope.drawCircle(Color(0xFFD6A420), radius = 8f, center = Offset(cx - 95f, cy + 94f), style = StitchedStroke)
+        scope.drawCircle(Color(0xFFB08221), radius = 8f, center = Offset(cx + 90f, cy + 95f))
+        scope.drawCircle(Color(0xFFD6A420), radius = 8f, center = Offset(cx + 90f, cy + 95f), style = StitchedStroke)
+}
 
 /**
  * Top of the poles, in the body's own local space: the sole of the boot drawLegs draws at
@@ -622,7 +638,16 @@ internal fun drawWardog(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
             // Tail
             scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx - 25f, cy - 5f), androidx.compose.ui.geometry.Offset(cx - 40f, cy - 15f), strokeWidth = 6f, cap = StrokeCap.Round)
         }
-    }
+        scope.drawCircle(Color(0xFF9E3624), radius = 4f, center = Offset(cx + 32f, cy + 113.5f))
+        val triangle_1 = Path().apply {
+            moveTo(cx + 42.5f, cy + 128f)
+            lineTo(cx + 45f, cy + 120f)
+            lineTo(cx + 39.5f, cy + 122.5f)
+            close()
+        }
+        drawStitchedFill(scope, triangle_1, Color(0xFFFAF6EB))
+        scope.drawPath(triangle_1, Color(0xFFBAC5CC), style = StitchedStroke)
+}
 
 internal fun drawRaven(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val anim = fighter.animFrame
@@ -642,11 +667,35 @@ internal fun drawRaven(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
             // Head
             scope.drawCircle(ravenColor, radius = 8f, center = androidx.compose.ui.geometry.Offset(cx + 15f, cy - 4f))
             // Beak
-            scope.drawLine(androidx.compose.ui.graphics.Color.Yellow, androidx.compose.ui.geometry.Offset(cx + 18f, cy - 4f), androidx.compose.ui.geometry.Offset(cx + 30f, cy), strokeWidth = 4f, cap = StrokeCap.Round)
+            scope.drawLine(androidx.compose.ui.graphics.Color.Yellow, androidx.compose.ui.geometry.Offset(cx + 21.5f, cy + 0.5f), androidx.compose.ui.geometry.Offset(cx + 25f, cy + 1f), strokeWidth = 4f, cap = StrokeCap.Round)
             // Eye
             scope.drawCircle(androidx.compose.ui.graphics.Color.Red, radius = 2f, center = androidx.compose.ui.geometry.Offset(cx + 15f, cy - 5f))
         }
-    }
+        val triangle_1 = Path().apply {
+            moveTo(cx + 10.5f, cy - 125.5f)
+            lineTo(cx - 9f, cy - 125.5f)
+            lineTo(cx - 8f, cy - 103.5f)
+            close()
+        }
+        drawStitchedFill(scope, triangle_1, Color(0xFF000000))
+        scope.drawPath(triangle_1, Color(0xFF000000), style = StitchedStroke)
+        val triangle_2 = Path().apply {
+            moveTo(cx + 23f, cy - 122.5f)
+            lineTo(cx + 31f, cy - 115.5f)
+            lineTo(cx + 20f, cy - 119f)
+            close()
+        }
+        drawStitchedFill(scope, triangle_2, Color(0xFFEFEA07))
+        scope.drawPath(triangle_2, Color(0xFFEFEA07), style = StitchedStroke)
+        val triangle_3 = Path().apply {
+            moveTo(cx - 10f, cy - 126.5f)
+            lineTo(cx - 10.5f, cy - 116f)
+            lineTo(cx - 18.5f, cy - 124.5f)
+            close()
+        }
+        drawStitchedFill(scope, triangle_3, Color(0xFF000000))
+        scope.drawPath(triangle_3, Color(0xFF000000), style = StitchedStroke)
+}
     
     // Background objects are static between damage events, but their stitched fills cost
     // thousands of drawLine calls. Render each to an offscreen bitmap once and blit per frame.

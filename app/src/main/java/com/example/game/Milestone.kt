@@ -45,5 +45,8 @@ enum class Milestone(
     REACH_10("reach_level_10", "A Norman Cut", "Reach level 10", "hair_tonsure_norman"),
     HARDRADA_BRAIDS("hardrada_braids", "Northern Ways", "Defeat Harald Hardrada", "hair_braids"),
     MONK_SURVIVES("monk_survives", "Brother in Arms", "Win a battle with Brother Tuck still alive", "hair_tonsure_monk"),
-    REACH_35("reach_level_35", "Old Campaigner", "Reach level 35", "hair_topknot")
+    REACH_35("reach_level_35", "Old Campaigner", "Reach level 35", "hair_topknot"),
+    STAR_GAZER("star_gazer", "Isti Mirant Stellam", "Reach level 30", "hair_mystic"),
+    THOUSAND_KILLS("thousand_kills", "The Longer Harvest", "Slay 1000 men in all", "hair_germanic"),
+    UNSHORN("unshorn", "Strength Enough", "Defeat a boss wearing no armour at all", "hair_samson")
 }

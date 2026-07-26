@@ -24,9 +24,9 @@ class MilestoneTest {
     fun everyMilestoneGrantsSomethingThatExists() {
         // Rewards are not all GearItems: mounts are Ancillary ids and hairstyles are bare strings.
         val ancillaryIds = Ancillary.values().map { it.id }.toSet()
-        val hairStyles = setOf(
-            "hair_tonsure_norman", "hair_braids", "hair_tonsure_monk", "hair_topknot"
-        )
+        // Read off the trait table rather than repeated here: a new style needs a HAIR_TRAITS row
+        // anyway for its effect line, so that table is the one list that cannot go stale.
+        val hairStyles = HAIR_TRAITS.keys
         Milestone.values().forEach { m ->
             val known = m.grants in allGearIds || m.grants in ancillaryIds || m.grants in hairStyles
             assertTrue("${m.id} grants ${m.grants}, which is not real content", known)

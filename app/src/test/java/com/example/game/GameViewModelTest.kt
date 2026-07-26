@@ -640,6 +640,28 @@ class GameViewModelTest {
         assertEquals(80f, player.mountHp)
     }
 
+    /**
+     * Being on fire used to show only as a warmer skin tone. The emitter is gated on a 4-tick
+     * counter shared with the incense, so this drives a full cycle rather than one frame.
+     */
+    @Test
+    fun `a burning fighter gives off smoke`() {
+        viewModel.startBattle()
+        setPrivateListFlow("_enemiesState", emptyList<FighterState>()) // only the player may smoke
+        val player = viewModel.playerState.value!!
+        player.igniteDuration = 3f
+
+        val bufferField = GameViewModel::class.java.getDeclaredField("particleBuffer")
+        bufferField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val buffer = bufferField.get(viewModel) as MutableList<BloodParticle>
+        buffer.clear()
+
+        repeat(4) { updateSimulation(0.033f) }
+
+        assertTrue("a fighter alight must smoke", buffer.any { it.isSmoke })
+    }
+
     @Test
     fun `transient effect tick preserves list identity when membership is unchanged`() {
         val popup = CombatPopup("10", 5f, 6f, age = 0.2f)

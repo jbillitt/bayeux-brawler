@@ -1397,6 +1397,65 @@ object TapestryRenderer {
                     lineTo(hx - 1f, hy - 24f)
                     lineTo(hx + 2f, hy - 6f)
                     close()
+                } else if (fighter.hairStyle == "hair_mystic") {
+                    // A seer's uncut mane: flat across the brow, then one heavy fall of straight
+                    // hair all the way down the back, well past the shoulder blades.
+                    moveTo(hx - 12f, hy)
+                    lineTo(hx - 3f, hy - 11f)
+                    lineTo(hx + 7f, hy - 9f)
+                    lineTo(hx + 4f, hy - 1f)
+                    lineTo(hx - 2f, hy + 2f)
+                    lineTo(hx - 5f, hy + 54f)   // the fall, straight and long
+                    lineTo(hx - 17f, hy + 52f)
+                    lineTo(hx - 14f, hy + 3f)
+                    close()
+                } else if (fighter.hairStyle == "hair_samson") {
+                    // Samsonite locks: a full uncut mane, wider than the head and falling in
+                    // seven heavy hanks. Bigger in every direction than the mystic's straight
+                    // fall — you should be able to tell these two apart at a glance.
+                    moveTo(hx - 16f, hy - 2f)
+                    lineTo(hx - 5f, hy - 15f)
+                    lineTo(hx + 9f, hy - 12f)
+                    lineTo(hx + 6f, hy - 1f)
+                    lineTo(hx + 1f, hy + 3f)
+                    lineTo(hx + 4f, hy + 40f)
+                    lineTo(hx - 6f, hy + 44f)
+                    lineTo(hx - 10f, hy + 46f)
+                    lineTo(hx - 22f, hy + 42f)
+                    lineTo(hx - 18f, hy + 4f)
+                    close()
+                    // Hanks, cut into the mass so it does not read as one slab of colour.
+                    moveTo(hx - 20f, hy + 14f)
+                    lineTo(hx - 25f, hy + 34f)
+                    lineTo(hx - 19f, hy + 36f)
+                    lineTo(hx - 16f, hy + 15f)
+                    close()
+                    moveTo(hx + 2f, hy + 12f)
+                    lineTo(hx + 8f, hy + 32f)
+                    lineTo(hx + 2f, hy + 35f)
+                    lineTo(hx - 1f, hy + 13f)
+                    close()
+                } else if (fighter.hairStyle == "hair_germanic") {
+                    // Pigtails: a centre-parted cap with a bound tail swinging off each side.
+                    moveTo(hx - 12f, hy)
+                    lineTo(hx - 3f, hy - 11f)
+                    lineTo(hx + 7f, hy - 9f)
+                    lineTo(hx + 4f, hy - 1f)
+                    lineTo(hx - 4f, hy + 3f)
+                    lineTo(hx - 13f, hy + 4f)
+                    close()
+                    // Left tail, hanging clear of the jaw.
+                    moveTo(hx - 15f, hy + 2f)
+                    lineTo(hx - 24f, hy + 20f)
+                    lineTo(hx - 17f, hy + 24f)
+                    lineTo(hx - 10f, hy + 4f)
+                    close()
+                    // Right tail, shorter — it reads as the far side of the head.
+                    moveTo(hx + 3f, hy + 1f)
+                    lineTo(hx + 9f, hy + 16f)
+                    lineTo(hx + 3f, hy + 19f)
+                    lineTo(hx - 1f, hy + 3f)
+                    close()
                 } else { // "short" or default bowl cut
                     moveTo(hx - 12f, hy)
                     lineTo(hx - 2f, hy - 10f)
@@ -1706,9 +1765,9 @@ object TapestryRenderer {
             // A hood of pelt: snout forward over the brow, ears up, pelt falling behind.
             val cowl = Path().apply {
                 moveTo(hx - 18f, hy + 6f)
-                quadraticTo(hx - 14f, hy - 22f, hx + 8f, hy - 20f)
-                quadraticTo(hx + 20f, hy - 18f, hx + 20f, hy - 4f)
-                lineTo(hx + 12f, hy + 4f)
+                quadraticTo(hx - 14f, hy - 10f, hx + 6f, hy - 18f)
+                quadraticTo(hx + 20f, hy - 8f, hx + 25f, hy - 4f)
+                lineTo(hx + 5.5f, hy + 2f)
                 close()
             }
             drawStitchedFill(scope, cowl, Color(0xFF5A5048))
@@ -1725,8 +1784,34 @@ object TapestryRenderer {
                 scope.drawPath(ear, ThreadColor, style = StitchedStroke)
             }
             // The wolf's own eye, on the snout above the wearer's.
-            scope.drawCircle(Color(0xFFD9B871), radius = 2f, center = Offset(hx + 12f, hy - 10f))
-        } else if (helmId == "helm_pot") {
+            scope.drawCircle(Color(0xFFD9B871), radius = 2f, center = Offset(hx + 10f, hy - 9.5f))
+            scope.drawCircle(Color(0xFF2C2219), radius = 3f, center = Offset(hx + 25.5f, hy - 4f))
+            scope.drawCircle(Color(0xFF2C2219), radius = 2f, center = Offset(hx + 25.5f, hy - 4f), style = StitchedStroke)
+            val triangle_3 = Path().apply {
+                moveTo(hx + 21.5f, hy - 2.5f)
+                lineTo(hx + 21f, hy)
+                lineTo(hx + 19f, hy - 1.5f)
+                close()
+            }
+            drawStitchedFill(scope, triangle_3, Color(0xFFFAF6EB))
+            scope.drawPath(triangle_3, Color(0xFFBAC5CC), style = StitchedStroke)
+            val triangle_4 = Path().apply {
+                moveTo(hx + 18f, hy - 1.5f)
+                lineTo(hx + 17.5f, hy + 2f)
+                lineTo(hx + 15.5f, hy - 0.5f)
+                close()
+            }
+            drawStitchedFill(scope, triangle_4, Color(0xFFFAF6EB))
+            scope.drawPath(triangle_4, Color(0xFFBAC5CC), style = StitchedStroke)
+            val triangle_5 = Path().apply {
+                moveTo(hx + 13.5f, hy + 0.5f)
+                lineTo(hx + 13.5f, hy + 4f)
+                lineTo(hx + 10f, hy + 1.5f)
+                close()
+            }
+            drawStitchedFill(scope, triangle_5, Color(0xFFFAF6EB))
+            scope.drawPath(triangle_5, Color(0xFFBAC5CC), style = StitchedStroke)
+} else if (helmId == "helm_pot") {
             // A cauldron, upside down, jammed on. Flat base up, handle out the side.
             val pot = Path().apply {
                 moveTo(hx - 17f, hy - 20f)
@@ -1998,39 +2083,59 @@ object TapestryRenderer {
                 }
             }
             "head_mace" -> {
+                // Along the haft, not along the screen axis — same defect as the broadsword and
+                // the saw. The whole head, flanges included, was built flat, so it sat across the
+                // shaft it is socketed onto instead of along it.
+                val dx = 0.894f; val dy = -0.447f      // unit vector of (0.8, -0.4)
+                val px = -dy; val py = dx              // perpendicular, across the head
+                fun at(along: Float, across: Float) = Offset(
+                    headPos.x + dx * along + px * across,
+                    headPos.y + dy * along + py * across
+                )
                 val macePath = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(headPos.x - 5f, headPos.y - 5f)
-                    lineTo(headPos.x + 15f, headPos.y - 12f)
-                    lineTo(headPos.x + 20f, headPos.y - 5f)
-                    lineTo(headPos.x + 20f, headPos.y + 5f)
-                    lineTo(headPos.x + 15f, headPos.y + 12f)
-                    lineTo(headPos.x - 5f, headPos.y + 5f)
+                    moveTo(at(-5f, -5f).x, at(-5f, -5f).y)
+                    lineTo(at(15f, -12f).x, at(15f, -12f).y)
+                    lineTo(at(20f, -5f).x, at(20f, -5f).y)
+                    lineTo(at(20f, 5f).x, at(20f, 5f).y)
+                    lineTo(at(15f, 12f).x, at(15f, 12f).y)
+                    lineTo(at(-5f, 5f).x, at(-5f, 5f).y)
                     close()
                 }
                 scope.drawPath(macePath, headColor)
                 scope.drawPath(macePath, ThreadColor, style = StitchedStroke)
                 // Flanges
-                scope.drawLine(ThreadColor, Offset(headPos.x, headPos.y - 8f), Offset(headPos.x + 18f, headPos.y - 2f), strokeWidth = 2f)
-                scope.drawLine(ThreadColor, Offset(headPos.x, headPos.y + 8f), Offset(headPos.x + 18f, headPos.y + 2f), strokeWidth = 2f)
-                scope.drawLine(ThreadColor, Offset(headPos.x - 2f, headPos.y), Offset(headPos.x + 20f, headPos.y), strokeWidth = 2.5f)
+                scope.drawLine(ThreadColor, at(0f, -8f), at(18f, -2f), strokeWidth = 2f)
+                scope.drawLine(ThreadColor, at(0f, 8f), at(18f, 2f), strokeWidth = 2f)
+                scope.drawLine(ThreadColor, at(-2f, 0f), at(20f, 0f), strokeWidth = 2.5f)
             }
             "head_broadsword" -> {
-                val bladeEnd = Offset(headPos.x + 40f, headPos.y - 15f)
+                // Along the haft, not along the screen axis — same defect the pitchfork had.
+                // The blade ran to (+40,-15), about 21 degrees, while the grip it is socketed
+                // into runs at 27, so the blade kinked visibly downward at the crossguard. The
+                // crossguard itself was already square to the haft, which is what made the
+                // mismatch read as a bent sword rather than a tilted one.
+                val dx = 0.894f; val dy = -0.447f      // unit vector of (0.8, -0.4)
+                val px = -dy; val py = dx              // perpendicular, across the blade
+                fun at(along: Float, across: Float) = Offset(
+                    headPos.x + dx * along + px * across,
+                    headPos.y + dy * along + py * across
+                )
+                val bladeLen = 43f                     // was |(40,-15)| = 42.7, so reach is unchanged
                 val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(headPos.x, headPos.y - 6f)
-                    lineTo(bladeEnd.x, bladeEnd.y - 6f)
-                    lineTo(bladeEnd.x + 10f, bladeEnd.y) // tip
-                    lineTo(bladeEnd.x, bladeEnd.y + 6f)
-                    lineTo(headPos.x, headPos.y + 6f)
+                    moveTo(at(0f, -6f).x, at(0f, -6f).y)
+                    lineTo(at(bladeLen, -6f).x, at(bladeLen, -6f).y)
+                    lineTo(at(bladeLen + 10f, 0f).x, at(bladeLen + 10f, 0f).y) // tip
+                    lineTo(at(bladeLen, 6f).x, at(bladeLen, 6f).y)
+                    lineTo(at(0f, 6f).x, at(0f, 6f).y)
                     close()
                 }
                 scope.drawPath(path, headColor)
                 scope.drawPath(path, ThreadColor, style = StitchedStroke)
                 // Fullers
-                scope.drawLine(ThreadColor, headPos, bladeEnd, strokeWidth = 1.5f)
-                
-                // Crossguard
-                scope.drawLine(Color(0xFF8A5E38), Offset(headPos.x - 8f, headPos.y - 14f), Offset(headPos.x + 8f, headPos.y + 14f), strokeWidth = 5f)
+                scope.drawLine(ThreadColor, headPos, at(bladeLen, 0f), strokeWidth = 1.5f)
+
+                // Crossguard, square across the blade
+                scope.drawLine(Color(0xFFD6A420), at(0f, -15f), at(0f, 15f), strokeWidth = 5f)
             }
             "head_dagger_hilt" -> {
                 // Large iron pommel strike
@@ -2087,18 +2192,30 @@ object TapestryRenderer {
             }
             "head_slingshot" -> {
                 // draw Y shape
-                scope.drawLine(headColor, headPos, androidx.compose.ui.geometry.Offset(headPos.x + 10f, headPos.y - 15f), strokeWidth = 4f)
-                scope.drawLine(headColor, headPos, androidx.compose.ui.geometry.Offset(headPos.x + 10f, headPos.y + 15f), strokeWidth = 4f)
-                scope.drawCircle(ThreadColor, radius = 3f, center = headPos)
-            }
+                scope.drawLine(Color(0xFF8A5E38), headPos, androidx.compose.ui.geometry.Offset(headPos.x + 9.5f, headPos.y - 10.5f), strokeWidth = 4f)
+                scope.drawLine(Color(0xFF8A5E38), headPos, androidx.compose.ui.geometry.Offset(headPos.x + 1f, headPos.y - 13.5f), strokeWidth = 4f)
+                scope.drawCircle(ThreadColor, radius = 1f, center = headPos, style = Stroke(width = 2f))
+                val square_1 = Path().apply {
+                    moveTo(headPos.x - 1f, headPos.y - 2f)
+                    lineTo(headPos.x + 2.5f, headPos.y - 1f)
+                    lineTo(headPos.x - 3f, headPos.y + 10.5f)
+                    lineTo(headPos.x - 6.5f, headPos.y + 9f)
+                    close()
+                }
+                drawStitchedFill(scope, square_1, Color(0xFF8A5E38))
+                // Outlined in its own fill, unlike every other head: the pouch strap is only a
+                // few units wide, so a thread outline swallows it whole and reads as a black
+                // smear. It needs no silhouette now the head stands clear of the sleeve.
+                scope.drawPath(square_1, Color(0xFF8A5E38), style = StitchedStroke)
+}
             "head_longbow" -> {
                 val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(headPos.x - 18f, headPos.y - 45f)
+                    moveTo(headPos.x - 14f, headPos.y - 69f)
                     quadraticTo(headPos.x + 25f, headPos.y, headPos.x - 18f, headPos.y + 45f)
                 }
                 scope.drawPath(path, headColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f))
                 scope.drawPath(path, ThreadColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
-                scope.drawLine(androidx.compose.ui.graphics.Color(0xFFE4D6B6), androidx.compose.ui.geometry.Offset(headPos.x - 18f, headPos.y - 45f), androidx.compose.ui.geometry.Offset(headPos.x - 18f, headPos.y + 45f), strokeWidth = 2f)
+                scope.drawLine(androidx.compose.ui.graphics.Color(0xFFE4D6B6), androidx.compose.ui.geometry.Offset(headPos.x - 15f, headPos.y - 68.5f), androidx.compose.ui.geometry.Offset(headPos.x - 18.5f, headPos.y + 45.5f), strokeWidth = 2f)
             }
             "head_flail", "head_war_flail" -> {
                 val isTwin = headId == "head_war_flail"
@@ -2138,8 +2255,8 @@ object TapestryRenderer {
             "head_scythe" -> {
                 val path = androidx.compose.ui.graphics.Path().apply {
                     moveTo(headPos.x, headPos.y)
-                    quadraticTo(headPos.x + 20f, headPos.y - 40f, headPos.x + 40f, headPos.y - 20f) // outer curve
-                    quadraticTo(headPos.x + 15f, headPos.y - 20f, headPos.x, headPos.y + 5f) // inner curve
+                    quadraticTo(headPos.x + 20f, headPos.y - 36f, headPos.x + 40f, headPos.y - 18f) // outer curve
+                    quadraticTo(headPos.x + 15f, headPos.y - 23f, headPos.x, headPos.y + 5f) // inner curve
                     close()
                 }
                 scope.drawPath(path, headColor)
@@ -2150,12 +2267,41 @@ object TapestryRenderer {
                     lineTo(headPos.x + 30f, headPos.y - 20f)
                 }
                 scope.drawPath(path, androidx.compose.ui.graphics.Color(0xFF6E5536), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f))
-                val bowPath = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(headPos.x + 20f, headPos.y - 35f)
-                    quadraticTo(headPos.x + 35f, headPos.y - 15f, headPos.x + 40f, headPos.y - 5f)
+                val square_2 = Path().apply {
+                    moveTo(headPos.x + 19f, headPos.y - 10.5f)
+                    lineTo(headPos.x + 28.5f, headPos.y - 21.5f)
+                    lineTo(headPos.x + 32f, headPos.y - 18.5f)
+                    lineTo(headPos.x + 22f, headPos.y - 8.5f)
+                    close()
                 }
-                scope.drawPath(bowPath, androidx.compose.ui.graphics.Color.DarkGray, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
-            }
+                drawStitchedFill(scope, square_2, Color(0xFF6B7882))
+                scope.drawPath(square_2, Color(0xFF2C2219), style = StitchedStroke)
+                val square_3 = Path().apply {
+                    moveTo(headPos.x + 1.5f, headPos.y - 7f)
+                    lineTo(headPos.x + 17.5f, headPos.y - 18f)
+                    lineTo(headPos.x + 19.5f, headPos.y - 15f)
+                    lineTo(headPos.x + 3.5f, headPos.y - 4f)
+                    moveTo(headPos.x + 17.5f, headPos.y - 18.5f)
+                    close()
+                }
+                drawStitchedFill(scope, square_3, Color(0xFF8A5E38))
+                scope.drawPath(square_3, Color(0xFF2C2219), style = StitchedStroke)
+                val square_4 = Path().apply {
+                    moveTo(headPos.x + 17.5f, headPos.y - 18.5f)
+                    lineTo(headPos.x + 25.5f, headPos.y - 20.5f)
+                    lineTo(headPos.x + 20.5f, headPos.y - 15f)
+                    lineTo(headPos.x + 19.5f, headPos.y - 16f)
+                    moveTo(headPos.x + 1.5f, headPos.y - 7f)
+                    moveTo(headPos.x + 3.5f, headPos.y - 4f)
+                    lineTo(headPos.x + 1f, headPos.y - 7f)
+                    moveTo(headPos.x + 9f, headPos.y)
+                    lineTo(headPos.x + 5.5f, headPos.y + 6.5f)
+                    lineTo(headPos.x + 3.5f, headPos.y + 4.5f)
+                    close()
+                }
+                drawStitchedFill(scope, square_4, Color(0xFFBAC5CC))
+                scope.drawPath(square_4, Color(0xFF2C2219), style = StitchedStroke)
+}
             "head_halberd" -> {
                 val path = androidx.compose.ui.graphics.Path().apply {
                     moveTo(headPos.x, headPos.y)
@@ -2195,7 +2341,7 @@ object TapestryRenderer {
                 scope.drawPath(path, headColor)
                 scope.drawPath(path, ThreadColor, style = StitchedStroke)
                 // Crossguard
-                scope.drawLine(androidx.compose.ui.graphics.Color(0xFFCFB53B), androidx.compose.ui.geometry.Offset(headPos.x - 5f, headPos.y - 12f), androidx.compose.ui.geometry.Offset(headPos.x + 10f, headPos.y + 15f), strokeWidth = 5f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                scope.drawLine(androidx.compose.ui.graphics.Color(0xFFCFB53B), androidx.compose.ui.geometry.Offset(headPos.x + 4f, headPos.y - 11.5f), androidx.compose.ui.geometry.Offset(headPos.x - 4.5f, headPos.y + 15f), strokeWidth = 5f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
             }
             "head_urumi" -> {
                 val numBlades = 4
@@ -2214,7 +2360,7 @@ object TapestryRenderer {
             "head_winged_axe" -> {
                 val path = androidx.compose.ui.graphics.Path().apply {
                     moveTo(headPos.x, headPos.y - 8f)
-                    lineTo(headPos.x + 18f, headPos.y - 28f) // top wing spike
+                    lineTo(headPos.x + 50f, headPos.y - 5.5f) // top wing spike
                     quadraticTo(headPos.x + 35f, headPos.y - 5f, headPos.x + 22f, headPos.y + 25f) // axe face
                     quadraticTo(headPos.x + 10f, headPos.y + 15f, headPos.x, headPos.y + 15f) 
                     // back wing spike
@@ -2264,19 +2410,30 @@ object TapestryRenderer {
                 val length = if (isHeavy) 55f else 45f
                 val height = if (isHeavy) 22f else 12f
                 val teethCount = if (isHeavy) 6 else 12
-                
+                // Along the haft, not along the screen axis. Drawn flat, the blade met the pole
+                // at one corner and ran off at its own angle — the "saw doesn't attach" bug. On
+                // the haft basis the pole enters the middle of the blade's back edge, in line.
+                val dx = 0.894f; val dy = -0.447f      // unit vector of (0.8, -0.4)
+                val px = -dy; val py = dx              // perpendicular, blade back-to-teeth
+                fun at(along: Float, across: Float) = Offset(
+                    headPos.x + dx * along + px * across,
+                    headPos.y + dy * along + py * across
+                )
+
                 val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(headPos.x, headPos.y - height / 2)
-                    lineTo(headPos.x + length, headPos.y - height / 4) // blunt top edge tapers down
-                    
+                    moveTo(at(0f, -height / 2).x, at(0f, -height / 2).y)
+                    // blunt top edge tapers down
+                    lineTo(at(length, -height / 4).x, at(length, -height / 4).y)
+
                     // Saw teeth on bottom edge (right to left)
                     for(i in teethCount downTo 1) {
                         val fraction = i / teethCount.toFloat()
                         val nextFraction = (i - 1) / teethCount.toFloat()
-                        val tx = headPos.x + length * fraction
-                        val nx = headPos.x + length * nextFraction
-                        lineTo(tx, headPos.y + height / 2) // tooth point down
-                        lineTo(nx + (tx - nx) / 2, headPos.y) // valley up
+                        val t = length * fraction
+                        val n = length * nextFraction
+                        lineTo(at(t, height / 2).x, at(t, height / 2).y) // tooth point down
+                        val v = n + (t - n) / 2
+                        lineTo(at(v, 0f).x, at(v, 0f).y) // valley up
                     }
                     close()
                 }
@@ -2293,7 +2450,12 @@ object TapestryRenderer {
 
         // Determine direction vector of the handle/pole (visually lengthen based on haft extensions)
         val handleLen = if (isBowOrSlingshot) {
-            0f
+            // A short standoff, not zero. Bows and slingshots have no haft, so their head used to
+            // land exactly on the fist — the sleeve, the hand and the face were all drawn in the
+            // same few pixels, and a slingshot is small enough to disappear into them entirely.
+            // No shaft is drawn for these (every draw below is guarded on isBowOrSlingshot), so
+            // this only pushes the grip clear of the hand.
+            18f
         } else {
             val baseLen = when (fighter.weaponHandle.id) {
                 // The pike is a 12-foot pole and must read as the longest haft in the game. It used
@@ -2507,33 +2669,43 @@ object TapestryRenderer {
                 }
                 headPos = Offset(hx + 2f, hy - 40f)
             } else if (fighter.weaponHandle.id == "handle_trumpet") {
-                // A herald's straight buisine, gripped by the bell with the tube pointing away.
+                // A herald's straight buisine, gripped at the mouthpiece with the bell swung
+                // outward — the bell is the business end, so that is where the weapon head goes.
+                // It used to be held by the bell, which put the widest, heaviest part of the
+                // instrument in the fist and the head on the mouthpiece.
                 //
                 // Was a drawStitchedStrap — the same primitive that draws arms and straps — in
                 // gold, with a 14px trapezoid stuck on the end. It read as a yellow stitched arm
                 // because that is exactly what it was. A trumpet needs the flare, a tube that
                 // tapers into it, and the ferrule bands, or it is just a stick.
-                scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
+                // Canted out along the haft line rather than straight up: held vertically the
+                // bell, now the top end, sat squarely over the fighter's own head and read as a
+                // hat. The narrow mouthpiece used to be up there, which is why it never showed.
+                scope.withTransform({
+                    translate(hx, hy)
+                    rotate(30f, pivot = Offset.Zero)
+                    scale(extScale, extScale, pivot = Offset.Zero)
+                }) {
                     val brass = fighter.weaponHandle.color
-                    // The bell: a real flare, widest at the grip and drawn in two steps so the
-                    // rim reads as a lip rather than a straight cut.
+                    // The bell: a real flare, widest at the far end and drawn in two steps so
+                    // the rim reads as a lip rather than a straight cut.
                     val bell = Path().apply {
-                        moveTo(-19f, 4f)
-                        quadraticTo(-16f, -8f, -7f, -17f)
-                        lineTo(7f, -17f)
-                        quadraticTo(16f, -8f, 19f, 4f)
-                        quadraticTo(0f, 10f, -19f, 4f)
+                        moveTo(-19f, -62f)
+                        quadraticTo(-16f, -50f, -7f, -41f)
+                        lineTo(7f, -41f)
+                        quadraticTo(16f, -50f, 19f, -62f)
+                        quadraticTo(0f, -68f, -19f, -62f)
                         close()
                     }
                     drawStitchedFill(this, bell, brass)
                     drawPath(bell, ThreadColor, style = StitchedStroke)
 
-                    // Tapering tube from the bell throat out to the mouthpiece.
+                    // Tapering tube from the mouthpiece out to the bell throat.
                     val tube = Path().apply {
-                        moveTo(-6.5f, -17f)
-                        lineTo(6.5f, -17f)
-                        lineTo(3.5f, -56f)
-                        lineTo(-3.5f, -56f)
+                        moveTo(-6.5f, -41f)
+                        lineTo(6.5f, -41f)
+                        lineTo(3.5f, -2f)
+                        lineTo(-3.5f, -2f)
                         close()
                     }
                     drawStitchedFill(this, tube, brass)
@@ -2541,14 +2713,16 @@ object TapestryRenderer {
 
                     // Ferrule bands: the join collars. Two short bars are the whole difference
                     // between "brass instrument" and "yellow pole".
-                    listOf(-27f, -42f).forEach { y ->
+                    listOf(-16f, -31f).forEach { y ->
                         drawLine(ThreadColor, Offset(-6f, y), Offset(6f, y), strokeWidth = 2f)
                     }
-                    // Mouthpiece cup at the far end, where the weapon head is lashed on.
-                    drawCircle(brass, radius = 5f, center = Offset(0f, -58f))
-                    drawCircle(ThreadColor, radius = 5f, center = Offset(0f, -58f), style = StitchedStroke)
+                    // Mouthpiece cup in the fist.
+                    drawCircle(brass, radius = 5f, center = Offset(0f, 0f))
+                    drawCircle(ThreadColor, radius = 5f, center = Offset(0f, 0f), style = StitchedStroke)
                 }
-                headPos = Offset(hx, hy - 60f)
+                // The head lashes to the bell rim, the end that goes into the enemy — local
+                // (0,-64) carried through the 30 degree cant above.
+                headPos = Offset(hx + 32f, hy - 55.4f)
             } else if (fighter.weaponHandle.id == "handle_wheelbarrow") {
                 // Sideways profile view: wooden shaft, tub/hopper box, front wheel & axle, support leg.
                 scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
@@ -2679,6 +2853,36 @@ object TapestryRenderer {
                     }
                 }
                 headPos = Offset(hx, hy - 80f)
+            } else if (fighter.weaponHandle.id == "handle_oar") {
+                // A ship's oar: a long loom with a flat blade spooned onto the far end. It rode
+                // the generic straight-haft path, which draws nothing but a line — an oar with
+                // no blade is a stick, and that is exactly how it read.
+                //
+                // handleLen already carries the extension growth, so this uses it directly the
+                // way handle_plough does; extScale would double-count it.
+                scope.withTransform({
+                    translate(hx, hy)
+                    rotate(-26.5f, pivot = Offset.Zero)
+                }) {
+                    // Loom, from the grip out to the throat of the blade.
+                    drawLine(fighter.weaponHandle.color, Offset(-25f, 0f), Offset(handleLen - 34f, 0f), strokeWidth = 7f)
+                    drawLine(ThreadColor, Offset(-25f, 0f), Offset(handleLen - 34f, 0f), strokeWidth = 2f)
+                    // Blade: widens off the throat, then squares off at the tip.
+                    val blade = Path().apply {
+                        moveTo(handleLen - 36f, -3.5f)
+                        quadraticTo(handleLen - 22f, -15f, handleLen - 6f, -13f)
+                        lineTo(handleLen + 6f, -11f)
+                        lineTo(handleLen + 6f, 11f)
+                        lineTo(handleLen - 6f, 13f)
+                        quadraticTo(handleLen - 22f, 15f, handleLen - 36f, 3.5f)
+                        close()
+                    }
+                    drawStitchedFill(this, blade, fighter.weaponHandle.color)
+                    drawPath(blade, ThreadColor, style = StitchedStroke)
+                    // Grain down the blade, so it reads as a shaved plank and not a paddle-shaped hole.
+                    drawLine(ThreadColor.copy(alpha = 0.5f), Offset(handleLen - 30f, 0f), Offset(handleLen + 3f, 0f), strokeWidth = 1f)
+                }
+                headPos = Offset(hx + handleLen * 0.894f, hy - handleLen * 0.447f)
             } else if (fighter.weaponHandle.id == "handle_fists") {
                 // Do nothing for fists handle
             } else {
@@ -3654,10 +3858,10 @@ object TapestryRenderer {
             // If Lil Guy, draw the backpack enclosing his lower torso
             if (anc == com.example.game.Ancillary.LIL_GUY) {
                 val backpack = Path().apply {
-                    moveTo(cx - 35f, cy + 65f)
-                    lineTo(cx + 35f, cy + 65f)
-                    lineTo(cx + 30f, cy + 120f)
-                    lineTo(cx - 30f, cy + 120f)
+                    moveTo(cx - 23.5f, cy + 69f)
+                    lineTo(cx + 22.5f, cy + 68.5f)
+                    lineTo(cx + 15.5f, cy + 117.5f)
+                    lineTo(cx - 13.5f, cy + 118.5f)
                     close()
                 }
                 drawStitchedFill(this, backpack, Color(0xFF5C4033)) // brown leather
@@ -3666,8 +3870,8 @@ object TapestryRenderer {
                 val strapTargetX = cx + 65f
                 val strapTargetY1 = cy + 50f // over shoulder
                 val strapTargetY2 = cy + 90f // under arm
-                drawLine(Color(0xFF382F22), Offset(cx + 20f, cy + 70f), Offset(strapTargetX, strapTargetY1), strokeWidth = 6f)
-                drawLine(Color(0xFF382F22), Offset(cx - 20f, cy + 90f), Offset(strapTargetX, strapTargetY2), strokeWidth = 6f)
+                drawLine(Color(0xFF382F22), Offset(cx + 20f, cy + 70f), Offset(strapTargetX - 2f, strapTargetY1 + 28f), strokeWidth = 6f)
+                drawLine(Color(0xFF382F22), Offset(cx - 20f, cy + 90f), Offset(strapTargetX - 1.5f, strapTargetY2 - 2f), strokeWidth = 6f)
             }
 
             // Per-copy heraldry keeps duplicate followers from becoming palette-swapped clones.

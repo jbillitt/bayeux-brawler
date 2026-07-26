@@ -757,7 +757,10 @@ class GameViewModel : ViewModel() {
         val chariotCollapses = currentMount == com.example.game.Ancillary.CHARIOT && totalArmorMass > ARMOR_WEIGHT_LIMIT && !state.hasSilkenGarments
         val baseHp = 100f + state.totalHpBoost
         // Soften the size-HP penalty and give an extra evasion-HP buff so small builds stay viable
-        val totalPlayerMaxHp = baseHp * (0.75f + 0.25f * state.characterSize) * (1f + (1f - state.characterSize).coerceAtLeast(0f) * 0.6f)
+        // The haircut's own small contribution, added before the size scaling so it reads the same
+        // proportionally on a big build as on a small one. Deliberately tiny — see HAIR_TRAITS.
+        val hair = hairTrait(state.hairStyle)
+        val totalPlayerMaxHp = (baseHp + hair.hpBonus) * (0.75f + 0.25f * state.characterSize) * (1f + (1f - state.characterSize).coerceAtLeast(0f) * 0.6f)
         val player = FighterState(
             id = "player_knight",
             name = state.playerName,
@@ -785,7 +788,7 @@ class GameViewModel : ViewModel() {
             extraAttachments = state.extraAttachments.mapNotNull { id -> GameData.WEAPON_HEADS.find { it.id == id } },
             extraArmors = state.extraArmors.mapNotNull { id -> GameData.ARMOR_PIECES.find { it.id == id } },
             handleExtensionCount = state.handleExtensionCount,
-            speedBoost = state.totalSpeedBoost,
+            speedBoost = state.totalSpeedBoost + hair.speedBonus,
             rangedUpgrades = state.rangedUpgrades,
             shieldUpgrades = state.shieldUpgrades,
             brawlerUpgrades = state.brawlerUpgrades,
@@ -1228,7 +1231,13 @@ class GameViewModel : ViewModel() {
             val codeBuildings = listOf(
                 BackgroundObjectType.BUILDING_BOSHAM,
                 BackgroundObjectType.BUILDING_BAYEUX,
-                BackgroundObjectType.TOWER_SPIRAL
+                BackgroundObjectType.TOWER_SPIRAL,
+                // The tapestry-traced set. Same pool as the rest, so they turn up in ordinary play
+                // rather than needing their own spawn rule.
+                BackgroundObjectType.DOMED_TOWER,
+                BackgroundObjectType.ABBEY_NAVE,
+                BackgroundObjectType.ECCLESIA,
+                BackgroundObjectType.PALACE_ARCH
             )
             val assetBuildings = VectorAsset.spawnable().filter { state.level >= (it.spawn?.minLevel ?: 2) }
 
@@ -1442,11 +1451,17 @@ class GameViewModel : ViewModel() {
         // incense for the same reason: particles are draw calls.
         if (incenseTick == 0) {
             _enemiesState.value.forEach { e ->
-                if (!e.isPlayer && !e.isDead && !e.isDying &&
-                    e.archetype == EnemyArchetype.TORCH_BEARER
-                ) {
-                    addTorchFlameParticles(e.posX + 16f * e.size, 205f)
+                if (e.isPlayer || e.isDead || e.isDying) return@forEach
+                if (e.archetype == EnemyArchetype.TORCH_BEARER) {
+                    addFlameAndSmokeParticles(e.posX + 16f * e.size, 205f)
                 }
+                // A man alight smokes. Ignition used to show only as a warmer skin tone, which
+                // is invisible on a mailed enemy at arm's length — the same puff the torch uses
+                // is what a burning man looks like, so it does the job for both.
+                if (e.igniteDuration > 0f) addFlameAndSmokeParticles(e.posX, 190f)
+            }
+            if (player.igniteDuration > 0f && !player.isDead) {
+                addFlameAndSmokeParticles(player.posX, 190f)
             }
         }
 
@@ -1944,11 +1959,12 @@ class GameViewModel : ViewModel() {
     }
 
     /**
-     * A burning brand: a couple of short-lived flame licks with a longer grey plume above them,
-     * the same shape as the monk's censer but hot. The flame rises fast and dies fast; the smoke
-     * drifts and lingers, which is what makes it read as fire rather than as coloured confetti.
+     * A burning brand, or a burning man: a couple of short-lived flame licks with a longer grey
+     * plume above them, the same shape as the monk's censer but hot. The flame rises fast and dies
+     * fast; the smoke drifts and lingers, which is what makes it read as fire rather than as
+     * coloured confetti.
      */
-    private fun addTorchFlameParticles(x: Float, y: Float) {
+    private fun addFlameAndSmokeParticles(x: Float, y: Float) {
         val flame = List(2) {
             BloodParticle(
                 x = x + Random.nextInt(-3, 4),
@@ -2010,8 +2026,10 @@ class GameViewModel : ViewModel() {
             if (level >= 15) add(Milestone.REACH_15)
             if (level >= 20) add(Milestone.REACH_20)
             if (level >= 25) add(Milestone.REACH_25)
+            if (level >= 30) add(Milestone.STAR_GAZER)
             if (level >= 35) add(Milestone.REACH_35)
             if (kills >= 500) add(Milestone.FIVE_HUNDRED_KILLS)
+            if (kills >= 1000) add(Milestone.THOUSAND_KILLS)
             if (woreNoArmour) add(Milestone.NAKED_WIN)
             if (siegesCleared >= 1) add(Milestone.FIRST_SIEGE)
             if (siegesCleared >= 3) add(Milestone.THREE_SIEGES)
@@ -2025,6 +2043,7 @@ class GameViewModel : ViewModel() {
                 null -> {}
             }
             if (bossBeaten != null && usedFistsOnly) add(Milestone.BARE_FISTED_BOSS)
+            if (bossBeaten != null && woreNoArmour) add(Milestone.UNSHORN)
 
             // Cross-run counters, read from the profile rather than this run's state. recordBossKill
             // runs before this, so a second William is already counted by the time we look.

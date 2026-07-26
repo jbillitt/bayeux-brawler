@@ -13,8 +13,21 @@ class HairstyleTest {
     /** Must match the branches in TapestryRenderer's hair switch and the picker in MainActivity. */
     private val renderableStyles = setOf(
         "short", "long", "bald",
-        "hair_tonsure_norman", "hair_braids", "hair_tonsure_monk", "hair_topknot"
+        "hair_tonsure_norman", "hair_braids", "hair_tonsure_monk", "hair_topknot",
+        "hair_mystic", "hair_germanic", "hair_samson"
     )
+
+    /**
+     * Every renderable style must carry a HairTrait, because the picker reads its effect line and
+     * its stat deltas straight off that table. A style missing from it silently falls back to the
+     * bowl cut's "no effect", which reads as a bug in the tooltip rather than a missing row.
+     */
+    @Test
+    fun everyRenderableStyleHasATrait() {
+        renderableStyles.forEach {
+            assertTrue("$it has no HAIR_TRAITS row", HAIR_TRAITS.containsKey(it))
+        }
+    }
 
     @Test
     fun everyHairstyleMilestoneGrantsAStyleTheRendererKnows() {

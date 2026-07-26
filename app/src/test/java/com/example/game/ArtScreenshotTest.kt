@@ -86,7 +86,9 @@ class ArtScreenshotTest {
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/procedural.png")
     }
 
+    // The set has outgrown a phone screen — the last rows were being clipped away unrendered.
     @Test
+    @Config(qualifiers = "+w440dp-h2000dp")
     fun buildings() {
         val types = BackgroundObjectType.values().toList()
         composeTestRule.setContent {
@@ -287,6 +289,46 @@ class ArtScreenshotTest {
     }
 
     /**
+     * Every weapon head on the same medium haft. The haft runs at ~26.6 degrees above horizontal,
+     * so this is the view that shows a head built on the screen axis instead of the haft's — it
+     * reads as a kink where the head meets the pole. Asserts nothing — eyeball only.
+     */
+    // A phone screen fits 2 columns; 35 heads at a readable size need a bigger canvas, so this
+    // one test widens the virtual device rather than shrinking the art.
+    @Test
+    @Config(qualifiers = "+w1100dp-h1400dp")
+    fun weaponHeads() {
+        fun withHead(head: String) = FighterState(
+            id = head, name = head, isPlayer = false,
+            maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == head },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 90f, targetX = 90f, facingRight = true, size = 1.0f,
+            hairColor = Color(0xFF5A442E), hairStyle = "short"
+        )
+
+        val cast = GameData.WEAPON_HEADS.map { withHead(it.id) }
+
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                cast.chunked(5).forEach { row ->
+                    Row {
+                        row.forEach { fighter ->
+                            Canvas(modifier = Modifier.width(206.dp).height(190.dp)) {
+                                TapestryRenderer.drawCharacter(this, fighter, scale = 1.0f, isBattleActive = true)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/weapon_heads.png")
+    }
+
+    /**
      * The three new armour layers, each stacked over chainmail the way they are worn in play, plus
      * all three at once. Asserts nothing — eyeball that greaves sit on the shins, spaulders cap the
      * shoulders without floating, and the surcoat hangs over the mail without hiding it.
@@ -365,7 +407,9 @@ class ArtScreenshotTest {
     }
 
     /** The four earned hats and four earned hairstyles. Asserts nothing — eyeball fit on the skull. */
+    // Eleven heads no longer fit a phone screen; the last rows were clipped away entirely.
     @Test
+    @Config(qualifiers = "+w900dp-h1400dp")
     fun newHatsAndHair() {
         fun head(id: String, helm: String = "helm_none", hair: String = "short") = FighterState(
             id = id, name = id, isPlayer = true, maxHp = 100f, hp = 100f,
@@ -386,7 +430,10 @@ class ArtScreenshotTest {
             head("hair_norman", hair = "hair_tonsure_norman"),
             head("hair_braids", hair = "hair_braids"),
             head("hair_monk", hair = "hair_tonsure_monk"),
-            head("hair_topknot", hair = "hair_topknot")
+            head("hair_topknot", hair = "hair_topknot"),
+            head("hair_mystic", hair = "hair_mystic"),
+            head("hair_germanic", hair = "hair_germanic"),
+            head("hair_samson", hair = "hair_samson")
         )
 
         composeTestRule.setContent {

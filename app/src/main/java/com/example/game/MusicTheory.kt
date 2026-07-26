@@ -146,11 +146,12 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
                 in 3..6 -> Mode.DORIAN           // 40% — the fighting mode
                 else -> Mode.MIXOLYDIAN          // 30% — organ gets to be triumphant
             }
-            // 180-200 was a thrash gallop. Wrestling-entrance metal is slower and heavier — the
-            // riff wants room to land, and at 180 the 16th-note double kick was a blur rather
-            // than two distinct feet. Nudged up from 118-136: a hero smashing things has a
-            // bounce to it. (The clamp below must move with this or it does nothing.)
-            bpm = 128 + rng.nextInt(19)          // 128-146
+            // Arcade tempo, settled by listening test: half again as fast as the 128-146 the
+            // wrestling-entrance pass landed on. What made that speed unplayable before was the
+            // continuous sixteenth double pedal, which turns to a buzz up here — the kick now
+            // plays a driving figure instead (see brawlKickFigure), so the tempo is free to run.
+            // (The clamp below must move with this or it does nothing.)
+            bpm = 192 + rng.nextInt(28)          // 192-219
             beatsPerBar = 4; totalBars = 16
             val grounds = when (mode) {
                 Mode.PHRYGIAN -> BRAWL_PHRYGIAN_GROUNDS
@@ -195,7 +196,7 @@ fun resolveSongSpec(seed: Long, moods: List<String>, brawl: Boolean = false, thr
     // chord changes and everything reads as discord. Nobler stacks -3 each pick; below MIDI 39
     // the counter-voice falls out of its playable register.
     bpm = bpm.coerceIn(40, when {
-        family == Family.BRAWL -> 146   // moves with the 128-146 roll above, or it caps it
+        family == Family.BRAWL -> 219   // moves with the 192-219 roll above, or it caps it
         family == Family.THRONE -> 98
         beatsPerBar == 6 -> 84
         else -> 150

@@ -11,8 +11,6 @@ object ProceduralMedievalComposer {
     var currentRootMidi: Float = 48f
     var currentThirdOffset: Float = 3f // minor third by default
 
-    /** Audition hook, as [brawlLeadOverride]: pins the harper's stringing (0 = harp, 1 = gittern). */
-    internal var harpTimbreOverride: Float? = null
 
     fun midiToFreq(midi: Float): Float = (440.0 * Math.pow(2.0, (midi - 69.0) / 12.0)).toFloat()
 
@@ -34,8 +32,7 @@ object ProceduralMedievalComposer {
         // One harper, one instrument, for the whole piece. Skewed toward the harp end: most runs
         // should sound like a harp, with the occasional gittern-strung one for variety — the
         // square keeps the middle of the range rare so it lands as one or the other.
-        val harpTimbre = harpTimbreOverride
-            ?: kotlin.random.Random(seed xor 0x2B9A17C5L).nextFloat().let { it * it }
+        val harpTimbre = kotlin.random.Random(seed xor 0x2B9A17C5L).nextFloat().let { it * it }
         // Brawl keeps the wilder double-hit drum floor; it's a family now, not a mood.
         val wilder = "Wilder" in moods || spec.family == Family.BRAWL
 

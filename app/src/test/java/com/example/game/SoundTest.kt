@@ -48,9 +48,9 @@ class SoundTest {
     fun brawlThemeIsSpeedMetalShaped() {
         for (seed in 1L..10L) {
             val spec = resolveSongSpec(seed, emptyList(), brawl = true)
-            // Wrestling-entrance metal, not thrash: at 180 the riff had no room to land and the
-            // 16th-note double kick blurred into one sound rather than two feet.
-            assertTrue("brawl bpm ${spec.bpm}", spec.bpm in 128..146)
+            // Arcade tempo. The sixteenth double pedal is what used to cap this at 146; with a
+            // driving kick underneath, the family runs half again as fast.
+            assertTrue("brawl bpm ${spec.bpm}", spec.bpm in 192..219)
             assertEquals(4, spec.beatsPerBar)
             assertEquals(8, spec.ground.size)
             // Phrygian/Aeolian are the villain colours; Dorian and Mixolydian are the heroic
@@ -248,8 +248,8 @@ class SoundTest {
     @Test
     fun moodsDoNotBendThemedFamilies() {
         val spec = resolveSongSpec(7L, listOf("More Tempo", "More Tempo", "Merrier"), brawl = true)
-        assertTrue("moods must not push brawl off 118-136, got ${spec.bpm}", spec.bpm in 118..136)
-        assertTrue(spec.mode == Mode.AEOLIAN || spec.mode == Mode.PHRYGIAN)
+        assertTrue("moods must not push brawl off 192-219, got ${spec.bpm}", spec.bpm in 192..219)
+        assertTrue(spec.mode in setOf(Mode.AEOLIAN, Mode.PHRYGIAN, Mode.DORIAN, Mode.MIXOLYDIAN))
     }
 
     @Test
@@ -289,14 +289,25 @@ class SoundTest {
         }
     }
 
+    /**
+     * The kick drives and saves the double pedal for a run at the end of every fourth bar. Four
+     * figures roll off the seed, so this pins the shape they must all share rather than the
+     * hits of any one of them: a run bar fills its last beat with sixteenths, a plain bar does
+     * not, and nobody plays a continuous pedal.
+     */
     @Test
-    fun brawlKickGallopsEveryBar() {
-        val spec = resolveSongSpec(7L, emptyList(), brawl = true)
-        val events = percussionEvents(spec, Voice.KICK, wilder = true)
-        // 16 sixteenth-note hits per 4/4 bar, every bar, on an actual bass drum. This pattern
-        // was on NAKERS, a 150-200Hz kettle drum that could play the rhythm but never sound
-        // like a kick — the theme had a busy tom where its engine belonged.
-        assertEquals(16 * spec.totalBars, events.size)
+    fun brawlKickDrivesAndRunsEveryFourthBar() {
+        for (seed in 1L..12L) {
+            val spec = resolveSongSpec(seed, emptyList(), brawl = true)
+            val bpb = spec.beatsPerBar.toFloat()
+            val events = percussionEvents(spec, Voice.KICK, wilder = true)
+            assertTrue("continuous sixteenth pedal, not a figure", events.size < 16 * spec.totalBars)
+            for (bar in 0 until spec.totalBars) {
+                val lastBeat = events.count { it.startBeat >= bar * bpb + bpb - 1f && it.startBeat < (bar + 1) * bpb }
+                if (bar % 4 == 3) assertEquals("double-pedal run in bar $bar of seed $seed", 4, lastBeat)
+                else assertTrue("no run outside every fourth bar (bar $bar, seed $seed): $lastBeat", lastBeat <= 2)
+            }
+        }
     }
 
     @Test

@@ -187,13 +187,6 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     return OrchestrationPlan(a, destinyFanfare)
 }
 
-/**
- * Audition hook: forces the BRAWL lead voice, so preview renders can A/B one candidate lead
- * against another with everything else — seed, drums, riff — held identical. null = shipped.
- * ponytail: a plain var rather than plumbing a parameter through compose(); tests reset it.
- */
-internal var brawlLeadOverride: Voice? = null
-
 /** BRAWL: a cumulative medieval speed-metal arrangement with sparse upper-level flourishes. */
 private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): OrchestrationPlan {
     val a = mutableListOf<VoiceAssignment>()
@@ -201,7 +194,7 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
     // The shawm takes the tune. A loud double reed cuts through a wall of drums the way an
     // arcade lead synth does; the harp lead that briefly replaced it read as a plucked melody
     // sitting inside the mix rather than a lead line riding on top of it.
-    val lead = brawlLeadOverride ?: Voice.SHAWM
+    val lead = Voice.SHAWM
     a += VoiceAssignment(lead, LineRef.MELODY, 1, 99, 0.46f, 0f)
 
     // Everything from here rolls per run. The opening line-up was a fixed seven voices, so every
@@ -321,6 +314,19 @@ private fun planThroneOrchestration(spec: SongSpec, hasTrumpeter: Boolean): Orch
 
 // ---- Pattern generators (all pure functions of the spec - level-free, rng-free) ----
 
+/**
+ * The brawl's bass drum figure, one per song off the seed. A continuous sixteenth double pedal
+ * is a 130bpm pattern; at the 192-219 this family now runs it stops reading as two feet and
+ * becomes a buzz, so the kick drives and the double pedal is saved for the runs above.
+ */
+private fun brawlKickFigure(spec: SongSpec): List<Float> =
+    when (Random(spec.seed xor 0x4B1C4L).nextInt(4)) {
+        0 -> listOf(0f, 1f, 2f, 3f)                                  // four on the floor
+        1 -> listOf(0f, 1f, 1.75f, 2f, 3f)                           // pushed into beat 3
+        2 -> listOf(0f, 0.5f, 0.75f, 1f, 2f, 2.5f, 2.75f, 3f)        // the metal gallop
+        else -> listOf(0f, 1f, 2f, 2.75f, 3.5f)                      // leans over the barline
+    }
+
 fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEvent> {
     val out = mutableListOf<NoteEvent>()
     val bpb = spec.beatsPerBar.toFloat()
@@ -383,23 +389,28 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
             // which is a 150-200Hz kettle drum — it could play the rhythm but never sound like a
             // kick, so the theme had a busy tom where its engine should be.
             Voice.KICK -> if (spec.family == Family.BRAWL) {
-                var b = 0f
-                while (b < bpb - 1e-3f) {
-                    val barAccent = b % 2f == 0f
-                    val onBeat = b % 1f == 0f
-                    out += NoteEvent(
-                        base + b,
-                        // Was 0.14 — shorter than the drum's own decay, so every hit was cut off
-                        // mid-body and what was left was the attack. That is the rattle.
-                        0.30f,
-                        36,
-                        when {
-                            barAccent -> 1f
-                            onBeat -> 0.8f
-                            else -> 0.55f
+                // A continuous sixteenth double pedal is a 130bpm figure. Wound up past that it
+                // stops reading as two feet and turns into a buzz, so the faster patterns play a
+                // figure and save the double pedal for a run at the end of every fourth bar.
+                // Durations stay at 0.30: 0.14 was shorter than the drum's own decay, so every
+                // hit was cut off mid-body and only the attack survived. That is the rattle.
+                val beats = brawlKickFigure(spec).filter { it < bpb - 1e-3f }
+                for (b in beats) {
+                    out += NoteEvent(base + b, 0.30f, 36, when {
+                        b % 2f == 0f -> 1f
+                        b % 1f == 0f -> 0.8f
+                        else -> 0.55f
+                    })
+                }
+                // The occasional double-pedal run, over the last beat of every fourth bar. Hits
+                // the figure already plays are skipped, or the drum retriggers on top of itself.
+                if (bar % 4 == 3) {
+                    for (r in 0 until 4) {
+                        val b = bpb - 1f + r * 0.25f
+                        if (beats.none { Math.abs(it - b) < 1e-3f }) {
+                            out += NoteEvent(base + b, 0.30f, 36, 0.7f + 0.08f * r)
                         }
-                    )
-                    b += 0.25f
+                    }
                 }
             } else {
                 // Everywhere else it is a plain heartbeat under the downbeats.

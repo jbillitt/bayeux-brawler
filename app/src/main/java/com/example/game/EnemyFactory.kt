@@ -173,7 +173,7 @@ object EnemyFactory {
         )
     }
 
-    fun createBoss(type: BossType, level: Int): FighterState {
+    fun createBoss(type: BossType, level: Int, tier: BossTier = BossTier.LIVING): FighterState {
         val isGiant = type == BossType.GOG || type == BossType.MAGOG
         val base = when (type) {
             BossType.HAROLD_GODWINSON -> createArchetype(EnemyArchetype.HOUSECARL, 90, level)
@@ -181,10 +181,10 @@ object EnemyFactory {
             BossType.WILLIAM_THE_BASTARD -> createArchetype(EnemyArchetype.NORMAN_LOYALIST, 90, level)
         }
         val scaling = 1f + (level - type.level).coerceAtLeast(0) * 0.05f
-        val hp = baseHpFor(level) * (if (isGiant) 13f else 9.5f) * scaling
+        val hp = baseHpFor(level) * (if (isGiant) 13f else 9.5f) * scaling * tier.hpScale
         return base.copy(
-            id = "boss_${type.name.lowercase()}",
-            name = when (type) {
+            id = "boss_${type.name.lowercase()}" + if (tier == BossTier.LIVING) "" else "_${tier.name.lowercase()}",
+            name = tier.titlePrefix + when (type) {
                 BossType.HAROLD_GODWINSON -> "Harold Godwinson"
                 BossType.HARALD_HARDRADA -> "Harald Hardrada"
                 BossType.WILLIAM_THE_BASTARD -> "William the Bastard"
@@ -198,11 +198,17 @@ object EnemyFactory {
             weaponHandle = if (isGiant) safeHandle("handle_stump") else base.weaponHandle,
             warPaint = if (isGiant) 1 else base.warPaint,
             hairStyle = if (isGiant) "long" else base.hairStyle,
-            hairColor = if (type == BossType.GOG) Color(0xFF4A5D23) else if (type == BossType.MAGOG) Color(0xFF384048) else base.hairColor,
             headgear = if (type == BossType.HARALD_HARDRADA || isGiant) safeHelm("helm_none") else safeHelm("helm_crown"),
             shield = if (type == BossType.HAROLD_GODWINSON) safeShield("shield_tower") else base.shield,
             shieldHp = if (type == BossType.HAROLD_GODWINSON) safeShield("shield_tower").defense * 5f else base.shieldHp,
-            posX = 1250f, targetX = 1250f, bossType = type,
+            posX = 1250f, targetX = 1250f, bossType = type, bossTier = tier,
+            // Grave-pallor: the risen keep their gear but not their colour.
+            hairColor = when {
+                tier != BossTier.LIVING -> Color(0xFF9AA88C)
+                type == BossType.GOG -> Color(0xFF4A5D23)
+                type == BossType.MAGOG -> Color(0xFF384048)
+                else -> base.hairColor
+            },
             // Late-run bosses punch through the player's stacked armour: welded lucerne beaks add
             // pierce (attachments contribute half their stats to every swing).
             extraAttachments = when {
@@ -215,8 +221,8 @@ object EnemyFactory {
         )
     }
 
-    fun createBossEncounter(type: BossType, level: Int): MutableList<FighterState> {
-        val boss = createBoss(type, level)
+    fun createBossEncounter(type: BossType, level: Int, tier: BossTier = BossTier.LIVING): MutableList<FighterState> {
+        val boss = createBoss(type, level, tier)
         val retinueType = when (type) {
             BossType.HAROLD_GODWINSON -> EnemyArchetype.HOUSECARL
             BossType.HARALD_HARDRADA -> EnemyArchetype.BERSERKER

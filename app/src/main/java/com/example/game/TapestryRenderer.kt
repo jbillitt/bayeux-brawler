@@ -47,6 +47,26 @@ object TapestryRenderer {
         isBattleActive: Boolean = true
     ) {
         val effectiveSize = if (fighter.isMounted && fighter.size > 1.3f) 1.3f + (fighter.size - 1.3f) * 0.5f else fighter.size
+
+        // A barrow-king burns with corpse-light. Drawn BEFORE the transform and before the body so
+        // it sits behind him as a halo rather than a tint on him — a player who has walked into
+        // one of these needs to know from across the field that this is not the ordinary undead.
+        if (fighter.bossTier == BossTier.SUPER_UNDEAD && !fighter.isDead) {
+            // Positioned the way the body transform below positions itself: screen scale pivots
+            // at 200, so a point at local y maps to 200 + (y - 200) * scale. Computing this in
+            // raw coordinates instead left the halo hanging below the man's feet.
+            val haloR = 210f * effectiveSize * scale
+            val cx = fighter.posX
+            val cy = 200f + (250f - 200f) * scale
+            listOf(1.0f to 0.10f, 0.72f to 0.14f, 0.46f to 0.20f).forEach { (rf, alpha) ->
+                drawScope.drawCircle(
+                    color = Color(0xFF8FE3B0).copy(alpha = alpha),
+                    radius = haloR * rf,
+                    center = Offset(cx, cy)
+                )
+            }
+        }
+
         drawScope.withTransform({
             // Apply scale (e.g. for flip/facing and overall sizing)
             val hFlip = if (fighter.facingRight) 1f else -1f
@@ -547,6 +567,11 @@ object TapestryRenderer {
      * whether they are the player, an enemy or a follower.
      */
     private fun skinTone(fighter: FighterState): Color = when {
+        // Grave-pallor first: a risen king is sallow whatever else ails him, and being poisoned
+        // or alight cannot make dead flesh look healthier. Face, neck and hands all come through
+        // here, so the whole body reads as one corpse rather than a pale head on a living man.
+        fighter.bossTier == BossTier.SUPER_UNDEAD -> Color(0xFF8E9A8C)
+        fighter.bossTier == BossTier.UNDEAD -> Color(0xFFA8AE9A)
         // Plague shows before it hurts: the peasant is contagious from the moment he spawns
         fighter.diseaseDuration > 0f || fighter.isContagious -> PlagueFlesh
         fighter.igniteDuration > 0f -> Color(0xFFE6A15A)

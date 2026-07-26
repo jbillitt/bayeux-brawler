@@ -87,20 +87,26 @@ internal fun weatherFlourishGeometry(
     return when (weather) {
         DivineWeather.LIGHTNING -> LightningFlourishGeometry(
             fieldRect = innerFieldRect,
-            strikeXs = listOf(
-                innerFieldRect.left + width * 0.52f,
-                innerFieldRect.left + width * 0.72f
-            ),
+            // Five bolts spanning the whole field. Two at 0.52 and 0.72 left the entire left
+            // third of a landscape screen untouched, so a storm called down on the host struck
+            // only the right-hand side of it. Irregular spacing so it does not read as a comb.
+            strikeXs = listOf(0.09f, 0.27f, 0.48f, 0.68f, 0.89f).map {
+                innerFieldRect.left + width * it
+            },
             skyY = innerFieldRect.top,
-            groundY = innerFieldRect.top + height * 0.78f,
+            // Was 0.78 — the bolts stopped in mid-air well above the line the men stand on.
+            groundY = innerFieldRect.top + height * 0.88f,
             jaggedXRadius = min(width * 0.03f, height * 0.06f),
             burstStartRadius = max(18f, shortestSide * 0.02f),
             burstGrowthRadius = max(70f, shortestSide * 0.08f)
         )
 
         DivineWeather.FLOOD -> {
-            val backExtent = max(width * 0.08f, height * 0.16f)
-            val frontExtent = max(width * 0.025f, height * 0.04f)
+            // A wall of water, not a floating pane. At 0.08 of the width the wave front was a
+            // small box drifting across the field, which is what read as a "prebaked weather box"
+            // rather than the sea coming in.
+            val backExtent = max(width * 0.34f, height * 0.16f)
+            val frontExtent = max(width * 0.09f, height * 0.04f)
             val strokeAllowance = 4f
             val start = innerFieldRect.left - frontExtent - strokeAllowance
             val end = innerFieldRect.right + backExtent + strokeAllowance

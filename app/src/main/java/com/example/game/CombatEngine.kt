@@ -356,6 +356,16 @@ class CombatEngine(private val ctx: BattleContext) {
             fighter.slowDuration -= dt
         }
 
+        // Panic tick. A routed man keeps his feet but not his head: he blunders off in whatever
+        // direction the last frog sent him, so his target keeps being rewritten from under him.
+        if (fighter.panicDuration > 0f) {
+            fighter.panicDuration -= dt
+            if (Random.nextFloat() < dt * 3f) {
+                fighter.targetX = fighter.posX + (Random.nextFloat() * 2f - 1f) * 220f
+                fighter.facingRight = fighter.targetX > fighter.posX
+            }
+        }
+
         // Crumple tick over time. isCrumpled was never cleared, so anyone knocked down stayed
         // flagged down forever — they stood back up and never swung again.
         if (fighter.crumpleDuration > 0f) {
@@ -631,6 +641,9 @@ class CombatEngine(private val ctx: BattleContext) {
 
     private fun performStrike(attacker: FighterState, defender: FighterState) {
         if (attacker.climbState != ClimbState.NONE || defender.climbState != ClimbState.NONE) return
+        // Nobody looses an arrow with a frog down his collar. Melee still lands — a panicking man
+        // will swing wildly at whatever is nearest, he just cannot aim anything.
+        if (attacker.isRanged && attacker.panicDuration > 0f) return
         if (attacker.isRanged) {
             val isDualWielding = attacker.isDualWielding && attacker.shield.id == "shield_none"
             var hitCount = if (isDualWielding) 2 else 1

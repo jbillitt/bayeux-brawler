@@ -85,17 +85,20 @@ class NewEnemyBossContentTest {
 
     @Test
     fun `boss schedule maps 1066 trio through level one hundred`() {
+        // The five originals keep their own levels; past 50 they cycle rather than every level
+        // being William, which is what a player reaching 136 actually experienced.
         for (level in 1..100) {
-            val expected = when {
-                level == 10 -> BossType.HAROLD_GODWINSON
-                level == 20 -> BossType.HARALD_HARDRADA
-                level == 40 -> BossType.GOG
-                level == 50 -> BossType.MAGOG
-                level >= 30 && level % 10 == 0 -> BossType.WILLIAM_THE_BASTARD
-                else -> null
+            val boss = BossSchedule.forLevel(level)
+            when {
+                level == 10 -> assertEquals(BossType.HAROLD_GODWINSON, boss)
+                level == 20 -> assertEquals(BossType.HARALD_HARDRADA, boss)
+                level == 30 -> assertEquals(BossType.WILLIAM_THE_BASTARD, boss)
+                level == 40 -> assertEquals(BossType.GOG, boss)
+                level == 50 -> assertEquals(BossType.MAGOG, boss)
+                level % 10 == 0 -> assertNotNull("level $level must still field a boss", boss)
+                else -> assertEquals("level $level is not a boss level", null, boss)
             }
-            assertEquals(expected, BossSchedule.forLevel(level))
-            if (expected != null) assertFalse(SiegeSchedule.isSiegeLevel(42L, level))
+            if (boss != null) assertFalse(SiegeSchedule.isSiegeLevel(42L, level))
         }
     }
 

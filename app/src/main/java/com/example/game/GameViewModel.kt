@@ -346,17 +346,20 @@ class GameViewModel : ViewModel() {
             }
             DivineWeather.FROST -> {
                 // Buffed: longer freeze and more of them go down.
+                // Frost binds rather than fells: they keep their feet and their weapons, but the
+                // ground is glass and they crawl. No knockdown — hail already owns that.
                 foes.forEach {
-                    it.slowDuration = 8f
-                    it.tryCrumple(1.6f, chance = 0.65f)
+                    it.slowDuration = 11f
                 }
             }
             DivineWeather.FROGS -> {
                 // Chronicle-grade chaos: frogs on EVERYONE. Foes go down hard; you and yours
                 // merely stumble. High risk, high comedy.
+                // Frogs rout the host. They scatter, blunder about, and nobody looses an arrow
+                // with a frog down his collar — no knockdown at all, which is the point.
                 foes.forEach {
-                    it.tryCrumple(3.2f)
-                    engine.applyFlatDamage(14f, it, isPlayerSource = true)
+                    it.panicDuration = 6f
+                    engine.applyFlatDamage(8f, it, isPlayerSource = true)
                 }
                 _enemiesState.value.filter { it.isPlayer && !it.isDead && !it.isDying }.forEach {
                     it.isCrumpled = true
@@ -799,9 +802,17 @@ class GameViewModel : ViewModel() {
         val perfBonus = ((state.performanceScore - 0.5f) * 2f).coerceIn(-0.3f, 0.5f)
         // Now the renderer is optimised the field can carry more bodies — a fuller host earlier
         // (was 1 + level/2, which felt thin in the opening rounds).
-        // Level 1 is the landing beach tutorial: a bare pair of foes, no reinforcements.
-        val rawEnemiesCount = if (state.level == 1) 2
-            else (2 + (state.level * 6 / 10) + contentRandom.nextInt(0, 2) + (perfBonus * 2).toInt()).coerceAtLeast(2)
+        // The opening three levels are a fixed, gentle ramp. Level 1 gave a bare pair and level 2
+        // then jumped to three or four PLUS up to two more from perfBonus — so clearing the
+        // tutorial well made the next fight harder, which is exactly backwards and was killing
+        // people on level 2. The random roll and the performance bonus both start at level 4.
+        val rawEnemiesCount = when (state.level) {
+            1 -> 2
+            2 -> 3
+            3 -> 4
+            else -> (2 + (state.level * 6 / 10) + contentRandom.nextInt(0, 2) +
+                (perfBonus * 2).toInt()).coerceAtLeast(2)
+        }
         val enemiesCount = rawEnemiesCount.coerceAtMost(10)
         // Overflow beyond the on-screen cap arrives as reinforcements from the right once
         // the battle scrolls past dead foes — longer battles instead of inflated HP.
@@ -810,7 +821,7 @@ class GameViewModel : ViewModel() {
         var siegeState: SiegeState? = null
         var hillState: HillState? = null
         val enemies = when {
-            bossType != null -> EnemyFactory.createBossEncounter(bossType, state.level)
+            bossType != null -> EnemyFactory.createBossEncounter(bossType, state.level, BossSchedule.tierForLevel(state.level))
             isSiegeBattle -> {
                 // Harder siege: a fuller line of archers raining down and a deeper relief column.
                 // The first siege of a run goes easier (two fewer archers on the wall); every siege

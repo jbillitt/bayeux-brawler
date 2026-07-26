@@ -148,14 +148,60 @@ enum class BossType(val level: Int, val latinName: String) {
     MAGOG(50, "MAGOG GIGAS")
 }
 
+/**
+ * What state a boss turns up in. A tier rather than ten more BossType entries: every rule that
+ * keys off the type — Harold's arrow-eye window, Hardrada's staged retinue, the giants' stump,
+ * the throne music — keeps working untouched, and the undead inherit all of it.
+ */
+enum class BossTier(val titlePrefix: String, val latinSuffix: String) {
+    LIVING("", ""),
+    UNDEAD("Undead ", " REDIVIVUS"),
+    SUPER_UNDEAD("Barrow-King ", " REDIVIVUS MAXIMUS");
+
+    /** Undead flesh does not feel a blow the way living flesh does. Multiplies FighterState.ccResist. */
+    val ccResistScale: Float
+        get() = when (this) {
+            LIVING -> 1f
+            UNDEAD -> 0.6f
+            SUPER_UNDEAD -> 0.3f
+        }
+
+    val hpScale: Float
+        get() = when (this) {
+            LIVING -> 1f
+            UNDEAD -> 1.6f
+            SUPER_UNDEAD -> 2.6f
+        }
+}
+
 object BossSchedule {
+    /** The five originals, in the order the campaign first meets them. */
+    private val CYCLE = listOf(
+        BossType.HAROLD_GODWINSON, BossType.HARALD_HARDRADA, BossType.WILLIAM_THE_BASTARD,
+        BossType.GOG, BossType.MAGOG
+    )
+
+    /**
+     * Every tenth level. Up to 50 the originals appear on their own levels; from 60 the dead of
+     * Senlac get up again and the five cycle round as UNDEAD, and past 130 as SUPER_UNDEAD.
+     *
+     * Before this, every level past 50 was William, over and over — a player who reached 136 met
+     * the same man nine times.
+     */
     fun forLevel(level: Int): BossType? = when {
         level == 10 -> BossType.HAROLD_GODWINSON
         level == 20 -> BossType.HARALD_HARDRADA
+        level == 30 -> BossType.WILLIAM_THE_BASTARD
         level == 40 -> BossType.GOG
         level == 50 -> BossType.MAGOG
-        level >= 30 && level % 10 == 0 -> BossType.WILLIAM_THE_BASTARD
+        level > 50 && level % 10 == 0 -> CYCLE[((level - 60) / 10) % CYCLE.size]
         else -> null
+    }
+
+    fun tierForLevel(level: Int): BossTier = when {
+        level >= 130 -> BossTier.SUPER_UNDEAD
+        level >= 60 -> BossTier.UNDEAD
+        else -> BossTier.LIVING
     }
 
     fun forcesThroneMusic(boss: BossType?): Boolean = boss == BossType.WILLIAM_THE_BASTARD

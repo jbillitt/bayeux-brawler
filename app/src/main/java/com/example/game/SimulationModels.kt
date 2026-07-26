@@ -447,6 +447,11 @@ data class FighterState(
     // Status effects
     var missingArm: Boolean = false,
     var isCrumpled: Boolean = false,
+    /**
+     * Routed, not floored. A panicking man runs where he shouldn't and cannot draw a bow — the
+     * frogs' answer to "every weather knocks them over", which made five miracles feel like one.
+     */
+    var panicDuration: Float = 0f,
     
     val speedBoost: Float = 0f,
 
@@ -501,6 +506,7 @@ data class FighterState(
     // next swing comes through regardless (no more stun-locking a boss with a fast weapon).
     var interruptStreak: Int = 0,
     val bossType: BossType? = null,
+    val bossTier: BossTier = BossTier.LIVING,
     val isBossRetinue: Boolean = false,
     var arrowEyeCritWindow: Float = 0f,
     var arrowEyeCritCooldown: Float = 4f,
@@ -719,7 +725,9 @@ fun FighterState.isKind(kind: String): Boolean = id == kind || id.startsWith("$k
  */
 val FighterState.ccResist: Float
     get() = when {
-        bossType != null -> 0.2f
+        // Undead flesh feels a blow less than living flesh — the tier multiplies the resistance
+        // a boss already has rather than adding a second, separate rule.
+        bossType != null -> 0.2f * bossTier.ccResistScale
         isBossRetinue -> 0.55f
         else -> 1f
     }

@@ -132,6 +132,7 @@ object ProceduralMedievalComposer {
         Voice.BELLS -> 0.25f
         // Percussion stays dry or the transients smear — and the shaker's whole job is definition.
         Voice.BODHRAN, Voice.TABOR, Voice.TAMBOURINE, Voice.NAKERS -> 0.08f
+        Voice.KICK -> 0.03f   // a kick with a tail on it is mud
         Voice.EGG_SHAKER -> 0.05f
         else -> 0.12f
     }

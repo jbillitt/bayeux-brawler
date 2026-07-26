@@ -86,9 +86,13 @@ class MilestoneAwardTest {
 
     @Test
     fun anAwardedMilestonePutsItsItemInThePool() = runTest {
+        GameViewModel.awardMilestone(Milestone.HARDRADA_BRAIDS)
+        assertTrue("hair_braids" in GameViewModel.poolWithUnlocks(emptySet()))
+        // Handles and Strange Relics instead join what the next run ROLLS from, rather than
+        // being handed over outright — otherwise a cheese wheel is in every future loadout.
         GameViewModel.awardMilestone(Milestone.NAKED_WIN)
-        assertTrue("head_eel" in GameViewModel.poolWithUnlocks(emptySet()))
-        // A handle instead joins what the next run rolls from — see GameProfileTest.
+        assertFalse("a relic must not be handed straight to the run",
+            "head_eel" in GameViewModel.poolWithUnlocks(emptySet()))
         GameViewModel.awardMilestone(Milestone.BEAT_HARDRADA)
         assertTrue(GameViewModel.handleRollPool().any { it.id == "handle_anchor" })
     }

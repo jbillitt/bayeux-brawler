@@ -48,7 +48,9 @@ class SoundTest {
     fun brawlThemeIsSpeedMetalShaped() {
         for (seed in 1L..10L) {
             val spec = resolveSongSpec(seed, emptyList(), brawl = true)
-            assertTrue("brawl bpm ${spec.bpm}", spec.bpm in 168..184)
+            // Wrestling-entrance metal, not thrash: at 180 the riff had no room to land and the
+            // 16th-note double kick blurred into one sound rather than two feet.
+            assertTrue("brawl bpm ${spec.bpm}", spec.bpm in 138..156)
             assertEquals(4, spec.beatsPerBar)
             assertEquals(8, spec.ground.size)
             assertTrue("minor mode wanted, got ${spec.mode}", spec.mode == Mode.AEOLIAN || spec.mode == Mode.PHRYGIAN)
@@ -215,7 +217,7 @@ class SoundTest {
     @Test
     fun moodsDoNotBendThemedFamilies() {
         val spec = resolveSongSpec(7L, listOf("More Tempo", "More Tempo", "Merrier"), brawl = true)
-        assertTrue("moods must not push brawl off 168-184, got ${spec.bpm}", spec.bpm in 168..184)
+        assertTrue("moods must not push brawl off 138-156, got ${spec.bpm}", spec.bpm in 138..156)
         assertTrue(spec.mode == Mode.AEOLIAN || spec.mode == Mode.PHRYGIAN)
     }
 
@@ -245,7 +247,7 @@ class SoundTest {
         // at level one, not the specific instruments filling them.
         assertTrue("level one needs the metal rhythm section: $l1",
             l1.any { it.line == LineRef.RIFF } &&
-                l1.any { it.voice == Voice.NAKERS } &&
+                l1.any { it.voice == Voice.KICK } &&
                 l1.any { it.voice == Voice.TABOR } &&
                 l1.any { it.voice == Voice.HARP && it.line == LineRef.MELODY } &&
                 l1.any { it.line == LineRef.DRONE })
@@ -257,11 +259,12 @@ class SoundTest {
     }
 
     @Test
-    fun brawlNakersGallopEveryBar() {
+    fun brawlKickGallopsEveryBar() {
         val spec = resolveSongSpec(7L, emptyList(), brawl = true)
-        val events = percussionEvents(spec, Voice.NAKERS, wilder = true)
-        // 16 sixteenth-note hits per 4/4 bar, every bar — a true double kick. At 8ths this
-        // read as one pedal working hard rather than two feet.
+        val events = percussionEvents(spec, Voice.KICK, wilder = true)
+        // 16 sixteenth-note hits per 4/4 bar, every bar, on an actual bass drum. This pattern
+        // was on NAKERS, a 150-200Hz kettle drum that could play the rhythm but never sound
+        // like a kick — the theme had a busy tom where its engine belonged.
         assertEquals(16 * spec.totalBars, events.size)
     }
 

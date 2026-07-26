@@ -8,18 +8,31 @@ class AdGateTest {
 
     @Test
     fun debugBuildsNeverShowAds() {
-        assertFalse(AdGate.adsAllowed(isDebug = true, purchased = false))
-        assertFalse(AdGate.adsAllowed(isDebug = true, purchased = true))
+        assertFalse(AdGate.adsAllowed(isDebug = true, purchased = false, enabled = true))
+        assertFalse(AdGate.adsAllowed(isDebug = true, purchased = true, enabled = true))
     }
 
     @Test
     fun aPurchaseRemovesAds() {
-        assertFalse(AdGate.adsAllowed(isDebug = false, purchased = true))
+        assertFalse(AdGate.adsAllowed(isDebug = false, purchased = true, enabled = true))
     }
 
     @Test
-    fun aFreeReleasePlayerSeesAds() {
-        assertTrue(AdGate.adsAllowed(isDebug = false, purchased = false))
+    fun aFreeReleasePlayerSeesAdsOnceTheyAreEnabled() {
+        assertTrue(AdGate.adsAllowed(isDebug = false, purchased = false, enabled = true))
+    }
+
+    /**
+     * Testers get a build with no ads in it at all until someone deliberately turns them on from
+     * the burger menu. This is the guarantee that the default is silence, not the placement logic.
+     */
+    @Test
+    fun adsAreOffUntilExplicitlyEnabled() {
+        assertFalse(
+            "a tester build must show no ads by default",
+            AdGate.adsAllowed(isDebug = false, purchased = false, enabled = false)
+        )
+        assertFalse("the runtime switch must default to off", AdGate.testAdsEnabled)
     }
 
     @Test

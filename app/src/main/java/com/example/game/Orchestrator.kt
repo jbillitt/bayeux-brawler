@@ -133,6 +133,8 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     // The shaker rides opposite the tambourine. It is pure treble, so it holds the subdivision
     // audible on a handset even when the membranes are fighting for room.
     a += VoiceAssignment(Voice.EGG_SHAKER, LineRef.PERC, if (merrier) 5 else 7, 99, gPerc2 * 0.85f, -0.6f)
+    // Even outside the brawl a bass drum under the downbeats gives the consort a floor.
+    a += VoiceAssignment(Voice.KICK, LineRef.PERC, 6, 99, gPerc1 * 0.8f, 0f)
 
     // L9 waits band
     val shawmLevel = if (wilder) 7 else 9
@@ -192,8 +194,10 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
     a += VoiceAssignment(foil, LineRef.COUNTER, 1 + rng.nextInt(3), 99, 0.34f, 0.4f)
 
     // Kit: kick and snare are fixed — it is metal — but the third drum and its entry vary.
-    a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, 1, 99, 0.62f, 0.4f)   // double kick
+    // Centre-panned and the loudest thing in the kit, as a kick drum is.
+    a += VoiceAssignment(Voice.KICK, LineRef.PERC, 1, 99, 0.72f, 0f)       // double kick
     a += VoiceAssignment(Voice.TABOR, LineRef.PERC, 1, 99, 0.50f, -0.45f)  // snare
+    a += VoiceAssignment(Voice.NAKERS, LineRef.PERC, 2, 99, 0.34f, 0.4f)   // tom accents
     val thirdDrum = weightedPick(rng, listOf(Voice.BODHRAN to 0.6f, Voice.TAMBOURINE to 0.4f))
     a += VoiceAssignment(thirdDrum, LineRef.PERC, 1 + rng.nextInt(2), 99, 0.24f, -0.55f)
 
@@ -250,6 +254,7 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
     late(Voice.OBOE, LineRef.COUNTER, 0.15f, 0.45f)
     late(Voice.CELLO, LineRef.BASS, 0.18f, -0.35f)
     late(Voice.EGG_SHAKER, LineRef.PERC, 0.14f, -0.6f)
+    late(Voice.KICK, LineRef.PERC, 0.30f, 0f)
     return OrchestrationPlan(a, destinyFanfare = false)
 }
 
@@ -352,25 +357,37 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
                     beat += step
                 }
             }
-            Voice.NAKERS -> if (spec.family == Family.BRAWL) {
-                // A true double kick: continuous 16ths, not the old 8th-note gallop, which at this
-                // tempo just read as one pedal working hard. Accents mark the bar and the beat so
-                // the pulse survives; short durations keep the low end from smearing into a drone.
+            // The double kick proper, on an actual bass drum. This pattern used to be on NAKERS,
+            // which is a 150-200Hz kettle drum — it could play the rhythm but never sound like a
+            // kick, so the theme had a busy tom where its engine should be.
+            Voice.KICK -> if (spec.family == Family.BRAWL) {
                 var b = 0f
                 while (b < bpb - 1e-3f) {
                     val barAccent = b % 2f == 0f
                     val onBeat = b % 1f == 0f
                     out += NoteEvent(
                         base + b,
-                        0.12f,
-                        if (barAccent) 56 else 57,
+                        0.14f,
+                        36,
                         when {
                             barAccent -> 1f
-                            onBeat -> 0.78f
-                            else -> 0.5f
+                            onBeat -> 0.8f
+                            else -> 0.55f
                         }
                     )
                     b += 0.25f
+                }
+            } else {
+                // Everywhere else it is a plain heartbeat under the downbeats.
+                out += NoteEvent(base, 0.2f, 36, 0.9f)
+                if (spec.beatsPerBar >= 4) out += NoteEvent(base + spec.beatsPerBar / 2f, 0.2f, 36, 0.7f)
+            }
+            Voice.NAKERS -> if (spec.family == Family.BRAWL) {
+                // Freed from double-kick duty: now a tom accent answering the snare on the turn.
+                if (bar % 2 == 1) {
+                    out += NoteEvent(base + bpb - 1.5f, 0.22f, 56, 0.85f)
+                    out += NoteEvent(base + bpb - 1.0f, 0.22f, 57, 0.75f)
+                    out += NoteEvent(base + bpb - 0.5f, 0.22f, 56, 0.9f)
                 }
             } else if (bar % 4 == 0) {
                 out += NoteEvent(base, 0.4f, 56, 0.9f); out += NoteEvent(base + 0.5f, 0.3f, 57, 0.6f)

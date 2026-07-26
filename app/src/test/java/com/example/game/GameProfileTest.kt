@@ -63,13 +63,13 @@ class GameProfileTest {
 
     @Test
     fun theRunPoolIsTheRandomRollPlusEverythingEarned() = runTest {
-        GameProfile.grant("head_eel", "naked_win")
+        GameProfile.grant("hair_braids", "hardrada_braids")
         GameProfile.load()
 
         val roll = setOf("head_sword", "handle_medium", "shield_kite")
         val pool = GameViewModel.poolWithUnlocks(roll)
 
-        assertTrue("earned items must always be present", "head_eel" in pool)
+        assertTrue("earned items must always be present", "hair_braids" in pool)
         assertTrue("the random roll must survive", "head_sword" in pool)
     }
 

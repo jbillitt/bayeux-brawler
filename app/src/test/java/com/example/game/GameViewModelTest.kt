@@ -574,6 +574,8 @@ class GameViewModelTest {
         // which silently decided whether this loadout crossed the weight limit
         mutateState { it.copy(
             unlockedAncillaries = listOf(Ancillary.CHARIOT),
+            // Owning a mount no longer equips it — activeMount is the source of truth now.
+            activeMount = Ancillary.CHARIOT,
             armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
             headgear = GameData.HEADGEAR_PIECES.first { h -> h.id == "helm_none" },
             extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif")
@@ -589,6 +591,8 @@ class GameViewModelTest {
     fun `silken garments prevents chariot collapse`() {
         mutateState { it.copy(
             unlockedAncillaries = listOf(Ancillary.CHARIOT),
+            // Owning a mount no longer equips it — activeMount is the source of truth now.
+            activeMount = Ancillary.CHARIOT,
             armor = GameData.ARMOR_PIECES.first { a -> a.id == "armor_scale" },
             headgear = GameData.HEADGEAR_PIECES.first { h -> h.id == "helm_none" },
             extraArmors = listOf("armor_gauntlets", "armor_boots", "armor_coif"),

@@ -173,7 +173,26 @@ class GameViewModel : ViewModel() {
          * cached profile so it never suspends on the game loop.
          */
         fun poolWithUnlocks(roll: Set<String>): Set<String> =
-            roll + GameProfile.cached.unlockedItemIds.filterNot { it in GameData.UNLOCKABLE_HANDLE_IDS }
+            roll + GameProfile.cached.unlockedItemIds.filterNot {
+                it in GameData.UNLOCKABLE_HANDLE_IDS || it in GameData.STRANGE_HEAD_IDS
+            }
+
+        /**
+         * Heads a run may roll from. The Strange Relics — the eel, the cheese, the goose, the
+         * thighbone — are meant to be rare rewards, so handing them over permanently the moment
+         * one is earned (which is what poolWithUnlocks did) put a cheese wheel in the opening
+         * loadout of every subsequent run. An earned relic instead turns up in the opening roll
+         * just occasionally; the rest of the time it is still won as a reward.
+         */
+        fun headRollPool(random: kotlin.random.Random = kotlin.random.Random.Default): List<GameData.WeaponHead> {
+            val earned = GameProfile.cached.unlockedItemIds
+            val base = GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }
+            val relics = GameData.WEAPON_HEADS.filter {
+                it.id in GameData.STRANGE_HEAD_IDS && it.id in earned
+            }
+            return if (relics.isNotEmpty() && random.nextFloat() < 0.07f) base + relics.random(random)
+            else base
+        }
 
         /**
          * Handles a run may roll from: the sixteen base hafts, plus every unlockable the profile
@@ -193,11 +212,20 @@ class GameViewModel : ViewModel() {
          * read `unlockedAncillaries` — so they have to be folded in there too, or a mount can be won
          * and never appear. Runs reset that list, which is exactly why this is applied on reset.
          */
-        fun ancillariesWithUnlocks(current: List<Ancillary>): List<Ancillary> {
+        fun ancillariesWithUnlocks(
+            current: List<Ancillary>,
+            random: kotlin.random.Random = kotlin.random.Random.Default
+        ): List<Ancillary> {
             val earned = GameProfile.cached.unlockedItemIds.mapNotNull { id ->
                 Ancillary.values().firstOrNull { it.id == id }
             }
-            return current + earned.filter { it !in current }
+            val offered = earned.filter { anc ->
+                // Earning a mount means it can TURN UP, not that you own it in perpetuity. The
+                // general rule for every unlock: it joins the pool a run may draw from, it is not
+                // handed over every time. Most runs should begin on foot.
+                if (anc.id in MOUNT_ANCILLARY_IDS) random.nextFloat() < 0.25f else true
+            }
+            return current + offered.filter { it !in current }
         }
 
         /**
@@ -374,7 +402,7 @@ class GameViewModel : ViewModel() {
         initialGear.add("helm_none")
         
         // Randomly unlock 2 more of each category to start
-        initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
+        initialGear.addAll(headRollPool().shuffled().take(2).map { it.id })
         // The seven unlockables are earned, not rolled — the ✦ marker's promise, now kept. They still
         // reach the pool for anyone who has earned them, via poolWithUnlocks below.
         initialGear.addAll(handleRollPool().shuffled().take(2).map { it.id })
@@ -448,6 +476,7 @@ class GameViewModel : ViewModel() {
                     val anc = GameData.ANCILLARIES.first { it.id == choice.itemId }
                     state.unlockedAncillaries + List(choice.copies) { anc }
                 }
+                // (a mount taken as a reward also becomes the active mount — see newActiveMount)
                 "follower_multiply" -> {
                     val anc = GameData.ANCILLARIES.first { it.id == choice.itemId }
                     val existingCopies = state.unlockedAncillaries.count { it.id == anc.id }
@@ -475,6 +504,15 @@ class GameViewModel : ViewModel() {
             if (choice.itemId == "armor_jester") {
                 newHeadgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_jester" }
             }
+
+            // Take a mount as a reward and you ride it immediately — nobody picks a warhorse and
+            // then expects to walk. This is set explicitly because effectiveMount no longer falls
+            // back to "whatever mount is in the list", which was force-mounting profile unlocks.
+            val newActiveMount = if (choice.type == "follower" && choice.itemId in MOUNT_ANCILLARY_IDS) {
+                GameData.ANCILLARIES.first { it.id == choice.itemId }
+            } else {
+                state.activeMount
+            }
             
             // Gain dynamic buffs based on items or ancillaries selected
             state.copy(
@@ -482,6 +520,8 @@ class GameViewModel : ViewModel() {
                 extraAttachments = newAttachments,
                 extraArmors = newArmors,
                 unlockedAncillaries = newAncs,
+                activeMount = newActiveMount,
+                isThroneMode = if (newActiveMount != state.activeMount) false else state.isThroneMode,
                 tripledFollowerIds = newTripledFollowerIds,
                 handleExtensionCount = newExtensions,
                 rangedUpgrades = newRangedUpgrades,
@@ -515,6 +555,12 @@ class GameViewModel : ViewModel() {
         if (_uiState.value.isBattleActive) return
         // Picking a mount means dismounting the throne — you cannot ride two things at once
         _uiState.update { it.copy(activeMount = a, isThroneMode = false) }
+    }
+
+    /** Go on foot. Needed since an unlocked mount is no longer equipped whether you like it or not. */
+    fun clearMount() {
+        if (_uiState.value.isBattleActive) return
+        _uiState.update { it.copy(activeMount = null, isThroneMode = false) }
     }
 
     /** The throne is a mount too, once you have one. */
@@ -693,7 +739,7 @@ class GameViewModel : ViewModel() {
 
         // Create player state with complete roguelike upgrade state
         val totalArmorMass = state.armor.mass + state.headgear.mass + state.extraArmors.sumOf { id -> com.example.game.GameData.ARMOR_PIECES.find { it.id == id }?.mass?.toDouble() ?: 0.0 }.toFloat()
-        val currentMount = state.activeMount ?: state.unlockedAncillaries.lastOrNull { it.id.startsWith("anc_mount_") }
+        val currentMount = state.effectiveMount
         val chariotCollapses = currentMount == com.example.game.Ancillary.CHARIOT && totalArmorMass > ARMOR_WEIGHT_LIMIT && !state.hasSilkenGarments
         val baseHp = 100f + state.totalHpBoost
         // Soften the size-HP penalty and give an extra evasion-HP buff so small builds stay viable
@@ -2316,7 +2362,7 @@ class GameViewModel : ViewModel() {
                 initialGear.add("shield_none")
                 initialGear.add("armor_bare")
                 initialGear.add("helm_none")
-                initialGear.addAll(GameData.WEAPON_HEADS.filter { it.id !in GameData.STRANGE_HEAD_IDS }.shuffled().take(2).map { it.id })
+                initialGear.addAll(headRollPool().shuffled().take(2).map { it.id })
                 initialGear.addAll(handleRollPool().shuffled().take(3).map { it.id })
                 initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.ARMOR_PIECES.filter {

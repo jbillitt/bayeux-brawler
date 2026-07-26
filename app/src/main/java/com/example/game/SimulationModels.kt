@@ -913,9 +913,13 @@ data class BattleSimState(
     // A mount's stats only count when you actually ride it. Merely unlocking a warhorse/chariot no
     // longer buffs a throne run (or a run on a different mount) — that leaked its hp/speed onto
     // whoever you played. Non-mount followers still all stack as before.
+    // activeMount is the ONLY source of truth, and null means on foot. The old fallback — ride
+    // whatever mount happened to be last in the list — meant a mount merely unlocked in the
+    // profile was force-equipped at the start of every run with no way to decline it, and with
+    // exactly one unlocked the picklist did not even appear. Winning one mid-run now sets
+    // activeMount explicitly, which is the only case that fallback was ever really serving.
     val effectiveMount: Ancillary?
-        get() = if (isThroneMode) null
-            else activeMount ?: unlockedAncillaries.lastOrNull { it.id in MOUNT_ANCILLARY_IDS }
+        get() = if (isThroneMode) null else activeMount
 
     val totalHpBoost: Float
         get() = unlockedAncillaries.filter { it.id !in MOUNT_ANCILLARY_IDS }.sumOf { it.hpBoost.toDouble() }.toFloat() +

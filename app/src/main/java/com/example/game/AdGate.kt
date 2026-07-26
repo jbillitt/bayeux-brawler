@@ -14,7 +14,16 @@ object AdGate {
     /** Deaths between interstitials. Tunable on device. */
     const val ADS_PER_DEATHS = 3
 
-    fun adsAllowed(isDebug: Boolean, purchased: Boolean): Boolean = !isDebug && !purchased
+    /**
+     * Runtime master switch, OFF by default so testers see no ads at all. Turned on from the
+     * burger menu ("Enable test ads") when the ad placements themselves need exercising.
+     * Deliberately not persisted: a tester who enables it should get a clean slate next launch.
+     */
+    @Volatile
+    var testAdsEnabled: Boolean = false
+
+    fun adsAllowed(isDebug: Boolean, purchased: Boolean, enabled: Boolean = testAdsEnabled): Boolean =
+        enabled && !isDebug && !purchased
 
     fun shouldShowInterstitial(totalDeaths: Int): Boolean =
         totalDeaths > 0 && totalDeaths % ADS_PER_DEATHS == 0

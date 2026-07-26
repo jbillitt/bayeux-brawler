@@ -357,7 +357,8 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                         CharacterPreviewCard(
                             uiState = uiState,
                             onSelectMount = { viewModel.selectMount(it) },
-                            onSelectThrone = { viewModel.selectThrone() }
+                            onSelectThrone = { viewModel.selectThrone() },
+                            onClearMount = { viewModel.clearMount() }
                         )
                     }
 
@@ -368,46 +369,26 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                             .fillMaxHeight()
                     ) {
                         Column(modifier = Modifier.fillMaxSize()) {
-                        // The trophy case, reachable from every between-battle screen. Without
-                        // somewhere to see them, earned unlocks are invisible and the loop is open.
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            // Only shown while ads are actually in play: hidden in debug builds and
-                            // gone for good once the purchase is owned.
-                            // ...and behind Features.SHOW_REMOVE_ADS_BUTTON until release day.
-                            val storeActivity = LocalContext.current as? android.app.Activity
-                            if (com.example.game.Features.SHOW_REMOVE_ADS_BUTTON &&
-                                com.example.game.AdGate.adsAllowedNow() && storeActivity != null
-                            ) {
-                                Text(
-                                    text = "REMOVE ADS" + (com.example.game.Billing.removeAdsPrice?.let { " ($it)" } ?: ""),
-                                    fontSize = 9.sp,
-                                    fontFamily = FontFamily.Serif,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TapestryRed,
-                                    modifier = Modifier
-                                        .clickable { com.example.game.Billing.purchaseRemoveAds(storeActivity) }
-                                        .padding(vertical = 2.dp, horizontal = 8.dp)
-                                )
-                            }
+                        // The trophies and store links used to live in a header Row here. On a
+                        // landscape phone that band cost the middle panel ~20dp of the one axis it
+                        // cannot spare, squashing the reward tiles and the weapon-head grid below
+                        // it. Both now live in the burger menu, which costs the panel nothing.
+                        if (showTrophies) {
+                            // Back sits inside the trophies view only, so it costs height on the
+                            // one screen that can spare it rather than on every panel.
                             Text(
-                                text = if (showTrophies) "‹ BACK" else "✦ TROPHIES",
+                                text = "‹ BACK",
                                 fontSize = 9.sp,
                                 fontFamily = FontFamily.Serif,
                                 fontWeight = FontWeight.Bold,
                                 color = TapestryDark,
-                                textAlign = TextAlign.End,
                                 modifier = Modifier
                                     .clickable {
-                                        showTrophies = !showTrophies
+                                        showTrophies = false
                                         MedievalAudioSynth.playSound(SoundType.SWOOSH)
                                     }
                                     .padding(vertical = 2.dp, horizontal = 4.dp)
                             )
-                        }
-                        if (showTrophies) {
                             TrophiesPanel(uiState)
                         } else if (uiState.showMusicDecision) {
                             MusicDecisionScreen(
@@ -415,14 +396,27 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                                 onSelect = { viewModel.selectMusicMood(it) }
                             )
                         } else if (uiState.showLevelUpScreen || uiState.level > 1) {
+                            // Decided here rather than inside the screen: LevelUpScreen is now a
+                            // pure function of its inputs, so the layout can be rendered — with
+                            // and without this offer — in the landscape screenshot harness.
+                            val rewardActivity = LocalContext.current as? android.app.Activity
                             LevelUpScreen(
                                 uiState = uiState,
+                                adOfferAvailable = !uiState.adRewardClaimedThisLevel &&
+                                    uiState.pendingLevelUpChoices.isNotEmpty() &&
+                                    com.example.game.Ads.rewardedReady() &&
+                                    rewardActivity != null,
+                                onAdReward = {
+                                    rewardActivity?.let { act ->
+                                        // Paid out on the SDK's earned callback only, never on dismissal.
+                                        com.example.game.Ads.showRewarded(act) { viewModel.grantAdReward() }
+                                    }
+                                },
                                 onSelectChoice = { viewModel.selectLevelUpChoice(it) },
                                 onSelectMount = { viewModel.selectMount(it) },
                                 onStartBattle = { viewModel.startBattle() },
                                 onSkipReward = { viewModel.selectLevelUpChoice("") },
-                                onClearSkipBonus = { viewModel.clearSkipBonus() },
-                                onAdReward = { viewModel.grantAdReward() }
+                                onClearSkipBonus = { viewModel.clearSkipBonus() }
                             )
                         } else {
                             GearSelectionTabs(
@@ -458,6 +452,12 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                 musicOn = musicOn,
                 onToggleMusic = onToggleMusic,
                 canRetire = uiState.isBattleActive && !uiState.battleWon && !uiState.battleLost,
+                inBattle = uiState.isBattleActive,
+                onShowTrophies = {
+                    showTrophies = true
+                    showPauseMenu = false
+                    viewModel.setPaused(false)
+                },
                 onResume = {
                     showPauseMenu = false
                     viewModel.setPaused(false)
@@ -482,11 +482,15 @@ fun PauseMenuOverlay(
     musicOn: Boolean,
     onToggleMusic: () -> Unit,
     canRetire: Boolean,
+    /** Out of battle this is a menu, not a pause — the wording changes with it. */
+    inBattle: Boolean = true,
+    onShowTrophies: () -> Unit = {},
     onResume: () -> Unit,
     onRetire: () -> Unit
 ) {
     var sfxOn by remember { mutableStateOf(com.example.game.MedievalAudioSynth.sfxEnabled) }
     var retireArmed by remember { mutableStateOf(false) }
+    var adsOn by remember { mutableStateOf(com.example.game.AdGate.testAdsEnabled) }
 
     Box(
         modifier = Modifier
@@ -521,7 +525,7 @@ fun PauseMenuOverlay(
                 ) {
                     Text("✛", fontSize = 11.sp, color = TapestryMustard)
                     Text(
-                        "  INTERMISSIO  ",
+                        if (inBattle) "  INTERMISSIO  " else "  SCRIPTORIUM  ",
                         fontFamily = FontFamily.Serif,
                         fontWeight = FontWeight.Black,
                         fontSize = 17.sp,
@@ -536,7 +540,8 @@ fun PauseMenuOverlay(
                         .background(TapestryDark)
                 )
                 Text(
-                    "The needles rest. The battle holds its breath.",
+                    if (inBattle) "The needles rest. The battle holds its breath."
+                    else "The needles wait. Choose your rites before the march.",
                     fontFamily = FontFamily.Serif,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                     fontSize = 11.sp,
@@ -586,6 +591,23 @@ fun PauseMenuOverlay(
                         sfxOn = !sfxOn
                         com.example.game.MedievalAudioSynth.sfxEnabled = sfxOn
                     }
+                    // Off by default so testers get a build with no ads in it at all. This is the
+                    // only way to turn them on, and it lasts until the app is next launched.
+                    toggleRow("ENABLE TEST ADS", "Off for testers; turn on to exercise placements", adsOn, "toggle_test_ads_btn") {
+                        adsOn = !adsOn
+                        com.example.game.AdGate.testAdsEnabled = adsOn
+                    }
+
+                    // The trophy case, moved off the between-battle panels where its header row
+                    // was stealing height from the reward tiles on a landscape phone.
+                    Button(
+                        onClick = onShowTrophies,
+                        colors = ButtonDefaults.buttonColors(containerColor = TapestryMustard),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("open_trophies_btn")
+                    ) {
+                        Text("✦ Trophies", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryDark)
+                    }
 
                     Button(
                         onClick = onResume,
@@ -593,7 +615,10 @@ fun PauseMenuOverlay(
                         shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.fillMaxWidth().testTag("resume_battle_btn")
                     ) {
-                        Text("Resume the Fray", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryLight)
+                        Text(
+                            if (inBattle) "Resume the Fray" else "Close",
+                            fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = TapestryLight
+                        )
                     }
 
                     if (canRetire) {
@@ -781,8 +806,9 @@ fun HeaderBar(
                 Text("${uiState.highscore}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TapestryDark)
             }
             
-            // Menu seal: a linen roundel bearing two woven pause-bars. Opens the Intermissio
-            // (pause menu), which now holds the music/sound toggles and the Retire rite.
+            // Menu seal: a linen roundel. Two upright bars mid-battle, where it really is a pause;
+            // three stacked bars between battles, where nothing is running and it is simply the
+            // menu — it now holds trophies and the ad switch as well as the sound rites.
             Box(
                 modifier = Modifier
                     .size(26.dp)
@@ -792,13 +818,25 @@ fun HeaderBar(
                     .testTag("open_pause_menu_btn"),
                 contentAlignment = Alignment.Center
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    repeat(2) {
-                        Box(
-                            modifier = Modifier
-                                .size(width = 3.dp, height = 11.dp)
-                                .background(TapestryDark, RoundedCornerShape(1.dp))
-                        )
+                if (uiState.isBattleActive) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        repeat(2) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 3.dp, height = 11.dp)
+                                    .background(TapestryDark, RoundedCornerShape(1.dp))
+                            )
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.5.dp)) {
+                        repeat(3) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 13.dp, height = 2.5.dp)
+                                    .background(TapestryDark, RoundedCornerShape(1.dp))
+                            )
+                        }
                     }
                 }
             }
@@ -810,11 +848,12 @@ fun HeaderBar(
 fun CharacterPreviewCard(
     uiState: BattleSimState,
     onSelectMount: (com.example.game.Ancillary) -> Unit = {},
-    onSelectThrone: () -> Unit = {}
+    onSelectThrone: () -> Unit = {},
+    onClearMount: () -> Unit = {}
 ) {
-    // The mount the player is actually riding into the next battle
-    val previewMount: com.example.game.Ancillary? = if (uiState.isThroneMode) null else
-        uiState.activeMount ?: uiState.unlockedAncillaries.lastOrNull { it.id.startsWith("anc_mount_") }
+    // The mount the player is actually riding into the next battle — effectiveMount, so the
+    // preview cannot disagree with what startBattle will actually put underneath him.
+    val previewMount: com.example.game.Ancillary? = uiState.effectiveMount
 
     Column(
         modifier = Modifier
@@ -1014,7 +1053,9 @@ fun CharacterPreviewCard(
         // just the 20% offer roll at character creation — listing it here put a throne in the
         // picklist for players who never accepted one.
         val throneAvailable = uiState.hasTakenThrone
-        if (mounts.size + (if (throneAvailable) 1 else 0) > 1) {
+        // Shown for even ONE mount. It used to need two before it appeared, so a player with a
+        // single unlocked mount was permanently astride it with no control on screen at all.
+        if (mounts.isNotEmpty() || throneAvailable) {
             val activeMount = previewMount
             Text(
                 text = "MOUNT",
@@ -1027,6 +1068,37 @@ fun CharacterPreviewCard(
                 textAlign = TextAlign.Center
             )
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                // On foot, always first and always available — the way to decline a mount.
+                run {
+                    val isSelected = activeMount == null && !uiState.isThroneMode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .background(
+                                if (isSelected) TapestryMustard.copy(alpha = 0.35f) else Color.Transparent,
+                                RoundedCornerShape(3.dp)
+                            )
+                            .border(
+                                if (isSelected) 1.5.dp else 1.dp,
+                                if (isSelected) TapestryRed else TapestryDark.copy(alpha = 0.35f),
+                                RoundedCornerShape(3.dp)
+                            )
+                            .clickable { onClearMount() }
+                            .padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(if (isSelected) "▸" else " ", fontSize = 9.sp, color = TapestryRed, modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "On Foot",
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Normal,
+                            color = TapestryDark,
+                            maxLines = 1
+                        )
+                    }
+                }
                 if (throneAvailable) {
                     val isSelected = uiState.isThroneMode
                     Row(
@@ -1105,6 +1177,8 @@ fun LevelUpScreen(
     onStartBattle: () -> Unit = {},
     onSkipReward: () -> Unit = {},
     onClearSkipBonus: () -> Unit = {},
+    /** Whether the rewarded-ad offer can be shown. Decided by the caller — see MainActivity. */
+    adOfferAvailable: Boolean = false,
     onAdReward: () -> Unit = {}
 ) {
     // Skip bonus popup
@@ -1124,50 +1198,55 @@ fun LevelUpScreen(
             .fillMaxSize()
             .background(TapestryLinenCard)
             .border(3.dp, TapestryDark, RoundedCornerShape(12.dp))
-            .padding(24.dp),
+            .padding(horizontal = 20.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        // Top, not Center: centring left the header floating low with dead space above it, which
+        // pushed the tiles down and cost them height they needed.
+        verticalArrangement = Arrangement.Top
     ) {
-        // Distinct, grand level up callout
-        Text(
-            "Victory!",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = TapestryRed,
-            fontFamily = FontFamily.Serif,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        Text(
-            "Select thy spoils of war:",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = TapestryDark.copy(alpha = 0.85f),
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
-        // Opt-in only, and only when an ad is genuinely loaded — offering a reward that cannot be
-        // delivered is worse than not offering it. Absent in debug and for ad-free players.
-        val rewardActivity = LocalContext.current as? android.app.Activity
-        if (!uiState.adRewardClaimedThisLevel &&
-            uiState.pendingLevelUpChoices.isNotEmpty() &&
-            com.example.game.Ads.rewardedReady() &&
-            rewardActivity != null
+        // Header row. A landscape phone is about 360dp tall inside this border and the reward
+        // cards need nearly all of it, so the title, the subtitle and the ad offer share ONE row
+        // and spend width — which landscape has to spare — instead of three stacked bands of
+        // height it does not. Stacked, the ad button alone cost ~50dp and clipped the card text.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Button(
-                onClick = {
-                    // Paid out on the SDK's earned callback only, never on dismissal.
-                    com.example.game.Ads.showRewarded(rewardActivity) { onAdReward() }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = TapestryMustard),
-                shape = RoundedCornerShape(6.dp),
-                modifier = Modifier.padding(bottom = 10.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
-                    "Watch a herald's message for two more spoils",
-                    color = TapestryDark,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp
+                    "Victory!",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TapestryRed,
+                    fontFamily = FontFamily.Serif
                 )
+                Text(
+                    "Select thy spoils of war:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TapestryDark.copy(alpha = 0.85f)
+                )
+            }
+            // Opt-in only, and only when an ad is genuinely loaded — offering a reward that cannot
+            // be delivered is worse than not offering it. Absent in debug and for ad-free players.
+            if (adOfferAvailable) {
+                Button(
+                    onClick = onAdReward,
+                    colors = ButtonDefaults.buttonColors(containerColor = TapestryMustard),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.widthIn(max = 190.dp)
+                ) {
+                    Text(
+                        "Watch a herald's message\nfor two more spoils",
+                        color = TapestryDark,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        lineHeight = 12.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
 

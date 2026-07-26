@@ -15,7 +15,47 @@ internal fun renderPerc(voice: Voice, midi: Int, durSec: Float, velocity: Float,
     Voice.TABOR      -> tabor(durSec, sr, rng)
     Voice.TAMBOURINE -> tambourine(durSec, sr, rng)
     Voice.EGG_SHAKER -> eggShaker(durSec, sr, rng)
+    Voice.KICK       -> kick(durSec, sr, rng)
     else -> FloatArray((sr * durSec).toInt())
+}
+
+/**
+ * Bass drum — the thing the metal kit was missing entirely. NAKERS is a small kettle drum tuned
+ * at 150-200Hz; it can play a double-kick RHYTHM but it can never sound like a kick drum, which
+ * is why the pattern read as a busy tom and not as two feet.
+ *
+ * A real kick's fundamental sits near 50Hz, which a phone speaker cannot move at all. So the
+ * weight here is deliberately carried by the two parts that survive: the beater click at ~3kHz
+ * and a 190Hz punch band. The pitch sweep is kept regardless — the drop from ~130Hz to ~50Hz is
+ * what makes the ear hear "kick" rather than "thud" even when the bottom octave is missing.
+ */
+private fun kick(durSec: Float, sr: Int, rng: Random): FloatArray {
+    val n = (sr * durSec).toInt(); val out = FloatArray(n); if (n == 0) return out
+    val dt = 1.0 / sr
+    var phase = 0.0
+    val click = Biquad.bandpass(sr, minOf(3400f, sr * 0.35f), 1.0f)
+    val thwack = Biquad.bandpass(sr, 950f, 1.1f)
+    val punch = Biquad.bandpass(sr, 420f, 1.3f)
+    for (i in 0 until n) {
+        val t = i * dt
+        val f = 48.0 + 82.0 * Math.exp(-t / 0.035)     // the classic kick drop
+        phase += 2.0 * Math.PI * f * dt
+        // Short body. A long low tail is inaudible on a handset AND masks the click that isn't.
+        val body = Math.sin(phase) * Math.exp(-t / 0.045)
+        var v = (body * 0.45).toFloat()
+        // Beater against the head. Measured, the first version put 88% of its energy below the
+        // 300Hz a phone cannot reproduce — i.e. it was the same silent kick the kit already had.
+        // The click and the 950Hz beater thwack are what actually make it audible in play.
+        val noise = rng.nextFloat() * 2f - 1f
+        if (t < 0.030) {
+            val g = 1f - (t / 0.030f).toFloat()
+            v += click.process(noise) * 1.6f * g * g
+            v += thwack.process(noise) * 1.2f * g
+        }
+        out[i] = v + punch.process(v) * 0.9f
+    }
+    normalise(out, 0.95f)
+    return out
 }
 
 /**

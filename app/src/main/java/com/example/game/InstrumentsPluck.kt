@@ -5,7 +5,7 @@ import kotlin.random.Random
 enum class Voice {
     HARP, LUTE, PSALTERY, VIELLE, VIOLA, CELLO, FIDDLE2, RECORDER, PANPIPES, SHAWM, OBOE,
     SACKBUT, HORN, GURDY, ORGAN, CHOIR, BELLS, NAKERS, TIMPANI, BODHRAN, TABOR, TAMBOURINE,
-    EGG_SHAKER
+    EGG_SHAKER, KICK
 }
 
 fun renderNote(
@@ -41,7 +41,8 @@ fun renderNote(
                                      formantHz = floatArrayOf(1150f, 2900f), formantGain = 2.2f)
         Voice.VIELLE, Voice.VIOLA, Voice.CELLO, Voice.FIDDLE2, Voice.SHAWM, Voice.SACKBUT, Voice.HORN, Voice.GURDY, Voice.ORGAN, Voice.CHOIR ->
             renderBowBrass(voice, midi, durSec, velocity, sr, rng, phraseIndex)
-        Voice.BELLS, Voice.NAKERS, Voice.TIMPANI, Voice.BODHRAN, Voice.TABOR, Voice.TAMBOURINE, Voice.EGG_SHAKER ->
+        Voice.BELLS, Voice.NAKERS, Voice.TIMPANI, Voice.BODHRAN, Voice.TABOR, Voice.TAMBOURINE,
+        Voice.EGG_SHAKER, Voice.KICK ->
             renderPerc(voice, midi, durSec, velocity, sr, rng)
     }
     if (velocity != 1f) for (i in buf.indices) buf[i] *= velocity

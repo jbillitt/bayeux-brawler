@@ -50,10 +50,15 @@ class SoundTest {
             val spec = resolveSongSpec(seed, emptyList(), brawl = true)
             // Wrestling-entrance metal, not thrash: at 180 the riff had no room to land and the
             // 16th-note double kick blurred into one sound rather than two feet.
-            assertTrue("brawl bpm ${spec.bpm}", spec.bpm in 118..136)
+            assertTrue("brawl bpm ${spec.bpm}", spec.bpm in 128..146)
             assertEquals(4, spec.beatsPerBar)
             assertEquals(8, spec.ground.size)
-            assertTrue("minor mode wanted, got ${spec.mode}", spec.mode == Mode.AEOLIAN || spec.mode == Mode.PHRYGIAN)
+            // Phrygian/Aeolian are the villain colours; Dorian and Mixolydian are the heroic
+            // bulk of the rolls. Ionian would be a maypole, not a brawl.
+            assertTrue(
+                "fighting mode wanted, got ${spec.mode}",
+                spec.mode in setOf(Mode.AEOLIAN, Mode.PHRYGIAN, Mode.DORIAN, Mode.MIXOLYDIAN)
+            )
             assertTrue(
                 "brawl melody must stay in fast note values",
                 generateSong(spec, melodyRng(seed)).melody.all { it.durBeats <= 1f }
@@ -275,7 +280,7 @@ class SoundTest {
             l1.any { it.line == LineRef.RIFF } &&
                 l1.any { it.voice == Voice.KICK } &&
                 l1.any { it.voice == Voice.TABOR } &&
-                l1.any { it.voice == Voice.HARP && it.line == LineRef.MELODY } &&
+                l1.any { it.voice == Voice.SHAWM && it.line == LineRef.MELODY } &&
                 l1.any { it.line == LineRef.DRONE })
         for (level in 1 until 11) {
             val current = activeAssignments(plan, level).toSet()

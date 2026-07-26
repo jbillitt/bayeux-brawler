@@ -187,21 +187,32 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     return OrchestrationPlan(a, destinyFanfare)
 }
 
+/**
+ * Audition hook: forces the BRAWL lead voice, so preview renders can A/B one candidate lead
+ * against another with everything else — seed, drums, riff — held identical. null = shipped.
+ * ponytail: a plain var rather than plumbing a parameter through compose(); tests reset it.
+ */
+internal var brawlLeadOverride: Voice? = null
+
 /** BRAWL: a cumulative medieval speed-metal arrangement with sparse upper-level flourishes. */
 private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): OrchestrationPlan {
     val a = mutableListOf<VoiceAssignment>()
 
-    // The harp takes the tune. It is the fastest plucked voice in the consort and the nearest
-    // thing here to a lead guitar; it used to strum ACCOMP behind a shawm carrying the melody.
-    a += VoiceAssignment(Voice.HARP, LineRef.MELODY, 1, 99, 0.46f, 0f)
+    // The shawm takes the tune. A loud double reed cuts through a wall of drums the way an
+    // arcade lead synth does; the harp lead that briefly replaced it read as a plucked melody
+    // sitting inside the mix rather than a lead line riding on top of it.
+    val lead = brawlLeadOverride ?: Voice.SHAWM
+    a += VoiceAssignment(lead, LineRef.MELODY, 1, 99, 0.46f, 0f)
 
     // Everything from here rolls per run. The opening line-up was a fixed seven voices, so every
     // brawl in every run began with the identical wall of sound and they all blurred together.
     val riff = weightedPick(rng, listOf(Voice.LUTE to 0.5f, Voice.GURDY to 0.3f, Voice.PSALTERY to 0.2f))
     a += VoiceAssignment(riff, LineRef.RIFF, 1, 99, 0.38f, -0.3f)
 
-    // Who answers the harp, and whether they open alongside it or arrive a level or two in.
-    val foil = weightedPick(rng, listOf(Voice.SHAWM to 0.45f, Voice.VIELLE to 0.3f, Voice.FIDDLE2 to 0.25f))
+    // Who answers the lead, and whether they open alongside it or arrive a level or two in.
+    // Never the lead's own voice, or the answer stops reading as an answer.
+    val foil = weightedPick(rng, listOf(Voice.SHAWM to 0.45f, Voice.VIELLE to 0.3f, Voice.FIDDLE2 to 0.25f)
+        .filter { it.first != lead })
     a += VoiceAssignment(foil, LineRef.COUNTER, 1 + rng.nextInt(3), 99, 0.34f, 0.4f)
 
     // Kit: kick and snare are fixed — it is metal — but the third drum and its entry vary.
@@ -238,7 +249,7 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
     if (rng.nextFloat() < 0.7f) {
         a += VoiceAssignment(Voice.HARP, LineRef.STRUM, 3 + rng.nextInt(3), 99, 0.26f, 0.15f)
     }
-    // The harp's own divisions an octave up — the lead taking a solo over its own riff.
+    // The harp doubles the tune's divisions an octave up — a plucked shimmer over the lead.
     a += VoiceAssignment(Voice.HARP, LineRef.MELODY_ORN, 7, 99, 0.18f, 0.25f, octave = 1)
     a += VoiceAssignment(Voice.PANPIPES, LineRef.FLOURISH, 8, 99, 0.11f, 0.6f)
     a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 10, 99, 0.08f, 0f)

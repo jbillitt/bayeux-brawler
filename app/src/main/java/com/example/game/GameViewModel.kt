@@ -60,7 +60,7 @@ internal fun createLilGuyDart(
 }
 
 internal fun rollFollowerCopies(random: Random = Random.Default): Int =
-    if (random.nextFloat() < 0.15f) 2 else 1
+    if (random.nextFloat() < 0.06f) 2 else 1   // was 0.15 — twins turned up most rounds
 
 internal fun pickTripleCandidate(
     followers: List<Ancillary>,
@@ -2043,7 +2043,7 @@ class GameViewModel : ViewModel() {
                     state.unlockedAncillaries,
                     state.tripledFollowerIds
                 )
-                if (state.level >= 8 && tripleCandidate != null && Random.nextFloat() < 0.08f) {
+                if (state.level >= 8 && tripleCandidate != null && Random.nextFloat() < 0.03f) {
                     val lucky = tripleCandidate
                     pendingChoices.add(LevelUpChoice(
                         id = "triple_${lucky.id}",
@@ -2086,11 +2086,17 @@ class GameViewModel : ViewModel() {
 
                 // 1. Follower option. Stackable pets stay in the pool even once owned, so you can
                 // keep rallying dogs/ravens and field a whole pack; everyone else dedups as before.
-                // A second mount is dead weight: effectiveMount only ever reads one, and the stat
-                // sums skip mounts outright. So once you are astride something, mounts mostly leave
-                // the pool — one still slips through occasionally so a swap stays possible.
-                val ownsMount = state.unlockedAncillaries.any { it.id in MOUNT_ANCILLARY_IDS }
-                val suppressMounts = ownsMount && Random.nextFloat() >= 0.12f
+                // Mounts are never guaranteed on a reward screen, and get rarer once you have
+                // actually taken one. "Taken" means activeMount — the mount you are riding —
+                // NOT unlockedAncillaries, which now also holds a mount the start screen merely
+                // OFFERED you from a profile unlock and which you may well have declined. Judging
+                // it on the offer punished you for an unlock you never accepted.
+                //
+                // A second mount is dead weight anyway: effectiveMount only ever reads one and the
+                // stat sums skip mounts outright, so a swap is all a second one can ever be.
+                val ridingAlready = state.activeMount != null
+                val mountChance = if (ridingAlready) 0.10f else 0.40f
+                val suppressMounts = Random.nextFloat() >= mountChance
                 val availableAncs = GameData.ANCILLARIES.filter {
                     (it !in state.unlockedAncillaries || it in STACKABLE_ANCILLARIES) &&
                         !(suppressMounts && it.id in MOUNT_ANCILLARY_IDS)
@@ -2099,7 +2105,19 @@ class GameViewModel : ViewModel() {
                 // First slot favours someone you DON'T yet own: the always-eligible stackable
                 // pets were crowding the pool, so every run collected the same dogs.
                 val unowned = availableAncs.filter { it !in state.unlockedAncillaries }
-                val followerOffers = (unowned.shuffled().take(1) + availableAncs.shuffled()).distinct().take(2)
+                // At most ONE mount across both offer slots. Two mounts in one round cost two
+                // follower cards for a choice you can only take one of anyway — the mount always
+                // arrives at the entourage's expense, so it may take one slot and no more.
+                val followerOffers = (unowned.shuffled().take(1) + availableAncs.shuffled())
+                    .distinct()
+                    .fold(mutableListOf<Ancillary>()) { picked, anc ->
+                        val isMount = anc.id in MOUNT_ANCILLARY_IDS
+                        if (picked.size < 2 && !(isMount && picked.any { it.id in MOUNT_ANCILLARY_IDS })) {
+                            picked.add(anc)
+                        }
+                        picked
+                    }
+                    .take(2)
                 if (followerOffers.isNotEmpty()) {
                     followerOffers.forEach { anc ->
                         val isObject = anc in listOf(com.example.game.Ancillary.WARHORSE, com.example.game.Ancillary.CHARIOT, com.example.game.Ancillary.STILTS, com.example.game.Ancillary.TROJAN_HORSE)

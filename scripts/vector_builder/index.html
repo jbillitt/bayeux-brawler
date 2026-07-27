@@ -190,6 +190,8 @@
           <button class="mode" data-mode="line"><span class="gl">&#9585;</span>Line colour<kbd>L</kbd></button>
           <div class="divider"></div>
           <button class="mode" data-mode="shape"><span class="gl">&#9633;</span>Add shape<kbd>S</kbd></button>
+          <div class="divider"></div>
+          <label class="chk" title="Also draw the other draw* functions this one calls, dimmed and not editable, so a part is composed with the whole it belongs to."><input type="checkbox" id="showParts" checked> whole building<kbd>W</kbd></label>
           <span id="sceneStat"></span>
         </div>
 
@@ -1238,6 +1240,15 @@ function fitView() {
     });
     [s.a, s.b, s.c].filter(Boolean).forEach(h => add(resolvePt(h)));
   });
+  // Frame the whole composed building, not just the part being edited — otherwise turning the
+  // context on zooms you into the props and leaves the room they sit in off-screen.
+  contextScenes.forEach(layer => layer.shapes.forEach(s => {
+    if (s.cmds) s.cmds.forEach(c => {
+      if (c.op === 'ARC' || c.op === 'RECTP') { add({ x: c.l, y: c.t }); add({ x: c.r, y: c.b }); }
+      else if (c.sx !== undefined) add({ x: c.sx, y: c.sy });
+    });
+    [s.a, s.b, s.c].filter(Boolean).forEach(h => add(resolvePt(h)));
+  }));
   if (!xs.length) { view = { k: 1, tx: 0, ty: 0 }; return; }
   const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
   const bw = Math.max(maxx - minx, 10), bh = Math.max(maxy - miny, 10);
@@ -1291,11 +1302,111 @@ function commit(text, note) {
   buildColorPickers();
   if (note) say(note);
 }
+// ---------- composed context ----------
+// An interior is a handful of props with no room around them; a keep is a tower with no motte.
+// Edited alone they are, in Joshua's words, confusing collections of lines. So: find the other
+// draw* functions this one CALLS, parse them too, and paint them dimmed underneath. The parts a
+// building is assembled from are already in `assets` — the server's discovery regex picks up
+// private fns as well — so this needs no server round trip and no Forge.
+//
+// The context scenes are FROZEN: every point is resolved to a plain number at parse time, because
+// ptAxis reads the live global sceneEnv and would otherwise re-resolve them against whatever
+// function is currently being edited.
+let contextScenes = [];
+
+function freezeScene(sc) {
+  const pt = h => { const p = resolvePt(h); return p ? { sx: p.x, sy: p.y } : null; };
+  const out = [];
+  for (const s of sc) {
+    const o = Object.assign({}, s);
+    let ok = true;
+    if (s.cmds) {
+      o.cmds = [];
+      for (const c of s.cmds) {
+        if (c.op === 'M' || c.op === 'L') {
+          const p = pt(c);
+          if (!p) { ok = false; break; }          // a point we cannot place: drop the whole shape
+          o.cmds.push({ op: c.op, sx: p.sx, sy: p.sy });
+        } else o.cmds.push(Object.assign({}, c));
+      }
+    }
+    if (ok) for (const k of ['a', 'b', 'c']) {
+      if (s[k]) { const p = pt(s[k]); if (!p) { ok = false; break; } o[k] = p; }
+    }
+    if (ok) out.push(o);
+  }
+  return out;
+}
+
+function translateScene(sc, dx, dy) {
+  if (!dx && !dy) return sc;
+  const mv = p => (p && p.sx !== undefined ? { sx: p.sx + dx, sy: p.sy + dy } : p);
+  return sc.map(s => {
+    const o = Object.assign({}, s);
+    if (s.cmds) o.cmds = s.cmds.map(c => {
+      if (c.sx !== undefined) return Object.assign({}, c, { sx: c.sx + dx, sy: c.sy + dy });
+      if (c.op === 'Q') return Object.assign({}, c, { pts: [c.pts[0] + dx, c.pts[1] + dy, c.pts[2] + dx, c.pts[3] + dy] });
+      if (c.op === 'ARC' || c.op === 'RECTP') return Object.assign({}, c, { l: c.l + dx, r: c.r + dx, t: c.t + dy, b: c.b + dy });
+      return c;
+    });
+    ['a', 'b', 'c'].forEach(k => { if (s[k]) o[k] = mv(s[k]); });
+    return o;
+  });
+}
+
+/** Source of a sibling draw function, whatever group the rail filed it under. */
+function siblingSource(fn) {
+  for (const k of ['building', 'creature', 'body', 'armor', 'custom']) {
+    const a = assetsByKey[k + ':' + fn];
+    if (a) return a.source;
+  }
+  return null;
+}
+
+// `drawInteriorShell(scope, cx, cy)` — capture the name and its argument list.
+const SIBLING_CALL = /(?:^|[^\w.])(draw[A-Z]\w*)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
+
+function buildContext(code, selfId) {
+  const out = [];
+  if (!$('showParts').checked) return out;
+  const seen = new Set([selfId]);
+  const queue = [{ code, dx: 0, dy: 0, depth: 0 }];
+  while (queue.length) {
+    const job = queue.shift();
+    SIBLING_CALL.lastIndex = 0;
+    let m;
+    while ((m = SIBLING_CALL.exec(job.code)) !== null) {
+      const fn = m[1];
+      if (seen.has(fn)) continue;
+      const src = siblingSource(fn);
+      if (!src) continue;
+      seen.add(fn);
+      // A call may site the part away from the origin (drawTower(scope, cx + 40f, cy)). Evaluate
+      // the two coordinate arguments and shift the frozen scene by the difference.
+      const args = splitArgs(m[2], 0).map(a => a.text.trim());
+      const ax = args.length > 1 ? evalExpr(args[1], { cx: cx, cy: cy }, () => null) : null;
+      const ay = args.length > 2 ? evalExpr(args[2], { cx: cx, cy: cy }, () => null) : null;
+      const dx = job.dx + (ax === null || ax === undefined ? 0 : ax - cx);
+      const dy = job.dy + (ay === null || ay === undefined ? 0 : ay - cy);
+      parseScene(src);
+      out.push({ fn, shapes: translateScene(freezeScene(scene), dx, dy) });
+      if (job.depth < 2) queue.push({ code: src, dx, dy, depth: job.depth + 1 });
+    }
+  }
+  return out;
+}
+
 function refresh(refit) {
+  // Context first: buildContext calls parseScene for each sibling, so the real source has to be
+  // parsed last or the editable scene would be whichever part happened to be resolved last.
+  contextScenes = buildContext($('source').value, current && current.id);
   parseScene($('source').value);
   if (selShapeIdx !== null && selShapeIdx >= scene.length) selectShape(null);
   if (refit) fitView();
   const bits = [`${scene.length} shapes`, `${editPts.length} draggable points`];
+  if (contextScenes.length) {
+    bits.push(`+ ${contextScenes.map(c => c.fn.replace('draw', '')).join(', ')} as context`);
+  }
   // Coordinates built through a helper (at(2f, -10f)) or a loop are computed, not literal,
   // so there is no single number in the file to drag. Say it, rather than leave a shape
   // that draws correctly but refuses to be grabbed looking broken.
@@ -1385,9 +1496,12 @@ setMode('drag');
 document.addEventListener('keydown', e => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+  if (e.key.toLowerCase() === 'w') { $('showParts').checked = !$('showParts').checked; refresh(true); e.preventDefault(); return; }
   const k = { v: 'drag', a: 'add', d: 'delete', f: 'fill', x: 'unfill', l: 'line', s: 'shape' }[e.key.toLowerCase()];
   if (k) { setMode(k); e.preventDefault(); }
 });
+// Refit on toggle: the composed building is a different size from the part on its own.
+$('showParts').onchange = () => refresh(true);
 function undo() {
   if (!undoStack.length) return say('Nothing left to undo.');
   commit(undoStack.pop(), 'Undone.');
@@ -1861,20 +1975,36 @@ function qcLoop() {
     ctx.globalAlpha = 1;
   }
 
-  scene.forEach((s, i) => {
+  // One shape, in model space. Shared by the live scene and the frozen context layer so the two
+  // can never drift apart in how they draw.
+  function traceShape(s) {
     ctx.beginPath();
-    if (s.type === 'fill' || s.type === 'stroke') tracePath(s.cmds);
-    else if (s.type === 'line') {
-      const a = resolvePt(s.a), b = resolvePt(s.b); if (!a || !b) return;
-      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-    } else if (s.type === 'circle') {
-      const c = resolvePt(s.c); if (!c) return;
-      ctx.arc(c.x, c.y, s.r, 0, Math.PI * 2);
-    } else {
-      const c = resolvePt(s.c); if (!c) return;
-      if (s.type === 'rect') ctx.rect(c.x, c.y, s.w, s.h);
-      else ctx.ellipse(c.x + s.w / 2, c.y + s.h / 2, Math.abs(s.w / 2), Math.abs(s.h / 2), 0, 0, Math.PI * 2);
+    if (s.type === 'fill' || s.type === 'stroke') { tracePath(s.cmds); return true; }
+    if (s.type === 'line') {
+      const a = resolvePt(s.a), b = resolvePt(s.b); if (!a || !b) return false;
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); return true;
     }
+    const c = resolvePt(s.c); if (!c) return false;
+    if (s.type === 'circle') ctx.arc(c.x, c.y, s.r, 0, Math.PI * 2);
+    else if (s.type === 'rect') ctx.rect(c.x, c.y, s.w, s.h);
+    else ctx.ellipse(c.x + s.w / 2, c.y + s.h / 2, Math.abs(s.w / 2), Math.abs(s.h / 2), 0, 0, Math.PI * 2);
+    return true;
+  }
+
+  // The rest of the building, underneath and out of the way. Dimmed rather than hidden: you are
+  // editing one part, so the others must not compete with it or invite a click.
+  if (contextScenes.length) {
+    ctx.globalAlpha = 0.32;
+    contextScenes.forEach(layer => layer.shapes.forEach(s => {
+      if (!traceShape(s)) return;
+      if (s.type === 'fill' || (s.fill && s.type !== 'line')) { ctx.fillStyle = s.color; ctx.fill(); }
+      else { ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 2; ctx.stroke(); }
+    }));
+    ctx.globalAlpha = 1;
+  }
+
+  scene.forEach((s, i) => {
+    if (!traceShape(s)) return;
     const filled = s.type === 'fill' || (s.fill && s.type !== 'line');
     if (filled) { ctx.fillStyle = s.color; ctx.fill(); }
     else { ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 2; ctx.stroke(); }

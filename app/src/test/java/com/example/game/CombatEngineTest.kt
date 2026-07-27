@@ -1,4 +1,4 @@
-package com.example.game
+﻿package com.example.game
 
 import androidx.compose.ui.graphics.Color
 import kotlin.math.abs
@@ -125,14 +125,14 @@ class CombatEngineTest {
         val dogMoved = dog.posX - dogStart
         val playerMoved = player.posX - playerStart
         assertTrue(
-            "dog advanced $dogMoved, player advanced $playerMoved — frontline must lead",
+            "dog advanced $dogMoved, player advanced $playerMoved â€” frontline must lead",
             dogMoved > playerMoved
         )
     }
 
     /**
      * Drive one complete melee swing to the point of impact. `engine.tick` only drains queued
-     * follow-ups — a strike lands when `updateFighter` carries swingProgress past the threshold.
+     * follow-ups â€” a strike lands when `updateFighter` carries swingProgress past the threshold.
      *
      * Callers repeat this: `meleeSweep` rolls a per-target dodge chance off the target's moveSpeed
      * (~10% for an unencumbered ally), so a single swing landing on everyone is not guaranteed.
@@ -238,7 +238,7 @@ class CombatEngineTest {
         val ctx = FakeContext()
         val engine = CombatEngine(ctx)
         val horse = fighter(head = "head_bare", handle = "handle_fists", isPlayer = true, posX = 200f)
-            // The real spawn id carries a "#i" copy suffix — use it here so an exact-match
+            // The real spawn id carries a "#i" copy suffix â€” use it here so an exact-match
             // check anywhere in the horse's logic fails this test instead of shipping.
             .let { it.copy(id = FighterId("trojan_horse#0")) }
         val foe = fighter(posX = 400f)
@@ -357,7 +357,7 @@ class CombatEngineTest {
             sourceFighterId = sourceId
         )
 
-        // An allied archer's arrow — a real follower fighter, not the player.
+        // An allied archer's arrow â€” a real follower fighter, not the player.
         engine.applyProjectileDamage(arrow(FighterId("archer#0")), harold)
         assertEquals(2.5f, harold.arrowEyeCritWindow, 0f)
         engine.applyProjectileDamage(arrow(player.id), harold)
@@ -403,7 +403,7 @@ class CombatEngineTest {
         // Drive both fighters at each other for a few simulated seconds, like the real battle loop.
         // Track the closest they get: combat knockback can bump them apart again after contact,
         // so what matters is whether the pursuer ever reaches melee range at all.
-        val reachPixels = player.reach * 40f + 40f
+        val reachPixels = player.reachPixels
         var minDist = abs(player.posX - enemy.posX)
         repeat(120) {
             engine.updateFighter(player, enemy, 0.033f)
@@ -414,7 +414,7 @@ class CombatEngineTest {
     }
 
     /**
-     * An enthroned lord does not swing — the retinue fights for him. He still advances, and he only
+     * An enthroned lord does not swing â€” the retinue fights for him. He still advances, and he only
      * takes up the fight himself, bare-handed, once the throne is smashed out from under him.
      */
     @Test
@@ -437,7 +437,7 @@ class CombatEngineTest {
             engine.updateFighter(enemy, player, 0.033f)
         }
 
-        val reachPixels = player.reach * 40f + 40f
+        val reachPixels = player.reachPixels
         val dist = abs(player.posX - enemy.posX)
         assertTrue("throne-mode lord should still have closed to melee reach ($reachPixels) but dist=$dist", dist <= reachPixels)
         assertEquals("an enthroned lord should not be swinging himself", enemy.maxHp, enemy.hp, 0.001f)
@@ -493,7 +493,7 @@ class CombatEngineTest {
         repeat(300) { engine.updateFighter(chariotPlayer, enemy, 0.1f) }
         
         val dist = kotlin.math.abs(chariotPlayer.posX - enemy.posX)
-        val reachPixels = chariotPlayer.reach * 40f + 40f
+        val reachPixels = chariotPlayer.reachPixels
         val mountReachPixels = 60f
         assertTrue("Chariot melee player stopped too far away: dist=$dist, hit range=${reachPixels - mountReachPixels}", dist <= reachPixels - mountReachPixels + 1f)
     }
@@ -513,7 +513,7 @@ class CombatEngineTest {
         repeat(300) { engine.updateFighter(chariotArcher, enemy, 0.1f) }
         
         val dist = kotlin.math.abs(chariotArcher.posX - enemy.posX)
-        val reachPixels = chariotArcher.reach * 40f + 40f
+        val reachPixels = chariotArcher.reachPixels
         val rangeMult = 0.8f
         assertTrue("Chariot ranged player didn't hold distance: dist=$dist, optimal=${reachPixels * rangeMult}", dist >= reachPixels * rangeMult - 5f)
     }
@@ -534,7 +534,7 @@ class CombatEngineTest {
         repeat(300) { engine.updateFighter(tinyDagger, hugeEnemy1, 0.1f) }
         
         val dist1 = kotlin.math.abs(tinyDagger.posX - hugeEnemy1.posX)
-        val reachPixels1 = tinyDagger.reach * 40f + 40f
+        val reachPixels1 = tinyDagger.reachPixels
         assertTrue("Tiny dagger player stopped too far away: dist=$dist1, reachPixels=$reachPixels1", dist1 <= reachPixels1)
 
         // test huge player
@@ -547,7 +547,7 @@ class CombatEngineTest {
         repeat(300) { engine.updateFighter(hugeDagger, hugeEnemy2, 0.1f) }
         
         val dist2 = kotlin.math.abs(hugeDagger.posX - hugeEnemy2.posX)
-        val reachPixels2 = hugeDagger.reach * 40f + 40f
+        val reachPixels2 = hugeDagger.reachPixels
         assertTrue("Huge dagger player stopped too far away: dist=$dist2, reachPixels=$reachPixels2", dist2 <= reachPixels2)
     }
 
@@ -603,7 +603,7 @@ class CombatEngineTest {
         }
         val plain = shieldLoss(withCard = false)
         val broken = shieldLoss(withCard = true)
-        assertTrue("shield took no damage at all — the test never exercised the block path", plain > 0f)
+        assertTrue("shield took no damage at all â€” the test never exercised the block path", plain > 0f)
         assertTrue("shieldbreaker did not splinter harder: plain=$plain broken=$broken", broken > plain * 1.8f)
     }
 
@@ -685,7 +685,7 @@ class CombatEngineTest {
         val engine = CombatEngine(ctx)
         val sick = fighter(posX = 500f).apply { diseaseDuration = CombatEngine.DISEASE_DURATION }
         ctx.enemies = listOf(sick)
-        // 10 seconds of rot — damage lands in whole points, so measure over a long enough window
+        // 10 seconds of rot â€” damage lands in whole points, so measure over a long enough window
         repeat(100) { engine.updateFighter(sick, null, 0.1f) }
         val lost = 100f - sick.hp
         assertEquals("disease dps off", CombatEngine.DISEASE_DPS * 10f, lost, 1.5f)
@@ -699,7 +699,7 @@ class CombatEngineTest {
         val player = fighter(isPlayer = true, posX = 40f)
         ctx.player = player
         ctx.enemies = listOf(peasant)
-        // 0.1%/sec — thousands of seconds of exposure makes a catch near-certain (E[catches] ≈ 20)
+        // 0.1%/sec â€” thousands of seconds of exposure makes a catch near-certain (E[catches] â‰ˆ 20)
         for (i in 0 until 20_000) {
             if (player.isContagious) break
             player.hp = 100f // keep him upright through the exposure so he can't die of it first
@@ -709,3 +709,4 @@ class CombatEngineTest {
         assertTrue("caught plague but no disease timer", player.diseaseDuration > 0f)
     }
 }
+

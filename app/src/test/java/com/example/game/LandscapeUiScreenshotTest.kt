@@ -113,7 +113,7 @@ class LandscapeUiScreenshotTest {
             choice(
                 "extension", "extension", "Handle Extension",
                 "Lash an additional 1.5-foot wood shaft extension to your grip. Drastically " +
-                    "increases reach (+0.35m) and supports more attachments!"
+                    "increases reach (+1m, whatever your size) and supports more attachments!"
             )
         )
     )

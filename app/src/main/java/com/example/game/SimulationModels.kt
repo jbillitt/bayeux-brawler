@@ -165,7 +165,7 @@ object GameData {
         // A burning brand. Rare rather than earned: it turns up in the opening roll now and then
         // and as an occasional reward, without a milestone gating it. It sets FOES alight — the
         // restriction on fire reaching the player belongs to the torch bearer alone.
-        TORCH("head_torch", "Burning Brand", 0.9f, blunt = 9f, slash = 2f, reach = 1.2f, description = "A pitch-soaked brand, still alight. Sets men on fire, which they dislike.", color = Color(0xFFD4562A)),
+        TORCH("head_torch", "Torch", 0.9f, blunt = 9f, slash = 2f, reach = 1.2f, description = "A pitch-soaked brand, still alight. Sets men on fire, which they dislike.", color = Color(0xFFD4562A)),
         PITCHFORK("head_pitchfork", "Pitchfork", 1.1f, pierce = 16f, slash = 2f, reach = 2.1f, description = "Three rusty tines. Perfect for hay or heathen flesh.", color = Color(0xFF817A73)),
         DAGGER_HILT("head_dagger_hilt", "Pommel", 0.3f, blunt = 12f, reach = 0.6f, description = "Ending them rightly with a solid iron pommel.", color = Color(0xFFC4AD6C)),
         LUCERNE("head_lucerne", "Lucerne Hammer", 3.0f, blunt = 22f, pierce = 18f, reach = 2.3f, description = "A horrific combination of beak and hammer. Punctures anything.", color = Color(0xFF7D838A)),
@@ -193,6 +193,46 @@ object GameData {
      * other head. Unlike the Strange Relics these need no milestone — they simply turn up rarely.
      */
     val RARE_HEAD_IDS = setOf("head_torch")
+
+    // ---- Weapon geometry ------------------------------------------------------------------
+    // The picture is the authority on reach. These are the numbers TapestryRenderer.drawWeapon
+    // lays a weapon out with, kept here so FighterState.reach can be derived from them: a blow
+    // must land where the head is painted, and it cannot if the art and the hitbox each keep
+    // their own idea of how long the weapon is.
+
+    /** Local length of the drawn haft, before the fighter's body-size transform. */
+    fun haftPixels(handleId: String): Float = when (handleId) {
+        "handle_pike_long" -> 210f
+        "handle_long", "handle_plough" -> 110f
+        "handle_medium", "handle_stump", "handle_ram" -> 70f
+        "handle_wheelbarrow", "handle_anchor" -> 70f
+        "handle_trumpet" -> 55f
+        "handle_antler" -> 40f
+        "handle_oar" -> 120f
+        "handle_plank" -> 65f
+        "handle_femur" -> 10f
+        "handle_chain", "handle_flail_chain" -> 60f
+        "handle_double_ended" -> 80f
+        "handle_blessed_branch" -> 70f
+        "handle_iron" -> 45f
+        "handle_dagger" -> 8f
+        else -> 30f
+    }
+
+    /** The haft is drawn up and out along this basis, so only 0.894 of its length is ground gained. */
+    const val HAFT_BASIS_X = 0.894f
+
+    /** Local x of the fist the haft starts from. */
+    const val GRIP_OFFSET_PX = 25f
+
+    /** How far a head's own geometry juts past the end of the haft, per metre of its reach stat. */
+    const val HEAD_OVERHANG_PX = 18f
+
+    /**
+     * Haft added per Longer Haft reward, in WORLD pixels — deliberately not scaled by body size.
+     * A reward that reads "+1m reach" has to be worth the same to a small fighter as a large one.
+     */
+    const val EXTENSION_REACH_PX = 40f
 
     enum class WeaponHandle(
         override val id: String,
@@ -367,7 +407,9 @@ data class StuckBuildingArrow(
     val offsetY: Float,
     val angle: Float,       // Angle of flight (in radians) when arrow struck
     val fromLeft: Boolean,
-    val projType: ProjectileType = ProjectileType.ARROW
+    val projType: ProjectileType = ProjectileType.ARROW,
+    /** Carried over from the projectile: a Lil Guy dart flies at 0.5 and must not embed at 1.0. */
+    val sizeMultiplier: Float = 1f
 )
 
 data class EmbeddedProjectile(
@@ -521,6 +563,13 @@ data class FighterState(
     // up the hill). 0 in every non-hill battle, so the high-ground damage bonus and the render
     // lift can key off it directly and never leak into flat fights.
     var terrainLiftY: Float = 0f,
+    /**
+     * 0..1 windmill for the Lil Guy riding this fighter's back. One number drives both his arm
+     * and the moment a dart leaves it — his arm used to be driven by the carrier's WALK cycle,
+     * so he mimed the knight's legs and froze whenever the knight stood still, while the darts
+     * themselves came out of a per-frame coin flip that clustered and then went quiet.
+     */
+    var lilGuyThrowPhase: Float = 0f,
     var pallbearerIndex: Int = -1,
     var trampleCooldown: Float = 0f,
     var kills: Int = 0,
@@ -581,14 +630,63 @@ data class FighterState(
     val isFists: Boolean
         get() = weaponHead.id == "head_bare"
 
+    /**
+     * How far the drawn weapon head sits from the fighter's centre, in world pixels.
+     *
+     * The renderer starts the haft at a fist GRIP_OFFSET_PX out, lays it along the haft basis
+     * and hangs the head off the end; the whole figure is then scaled by body size. Reading the
+     * hitbox off that same geometry is the only way the head can be where the blow lands.
+     * Extensions are added AFTER the size scale, so the reward is worth the same ground to
+     * everybody — the art used to scale its extra haft by size while the stat did not.
+     */
+    val meleeReachPixels: Float
+        get() {
+            if (missingArm) return 20f * size + if (isMounted) 60f else 0f
+            // Bare knuckles draw no weapon at all, so there is no picture to match: the brawler
+            // keeps exactly the range he has always had (40*size + 40 px of hit range), because
+            // shortening him would be a balance change smuggled in under an art fix.
+            val local = if (isBrawler) 60f else
+                GameData.GRIP_OFFSET_PX +
+                    GameData.haftPixels(weaponHandle.id) * GameData.HAFT_BASIS_X +
+                    weaponHead.reach * GameData.HEAD_OVERHANG_PX
+            return local * size +
+                handleExtensionCount * GameData.EXTENSION_REACH_PX +
+                (if (isMounted) 60f else 0f)
+        }
+
+    /**
+     * World position of the drawn weapon head, for effects that belong to the weapon rather than
+     * the man — torch flame and smoke were spawned at a fixed point beside the body, so they came
+     * out of his neck while the brand burned a hand's length away. Mirrors TapestryRenderer's
+     * layout: fist at the grip offset, haft along the basis, the whole figure scaled about its
+     * feet at y=358 inside the same 200-based space particles live in.
+     */
+    val weaponHeadWorld: Pair<Float, Float>
+        get() {
+            val haft = GameData.haftPixels(weaponHandle.id) +
+                handleExtensionCount * (GameData.EXTENSION_REACH_PX / GameData.HAFT_BASIS_X / size)
+            val out = (GameData.GRIP_OFFSET_PX + haft * GameData.HAFT_BASIS_X) * size
+            val localY = 230f - haft * 0.447f
+            return Pair(
+                posX + if (facingRight) out else -out,
+                358f + (localY - 358f) * size + terrainLiftY
+            )
+        }
+
+    /** Reach in metres, for the stat panels. Ranged weapons keep their own flight range. */
     val reach: Float
         get() {
-            if (missingArm) return 0.2f * size + if (isMounted) 1.5f else 0f
-            val baseReach = (weaponHead.reach + weaponHandle.reach) * size
-            val extensionReach = handleExtensionCount * 0.35f
-            val mountReach = if (isMounted) 1.5f else 0f
-            return baseReach + extensionReach + mountReach
+            if (isRanged) {
+                if (missingArm) return 0.2f * size + if (isMounted) 1.5f else 0f
+                return (weaponHead.reach + weaponHandle.reach) * size +
+                    handleExtensionCount * 0.35f + (if (isMounted) 1.5f else 0f)
+            }
+            return meleeReachPixels / 40f
         }
+
+    /** Hit range in world pixels: the drawn tip, plus a body's width of slack on the target. */
+    val reachPixels: Float
+        get() = if (isRanged) reach * 40f + 40f else meleeReachPixels + 20f
 
     val baseDamage: Float
         get() {

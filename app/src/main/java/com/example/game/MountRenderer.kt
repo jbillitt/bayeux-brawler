@@ -528,6 +528,12 @@ internal fun radToDeg(rad: Float): Float {
         return (rad * 180f / Math.PI).toFloat()
     }
 
+/**
+ * How far the litter rides above where it used to, in throne-local units. The lord's own
+ * mountOffsetY is raised by the same amount so he stays seated on the chair rather than in it.
+ */
+internal const val THRONE_LIFT = 50f
+
 internal fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState, isBattleActive: Boolean) {
         val wColor = Color(0xFF5C4033) // Dark wood
         
@@ -547,33 +553,38 @@ internal fun drawThrone(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
             }
         }
 
+        // The whole litter — chair, poles and finials — sits THRONE_LIFT higher than it used to.
+        // The carrying poles ran below the bearers' shoulders, so four men appeared to be walking
+        // beside a chair rather than carrying one.
+        val lift = THRONE_LIFT
+
         // Draw a basic wooden throne
         val tPath = Path().apply {
-            moveTo(cx - 30f, cy + 100f)
-            lineTo(cx - 29f, cy + 35.5f)
-            moveTo(cx - 30f, cy + 90f)
-            lineTo(cx + 30f, cy + 90f)
+            moveTo(cx - 30f, cy + 100f - lift)
+            lineTo(cx - 29f, cy + 35.5f - lift)
+            moveTo(cx - 30f, cy + 90f - lift)
+            lineTo(cx + 30f, cy + 90f - lift)
         }
         scope.drawPath(tPath, wColor, style = Stroke(width = 12f))
-        
+
         // Add horizontal pole for pallbearers
         val polePath = Path().apply {
-            moveTo(cx - 95.5f, cy + 94f) // Reaches the back pallbearers
-            lineTo(cx + 89f, cy + 94f) // Reaches the front pallbearers
+            moveTo(cx - 95.5f, cy + 94f - lift) // Reaches the back pallbearers
+            lineTo(cx + 89f, cy + 94f - lift) // Reaches the front pallbearers
         }
         scope.drawPath(polePath, wColor, style = Stroke(width = 10f))
 
         // Add gold trim
         val trimPath = Path().apply {
-            moveTo(cx - 24.5f, cy + 69f)
-            lineTo(cx + 2f, cy + 69.5f)
-            lineTo(cx + 2f, cy + 85f)
+            moveTo(cx - 24.5f, cy + 69f - lift)
+            lineTo(cx + 2f, cy + 69.5f - lift)
+            lineTo(cx + 2f, cy + 85f - lift)
         }
         scope.drawPath(trimPath, Color(0xFF7A1F14), style = Stroke(width = 6f))
-        scope.drawCircle(Color(0xFFB08221), radius = 8f, center = Offset(cx - 95f, cy + 94f))
-        scope.drawCircle(Color(0xFFD6A420), radius = 8f, center = Offset(cx - 95f, cy + 94f), style = StitchedStroke)
-        scope.drawCircle(Color(0xFFB08221), radius = 8f, center = Offset(cx + 90f, cy + 95f))
-        scope.drawCircle(Color(0xFFD6A420), radius = 8f, center = Offset(cx + 90f, cy + 95f), style = StitchedStroke)
+        scope.drawCircle(Color(0xFFB08221), radius = 8f, center = Offset(cx - 95f, cy + 94f - lift))
+        scope.drawCircle(Color(0xFFD6A420), radius = 8f, center = Offset(cx - 95f, cy + 94f - lift), style = StitchedStroke)
+        scope.drawCircle(Color(0xFFB08221), radius = 8f, center = Offset(cx + 90f, cy + 95f - lift))
+        scope.drawCircle(Color(0xFFD6A420), radius = 8f, center = Offset(cx + 90f, cy + 95f - lift), style = StitchedStroke)
 }
 
 /**

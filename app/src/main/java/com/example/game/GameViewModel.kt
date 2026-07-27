@@ -34,8 +34,19 @@ data class Projectile(
     val isBallista: Boolean = false,
     val isIgniting: Boolean = false,
     val gravityMult: Float = 1f,
-    val sourceFighterId: FighterId? = null
+    val sourceFighterId: FighterId? = null,
+    /**
+     * Ground level the shot was loosed from (0 on the flat, down to -150 at a hill crest).
+     * Fighters have no real y — only posX — so a missile's height is only ever meaningful
+     * relative to the ground it left. Tested absolutely, an archer on a crest loosed his arrows
+     * at y≈80 and they spent the whole flight above the 100..350 body window: on a hill, nothing
+     * ranged hit anything, uphill or down.
+     */
+    val launchLiftY: Float = 0f
 )
+
+/** The body window a missile has to be inside to strike, measured from where it was loosed. */
+internal fun Projectile.atBodyHeight(): Boolean = (posY - launchLiftY) in 100f..350f
 
 internal fun createLilGuyDart(
     player: FighterState,
@@ -48,6 +59,7 @@ internal fun createLilGuyDart(
         isPlayerOwned = true,
         posX = player.posX + direction * (35f + 30f * player.size),
         posY = 150f + player.terrainLiftY, // riding the player's back, so his hill lift applies
+        launchLiftY = player.terrainLiftY,
         velocityX = direction * (300f + random.nextFloat() * 80f),
         velocityY = -25f,
         damage = 14f,
@@ -61,6 +73,9 @@ internal fun createLilGuyDart(
         sourceFighterId = null
     )
 }
+
+/** One throw every this many seconds, per Lil Guy on your back. Steady, not a coin flip. */
+internal const val LIL_GUY_THROW_SECONDS = 1.4f
 
 internal fun rollFollowerCopies(random: Random = Random.Default): Int =
     if (random.nextFloat() < 0.06f) 2 else 1   // was 0.15 — twins turned up most rounds
@@ -1032,7 +1047,8 @@ class GameViewModel : ViewModel() {
         repeat(state.unlockedAncillaries.count { it == Ancillary.ARCHER }) { i ->
             enemies.add(FighterState(
                 id = FighterId("archer#$i"), name = "Robin", isPlayer = true, maxHp = 45f, hp = 45f,
-                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bow" },
+                // He is billed as the Longbowman; he carried the short bow.
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_longbow" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_leather" },
@@ -1466,7 +1482,8 @@ class GameViewModel : ViewModel() {
                 // The archetype carries a club-and-flame; the Burning Brand weapon head IS a lit
                 // torch. Both burn, whoever is holding them.
                 if (e.archetype == EnemyArchetype.TORCH_BEARER || e.weaponHead.id == "head_torch") {
-                    addFlameAndSmokeParticles(e.posX + 16f * e.size, 205f)
+                    val (tx, ty) = e.weaponHeadWorld
+                    addFlameAndSmokeParticles(tx, ty)
                 }
                 // A man alight smokes. Ignition used to show only as a warmer skin tone, which
                 // is invisible on a mailed enemy at arm's length — the same puff the torch uses
@@ -1477,7 +1494,8 @@ class GameViewModel : ViewModel() {
                 addFlameAndSmokeParticles(player.posX, 190f)
             }
             if (player.weaponHead.id == "head_torch" && !player.isDead && !player.isDying) {
-                addFlameAndSmokeParticles(player.posX + 16f * player.size, 205f)
+                val (tx, ty) = player.weaponHeadWorld
+                addFlameAndSmokeParticles(tx, ty)
             }
         }
 
@@ -1790,7 +1808,7 @@ class GameViewModel : ViewModel() {
                 bg.type != BackgroundObjectType.FEASTING_HALL &&
                 bg.type != BackgroundObjectType.INTERIOR_KITCHEN &&
                 bg.type != BackgroundObjectType.INTERIOR_CHAMBER &&
-                proj.posX in (bg.posX - 100f)..(bg.posX + 100f) && proj.posY in 100f..350f &&
+                proj.posX in (bg.posX - 100f)..(bg.posX + 100f) && proj.atBodyHeight() &&
                 coverTargets.any { t ->
                     val behindBuilding = if (proj.velocityX >= 0f) t.posX > bg.posX else t.posX < bg.posX
                     behindBuilding && abs(t.posX - bg.posX) < 130f
@@ -1820,7 +1838,8 @@ class GameViewModel : ViewModel() {
                                 offsetY = relY,
                                 angle = jitteredAngle,
                                 fromLeft = proj.velocityX >= 0f,
-                                projType = proj.type
+                                projType = proj.type,
+                                sizeMultiplier = proj.sizeMultiplier
                             )
                         )
                     }
@@ -1834,7 +1853,7 @@ class GameViewModel : ViewModel() {
                 // Hit test against enemies
                 for (enemy in livingEnemies) {
                     if (enemy.isCombatInactive || enemy.climbState != ClimbState.NONE) continue
-                    if (abs(proj.posX - enemy.posX) < 30f && proj.posY in 100f..350f) {
+                    if (abs(proj.posX - enemy.posX) < 30f && proj.atBodyHeight()) {
                         engine.applyProjectileDamage(proj, enemy)
                         hit = true
                         break
@@ -1850,7 +1869,7 @@ class GameViewModel : ViewModel() {
                             abs(proj.posX - it.posX) < 30f
                     }
                     .minByOrNull { abs(proj.posX - it.posX) }
-                if (friendly != null && proj.posY in 100f..350f) {
+                if (friendly != null && proj.atBodyHeight()) {
                     engine.applyProjectileDamage(proj, friendly)
                     hit = true
                 }
@@ -1858,7 +1877,7 @@ class GameViewModel : ViewModel() {
         }
 
         // Boundary collision or hit
-            if (!hit && proj.posX in -500f..(_uiState.value.levelWidth + 500f) && proj.posY < 350f) {
+            if (!hit && proj.posX in -500f..(_uiState.value.levelWidth + 500f) && proj.posY - proj.launchLiftY < 350f) {
                 remainingProjectiles.add(proj)
             } else if (bgHit != null) {
                 // Only building/cover hits thud from here — body hits sound from CombatEngine,
@@ -1875,9 +1894,14 @@ class GameViewModel : ViewModel() {
         // was lost whenever the flow's equality check skipped the (structurally equal, e.g. empty)
         // new list — which is why he waved his arms and nothing ever flew.
         val lilGuyCount = _uiState.value.unlockedAncillaries.count { it == Ancillary.LIL_GUY }
-        if (lilGuyCount > 0 && !player.isDead && Random.nextFloat() < dt * 0.7f * lilGuyCount) {
-            remainingProjectiles.add(createLilGuyDart(player))
-            MedievalAudioSynth.playSound(SoundType.SWOOSH)
+        if (lilGuyCount > 0 && !player.isDead) {
+            val before = player.lilGuyThrowPhase
+            player.lilGuyThrowPhase = (before + dt * lilGuyCount / LIL_GUY_THROW_SECONDS) % 1f
+            // The dart leaves as the arm reaches full forward, i.e. exactly when the phase wraps.
+            if (player.lilGuyThrowPhase < before) {
+                remainingProjectiles.add(createLilGuyDart(player))
+                MedievalAudioSynth.playSound(SoundType.SWOOSH)
+            }
         }
 
         val newlySpawned = _projectilesState.value.filter { it !in projectiles }
@@ -2291,7 +2315,7 @@ class GameViewModel : ViewModel() {
                     pendingChoices.add(LevelUpChoice(
                         id = "extension",
                         title = "Handle Extension",
-                        description = "Lash an additional 1.5-foot wood shaft extension to your grip. Drastically increases reach (+0.35m) and supports more attachments!",
+                        description = "Lash an additional wood shaft extension to your grip. Increases reach (+1m, whatever your size) and supports more attachments!",
                         type = "extension",
                         itemId = ""
                     ))

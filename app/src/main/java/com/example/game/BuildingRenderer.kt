@@ -239,18 +239,22 @@ internal fun drawDamageDecals(scope: DrawScope, cx: Float, cy: Float, bg: Backgr
             val nx = kotlin.math.cos(arrow.angle.toDouble()).toFloat()
             val ny = kotlin.math.sin(arrow.angle.toDouble()).toFloat()
 
-            val tailX = dx - nx * 32f
-            val tailY = dy - ny * 32f
-            val headX = dx + nx * 10f
-            val headY = dy + ny * 10f
+            // Embed at the size it flew at. Every shaft was drawn full arrow size, so a Lil Guy
+            // dart (0.5) that read as a needle in the air stuck out of the wall as a full arrow.
+            val s = arrow.sizeMultiplier.coerceIn(0.35f, 2.5f)
 
-            scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 4.5f)
-            scope.drawLine(ThreadColor, Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 1.5f)
+            val tailX = dx - nx * 32f * s
+            val tailY = dy - ny * 32f * s
+            val headX = dx + nx * 10f * s
+            val headY = dy + ny * 10f * s
+
+            scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 4.5f * s)
+            scope.drawLine(ThreadColor, Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 1.5f * s)
 
             // Fletching at the tail
             val perpX = -ny; val perpY = nx
-            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 8f + perpX * 6f, tailY - ny * 8f + perpY * 6f), strokeWidth = 3f)
-            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - nx * 8f - perpX * 6f, tailY - ny * 8f - perpY * 6f), strokeWidth = 3f)
+            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - (nx * 8f - perpX * 6f) * s, tailY - (ny * 8f - perpY * 6f) * s), strokeWidth = 3f * s)
+            scope.drawLine(Color.White, Offset(tailX, tailY), Offset(tailX - (nx * 8f + perpX * 6f) * s, tailY - (ny * 8f + perpY * 6f) * s), strokeWidth = 3f * s)
         }
         return
     }

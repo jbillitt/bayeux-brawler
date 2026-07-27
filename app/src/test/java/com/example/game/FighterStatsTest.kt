@@ -58,7 +58,31 @@ class FighterStatsTest {
     fun handleExtensionsIncreaseReach() {
         val base = fighter()
         val extended = fighter(extensions = 2)
-        assertEquals(base.reach + 0.7f, extended.reach, 0.001f)
+        assertEquals(base.meleeReachPixels + 2 * GameData.EXTENSION_REACH_PX, extended.meleeReachPixels, 0.001f)
+    }
+
+    /** A reward card promises a fixed amount of ground. A small fighter must get all of it. */
+    @Test
+    fun handleExtensionsAddTheSameReachAtEverySize() {
+        val smallGain = fighter(size = 0.7f, extensions = 1).meleeReachPixels - fighter(size = 0.7f).meleeReachPixels
+        val largeGain = fighter(size = 1.4f, extensions = 1).meleeReachPixels - fighter(size = 1.4f).meleeReachPixels
+        assertEquals(smallGain, largeGain, 0.001f)
+    }
+
+    /**
+     * The hitbox is read off the drawn weapon, so a blow lands where the head is painted. This
+     * reproduces the renderer's layout: fist at GRIP_OFFSET_PX, haft along the basis, head past
+     * its end, all scaled by body size, plus the flat extension.
+     */
+    @Test
+    fun reachMatchesWhereTheWeaponIsDrawn() {
+        val f = fighter(head = "head_spear", handle = "handle_long", size = 1.2f, extensions = 1)
+        val drawnHaft = GameData.haftPixels("handle_long") +
+            GameData.EXTENSION_REACH_PX / GameData.HAFT_BASIS_X / 1.2f
+        val head = GameData.WEAPON_HEADS.first { it.id == "head_spear" }
+        val drawnTip = (GameData.GRIP_OFFSET_PX + drawnHaft * GameData.HAFT_BASIS_X +
+            head.reach * GameData.HEAD_OVERHANG_PX) * 1.2f
+        assertEquals(drawnTip, f.meleeReachPixels, 0.5f)
     }
 
     @Test

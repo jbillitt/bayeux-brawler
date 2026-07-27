@@ -197,7 +197,11 @@ object TapestryRenderer {
             }
 
             // Draw blood pool and stream BEFORE the ragdoll transform so it stays flat on the floor AND underneath the body!
-            if ((fighter.isDead || fighter.isDying) && fighter.deathType == DeathType.DECAPITATED) {
+            // Nothing wooden bleeds. Every other blood path already checks isInanimate; these two
+            // did not, so the Trojan horse — size 1.8, and the pools scale with size — collapsed
+            // into a lake three times the width of a man's.
+            if ((fighter.isDead || fighter.isDying) && fighter.deathType == DeathType.DECAPITATED &&
+                !fighter.isInanimate) {
                 val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
                 val fountainProgress = progress.coerceIn(0f, 1f)
                 if (fountainProgress > 0.05f) {
@@ -227,7 +231,7 @@ object TapestryRenderer {
             }
 
             // Persistent blood pool for dying/dead fighters (all death types except deathType 5 which has its own)
-            if (fighter.isDead && fighter.deathType != DeathType.DECAPITATED) {
+            if (fighter.isDead && fighter.deathType != DeathType.DECAPITATED && !fighter.isInanimate) {
                 // Time since death drives pool expansion
                 val timeSinceDeath = (System.currentTimeMillis() - fighter.deathTime) / 1000f
                 val progress = (timeSinceDeath * 0.5f).coerceIn(0f, 1f)
@@ -253,7 +257,7 @@ object TapestryRenderer {
                 // The ox and bear are taller through the shoulder than a horse, the mule a good deal
                 // shorter — the rider sits at the saddle each one actually draws.
                 val mountOffsetY = if (fighter.isChariot) -15f
-                    else if (fighter.isMounted && fighter.isLord) -20f
+                    else if (fighter.isMounted && fighter.isLord) -20f - THRONE_LIFT
                     else if (fighter.isMounted && fighter.isStilts) -STILTS_LIFT_PX
                     else if (fighter.isMounted && fighter.isOx) -38f
                     else if (fighter.isMounted && fighter.isMule) -22f
@@ -897,7 +901,8 @@ object TapestryRenderer {
 
         // Blood pool beneath heavily wounded fighter (drawn at feet level ~cy+155)
         val hpRatioTorso = if (fighter.maxHp > 0f) fighter.hp / fighter.maxHp else 1f
-        if (!fighter.isDead && !fighter.isDying && (fighter.missingArm || hpRatioTorso < 0.5f)) {
+        if (!fighter.isDead && !fighter.isDying && !fighter.isInanimate &&
+            (fighter.missingArm || hpRatioTorso < 0.5f)) {
             val groundY = cy + 158f
             val poolAlpha = if (fighter.missingArm) 0.75f else (0.5f - hpRatioTorso).coerceIn(0f, 0.5f) * 1.5f
             scope.drawOval(
@@ -1672,9 +1677,8 @@ object TapestryRenderer {
             }
             drawStitchedFill(scope, mask, Color(0xFF7B858B))
             scope.drawPath(mask, ThreadColor, style = StitchedStroke)
-            // Eye slits
+            // One eye slit. The head is drawn in profile, so the far eye is round the back of it.
             scope.drawLine(Color(0xFF222222), Offset(hx + 2f, hy - 2f), Offset(hx + 14f, hy + 2f), strokeWidth = 2.5f)
-            scope.drawLine(Color(0xFF222222), Offset(hx - 12f, hy + 2f), Offset(hx - 2f, hy - 2f), strokeWidth = 2.5f)
             // Breathing holes
             scope.drawCircle(Color(0xFF222222), radius = 1.5f, center = Offset(hx + 10f, hy + 10f))
             scope.drawCircle(Color(0xFF222222), radius = 1.5f, center = Offset(hx + 6f, hy + 12f))
@@ -2210,13 +2214,16 @@ object TapestryRenderer {
                 scope.drawPath(square_1, Color(0xFF8A5E38), style = StitchedStroke)
 }
             "head_longbow" -> {
+                // Same stave length as before (114 units), hung 12 lower: it ran -69/+45 about the
+                // grip, so the archer held it well down the lower limb and the bow read as riding
+                // up out of his hands.
                 val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(headPos.x - 14f, headPos.y - 69f)
-                    quadraticTo(headPos.x + 25f, headPos.y, headPos.x - 18f, headPos.y + 45f)
+                    moveTo(headPos.x - 14f, headPos.y - 57f)
+                    quadraticTo(headPos.x + 25f, headPos.y + 12f, headPos.x - 18f, headPos.y + 57f)
                 }
                 scope.drawPath(path, headColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f))
                 scope.drawPath(path, ThreadColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
-                scope.drawLine(androidx.compose.ui.graphics.Color(0xFFE4D6B6), androidx.compose.ui.geometry.Offset(headPos.x - 15f, headPos.y - 68.5f), androidx.compose.ui.geometry.Offset(headPos.x - 18.5f, headPos.y + 45.5f), strokeWidth = 2f)
+                scope.drawLine(androidx.compose.ui.graphics.Color(0xFFE4D6B6), androidx.compose.ui.geometry.Offset(headPos.x - 15f, headPos.y - 56.5f), androidx.compose.ui.geometry.Offset(headPos.x - 18.5f, headPos.y + 57.5f), strokeWidth = 2f)
             }
             "head_flail", "head_war_flail" -> {
                 val isTwin = headId == "head_war_flail"
@@ -2430,33 +2437,35 @@ object TapestryRenderer {
                 for (t in listOf(4f, 12f, 20f)) {
                     scope.drawLine(ThreadColor, at(t, -8f), at(t, 8f), strokeWidth = 1.8f)
                 }
-                // Flame: three licks that gutter on the idle animation and roar mid-swing.
-                val roar = if (isAttacking) 1f + swingProgress * 0.8f else 1f
-                val flicker = sin(animFrame * 9f) * 3f
+                // Fire RISES. The licks used to be laid out along the haft basis, so the flame
+                // shot sideways out of the end of the stick — a blowtorch, not a torch. They are
+                // drawn screen-upward from the head of the wrap now, whatever angle the haft is at.
+                // The sway is also 9x slower: at sin(animFrame * 9) it strobed rather than guttered.
+                val tip = at(26f, 0f)
+                val roar = if (isAttacking) 1f + swingProgress * 0.4f else 1f
+                val sway = sin(animFrame * 2.2f) * 2.5f
                 listOf(
-                    Triple(34f, 0f, 18f), Triple(30f, -7f, 12f), Triple(31f, 7f, 11f)
-                ).forEachIndexed { i, (along, across, len) ->
-                    val wob = sin(animFrame * 9f + i * 2f) * 4f
+                    Triple(0f, 36f, 7f),      // offsetX, height, half-width
+                    Triple(-5f, 21f, 4f),
+                    Triple(5f, 17f, 3.5f)
+                ).forEachIndexed { i, (offX, h, hw) ->
+                    val s = sway * (0.6f + i * 0.35f)
+                    val bx = tip.x + offX
+                    val by = tip.y
                     val lick = Path().apply {
-                        moveTo(at(along - 8f, across - 5f).x, at(along - 8f, across - 5f).y)
-                        quadraticTo(
-                            at(along + len * 0.4f, across - 9f - wob).x, at(along + len * 0.4f, across - 9f - wob).y,
-                            at(along + len * roar + wob, across).x, at(along + len * roar + wob, across).y
-                        )
-                        quadraticTo(
-                            at(along + len * 0.4f, across + 9f + wob).x, at(along + len * 0.4f, across + 9f + wob).y,
-                            at(along - 8f, across + 5f).x, at(along - 8f, across + 5f).y
-                        )
+                        moveTo(bx - hw, by)
+                        quadraticTo(bx - hw * 1.35f, by - h * 0.55f, bx + s, by - h * roar)
+                        quadraticTo(bx + hw * 1.35f, by - h * 0.55f, bx + hw, by)
                         close()
                     }
-                    scope.drawPath(lick, if (i == 0) Color(0xFFE8A33D) else headColor)
+                    scope.drawPath(lick, if (i == 0) headColor else Color(0xFFE8A33D))
                     scope.drawPath(lick, ThreadColor, style = Stroke(width = 1.5f))
                 }
-                // Hot heart of the fire
+                // Hot heart of the fire, sitting in the throat of the flame
                 scope.drawCircle(
-                    Color(0xFFFFE9A8).copy(alpha = 0.75f),
-                    radius = 7f + flicker * 0.4f,
-                    center = at(30f, 0f)
+                    Color(0xFFFFE9A8).copy(alpha = 0.8f),
+                    radius = 5.5f,
+                    center = Offset(tip.x + sway * 0.3f, tip.y - 9f)
                 )
             }
             "head_saw_1", "head_saw_2" -> {
@@ -2511,33 +2520,16 @@ object TapestryRenderer {
             // this only pushes the grip clear of the hand.
             18f
         } else {
-            val baseLen = when (fighter.weaponHandle.id) {
-                // The pike is a 12-foot pole and must read as the longest haft in the game. It used
-                // to fall through to the 30f default, drawing shorter than a medium handle.
-                "handle_pike_long" -> 210f
-                "handle_long", "handle_plough" -> 110f
-                "handle_medium", "handle_stump", "handle_ram" -> 70f
-                "handle_wheelbarrow", "handle_anchor" -> 70f
-                "handle_trumpet" -> 55f
-                "handle_antler" -> 40f
-                // The straight new hafts ride the generic path, so length has to track reach here or
-                // an oar (reach 1.4, longer than handle_long) draws as a 30px stub.
-                "handle_oar" -> 120f
-                "handle_plank" -> 65f
-                "handle_femur" -> 10f
-                "handle_chain", "handle_flail_chain" -> 60f
-                "handle_double_ended" -> 80f
-                "handle_blessed_branch" -> 70f
-                "handle_iron" -> 45f
-                "handle_dagger" -> 8f // a grip, barely more than a fist
-                else -> 30f // short, wheel, pick, fists
-            }
-            // 25f per extension was barely readable against a 70-210f haft, so a reward that
-            // says "+0.35m reach" looked like it did nothing. Each lashed-on shaft now adds a
-            // clear 48px AND a proportional stretch, so a thrice-extended pike is unmistakably
-            // a longer weapon than a fresh one.
-            (baseLen + fighter.handleExtensionCount * 48f) *
-                (1f + fighter.handleExtensionCount * 0.12f)
+            // The table lives in GameData because FighterState.meleeReachPixels reads the same
+            // numbers — the hitbox is derived from this drawing, not guessed alongside it.
+            val baseLen = GameData.haftPixels(fighter.weaponHandle.id)
+            // A lashed-on shaft adds a flat EXTENSION_REACH_PX of GROUND, so it is divided by
+            // body size here (the whole figure is scaled by size around the feet) and divided by
+            // the haft basis (the shaft rises as it goes out, so only 0.894 of it is ground).
+            // It used to add 48px AND a 12% stretch, both multiplied by size, while the stat added
+            // a flat 0.35m — the picture and the hitbox grew at completely different rates.
+            baseLen + fighter.handleExtensionCount *
+                (GameData.EXTENSION_REACH_PX / GameData.HAFT_BASIS_X / fighter.size)
         }
         // The bespoke hafts below (antler, trumpet, wheelbarrow, anchor) draw fixed paths rather
         // than a shaft of handleLen, so they take the growth as a scale or they alone would show
@@ -3673,7 +3665,14 @@ object TapestryRenderer {
                         val attackAnim = if (playerFighter.isAttacking) playerFighter.swingProgress else 0f
                         if (attackAnim > 0f && playerFighter.hp < playerFighter.maxHp) -45f * sin(attackAnim * Math.PI).toFloat() else 0f
                     }
-                    com.example.game.Ancillary.LIL_GUY -> -110f + sin(playerFighter.animFrame * 2f).toFloat() * 90f // constant slinging windup/throw
+                    com.example.game.Ancillary.LIL_GUY -> {
+                        // His own throw cycle, not the carrier's walk cycle: wind back slowly,
+                        // whip through, and release at the forward extreme where the sim spawns
+                        // the dart (both read FighterState.lilGuyThrowPhase).
+                        val p = playerFighter.lilGuyThrowPhase
+                        if (p < 0.6f) -20f - 90f * (p / 0.6f)
+                        else -110f + 130f * ((p - 0.6f) / 0.4f)
+                    }
                     else -> 0f
                 }
                 

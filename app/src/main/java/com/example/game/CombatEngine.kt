@@ -62,8 +62,12 @@ class CombatEngine(private val ctx: BattleContext) {
         /** Early-game enemy ranged fire is slower (level <= EARLY_RANGED_LEVEL). */
         const val EARLY_RANGED_SLOW = 1.4f
         const val EARLY_RANGED_LEVEL = 3
-        /** A melee weapon this long (head+handle reach) earns polearm spacing: it keeps foes at its tip. */
-        const val LONG_MELEE_REACH = 2.0f
+        /**
+         * A melee weapon this long earns polearm spacing: it keeps foes at its tip. 3.0 not 2.0
+         * because reach is now measured off the drawn weapon (grip + haft + head) rather than the
+         * old head+handle stat sum; the same builds fall either side of it as before.
+         */
+        const val LONG_MELEE_REACH = 3.0f
         /** Foes inside this fraction of a long weapon's pixel reach are "point-blank" — back off to the tip. */
         const val LONG_MELEE_DEADZONE = 0.5f
         /** Damage a long weapon does to someone already inside its dead zone. Tunable; the highest
@@ -441,7 +445,7 @@ class CombatEngine(private val ctx: BattleContext) {
             if (fighter.isBrawler && target != null && !target.isDead) {
                 // Apply visual lift for wrestling moves
                 val distToTarget = abs(fighter.posX - target.posX)
-                if (distToTarget < fighter.reach * 40f + 60f) {
+                if (distToTarget < fighter.reachPixels + 20f) {
                     val p = effectiveSwingProgress.coerceIn(0f, 1f)
                     val liftMax = if (isChokeSlam) -140f else if (isSuplex) -90f else if (fighter.activeWrestlingMove == WrestlingMove.BODY_THROW) -70f else 0f
                     if (liftMax != 0f) {
@@ -491,7 +495,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 // Only the gear-bearing front pair fight; the rear pair just carry
                 if (fighter.pallbearerIndex < 2 && target != null && !target.isDead) {
                     val dist = abs(fighter.posX - target.posX)
-                    val reachPixels = fighter.reach * 40f + 40f
+                    val reachPixels = fighter.reachPixels
                     if (dist <= reachPixels && fighter.attackCooldown <= 0 && !fighter.isAttacking) {
                         triggerAttack(fighter)
                     }
@@ -516,7 +520,7 @@ class CombatEngine(private val ctx: BattleContext) {
         // Decide movement & actions
         if (target != null && !target.isDead && fighter.crumpleDuration <= 0f) {
             val dist = abs(fighter.posX - target.posX)
-            val reachPixels = fighter.reach * 40f + 40f // generous hitbox
+            val reachPixels = fighter.reachPixels
             val rangeMult = if (!fighter.isPlayer && fighter.level > 5) 0.8f + (fighter.level - 5) * 0.05f else 0.8f
             // Only ranged fighters kite to keep their distance; melee (including fists) holds ground
             // and stands to trade blows once in range, so a fists player is never stalled just outside
@@ -525,7 +529,9 @@ class CombatEngine(private val ctx: BattleContext) {
             val baseOptimal = reachPixels - mountReachPixels
             // Short weapons step right inside the boundary; everything else still closes enough that a
             // slow swing cannot whiff on a target that shuffled a few pixels during the windup.
-            val approachTarget = if (!fighter.isRanged && fighter.reach < 1.2f) baseOptimal * 0.45f
+            // 1.6 not 1.2 because reach is now measured off the drawn weapon: fists and a dagger
+            // grip land either side of 1.6 where they used to land either side of 1.2.
+            val approachTarget = if (!fighter.isRanged && fighter.reach < 1.6f) baseOptimal * 0.45f
                 else baseOptimal * MELEE_ENGAGE_MARGIN
             val optimalDistance = when {
                 fighter.isRanged -> reachPixels * rangeMult
@@ -666,7 +672,7 @@ class CombatEngine(private val ctx: BattleContext) {
         } else {
             if (attacker.elevated != defender.elevated) return
             // Melee hit
-            val reachPixels = attacker.reach * 40f + 40f // generous hitbox
+            val reachPixels = attacker.reachPixels
             val isPiercingWeapon = attacker.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd")
 
             // Gather all targets in a line if we are using a piercing weapon
@@ -820,7 +826,7 @@ class CombatEngine(private val ctx: BattleContext) {
             // inside the shaft. Pairs with the polearm spacing above — a spear build wants to keep
             // its distance, and a brute who closes the gap earns his kill. Reuses the existing
             // falloff so it flows into every damage type. Long weapons only; a fist has no dead zone.
-            val attackerReachPx = attacker.reach * 40f + 40f // same hitbox formula the melee block uses
+            val attackerReachPx = attacker.reachPixels
             val pointBlankMult = if (!attacker.isRanged && attacker.reach > LONG_MELEE_REACH &&
                 abs(attacker.posX - currTarget.posX) < attackerReachPx * LONG_MELEE_DEADZONE
             ) POINT_BLANK_DMG_MULT else 1f
@@ -971,10 +977,14 @@ class CombatEngine(private val ctx: BattleContext) {
                     }
                 }
 
-                // The torch bearer's brand, and nothing else in the game, can set the player
-                // alight — see applyIgnite. Melee only, by construction: this is the swing path.
-                if (attacker.archetype == EnemyArchetype.TORCH_BEARER && totalDamage > 0f) {
-                    applyIgnite(currTarget, onPlayer = true)
+                // Anything with fire in its hand sets what it hits alight: the torch bearer's brand,
+                // and the Torch weapon head, which advertises exactly that and did nothing. Melee
+                // only, by construction: this is the swing path. Only the torch BEARER may burn the
+                // player — see applyIgnite — so a foe who happens to roll a Torch cannot.
+                val bearsFire = attacker.archetype == EnemyArchetype.TORCH_BEARER ||
+                    attacker.weaponHead.id == "head_torch"
+                if (bearsFire && totalDamage > 0f) {
+                    applyIgnite(currTarget, onPlayer = attacker.archetype == EnemyArchetype.TORCH_BEARER)
                 }
 
                 // Brawler Bleeding (Spiked Wraps)
@@ -1203,7 +1213,8 @@ class CombatEngine(private val ctx: BattleContext) {
             isPoisonous = poison,
             isBallista = ballista,
             isIgniting = igniting,
-            sourceFighterId = attacker.id
+            sourceFighterId = attacker.id,
+            launchLiftY = elevationVisualOffset(attacker)
         ))
     }
 

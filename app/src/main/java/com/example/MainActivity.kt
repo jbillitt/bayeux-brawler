@@ -448,6 +448,12 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
             }
         }
 
+        // The heavens open over the WHOLE screen, header band included, in a canvas of its own
+        // above the Column. Inside the battlefield canvas it could only ever cover the battlefield,
+        // and it shared that canvas's layers and camera-dependent state — so it washed part of the
+        // field and drifted off as the player walked right.
+        DivineWeatherOverlay(viewModel)
+
         if (showPauseMenu) {
             PauseMenuOverlay(
                 musicOn = musicOn,
@@ -2361,7 +2367,7 @@ fun StatsAndLaunchPanel(
             StatProgressBar(
                 label = "Weapon Reach",
                 valueText = "%.1fm".format(dummyFighter.reach),
-                fraction = (dummyFighter.reach / 4f).coerceIn(0f, 1f),
+                fraction = (dummyFighter.reach / 6f).coerceIn(0f, 1f),
                 color = TapestryMustard
             )
         }
@@ -2477,15 +2483,20 @@ fun BattlefieldScene(
         val borderSeed = remember(uiState.level) { MedievalHarpPlayer.gameSeed * 7L + uiState.level }
         val fixedBackdropCache = remember { TapestryBackdropCache() }
         val worldBackdropCache = remember { TapestryBackdropCache() }
-        val weatherFlash by viewModel.weatherFlash.collectAsState()
-        // Clock the flourish from when the UI first SEES the flash, not from when the tap fired.
-        // Under frame lag the wall-clock window could expire before a single frame drew it, so the
-        // weather looked like it "didn't work" even though its combat effect had applied.
-        val weatherFlashShownAt = remember(weatherFlash) { System.currentTimeMillis() }
+        // Press and hold a fighter to read his health. Bars tell you a boss is "nearly dead" for
+        // about a minute; the number tells you whether that is true.
+        val inspectAt = remember { mutableStateOf<Offset?>(null) }
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("bayeux_tapestry_canvas")
+                .pointerInput(Unit) {
+                    detectTapGestures(onPress = { at ->
+                        inspectAt.value = at
+                        tryAwaitRelease()
+                        inspectAt.value = null
+                    })
+                }
         ) {
             // Force redraw on tick
             val currentTick = tick
@@ -2563,11 +2574,16 @@ fun BattlefieldScene(
                 staticBackgroundObjects,
                 worldZoom
             )
+            // A hill shifts this bitmap DOWN the screen by up to MAX_LIFT, which drags whatever the
+            // bitmap clipped at its own top edge into view — tall trees ended in a flat horizontal
+            // cut halfway up a hill battle. Render with that much headroom and blit it back up.
+            val worldHeadroom = if (uiState.hillState != null)
+                kotlin.math.ceil(com.example.game.HillField.MAX_LIFT * scaleFactor).toInt() else 0
             val worldBackdrop = worldBackdropCache.bitmapFor(
-                BackdropKey(uiState.level, backgroundVisualSeed, worldWidth, canvasHeight)
+                BackdropKey(uiState.level, backgroundVisualSeed, worldWidth, canvasHeight + worldHeadroom)
             ) {
                 withTransform({
-                    translate(left = worldPadding, top = groundOffsetY)
+                    translate(left = worldPadding, top = groundOffsetY + worldHeadroom)
                 }) {
                     staticBackgroundObjects.forEach { bg ->
                         com.example.game.drawStaticBackgroundObject(
@@ -2581,7 +2597,7 @@ fun BattlefieldScene(
             }
             withTransform({
                 clipRect(top = 40f, bottom = size.height - 40f)
-                translate(left = offsetX - worldPadding, top = offsetY + cameraLiftY)
+                translate(left = offsetX - worldPadding, top = offsetY + cameraLiftY - worldHeadroom)
             }) {
                 drawImage(worldBackdrop)
             }
@@ -2927,12 +2943,29 @@ fun BattlefieldScene(
             // (The Halley's-comet portent — the "miniature sun" — is retired along with its hidden
             // 1.5x both-sides buff. Weather visuals are reserved for the divine weather rewards.)
 
-            // Divine weather sits outside the camera transform, so the flourish washes the whole
-            // field. The charges themselves are buttons in the header bar, not on the map.
-            weatherFlash?.let { (weather, _) ->
-                val elapsed = (System.currentTimeMillis() - weatherFlashShownAt) / 1000f
-                if (elapsed <= WEATHER_FLOURISH_SECS) {
-                    drawWeatherFlourish(this, weather, elapsed / WEATHER_FLOURISH_SECS)
+            // (Divine weather is drawn by DivineWeatherOverlay, a Canvas of its own over the whole
+            // screen. Drawn here it was still subject to this canvas's layers and camera state —
+            // it washed only part of the field and thinned out as the player walked right, which
+            // is exactly what it was moved out of the camera transform to stop doing.)
+
+            // Held-finger health read-out. Screen space, like the weather: it must not scroll with
+            // the world while the finger is still down.
+            inspectAt.value?.let { at ->
+                val candidates = (listOfNotNull(playerFighter) + enemies).filter { !it.isDead }
+                val target = candidates.minByOrNull {
+                    kotlin.math.abs(it.posX * playerScaleX + offsetX - at.x)
+                }
+                if (target != null) {
+                    val tx = target.posX * playerScaleX + offsetX
+                    if (kotlin.math.abs(tx - at.x) <= INSPECT_GRAB_PX) {
+                        drawHealthTag(
+                            this,
+                            target.name,
+                            "${target.hp.toInt()} / ${target.maxHp.toInt()}",
+                            tx.coerceIn(80f, size.width - 80f),
+                            (at.y - 60f).coerceIn(70f, size.height - 60f)
+                        )
+                    }
                 }
             }
         }
@@ -3213,6 +3246,73 @@ private fun drawComicTextBubble(
 
     scope.drawContext.canvas.nativeCanvas.drawText(text, x, y, outlinePaint)
     scope.drawContext.canvas.nativeCanvas.drawText(text, x, y, textPaint)
+}
+
+/**
+ * The divine weather flourish, as a full-screen layer of its own. It draws nothing at all except
+ * during the 1.2s after a charge is spent, so it costs one empty canvas the rest of the time.
+ */
+@Composable
+private fun DivineWeatherOverlay(viewModel: GameViewModel) {
+    val weatherFlash by viewModel.weatherFlash.collectAsState()
+    // Clock the flourish from when the UI first SEES the flash, not from when the tap fired.
+    // Under frame lag the wall-clock window could expire before a single frame drew it, so the
+    // weather looked like it "didn't work" even though its combat effect had applied.
+    val shownAt = remember(weatherFlash) { System.currentTimeMillis() }
+    val flash = weatherFlash ?: return
+    // Repaint for the length of the flourish; nothing else in this canvas changes.
+    var now by remember(weatherFlash) { mutableStateOf(shownAt) }
+    LaunchedEffect(weatherFlash) {
+        while (now - shownAt <= (WEATHER_FLOURISH_SECS * 1000f).toLong()) {
+            withFrameMillis { now = System.currentTimeMillis() }
+        }
+    }
+    val elapsed = (now - shownAt) / 1000f
+    if (elapsed > WEATHER_FLOURISH_SECS) return
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        drawWeatherFlourish(this, flash.first, elapsed / WEATHER_FLOURISH_SECS)
+    }
+}
+
+/** How near the finger has to land, in screen px, to be inspecting a given fighter. */
+internal const val INSPECT_GRAB_PX = 70f
+
+/**
+ * The hold-to-inspect tag: a scrap of linen with a name and an exact hit-point count, drawn
+ * above the finger for as long as it is held down.
+ */
+private fun drawHealthTag(
+    scope: androidx.compose.ui.graphics.drawscope.DrawScope,
+    name: String,
+    hp: String,
+    x: Float,
+    y: Float
+) {
+    val namePaint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        textSize = 22f
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
+        setColor(TapestryDark.toArgb())
+        textAlign = android.graphics.Paint.Align.CENTER
+    }
+    val hpPaint = android.graphics.Paint(namePaint).apply {
+        textSize = 30f
+        setColor(TapestryRed.toArgb())
+    }
+    val halfW = maxOf(namePaint.measureText(name), hpPaint.measureText(hp)) / 2f + 14f
+    scope.drawRect(
+        color = TapestryLinenCard,
+        topLeft = Offset(x - halfW, y - 46f),
+        size = Size(halfW * 2f, 62f)
+    )
+    scope.drawRect(
+        color = TapestryDark,
+        topLeft = Offset(x - halfW, y - 46f),
+        size = Size(halfW * 2f, 62f),
+        style = Stroke(width = 2.5f)
+    )
+    scope.drawContext.canvas.nativeCanvas.drawText(name, x, y - 26f, namePaint)
+    scope.drawContext.canvas.nativeCanvas.drawText(hp, x, y + 6f, hpPaint)
 }
 
 // --- Divine weather: header medallions and battle flourishes ---

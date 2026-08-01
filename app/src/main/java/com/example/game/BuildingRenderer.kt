@@ -317,7 +317,7 @@ internal fun drawCastleWall(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             close()
         }
         drawStitchedFill(scope, wall, stone)
-        scope.drawPath(wall, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(wall, ThreadColor)
 
         val parapetY = cy + SiegeRules.GROUND_FEET_OFFSET +
             SiegeRules.PARAPET_ELEVATION_OFFSET - 138f
@@ -348,7 +348,7 @@ internal fun drawCastleWall(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
                 close()
             }
             drawStitchedFill(scope, tower, if (side < 0) Color(0xFFD6C49C) else Color(0xFFC1AD83))
-            scope.drawPath(tower, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(tower, ThreadColor)
             scope.drawCircle(Color(0xFF4B3A2A), 7f, Offset(tx, cy - 150f))
             scope.drawLine(Color(0xFFD6A420), Offset(tx, cy - 198f), Offset(tx, cy - 232f), strokeWidth = 2.5f)
             val pennant = Path().apply {
@@ -427,7 +427,7 @@ internal fun drawSiegeMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             close()
         }
         drawStitchedFill(scope, mound, Color(0xFF74804D))
-        scope.drawPath(mound, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(mound, ThreadColor)
         for (i in 0..5) {
             val y = cy - 4f - i * 10f
             scope.drawLine(Color(0x555D4831), Offset(cx - 118f + i * 8f, y), Offset(cx + 120f - i * 10f, y), 1.5f)
@@ -443,7 +443,7 @@ internal fun drawSiegeMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             lineTo(cx + 38f, cy - 178f); lineTo(cx + 46f, cy - 72f); close()
         }
         drawStitchedFill(scope, keep, stone)
-        scope.drawPath(keep, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(keep, ThreadColor)
         // String courses divide the tower into storeys, as the tapestry's towers are drawn
         listOf(cy - 108f, cy - 146f).forEach { y ->
             scope.drawLine(band, Offset(cx - 44f, y), Offset(cx + 44f, y), strokeWidth = 4f)
@@ -456,7 +456,7 @@ internal fun drawSiegeMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             lineTo(cx + 13f, cy - 72f); close()
         }
         drawStitchedFill(scope, door, dark)
-        scope.drawPath(door, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(door, ThreadColor)
         for (i in 0 until 2) {
             val wx = cx - 16f + i * 32f
             val win = Path().apply {
@@ -465,14 +465,14 @@ internal fun drawSiegeMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
                 lineTo(wx + 7f, cy - 150f); close()
             }
             drawStitchedFill(scope, win, dark)
-            scope.drawPath(win, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(win, ThreadColor)
         }
         // Hipped roof with a lozenge lattice, matching the abbey and the palace
         val roof = Path().apply {
             moveTo(cx - 54f, cy - 178f); lineTo(cx, cy - 222f); lineTo(cx + 54f, cy - 178f); close()
         }
         drawStitchedFill(scope, roof, Color(0xFF6B7882))
-        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(roof, ThreadColor)
         // No lattice on this one: the hatch lines ran past the two top corners of the gable and
         // stuck out as grey whiskers against the sky. A small hipped roof reads fine plain.
         scope.drawLine(ThreadColor, Offset(cx, cy - 222f), Offset(cx, cy - 244f), strokeWidth = 3f)
@@ -480,7 +480,7 @@ internal fun drawSiegeMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             moveTo(cx, cy - 244f); lineTo(cx + 26f, cy - 237f); lineTo(cx, cy - 230f); close()
         }
         drawStitchedFill(scope, pennant, Color(0xFF9E3624))
-        scope.drawPath(pennant, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(pennant, ThreadColor)
 }
 
 internal fun drawFeastingHall(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
@@ -492,7 +492,7 @@ internal fun drawFeastingHall(scope: DrawScope, cx: Float, cy: Float, bg: Backgr
             lineTo(cx, cy - 214f); lineTo(cx + 235f, cy - 145f); lineTo(cx + 235f, cy + 28f); close()
         }
         drawStitchedFill(scope, back, plaster)
-        scope.drawPath(back, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(back, ThreadColor)
         scope.drawLine(beam, Offset(cx - 230f, cy - 143f), Offset(cx, cy - 208f), 8f)
         scope.drawLine(beam, Offset(cx, cy - 208f), Offset(cx + 230f, cy - 143f), 8f)
         scope.drawLine(beam, Offset(cx, cy - 205f), Offset(cx, cy + 20f), 7f)
@@ -508,7 +508,7 @@ internal fun drawFeastingHall(scope: DrawScope, cx: Float, cy: Float, bg: Backgr
             lineTo(cx + 165f, cy + 5f); lineTo(cx - 165f, cy + 5f); close()
         }
         drawStitchedFill(scope, table, Color(0xFF8B6037))
-        scope.drawPath(table, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(table, ThreadColor)
         listOf(-145f, 145f).forEach { x ->
             scope.drawLine(
                 beam,
@@ -551,7 +551,7 @@ internal fun drawInteriorShell(scope: DrawScope, cx: Float, cy: Float) {
         lineTo(cx, cy - 214f); lineTo(cx + 235f, cy - 145f); lineTo(cx + 235f, cy + 28f); close()
     }
     drawStitchedFill(scope, back, plaster)
-    scope.drawPath(back, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(back, ThreadColor)
 
     // Blind arcade along the back wall — the tapestry never leaves an interior wall blank, and it
     // gives the eye a depth cue behind the furniture.
@@ -572,7 +572,7 @@ internal fun drawInteriorShell(scope: DrawScope, cx: Float, cy: Float) {
         lineTo(cx + 235f, cy + 28f); lineTo(cx - 235f, cy + 28f); close()
     }
     drawStitchedFill(scope, floor, Color(0xFF8B6037))
-    scope.drawPath(floor, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(floor, ThreadColor)
     for (i in 0 until 10) {
         val x = cx - 212f + i * 47f
         scope.drawLine(ThreadColor.copy(alpha = 0.3f), Offset(x, floorY + 2f), Offset(x - 8f, cy + 26f), strokeWidth = 1.5f)
@@ -600,7 +600,7 @@ internal fun drawInteriorKitchen(scope: DrawScope, cx: Float, cy: Float, bg: Bac
         lineTo(cx - 95f, cy - 85f); lineTo(cx - 95f, cy + 25f); close()
     }
     drawStitchedFill(scope, hearth, Color(0xFF8A8478))
-    scope.drawPath(hearth, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(hearth, ThreadColor)
     scope.drawOval(Color(0xFF2C2219), Offset(cx - 190f, cy - 55f), androidx.compose.ui.geometry.Size(75f, 75f))
     scope.drawOval(Color(0xFFE07020), Offset(cx - 178f, cy - 20f), androidx.compose.ui.geometry.Size(50f, 40f))
     scope.drawOval(Color(0xFFFFC34D), Offset(cx - 165f, cy - 8f), androidx.compose.ui.geometry.Size(24f, 24f))
@@ -622,7 +622,7 @@ internal fun drawInteriorKitchen(scope: DrawScope, cx: Float, cy: Float, bg: Bac
         lineTo(cx + 190f, cy + 5f); lineTo(cx + 45f, cy + 5f); close()
     }
     drawStitchedFill(scope, table, Color(0xFF8B6037))
-    scope.drawPath(table, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(table, ThreadColor)
     scope.drawLine(beam, Offset(cx + 60f, cy + 2f), Offset(cx + 66f, cy + 36f), 8f)
     scope.drawLine(beam, Offset(cx + 178f, cy + 2f), Offset(cx + 172f, cy + 36f), 8f)
     for (i in 0..2) {
@@ -646,7 +646,7 @@ internal fun drawInteriorChamber(scope: DrawScope, cx: Float, cy: Float, bg: Bac
         lineTo(cx + 70f, cy - 90f); lineTo(cx - 70f, cy - 90f); close()
     }
     drawStitchedFill(scope, tap, if (rng.nextBoolean()) Color(0xFF9E3624) else Color(0xFF265063))
-    scope.drawPath(tap, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(tap, ThreadColor)
     scope.drawLine(Color(0xFFD6A420), Offset(cx - 45f, cy - 140f), Offset(cx + 45f, cy - 140f), 4f)
     scope.drawLine(Color(0xFFD6A420), Offset(cx - 45f, cy - 118f), Offset(cx + 45f, cy - 118f), 4f)
     listOf(-110f, 110f).forEach { x ->
@@ -659,7 +659,7 @@ internal fun drawInteriorChamber(scope: DrawScope, cx: Float, cy: Float, bg: Bac
         lineTo(cx - 80f, cy - 30f); lineTo(cx - 80f, cy + 20f); close()
     }
     drawStitchedFill(scope, bed, Color(0xFF632873))
-    scope.drawPath(bed, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(bed, ThreadColor)
     scope.drawOval(Color(0xFFEFE6D4), Offset(cx - 205f, cy - 42f), androidx.compose.ui.geometry.Size(42f, 20f))
     scope.drawLine(beam, Offset(cx - 215f, cy - 30f), Offset(cx - 215f, cy - 95f), 6f)
     scope.drawLine(beam, Offset(cx - 80f, cy - 30f), Offset(cx - 80f, cy - 95f), 6f)
@@ -670,7 +670,7 @@ internal fun drawInteriorChamber(scope: DrawScope, cx: Float, cy: Float, bg: Bac
         lineTo(cx + 140f, cy + 5f); lineTo(cx + 65f, cy + 5f); close()
     }
     drawStitchedFill(scope, table, Color(0xFF8B6037))
-    scope.drawPath(table, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(table, ThreadColor)
     scope.drawLine(beam, Offset(cx + 75f, cy + 2f), Offset(cx + 78f, cy + 34f), 7f)
     scope.drawLine(beam, Offset(cx + 130f, cy + 2f), Offset(cx + 127f, cy + 34f), 7f)
     listOf(20f, 175f).forEach { x ->
@@ -691,7 +691,7 @@ internal fun drawFleetCrossing(scope: DrawScope, cx: Float, cy: Float, bg: Backg
             lineTo(cx + 270f, cy + 78f); lineTo(cx - 270f, cy + 78f); close()
         }
         drawStitchedFill(scope, sea, Color(0xFF315F70))
-        scope.drawPath(sea, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(sea, ThreadColor)
         for (row in 0..3) {
             val y = cy + 8f + row * 17f
             for (i in 0..8) {
@@ -732,7 +732,7 @@ internal fun drawHillTerrain(
         close()
     }
     drawStitchedFill(scope, slope, Color(0xFF6E8A4E))
-    scope.drawPath(slope, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(slope, ThreadColor)
     // A lighter ridge line along the crown for depth
     val ridge = Path().apply {
         for (i in 0..steps) {
@@ -757,7 +757,7 @@ internal fun drawFieldTree(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, t, trunkCol)
-        scope.drawPath(t, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(t, ThreadColor)
     }
     when (rng.nextInt(3)) {
         0 -> {
@@ -781,7 +781,7 @@ internal fun drawFieldTree(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
                     moveTo(cx - hw, ty); lineTo(cx, ty - 46f); lineTo(cx + hw, ty); close()
                 }
                 drawStitchedFill(scope, tri, leaf)
-                scope.drawPath(tri, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(tri, ThreadColor)
             }
         }
         else -> {
@@ -822,7 +822,7 @@ internal fun drawStamfordBridge(scope: DrawScope, cx: Float, cy: Float, bg: Back
         close()
     }
     drawStitchedFill(scope, water, Color(0xFF315F70))
-    scope.drawPath(water, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(water, ThreadColor)
 
     val bridge = Path().apply {
         moveTo(cx - 270f, cy - 12f)
@@ -832,7 +832,7 @@ internal fun drawStamfordBridge(scope: DrawScope, cx: Float, cy: Float, bg: Back
         close()
     }
     drawStitchedFill(scope, bridge, Color(0xFF8B6037))
-    scope.drawPath(bridge, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(bridge, ThreadColor)
     for (i in -5..5) {
         val x = cx + i * 46f
         scope.drawLine(Color(0xFF5C4029), Offset(x, cy - 9f), Offset(x - 4f, cy + 18f), 4f)
@@ -852,7 +852,7 @@ internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: Bac
             lineTo(cx + 270f, cy + 72f); lineTo(cx - 270f, cy + 72f); close()
         }
         drawStitchedFill(scope, sand, Color(0xFFB39B68))
-        scope.drawPath(sand, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(sand, ThreadColor)
         for (i in 0..8) {
             val x = cx - 235f + i * 58f
             val y = cy + 20f + (i % 3) * 12f
@@ -872,7 +872,7 @@ internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: Bac
             close()
         }
         drawStitchedFill(scope, mount, Color(0xFF73764E))
-        scope.drawPath(mount, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(mount, ThreadColor)
         // Rock strata across the mount, so it reads as a crag and not a green hill
         for (i in 0..4) {
             val y = cy - 14f - i * 22f
@@ -907,7 +907,7 @@ internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: Bac
                 lineTo(mx + r.half, wallTop); lineTo(mx + r.half, r.floorY); close()
             }
             drawStitchedFill(scope, range, stone)
-            scope.drawPath(range, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(range, ThreadColor)
             // Arcade of round-arched openings along the range
             for (i in 0 until r.bays) {
                 val ax = mx - r.half + (2f * r.half) * (i + 0.5f) / r.bays
@@ -927,7 +927,7 @@ internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: Bac
                 lineTo(mx + r.half - 4f, roofTop); lineTo(mx + r.half + 7f, wallTop); close()
             }
             drawStitchedFill(scope, roof, slate)
-            scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(roof, ThreadColor)
             for (i in 1..r.bays) {
                 val x = mx - r.half + (2f * r.half) * i / (r.bays + 1f)
                 scope.drawLine(ThreadColor.copy(alpha = 0.45f), Offset(x, wallTop), Offset(x + 8f, roofTop), strokeWidth = 1.3f)
@@ -941,7 +941,7 @@ internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: Bac
                     lineTo(mx + 13f, r.floorY); close()
                 }
                 drawStitchedFill(scope, gate, dark)
-                scope.drawPath(gate, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(gate, ThreadColor)
             }
         }
 
@@ -954,7 +954,7 @@ internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: Bac
             lineTo(sx0 + 26f, cy - 164f); close()
         }
         drawStitchedFill(scope, nave, stone)
-        scope.drawPath(nave, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(nave, ThreadColor)
         for (i in 0 until 2) {
             val wx = sx0 - 11f + i * 22f
             val win = Path().apply {
@@ -963,13 +963,13 @@ internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: Bac
                 lineTo(wx + 5f, cy - 168f); close()
             }
             drawStitchedFill(scope, win, dark)
-            scope.drawPath(win, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(win, ThreadColor)
         }
         val spire = Path().apply {
             moveTo(sx0 - 20f, naveTop + 4f); lineTo(sx0, cy - 284f); lineTo(sx0 + 20f, naveTop + 4f); close()
         }
         drawStitchedFill(scope, spire, slate)
-        scope.drawPath(spire, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(spire, ThreadColor)
         // Scale courses up the spire, the same fish-scale the towers wear
         for (row in 1 until 4) {
             val t = row / 4f
@@ -983,12 +983,12 @@ internal fun drawMontSaintMichel(scope: DrawScope, cx: Float, cy: Float, bg: Bac
             moveTo(sx0, cy - 302f); lineTo(sx0 + 13f, cy - 296f); lineTo(sx0, cy - 290f); close()
         }
         drawStitchedFill(scope, michael, band)
-        scope.drawPath(michael, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(michael, ThreadColor)
 }
 
 private fun drawShipBody(scope: DrawScope, cx: Float, cy: Float, hullPath: Path) {
         drawStitchedFill(scope, hullPath, Color(0xFF5D4831))
-        scope.drawPath(hullPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(hullPath, ThreadColor)
         
         // Planking lines
         for (i in 0 until 3) {
@@ -1004,7 +1004,7 @@ private fun drawShipBody(scope: DrawScope, cx: Float, cy: Float, hullPath: Path)
             quadraticTo(cx + 220f, cy - 110f, cx + 210f, cy - 80f) // Back of neck
         }
         drawStitchedFill(scope, prowPath, Color(0xFF8C6F47))
-        scope.drawPath(prowPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(prowPath, ThreadColor)
         scope.drawCircle(Color.Red, radius = 4f, center = Offset(cx + 235f, cy - 140f)) // Eye
 
         // Mast and Square Sail
@@ -1016,7 +1016,7 @@ private fun drawShipBody(scope: DrawScope, cx: Float, cy: Float, hullPath: Path)
             close()
         }
         drawStitchedFill(scope, mastPath, Color(0xFF382F22))
-        scope.drawPath(mastPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(mastPath, ThreadColor)
 
         val sailPath = Path().apply {
             moveTo(cx - 60f, cy - 150f)
@@ -1035,7 +1035,7 @@ private fun drawShipBody(scope: DrawScope, cx: Float, cy: Float, hullPath: Path)
             }
             drawStitchedFill(scope, stripePath, Color(0xFFD6A420))
         }
-        scope.drawPath(sailPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(sailPath, ThreadColor)
         
         // Overlapping shields on gunwale
         for (i in 0 until 8) {
@@ -1057,7 +1057,7 @@ private fun drawShipBody(scope: DrawScope, cx: Float, cy: Float, hullPath: Path)
             close()
         }
         drawStitchedFill(scope, waterPath, Color(0xFF265063))
-        scope.drawPath(waterPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(waterPath, ThreadColor)
     }
     
 internal fun drawFortTower(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
@@ -1079,7 +1079,7 @@ internal fun drawFortTower(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, cabin, wood)
-        scope.drawPath(cabin, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(cabin, ThreadColor)
         // Battlement notches
         for (i in 0 until 4) {
             val bx = cx - 30f + i * 20f
@@ -1093,7 +1093,7 @@ internal fun drawFortTower(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, roof, Color(0xFF9E3624))
-        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(roof, ThreadColor)
         scope.drawLine(darkWood, Offset(cx, cy - 210f), Offset(cx, cy - 235f), strokeWidth = 3f)
         val pennant = Path().apply {
             moveTo(cx, cy - 235f); lineTo(cx + 26f, cy - 228f); lineTo(cx, cy - 221f); close()
@@ -1130,7 +1130,7 @@ internal fun drawPalisadeRun(scope: DrawScope, x0: Float, x1: Float, baseY: Floa
             close()
         }
         drawStitchedFill(scope, post, if (rng.nextBoolean()) Color(0xFF735835) else Color(0xFF8C6F47))
-        scope.drawPath(post, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(post, ThreadColor)
         // A single grain line down the middle of the trunk
         scope.drawLine(
             ThreadColor.copy(alpha = 0.35f),
@@ -1157,7 +1157,7 @@ internal fun drawFortMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, mound, Color(0xFF6B7C4A))
-        scope.drawPath(mound, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(mound, ThreadColor)
         // Winding path up the right slope
         scope.drawLine(Color(0xFFB09A6C), Offset(cx + 100f, cy + 14f), Offset(cx + 55f, cy - 58f), strokeWidth = 8f)
         // Palisade of individual timbers around the plateau edge
@@ -1172,7 +1172,7 @@ internal fun drawFortMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, keep, Color(0xFF8C6F47))
-        scope.drawPath(keep, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(keep, ThreadColor)
         // Keep roof
         val roof = Path().apply {
             moveTo(cx - 32f, cy - 150f)
@@ -1181,7 +1181,7 @@ internal fun drawFortMotte(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, roof, Color(0xFF265063))
-        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(roof, ThreadColor)
         // Door + window
         scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 7f, cy - 86f), size = androidx.compose.ui.geometry.Size(14f, 24f))
         scope.drawRect(Color(0xFF2C2219), topLeft = Offset(cx - 5f, cy - 140f), size = androidx.compose.ui.geometry.Size(10f, 12f))
@@ -1211,7 +1211,7 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             lineTo(cx + 96f, hallTop); lineTo(cx + 96f, cy + 20f); close()
         }
         drawStitchedFill(scope, hall, stone)
-        scope.drawPath(hall, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(hall, ThreadColor)
 
         // Lozenge-tiled roof band over the hall
         val roof = Path().apply {
@@ -1219,7 +1219,7 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             lineTo(cx + 106f, roofTop); lineTo(cx + 106f, hallTop); close()
         }
         drawStitchedFill(scope, roof, slate)
-        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(roof, ThreadColor)
         for (i in 0 until 7) {
             val x0 = cx - 106f + i * 30f
             scope.drawLine(ThreadColor.copy(alpha = 0.5f), Offset(x0, hallTop), Offset(x0 + 30f, roofTop), strokeWidth = 1.5f)
@@ -1235,7 +1235,7 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
             lineTo(cx + 30f, cy + 20f); close()
         }
         drawStitchedFill(scope, gate, dark)
-        scope.drawPath(gate, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(gate, ThreadColor)
         val order = Path().apply {
             moveTo(cx - 38f, cy - 32f)
             quadraticTo(cx, cy - 94f, cx + 38f, cy - 32f)
@@ -1254,7 +1254,7 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
                 lineTo(ax + 19f, cy + 20f); close()
             }
             drawStitchedFill(scope, blind, slate)
-            scope.drawPath(blind, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(blind, ThreadColor)
         }
         // Upper windows, above the arcade and below the eaves
         for (i in 0 until 5) {
@@ -1265,7 +1265,7 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
                 lineTo(wx + 7f, cy - 68f); close()
             }
             drawStitchedFill(scope, win, dark)
-            scope.drawPath(win, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(win, ThreadColor)
         }
 
         // Two turrets under scaled domes, one at each end
@@ -1277,7 +1277,7 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
                 lineTo(tx + 25f, topY); lineTo(tx + 30f, cy + 20f); close()
             }
             drawStitchedFill(scope, turret, stone)
-            scope.drawPath(turret, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(turret, ThreadColor)
             listOf(cy - 60f, cy - 126f).forEach { y ->
                 scope.drawLine(band, Offset(tx - 28f, y), Offset(tx + 28f, y), strokeWidth = 4f)
                 scope.drawLine(ThreadColor, Offset(tx - 28f, y), Offset(tx + 28f, y), strokeWidth = 1.5f)
@@ -1288,7 +1288,7 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
                 lineTo(tx + 8f, cy - 90f); close()
             }
             drawStitchedFill(scope, op, dark)
-            scope.drawPath(op, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(op, ThreadColor)
             // Fish-scale dome, the tapestry's standard cap for a tower of any importance
             val dome = Path().apply {
                 moveTo(tx - 32f, topY)
@@ -1297,7 +1297,7 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
                 close()
             }
             drawStitchedFill(scope, dome, domeCol)
-            scope.drawPath(dome, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(dome, ThreadColor)
             for (row in 0 until 2) {
                 val sy = topY - 5f - row * 10f
                 val halfW = 26f - row * 11f
@@ -1316,7 +1316,7 @@ internal fun drawFortPalace(scope: DrawScope, cx: Float, cy: Float, bg: Backgrou
                 moveTo(tx, topY - 56f); lineTo(tx + side * 24f, topY - 49f); lineTo(tx, topY - 42f); close()
             }
             drawStitchedFill(scope, pennant, band)
-            scope.drawPath(pennant, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(pennant, ThreadColor)
         }
     }
     
@@ -1344,7 +1344,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
                 strokeWidth = 3f
             )
         }
-        scope.drawPath(hillPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(hillPath, ThreadColor)
 
         // Palisade of individual timbers along the plateau
         drawPalisadeRun(scope, cx - 60f, cx + 60f, baseY = cy - 58f, height = 48f, seed = bg.id.hashCode())
@@ -1358,7 +1358,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, towerPath, Color(0xFFBAC5CC))
-        scope.drawPath(towerPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(towerPath, ThreadColor)
         
         // Crossbeams
         scope.drawLine(ThreadColor, Offset(cx - 10f, cy - 142f), Offset(cx + 12f, cy - 164f), strokeWidth = 2f)
@@ -1372,7 +1372,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, roofPath, Color(0xFF265063))
-        scope.drawPath(roofPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(roofPath, ThreadColor)
         val square_4 = Path().apply {
             moveTo(cx - 39f, cy - 156f)
             lineTo(cx - 14.5f, cy - 156f)
@@ -1381,7 +1381,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, square_4, Color(0xFFBAC5CC))
-        scope.drawPath(square_4, Color(0xFF2C2219), style = StitchedStroke)
+        scope.drawStitchedOutline(square_4, Color(0xFF2C2219))
         val triangle_5 = Path().apply {
             moveTo(cx - 24.5f, cy - 201.5f)
             lineTo(cx - 12.5f, cy - 155f)
@@ -1389,7 +1389,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, triangle_5, Color(0xFF265063))
-        scope.drawPath(triangle_5, Color(0xFF2C2219), style = StitchedStroke)
+        scope.drawStitchedOutline(triangle_5, Color(0xFF2C2219))
         val square_6 = Path().apply {
             moveTo(cx - 30.5f, cy - 141f)
             lineTo(cx - 21.5f, cy - 142f)
@@ -1398,7 +1398,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, square_6, Color(0xFF2C2219))
-        scope.drawPath(square_6, Color(0xFF2C2219), style = StitchedStroke)
+        scope.drawStitchedOutline(square_6, Color(0xFF2C2219))
         val square_7 = Path().apply {
             moveTo(cx - 5.5f, cy - 143.5f)
             lineTo(cx + 7f, cy - 144.5f)
@@ -1407,7 +1407,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, square_7, Color(0xFF2C2219))
-        scope.drawPath(square_7, Color(0xFF2C2219), style = StitchedStroke)
+        scope.drawStitchedOutline(square_7, Color(0xFF2C2219))
         val square_8 = Path().apply {
             moveTo(cx + 17f, cy - 153f)
             lineTo(cx + 42f, cy - 153f)
@@ -1416,7 +1416,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, square_8, Color(0xFFBAC5CC))
-        scope.drawPath(square_8, Color(0xFF2C2219), style = StitchedStroke)
+        scope.drawStitchedOutline(square_8, Color(0xFF2C2219))
         val triangle_9 = Path().apply {
             moveTo(cx + 30f, cy - 201.5f)
             lineTo(cx + 42.5f, cy - 151f)
@@ -1424,7 +1424,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, triangle_9, Color(0xFF265063))
-        scope.drawPath(triangle_9, Color(0xFF2C2219), style = StitchedStroke)
+        scope.drawStitchedOutline(triangle_9, Color(0xFF2C2219))
         val square_10 = Path().apply {
             moveTo(cx + 26.5f, cy - 130f)
             lineTo(cx + 37.5f, cy - 132f)
@@ -1433,7 +1433,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, square_10, Color(0xFF2C2219))
-        scope.drawPath(square_10, Color(0xFF2C2219), style = StitchedStroke)
+        scope.drawStitchedOutline(square_10, Color(0xFF2C2219))
         val square_11 = Path().apply {
             moveTo(cx - 6f, cy - 74.5f)
             lineTo(cx + 10f, cy - 74.5f)
@@ -1442,7 +1442,7 @@ internal fun drawFortDinan(scope: DrawScope, cx: Float, cy: Float, bg: Backgroun
             close()
         }
         drawStitchedFill(scope, square_11, Color(0xFF8A5E38))
-        scope.drawPath(square_11, Color(0xFF8A5E38), style = StitchedStroke)
+        scope.drawStitchedOutline(square_11, Color(0xFF8A5E38))
         scope.drawCircle(Color(0xFF8A5E38), radius = 8f, center = Offset(cx + 2f, cy - 71.5f))
         scope.drawCircle(Color(0xFF8A5E38), radius = 8f, center = Offset(cx + 2f, cy - 71.5f), style = StitchedStroke)
 }
@@ -1480,7 +1480,7 @@ internal fun drawBayeuxBuilding(scope: DrawScope, cx: Float, cy: Float, bg: Back
         addRect(androidx.compose.ui.geometry.Rect(cx - halfW, bodyTop, cx + halfW, cy + 20f))
     }
     drawStitchedFill(scope, body, wall)
-    scope.drawPath(body, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(body, ThreadColor)
 
     // Ground-floor arcade: slim round-headed openings with plenty of wall between them, so the
     // arcade reads as arches rather than a row of dark tombstones
@@ -1497,7 +1497,7 @@ internal fun drawBayeuxBuilding(scope: DrawScope, cx: Float, cy: Float, bg: Back
             close()
         }
         drawStitchedFill(scope, opening, Color(0xFF6B5B48)) // shadowed, not black
-        scope.drawPath(opening, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(opening, ThreadColor)
 
         // The arch ring, picked out over the shadow
         val ring = Path().apply {
@@ -1511,7 +1511,7 @@ internal fun drawBayeuxBuilding(scope: DrawScope, cx: Float, cy: Float, bg: Back
             addRect(androidx.compose.ui.geometry.Rect(ax - 7f, cy - 6f, ax - 1f, cy + 20f))
         }
         drawStitchedFill(scope, pPath, pillarCol)
-        scope.drawPath(pPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(pPath, ThreadColor)
     }
 
     // Upper storey: a colonnade of slim pillars under the eaves
@@ -1523,7 +1523,7 @@ internal fun drawBayeuxBuilding(scope: DrawScope, cx: Float, cy: Float, bg: Back
             addRect(androidx.compose.ui.geometry.Rect(px, bodyTop + 12f, px + 8f, cy - 42f))
         }
         drawStitchedFill(scope, col, pillarCol)
-        scope.drawPath(col, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(col, ThreadColor)
         // Little round-headed arch over each
         val arc = Path().apply {
             moveTo(px - 4f, bodyTop + 12f)
@@ -1542,7 +1542,7 @@ internal fun drawBayeuxBuilding(scope: DrawScope, cx: Float, cy: Float, bg: Back
         close()
     }
     drawStitchedFill(scope, roof, roofCol)
-    scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(roof, ThreadColor)
 
     val rows = ((bodyTop - ridge) / 15f).toInt().coerceIn(2, 6)
     for (r in 0 until rows) {
@@ -1580,7 +1580,7 @@ internal fun drawEcclesia(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, body, stone)
-    scope.drawPath(body, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(body, ThreadColor)
 
     // The steep gable. Bosham's roof is the tallest thing in its panel and it is what makes the
     // building read as a church rather than a hall.
@@ -1589,7 +1589,7 @@ internal fun drawEcclesia(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, roof, slate)
-    scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(roof, ThreadColor)
     // Courses running with the pitch, the fine hatch the tapestry uses on a shingled roof.
     for (i in 1 until 7) {
         val t = i / 7f
@@ -1613,13 +1613,13 @@ internal fun drawEcclesia(scope: DrawScope, cx: Float, cy: Float) {
             close()
         }
         drawStitchedFill(scope, turret, stone)
-        scope.drawPath(turret, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(turret, ThreadColor)
         val cap = Path().apply {
             moveTo(tx - 16f, cy - 104f); lineTo(tx, cy - 132f); lineTo(tx + 16f, cy - 104f)
             close()
         }
         drawStitchedFill(scope, cap, slate)
-        scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(cap, ThreadColor)
         scope.drawLine(ThreadColor, Offset(tx, cy - 132f), Offset(tx, cy - 148f), strokeWidth = 2.5f)
         scope.drawLine(ThreadColor, Offset(tx - 6f, cy - 142f), Offset(tx + 6f, cy - 142f), strokeWidth = 2.5f)
         // A single slit window, so the turrets are not blank posts.
@@ -1637,7 +1637,7 @@ internal fun drawEcclesia(scope: DrawScope, cx: Float, cy: Float) {
             close()
         }
         drawStitchedFill(scope, arch, if (i == 2) dark else if (i == 1) band else stone)
-        scope.drawPath(arch, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(arch, ThreadColor)
     }
 }
 
@@ -1660,7 +1660,7 @@ internal fun drawPalaceArch(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, voidPath, dark)
-    scope.drawPath(voidPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(voidPath, ThreadColor)
 
     // Columns, with the heavy capital and base the tapestry always gives them.
     for (i in 0 until 2) {
@@ -1671,7 +1671,7 @@ internal fun drawPalaceArch(scope: DrawScope, cx: Float, cy: Float) {
             close()
         }
         drawStitchedFill(scope, col, stone)
-        scope.drawPath(col, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(col, ThreadColor)
         listOf(cy - 6f, capY + 6f).forEach { by ->
             scope.drawLine(band, Offset(px - 17f, by), Offset(px + 17f, by), strokeWidth = 7f)
             scope.drawLine(ThreadColor, Offset(px - 17f, by), Offset(px + 17f, by), strokeWidth = 1.5f)
@@ -1687,7 +1687,7 @@ internal fun drawPalaceArch(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, archBand, stone)
-    scope.drawPath(archBand, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(archBand, ThreadColor)
 
     // Chequered cornice: alternating squares, the diapered band that runs over every hall in the
     // tapestry. Two colours alternating is the whole trick, and nothing we had did it.
@@ -1717,7 +1717,7 @@ internal fun drawPalaceArch(scope: DrawScope, cx: Float, cy: Float) {
             close()
         }
         drawStitchedFill(scope, bird, Color(0xFF8A5E38))
-        scope.drawPath(bird, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(bird, ThreadColor)
     }
 }
 
@@ -1745,7 +1745,7 @@ internal fun drawAbbeyNave(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, nave, stone)
-    scope.drawPath(nave, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(nave, ThreadColor)
 
     // The roof as a long hatched band, which is how the tapestry draws a great tiled roof in
     // elevation — a lozenge lattice, not a flat slab of colour.
@@ -1755,7 +1755,7 @@ internal fun drawAbbeyNave(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, roof, slate)
-    scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(roof, ThreadColor)
     // 10, not 11: the span is 320 wide in steps of 32, and each cross reaches a further 32 to the
     // right, so an eleventh hung a lozenge out past the eaves in mid-air.
     for (i in 0 until 10) {
@@ -1778,7 +1778,7 @@ internal fun drawAbbeyNave(scope: DrawScope, cx: Float, cy: Float) {
             close()
         }
         drawStitchedFill(scope, arch, dark)
-        scope.drawPath(arch, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(arch, ThreadColor)
     }
 
     // Clerestory: the upper row of small windows, offset from the arcade below it.
@@ -1791,7 +1791,7 @@ internal fun drawAbbeyNave(scope: DrawScope, cx: Float, cy: Float) {
             close()
         }
         drawStitchedFill(scope, win, slate)
-        scope.drawPath(win, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(win, ThreadColor)
     }
 
     // Central tower, rising through the roof.
@@ -1802,7 +1802,7 @@ internal fun drawAbbeyNave(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, tower, stone)
-    scope.drawPath(tower, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(tower, ThreadColor)
     scope.drawLine(band, Offset(cx - 29f, cy - 176f), Offset(cx + 29f, cy - 176f), strokeWidth = 4f)
     // Twin belfry openings, the tower's own arcade in miniature.
     for (i in 0 until 2) {
@@ -1814,7 +1814,7 @@ internal fun drawAbbeyNave(scope: DrawScope, cx: Float, cy: Float) {
             close()
         }
         drawStitchedFill(scope, op, dark)
-        scope.drawPath(op, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(op, ThreadColor)
     }
 
     // Scaled cupola and the weathercock that crowns the whole scene in the tapestry.
@@ -1825,7 +1825,7 @@ internal fun drawAbbeyNave(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, cap, domeCol)
-    scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(cap, ThreadColor)
     for (row in 0 until 2) {
         val sy = towerTop - 5f - row * 10f
         val halfW = 30f - row * 12f
@@ -1846,7 +1846,7 @@ internal fun drawAbbeyNave(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, cock, band)
-    scope.drawPath(cock, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(cock, ThreadColor)
 }
 
 /**
@@ -1874,7 +1874,7 @@ internal fun drawDomedTower(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, shaft, stone)
-    scope.drawPath(shaft, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(shaft, ThreadColor)
 
     // Storey bands. Two courses of ochre, the horizontals that stop the shaft reading as a post.
     listOf(-104f to 29f, -56f to 30.5f).forEach { (dy, halfW) ->
@@ -1890,7 +1890,7 @@ internal fun drawDomedTower(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, dome, domeCol)
-    scope.drawPath(dome, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(dome, ThreadColor)
 
     // Fish-scale tiling on the dome — overlapping scallops, offset row to row. This is the
     // texture the whole tapestry uses for a roof, and none of our buildings had it.
@@ -1927,7 +1927,7 @@ internal fun drawDomedTower(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, window, slate)
-    scope.drawPath(window, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(window, ThreadColor)
 
     val door = Path().apply {
         moveTo(cx - 13f, cy)
@@ -1937,7 +1937,7 @@ internal fun drawDomedTower(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, door, Color(0xFF3B332A))
-    scope.drawPath(door, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(door, ThreadColor)
 }
 
 internal fun drawSpiralTower(scope: DrawScope, cx: Float, cy: Float, bg: BackgroundObject) {
@@ -1957,7 +1957,7 @@ internal fun drawSpiralTower(scope: DrawScope, cx: Float, cy: Float, bg: Backgro
         close()
     }
     drawStitchedFill(scope, shaft, wall)
-    scope.drawPath(shaft, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(shaft, ThreadColor)
 
     // A genuinely twisted shaft: bands that wrap the column diagonally, the way the tapestry
     // draws its towers. This used to be rows of scallops with each row nudged sideways, which
@@ -2003,7 +2003,7 @@ internal fun drawSpiralTower(scope: DrawScope, cx: Float, cy: Float, bg: Backgro
             close()
         }
         drawStitchedFill(scope, win, Color(0xFF3B332A))
-        scope.drawPath(win, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(win, ThreadColor)
     }
 
     // Conical cap
@@ -2014,7 +2014,7 @@ internal fun drawSpiralTower(scope: DrawScope, cx: Float, cy: Float, bg: Backgro
         close()
     }
     drawStitchedFill(scope, cap, roofCol)
-    scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(cap, ThreadColor)
 
     // Pennant
     scope.drawLine(ThreadColor, Offset(cx, topY - 46f), Offset(cx, topY - 74f), strokeWidth = 2.5f)
@@ -2025,7 +2025,7 @@ internal fun drawSpiralTower(scope: DrawScope, cx: Float, cy: Float, bg: Backgro
         close()
     }
     drawStitchedFill(scope, flag, Color(0xFF9E3624))
-    scope.drawPath(flag, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(flag, ThreadColor)
 }
 
 /**
@@ -2057,7 +2057,7 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
                 lineTo(ax + 21f, cy + 20f); close()
             }
             drawStitchedFill(scope, arch, dark)
-            scope.drawPath(arch, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(arch, ThreadColor)
         }
         // Piers between and either side of the arches
         for (i in 0 until 5) {
@@ -2067,7 +2067,7 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
                 lineTo(px + 7f, deckY); lineTo(px + 7f, cy + 20f); close()
             }
             drawStitchedFill(scope, pier, stone)
-            scope.drawPath(pier, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(pier, ThreadColor)
         }
 
         // The deck the feast sits on, a gold-edged sill running the full width
@@ -2076,7 +2076,7 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
             lineTo(cx + 122f, deckY + 12f); lineTo(cx - 122f, deckY + 12f); close()
         }
         drawStitchedFill(scope, deck, band)
-        scope.drawPath(deck, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(deck, ThreadColor)
 
         // Open upper storey: arched bays first, so the dark of the hall behind shows through, then
         // the columns over them. Drawn as filled openings rather than stroked curves — as bare
@@ -2089,7 +2089,7 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
                 lineTo(ax + 24f, deckY); close()
             }
             drawStitchedFill(scope, bay, dark)
-            scope.drawPath(bay, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(bay, ThreadColor)
         }
         // Five slender columns with capitals, the hall standing open between them
         for (i in 0 until 5) {
@@ -2099,7 +2099,7 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
                 lineTo(px + 6f, capY + 8f); lineTo(px + 7f, deckY); close()
             }
             drawStitchedFill(scope, col, stone)
-            scope.drawPath(col, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(col, ThreadColor)
             // Capital and base blocks
             listOf(capY, deckY - 8f).forEach { y ->
                 val blk = Path().apply {
@@ -2107,7 +2107,7 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
                     lineTo(px + 11f, y + 8f); lineTo(px - 11f, y + 8f); close()
                 }
                 drawStitchedFill(scope, blk, band)
-                scope.drawPath(blk, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(blk, ThreadColor)
             }
         }
 
@@ -2117,7 +2117,7 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
             lineTo(cx + 76f, cy - 214f); lineTo(cx + 138f, eaveY); close()
         }
         drawStitchedFill(scope, roof, stone)
-        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(roof, ThreadColor)
         // Chequer, laid in courses that narrow with the hip
         for (row in 0 until 4) {
             val t0 = row / 4f
@@ -2145,7 +2145,7 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
                 scope.drawPath(cell, ThreadColor.copy(alpha = 0.55f), style = Stroke(width = 1.2f))
             }
         }
-        scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(roof, ThreadColor)
         // Ridge, with a beast-head finial at each end — the tapestry's habitual roof furniture
         scope.drawLine(band, Offset(cx - 78f, cy - 214f), Offset(cx + 78f, cy - 214f), strokeWidth = 5f)
         scope.drawLine(ThreadColor, Offset(cx - 78f, cy - 214f), Offset(cx + 78f, cy - 214f), strokeWidth = 1.5f)
@@ -2158,7 +2158,7 @@ internal fun drawBuildingBosham(scope: DrawScope, cx: Float, cy: Float, bg: Back
                 close()
             }
             drawStitchedFill(scope, beast, Color(0xFF8B6037))
-            scope.drawPath(beast, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(beast, ThreadColor)
         }
     }
 
@@ -2188,7 +2188,7 @@ internal fun drawBellTower(scope: DrawScope, cx: Float, cy: Float) {
             lineTo(cx + halfW, topY); lineTo(cx + halfW, baseY); close()
         }
         drawStitchedFill(scope, shaft, stone)
-        scope.drawPath(shaft, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(shaft, ThreadColor)
         // The string course that caps each stage, which is what makes it read as stacked
         scope.drawLine(band, Offset(cx - halfW - 5f, topY), Offset(cx + halfW + 5f, topY), strokeWidth = 5f)
         scope.drawLine(ThreadColor, Offset(cx - halfW - 5f, topY), Offset(cx + halfW + 5f, topY), strokeWidth = 1.5f)
@@ -2201,7 +2201,7 @@ internal fun drawBellTower(scope: DrawScope, cx: Float, cy: Float) {
         lineTo(cx + 14f, cy + 20f); close()
     }
     drawStitchedFill(scope, door, dark)
-    scope.drawPath(door, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(door, ThreadColor)
 
     // A single tall light in the middle stage, twin belfry openings in the top one
     val light = Path().apply {
@@ -2210,7 +2210,7 @@ internal fun drawBellTower(scope: DrawScope, cx: Float, cy: Float) {
         lineTo(cx + 9f, cy - 104f); close()
     }
     drawStitchedFill(scope, light, slate)
-    scope.drawPath(light, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(light, ThreadColor)
     for (i in 0 until 2) {
         val bx = cx - 13f + i * 26f
         val op = Path().apply {
@@ -2219,7 +2219,7 @@ internal fun drawBellTower(scope: DrawScope, cx: Float, cy: Float) {
             lineTo(bx + 8f, cy - 186f); close()
         }
         drawStitchedFill(scope, op, dark)
-        scope.drawPath(op, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(op, ThreadColor)
     }
 
     // Fish-scale lantern and cross
@@ -2230,7 +2230,7 @@ internal fun drawBellTower(scope: DrawScope, cx: Float, cy: Float) {
         close()
     }
     drawStitchedFill(scope, lantern, domeCol)
-    scope.drawPath(lantern, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(lantern, ThreadColor)
     for (row in 0 until 2) {
         val sy = cy - 243f - row * 11f
         val halfW = 29f - row * 12f
@@ -2266,7 +2266,7 @@ internal fun drawCloisterWalk(scope: DrawScope, cx: Float, cy: Float) {
         lineTo(cx + 170f, wallTop); lineTo(cx + 170f, cy + 20f); close()
     }
     drawStitchedFill(scope, wall, stone)
-    scope.drawPath(wall, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(wall, ThreadColor)
 
     // Lean-to roof, pitched forward over the walk
     val roof = Path().apply {
@@ -2274,7 +2274,7 @@ internal fun drawCloisterWalk(scope: DrawScope, cx: Float, cy: Float) {
         lineTo(cx + 174f, wallTop - 26f); lineTo(cx + 182f, arcadeTop - 6f); close()
     }
     drawStitchedFill(scope, roof, slate)
-    scope.drawPath(roof, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(roof, ThreadColor)
     for (i in 0 until 12) {
         val x = cx - 176f + i * 30f
         scope.drawLine(ThreadColor.copy(alpha = 0.45f), Offset(x, wallTop - 26f), Offset(x - 6f, arcadeTop - 6f), strokeWidth = 1.5f)
@@ -2293,7 +2293,7 @@ internal fun drawCloisterWalk(scope: DrawScope, cx: Float, cy: Float) {
             lineTo(ax + 19f, cy + 20f); close()
         }
         drawStitchedFill(scope, bay, dark)
-        scope.drawPath(bay, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(bay, ThreadColor)
         // Gold impost blocks where each arch springs — the one detail worth keeping from the shafts
         listOf(ax - 19f, ax + 19f).forEach { sx ->
             val imp = Path().apply {

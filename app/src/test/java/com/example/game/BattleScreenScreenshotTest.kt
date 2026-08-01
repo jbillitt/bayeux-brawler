@@ -187,6 +187,82 @@ class BattleScreenScreenshotTest {
             .captureRoboImage(filePath = "src/test/screenshots/battle_health_hold.png")
     }
 
+    /** Sets any of the ViewModel's private list StateFlows, for states a paused battle won't reach. */
+    private fun setPrivateList(vm: GameViewModel, fieldName: String, value: List<Any>) {
+        val field = GameViewModel::class.java.getDeclaredField(fieldName).apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val flow = field.get(vm) as kotlinx.coroutines.flow.MutableStateFlow<List<Any>>
+        flow.value = value
+    }
+
+    /**
+     * Weapon-Tipped Shafts and the Weapon-Head Launcher, in flight.
+     *
+     * This exists because the rendering was once claimed to be missing when it was not: the
+     * `launchedWeaponId` branch sits EARLY in the projectile if/else chain in MainActivity, above
+     * the arrow and stone cases, so a search that stops at the arrow-drawing code finds nothing.
+     * Pinning it with a picture is cheaper than reading that chain again.
+     *
+     * Look for: an axe head, a spiked morningstar and a sword blade crossing the field, against one
+     * ordinary arrow for comparison.
+     */
+    @Test
+    fun launchedWeaponHeadsAreVisibleInFlight() {
+        val vm = battleInProgress()
+        fun shot(id: String, head: String?, x: Float, type: ProjectileType) = Projectile(
+            id = id, isPlayerOwned = true, posX = x, posY = 210f,
+            velocityX = 320f, velocityY = -20f,
+            damage = 20f, pierce = 5f, blunt = 2f, type = type,
+            sizeMultiplier = 1.4f, launchedWeaponId = head
+        )
+        setPrivateList(
+            vm, "_projectilesState",
+            listOf(
+                shot("axe", "head_axe", 320f, ProjectileType.ARROW),
+                shot("star", "head_morningstar", 450f, ProjectileType.ARROW),
+                shot("blade", "head_claymore", 580f, ProjectileType.ARROW),
+                shot("slung", "head_axe", 700f, ProjectileType.STONE),
+                shot("plain", null, 830f, ProjectileType.ARROW)
+            )
+        )
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            MainBayeuxGameScreen(viewModel = vm, musicOn = false, onToggleMusic = {})
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/battle_launched_heads.png")
+    }
+
+    /**
+     * Blood thrown onto the linen itself after a knot of men falls together.
+     *
+     * Look for: irregular oxblood gouts with satellite spatter and a run-off drip, high on the
+     * cloth. They are positioned in canvas fractions, so they must NOT pan with the battlefield
+     * behind them. The one at centre is most of the way through its life and must be visibly
+     * thinner than the rest.
+     */
+    @Test
+    fun bloodSplattersOntoTheTapestryItself() {
+        val vm = battleInProgress()
+        setPrivateList(
+            vm, "_tapestrySplats",
+            listOf(
+                TapestrySplat(xFrac = 0.14f, yFrac = 0.10f, radius = 30f, seed = 11),
+                TapestrySplat(xFrac = 0.38f, yFrac = 0.30f, radius = 20f, seed = 402),
+                TapestrySplat(xFrac = 0.62f, yFrac = 0.06f, radius = 34f, seed = 77),
+                TapestrySplat(xFrac = 0.81f, yFrac = 0.24f, radius = 15f, seed = 555),
+                // Most of the way through its life: this one proves the fade works.
+                TapestrySplat(xFrac = 0.50f, yFrac = 0.40f, radius = 26f, seed = 900, age = 3.6f)
+            )
+        )
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            MainBayeuxGameScreen(viewModel = vm, musicOn = false, onToggleMusic = {})
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/battle_tapestry_blood.png")
+    }
+
     /** The same screen with no weather, as the reference for what "the whole screen" is. */
     @Test
     fun theComposedBattleScreen() {

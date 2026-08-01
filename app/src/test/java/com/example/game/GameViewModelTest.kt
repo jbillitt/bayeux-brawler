@@ -401,6 +401,19 @@ class GameViewModelTest {
         assertTrue(viewModel.projectilesState.value.none { it.id == "torch_test" })
     }
 
+    /** A ranged build was feeding its whole quiver to a barn. The Saxons still shoot the barn. */
+    @Test
+    fun `player missiles mostly ignore building cover and enemy missiles never do`() {
+        fun shot(playerOwned: Boolean) = Projectile(
+            id = "t", isPlayerOwned = playerOwned, posX = 0f, posY = 0f,
+            velocityX = 0f, velocityY = 0f, damage = 1f, pierce = 0f, blunt = 0f,
+            type = ProjectileType.ARROW
+        )
+        assertTrue((1..400).none { shot(false).ignoresCover })
+        val passed = (1..400).count { shot(true).ignoresCover }
+        assertTrue("player shots past cover: $passed/400", passed in 280..400)
+    }
+
     @Test
     fun `weather is only offered late and never a third time`() {
         val method = GameViewModel::class.java.getDeclaredMethod("endBattle", Boolean::class.javaPrimitiveType)
@@ -531,12 +544,17 @@ class GameViewModelTest {
         val sword = GameData.WEAPON_HEADS.first { it.id == "head_sword" }
         val handle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" }
         val shield = GameData.SHIELDS.first { it.id != "shield_none" }
+        val mail = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" }
+        val helm = GameData.HEADGEAR_PIECES.first { it.id == "helm_conical" }
         mutateState {
             it.copy(
                 isThroneMode = true,
                 weaponHead = sword,
                 weaponHandle = handle,
                 shield = shield,
+                armor = mail,
+                headgear = helm,
+                extraArmors = listOf("armor_coif"),
                 extraAttachments = listOf("head_axe"),
                 handleExtensionCount = 2,
                 rangedUpgrades = listOf("multishot"),
@@ -553,6 +571,10 @@ class GameViewModelTest {
             .filter { it.id.raw.startsWith("pallbearer_") }
             .sortedBy { it.pallbearerIndex }
         for (front in bearers.take(2)) {
+            // BOTH front men carry the whole weapon. Bearer 1 used to get the lord's handle with a
+            // bare head on it, so the shield-carrier waved a headless stick around.
+            assertEquals(sword.id, front.weaponHead.id)
+            assertEquals(handle.id, front.weaponHandle.id)
             assertEquals(listOf("head_axe"), front.extraAttachments.map { it.id })
             assertEquals(2, front.handleExtensionCount)
             assertEquals(listOf("multishot"), front.rangedUpgrades)
@@ -561,12 +583,30 @@ class GameViewModelTest {
         }
         assertEquals(player.shieldHp, bearers[1].shieldHp, 0f)
         for (rear in bearers.drop(2)) {
+            // The rear pair only carry the throne, so they get no weapon and no shield...
             assertEquals("head_bare", rear.weaponHead.id)
             assertEquals("handle_fists", rear.weaponHandle.id)
             assertEquals("shield_none", rear.shield.id)
             assertTrue(rear.extraAttachments.isEmpty())
-            assertEquals("armor_bare", rear.armor.id)
         }
+        // ...but every one of the four wears the lord's armour, helm and layered pieces. They are
+        // the only thing between him and the Saxons; they were being sent out in starting kit.
+        for (bearer in bearers) {
+            assertEquals(mail.id, bearer.armor.id)
+            assertEquals(helm.id, bearer.headgear.id)
+            assertEquals(listOf("armor_coif"), bearer.extraArmors.map { it.id })
+        }
+    }
+
+    /** Health rewards the lord earns must reach the men carrying him. */
+    @Test
+    fun `pallbearers share the lords earned health`() {
+        mutateState { it.copy(isThroneMode = true, level = 1) }
+        viewModel.startBattle()
+        val boost = viewModel.uiState.value.totalHpBoost
+        val bearer = viewModel.enemiesState.value.first { it.id.raw == "pallbearer_3" }
+        // Level 1, so the per-level ally bonus is zero and the lord's own boost is all that shows.
+        assertEquals(70f + boost, bearer.maxHp, 0.001f)
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.example.game
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.asAndroidPath
 import kotlin.math.ceil
 import kotlin.math.max
 import org.junit.Assert.assertEquals
@@ -101,5 +102,80 @@ class StitchCraftTest {
             row++
         }
         return StitchGeometry(horizontal, anchors)
+    }
+}
+
+/**
+ * The hand-worked line must be *hand-worked*, not *animated*. Every deviation has to be identical
+ * every time the same shape is drawn, wherever it is on screen — otherwise the outlines crawl at
+ * 60fps and the whole tapestry boils. That is a property of the maths, not of how it looks, so it
+ * is checked here rather than by staring at a screenshot.
+ */
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+// NATIVE graphics is required, not optional: Robolectric's legacy shadow of PathMeasure returns
+// zeros for every getPosTan, so without this the test compares (0,0) against (0,0) and passes
+// while proving nothing at all.
+@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+@org.robolectric.annotation.Config(sdk = [34])
+class StitchJitterTest {
+
+    private fun blade(x: Float, y: Float) = androidx.compose.ui.graphics.Path().apply {
+        moveTo(x, y)
+        lineTo(x + 63f, y + 4f)
+        lineTo(x + 58f, y + 41f)
+        lineTo(x - 3f, y + 37f)
+        close()
+    }
+
+    /** Walks the finished outline so two paths can be compared point for point. */
+    private fun samples(path: androidx.compose.ui.graphics.Path): List<Offset> {
+        val measure = android.graphics.PathMeasure(path.asAndroidPath(), false)
+        val out = mutableListOf<Offset>()
+        val point = FloatArray(2)
+        do {
+            var d = 0f
+            while (d <= measure.length) {
+                measure.getPosTan(d, point, null)
+                out += Offset(point[0], point[1])
+                d += 2f
+            }
+        } while (measure.nextContour())
+        return out
+    }
+
+    @Test
+    fun `the same shape jitters identically every time it is drawn`() {
+        val first = samples(jitteredPath(blade(0f, 0f)))
+        val again = samples(jitteredPath(blade(0f, 0f)))
+        assertEquals("a redraw must not move a single stitch", first, again)
+        assertTrue("the outline must actually have been sampled", first.size > 10)
+    }
+
+    /**
+     * The one that matters. A fighter walking across the field hands us the same shape at a new
+     * x every frame; if the deviations were keyed off absolute position, his outline would writhe
+     * as he moved. Translating the shape must translate the jitter with it, unchanged.
+     */
+    @Test
+    fun `moving a shape across the field does not change its stitching`() {
+        val atOrigin = samples(jitteredPath(blade(0f, 0f)))
+        val movedBack = samples(jitteredPath(blade(250f, 90f)))
+            .map { Offset(it.x - 250f, it.y - 90f) }
+        assertEquals("same number of stitches", atOrigin.size, movedBack.size)
+        atOrigin.zip(movedBack).forEachIndexed { i, (a, b) ->
+            assertEquals("stitch $i drifted in x", a.x, b.x, 0.01f)
+            assertEquals("stitch $i drifted in y", a.y, b.y, 0.01f)
+        }
+    }
+
+    /** The deviation is a real one — this proves the test above is not passing on a no-op. */
+    @Test
+    fun `the jitter actually displaces the outline`() {
+        val straight = samples(blade(0f, 0f))
+        val worked = samples(jitteredPath(blade(0f, 0f)))
+        val drift = straight.zip(worked).maxOf { (a, b) ->
+            kotlin.math.abs(a.x - b.x) + kotlin.math.abs(a.y - b.y)
+        }
+        assertTrue("outline was not displaced at all: $drift", drift > 0.1f)
     }
 }

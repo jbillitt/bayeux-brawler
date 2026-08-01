@@ -42,8 +42,30 @@ data class Projectile(
      * at y≈80 and they spent the whole flight above the 100..350 body window: on a hill, nothing
      * ranged hit anything, uphill or down.
      */
-    val launchLiftY: Float = 0f
+    val launchLiftY: Float = 0f,
+    /** Plague-tipped: lays rotting sickness on whoever it strikes, stacking with existing rot. */
+    val isPlaguing: Boolean = false,
+    /**
+     * Share of the target's armour this missile simply ignores, 0..1. A bodkin point is a spike
+     * meant for mail; the reward cards promised exactly this and nothing implemented it, because
+     * a missile's `pierce` stat is never read when damage is worked out.
+     */
+    val armorPierceFraction: Float = 0f,
+    /** Fragments this missile bursts into when it strikes. 0 for an ordinary shaft. */
+    val clusterCount: Int = 0,
+    /**
+     * Whether this shot sails straight past a building instead of thudding into it. Rolled once,
+     * here, rather than per frame — a shot crossing the cover band gets many collision tests, and
+     * re-rolling each one would block almost everything however low the chance.
+     *
+     * The player's missiles mostly ignore cover: a ranged build was spending its whole battle
+     * feeding arrows to a barn. Enemy fire is blocked exactly as before.
+     */
+    val ignoresCover: Boolean = isPlayerOwned && Random.nextFloat() < PLAYER_COVER_PASS_CHANCE
 )
+
+/** How often a player-loosed missile flies past a building that would otherwise stop it. */
+const val PLAYER_COVER_PASS_CHANCE = 0.85f
 
 /** The body window a missile has to be inside to strike, measured from where it was loosed. */
 internal fun Projectile.atBodyHeight(): Boolean = (posY - launchLiftY) in 100f..350f
@@ -157,9 +179,20 @@ class GameViewModel : ViewModel() {
     private val _weatherFlash = MutableStateFlow<Pair<DivineWeather, Long>?>(null)
     val weatherFlash: StateFlow<Pair<DivineWeather, Long>?> = _weatherFlash.asStateFlow()
 
+    // Blood thrown onto the linen itself when a whole knot of men goes down together. Purely a
+    // flourish — it fades out and touches nothing in the simulation.
+    private val _tapestrySplats = MutableStateFlow<List<TapestrySplat>>(emptyList())
+    val tapestrySplats: StateFlow<List<TapestrySplat>> = _tapestrySplats.asStateFlow()
+
     private var gameLoopJob: Job? = null
     private var pendingReinforcements = 0
     private var battleContentRandom = Random(0)
+
+    // Multikill tracking for the splatter. Kept here rather than in CombatEngine so the flourish
+    // costs the combat rules nothing and needs no new BattleContext hook.
+    private var lastLivingEnemyCount = 0
+    private var multiKillCount = 0
+    private var multiKillWindow = 0f
 
     // Softlock watchdog: seconds since ANY hp (fighters, mounts, shields, gate) last changed.
     // If nothing has been hurt for a while mid-battle, something is stuck — see updateSimulation.
@@ -329,6 +362,22 @@ class GameViewModel : ViewModel() {
 
         /** Seconds before a spent weather charge is ready again. The border icons dim against it. */
         const val WEATHER_COOLDOWN = 60f
+
+        // Tapestry splatter. Seconds the kill window stays open, and how many must fall inside it.
+        const val MULTIKILL_WINDOW_SECS = 1.6f
+        const val MULTIKILL_THRESHOLD = 3
+
+        /** Finish a level with at least this much health left and it counts as unpunished. */
+        const val UNPUNISHED_HP_FRACTION = 0.8f
+        /**
+         * Unpunished levels in a row before the host starts compensating. Below this the run is
+         * simply going well; at and past it the player has stopped being fought and starts getting
+         * extra men and extra iron thrown at him until a level costs him something again.
+         */
+        const val UNPUNISHED_STREAK_TRIGGER = 5
+        /** Most extra bodies and armour layers the streak can ever add. */
+        const val UNPUNISHED_MAX_EXTRA_ENEMIES = 3
+        const val UNPUNISHED_MAX_EXTRA_ARMOUR = 2
     }
 
     /**
@@ -530,11 +579,15 @@ class GameViewModel : ViewModel() {
             val newHasRetinuePanoply = state.hasRetinuePanoply || choice.type == "panoply"
             val newHasShieldbreaker = state.hasShieldbreaker || choice.itemId == "counter_shieldbreaker"
             val newHasSiegeLadders = state.hasSiegeLadders || choice.type == "siege_ladders"
+            val newHasUnmuzzledBear = state.hasUnmuzzledBear || choice.type == "unmuzzle_bear"
             val newHasArmorPiercing = state.hasArmorPiercing || choice.itemId == "counter_armor_piercing"
             
             var newHeadgear = state.headgear
             if (choice.itemId == "armor_jester") {
                 newHeadgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_jester" }
+            }
+            if (choice.type == "headgear") {
+                newHeadgear = GameData.HEADGEAR_PIECES.first { it.id == choice.itemId }
             }
 
             // Take a mount as a reward and you ride it immediately — nobody picks a warhorse and
@@ -564,6 +617,7 @@ class GameViewModel : ViewModel() {
                 divineWeathers = newWeathers,
                 hasShieldbreaker = newHasShieldbreaker,
                 hasSiegeLadders = newHasSiegeLadders,
+                hasUnmuzzledBear = newHasUnmuzzledBear,
                 hasArmorPiercing = newHasArmorPiercing,
                 showLevelUpScreen = false,
                 pendingLevelUpChoices = emptyList()
@@ -818,6 +872,7 @@ class GameViewModel : ViewModel() {
             isOx = !state.isThroneMode && currentMount == Ancillary.WAR_OX,
             isMule = !state.isThroneMode && currentMount == Ancillary.PACK_MULE,
             isBear = !state.isThroneMode && currentMount == Ancillary.WAR_BEAR,
+            isBearUnmuzzled = state.hasUnmuzzledBear,
             isLord = state.isThroneMode,
             hasSilkenGarments = state.hasSilkenGarments,
             bandagesCount = state.bandagesCount
@@ -838,12 +893,16 @@ class GameViewModel : ViewModel() {
         // then jumped to three or four PLUS up to two more from perfBonus — so clearing the
         // tutorial well made the next fight harder, which is exactly backwards and was killing
         // people on level 2. The random roll and the performance bonus both start at level 4.
+        // How far past the trigger the player's untouched streak has run. Zero for anyone the
+        // Saxons have actually managed to hurt lately.
+        val unpunished = (state.unpunishedStreak - UNPUNISHED_STREAK_TRIGGER + 1).coerceAtLeast(0)
         val rawEnemiesCount = when (state.level) {
             1 -> 2
             2 -> 3
             3 -> 4
             else -> (2 + (state.level * 6 / 10) + contentRandom.nextInt(0, 2) +
-                (perfBonus * 2).toInt()).coerceAtLeast(2)
+                (perfBonus * 2).toInt() +
+                unpunished.coerceAtMost(UNPUNISHED_MAX_EXTRA_ENEMIES)).coerceAtLeast(2)
         }
         val enemiesCount = rawEnemiesCount.coerceAtMost(10)
         // Overflow beyond the on-screen cap arrives as reinforcements from the right once
@@ -863,11 +922,18 @@ class GameViewModel : ViewModel() {
                 val parapetCount = (max(3, (enemiesCount * 2) / 3) +
                     (if (siegeOrdinal == 0) -2 else siegeOrdinal.coerceAtMost(4))).coerceAtLeast(1)
                 val queueCount = max(3, enemiesCount + 2) + siegeOrdinal.coerceAtMost(5)
+                // A late siege is defended, not merely garrisoned: from level 30 the wall and the
+                // relief column layer on coif, gauntlets and boots the way the field host already
+                // does, and a second piece goes on at 50.
+                val defenderArmour = GameData.ARMOR_PIECES
+                    .filter { it.id in listOf("armor_coif", "armor_gauntlets", "armor_boots") }
+                    .take(if (state.level >= 50) 2 else if (state.level >= 30) 1 else 0)
                 val wall = List(parapetCount) { index ->
                     EnemyFactory.createArchetype(EnemyArchetype.WALL_ARCHER, index, state.level).apply {
                         elevated = true
                         posX = 1850f + index * 90f
                         targetX = posX
+                        extraArmors = defenderArmour
                     }
                 }
                 val queue = List(queueCount) { index ->
@@ -875,12 +941,18 @@ class GameViewModel : ViewModel() {
                         index == 0 -> EnemyArchetype.DANE_AXE_EXECUTIONER
                         index == 1 -> EnemyArchetype.NORMAN_LOYALIST
                         index == 2 -> EnemyArchetype.TORCH_BEARER
+                        // Deep sieges send the marginalia out of the gate: a snail squatting in the
+                        // gateway that has to be chewed through, and dog-heads down the column.
+                        state.level >= 40 && index == 3 -> EnemyArchetype.REBEL_SNAIL
+                        state.level >= 30 && index % 4 == 3 -> EnemyArchetype.CYNOCEPHALUS
                         else -> EnemyArchetype.HOUSECARL
                     }
                     EnemyFactory.createArchetype(type, parapetCount + index, state.level).apply {
                         posX = 2050f + index * 65f
                         targetX = posX
                         isCombatInactive = true
+                        // The snail's shell is its armour; strapping mail to it is nonsense.
+                        if (type != EnemyArchetype.REBEL_SNAIL) extraArmors = defenderArmour
                     }
                 }
                 val gateHp = 360f + state.level * 22f
@@ -896,6 +968,19 @@ class GameViewModel : ViewModel() {
             else -> List(enemiesCount) { index ->
                 EnemyFactory.randomSaxon(index, state.level, contentRandom)
             }.toMutableList()
+        }
+
+        // The host answers a player nobody can touch. Extra bodies came in above; this is the iron.
+        // Applied after every spawn branch so it reaches sieges and boss retinues too, and it lifts
+        // by itself the moment one level actually costs the player some health.
+        if (unpunished > 0) {
+            val hardening = GameData.ARMOR_PIECES
+                .filter { it.id in listOf("armor_coif", "armor_gauntlets", "armor_boots") }
+                .take(unpunished.coerceAtMost(UNPUNISHED_MAX_EXTRA_ARMOUR))
+            enemies.filter { !it.isPlayer && it.archetype != EnemyArchetype.REBEL_SNAIL }
+                .forEach { foe ->
+                    foe.extraArmors = (foe.extraArmors + hardening).distinctBy { it.id }
+                }
         }
 
         // Retinue bodies spawn one per copy (Twins/Thrice-Blessed) — ids get "#i" and everything
@@ -1115,9 +1200,16 @@ class GameViewModel : ViewModel() {
         }
         
         if (state.isThroneMode) {
-            // Dedicated retinue of four. Front pair (0,1) inherit the lord's gear and fight:
-            // one wields his weapon, the other carries his shield (or the weapon again when
-            // dual-wielding). Rear pair (2,3) only carry the throne.
+            // Dedicated retinue of four. Front pair (0,1) inherit the lord's weapon and fight;
+            // bearer 1 carries his shield as well. Rear pair (2,3) only carry the throne.
+            //
+            // Both front men carry the whole weapon. Bearer 1 used to get the lord's HANDLE with a
+            // head_bare head, so the shield-carrier walked into battle brandishing a naked haft.
+            //
+            // All four wear the lord's armour, helm and layered pieces, and share his earned HP:
+            // the men carrying you are the only thing between you and the Saxons, and they were
+            // being sent out in the kit you started the run in.
+            val lordArmours = state.extraArmors.mapNotNull { id -> GameData.ARMOR_PIECES.find { it.id == id } }
             for (i in 0 until 4) {
                 val isFront = i < 2
                 val bearerShield = if (i == 1 && !state.isDualWielding) {
@@ -1125,17 +1217,15 @@ class GameViewModel : ViewModel() {
                 } else {
                     GameData.SHIELDS.first { it.id == "shield_none" }
                 }
+                val bearerHp = 70f + state.totalHpBoost
                 enemies.add(FighterState(
                     id = FighterId("pallbearer_$i"), name = "Pallbearer", isPlayer = true,
-                    maxHp = 70f, hp = 70f,
-                    weaponHead = when {
-                        i == 0 -> state.weaponHead
-                        i == 1 && state.isDualWielding -> state.weaponHead
-                        else -> GameData.WEAPON_HEADS.first { it.id == "head_bare" }
-                    },
+                    maxHp = bearerHp, hp = bearerHp,
+                    weaponHead = if (isFront) state.weaponHead else GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                     weaponHandle = if (isFront) state.weaponHandle else GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                     shield = bearerShield,
-                    armor = if (isFront) state.armor else GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+                    armor = state.armor,
+                    extraArmors = lordArmours,
                     extraAttachments = if (isFront) {
                         state.extraAttachments.mapNotNull { id -> GameData.WEAPON_HEADS.find { it.id == id } }
                     } else {
@@ -1146,10 +1236,11 @@ class GameViewModel : ViewModel() {
                     shieldUpgrades = if (isFront) state.shieldUpgrades else emptyList(),
                     brawlerUpgrades = if (isFront) state.brawlerUpgrades else emptyList(),
                     shieldHp = if (isFront) shieldHpFor(bearerShield, state.shieldUpgrades) else 0f,
-                    headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                    headgear = state.headgear,
                     posX = player.posX, targetX = player.posX, facingRight = true, size = 0.95f,
                     hairColor = androidx.compose.ui.graphics.Color(0xFF5A442E), hairStyle = "short",
                     isDualWielding = isFront && state.isDualWielding,
+                    hasSilkenGarments = state.hasSilkenGarments,
                     pallbearerIndex = i
                 ))
             }
@@ -1185,6 +1276,10 @@ class GameViewModel : ViewModel() {
         _projectilesState.value = emptyList()
         _popupsState.value = emptyList()
         _particlesState.value = emptyList() // clear blood from previous battle
+        _tapestrySplats.value = emptyList()
+        lastLivingEnemyCount = enemies.count { !it.isPlayer && !it.isDead && !it.isDying }
+        multiKillCount = 0
+        multiKillWindow = 0f
 
         // Generate Environment
         val levelWidth = if (state.level == 1) 1500f else if (state.level >= 5) 2500f else 1000f + (contentRandom.nextFloat() * 500f)
@@ -1511,6 +1606,41 @@ class GameViewModel : ViewModel() {
             _screenshake.value = (_screenshake.value - dt * 45f).coerceAtLeast(0f)
         }
 
+        // Multikill splatter. Counted off the living-enemy tally rather than through a new combat
+        // hook: a body stops being living exactly once, whatever killed it, so this catches a
+        // cleave, a hail of arrows and a divine bolt alike without CombatEngine knowing about it.
+        run {
+            val livingNow = enemies.count { !it.isPlayer && !it.isDead && !it.isDying }
+            val fellThisTick = (lastLivingEnemyCount - livingNow).coerceAtLeast(0)
+            lastLivingEnemyCount = livingNow
+            if (multiKillWindow > 0f) {
+                multiKillWindow -= dt
+                if (multiKillWindow <= 0f) multiKillCount = 0
+            }
+            if (fellThisTick > 0) {
+                multiKillCount += fellThisTick
+                multiKillWindow = MULTIKILL_WINDOW_SECS
+                if (multiKillCount >= MULTIKILL_THRESHOLD) {
+                    multiKillCount = 0
+                    multiKillWindow = 0f
+                    _tapestrySplats.value = _tapestrySplats.value + List(Random.nextInt(3, 6)) {
+                        TapestrySplat(
+                            xFrac = Random.nextFloat(),
+                            // Upper reaches of the cloth, where nothing is happening — the border
+                            // and the sky. Down among the feet it would read as ordinary gore.
+                            yFrac = Random.nextFloat() * 0.45f,
+                            radius = 10f + Random.nextFloat() * 26f,
+                            seed = Random.nextInt(1000)
+                        )
+                    }
+                }
+            }
+            if (_tapestrySplats.value.isNotEmpty()) {
+                _tapestrySplats.value.forEach { it.age += dt }
+                _tapestrySplats.value = _tapestrySplats.value.filter { it.age < it.maxAge }
+            }
+        }
+
         if (siege != null) {
             SiegeRules.tickClimb(player, dt)
             SiegeRules.tickClimbs(enemies, dt)
@@ -1799,7 +1929,7 @@ class GameViewModel : ViewModel() {
             // so a background house no longer eats your arrows when nobody is hiding behind it.
             // Ship is pure background scenery — it never blocks.
             val coverTargets = if (proj.isPlayerOwned) livingEnemies else listOfNotNull(player.takeIf { !it.isDead })
-            val bgHit = bgObjects.firstOrNull { bg ->
+            val bgHit = if (proj.ignoresCover) null else bgObjects.firstOrNull { bg ->
                 !bg.isDestroyed && bg.type != BackgroundObjectType.SHIP &&
                 bg.type != BackgroundObjectType.CASTLE_GATE &&
                 bg.type != BackgroundObjectType.CASTLE_WALL &&
@@ -2135,11 +2265,16 @@ class GameViewModel : ViewModel() {
             val pendingChoices = mutableListOf<LevelUpChoice>()
             var showLevelUp = false
             var newPerf = state.performanceScore
+            var newUnpunishedStreak = state.unpunishedStreak
             if (won) {
                 // Compute performance from hp ratio + kill rate
                 val hpRatio = (state.playerHp / state.playerMaxHp).coerceIn(0f, 1f)
                 val killRate = (state.totalKills.toFloat() / (state.level.toFloat() + 1f)).coerceIn(0f, 1f)
                 newPerf = (hpRatio * 0.6f + killRate * 0.4f).coerceIn(0f, 1f)
+
+                // A level that barely scratched you extends the streak; one that hurt clears it.
+                newUnpunishedStreak =
+                    if (hpRatio >= UNPUNISHED_HP_FRACTION) state.unpunishedStreak + 1 else 0
 
                 val triggerMusicDecision = (state.level % 5 == 0)
 
@@ -2310,8 +2445,13 @@ class GameViewModel : ViewModel() {
 
                 // 3. Handle Extension or Layered Armor or Shield Upgrade option
                 val rndVal = Random.nextFloat()
-                // No haft extension on ranged weapons — a longer shaft does nothing for a bow/sling.
-                if (rndVal < 0.33f && !isUnarmed && !state.weaponHead.isRanged) {
+                // No haft extension on ranged weapons — a longer shaft does nothing for a bow/sling —
+                // and none once reach is capped, or the card is a wasted slot every level after.
+                val reachCapped = GameData.meleeReachMetres(
+                    state.weaponHandle.id, state.weaponHead.reach,
+                    state.characterSize, state.handleExtensionCount
+                ) >= GameData.MAX_MELEE_REACH_M
+                if (rndVal < 0.33f && !isUnarmed && !state.weaponHead.isRanged && !reachCapped) {
                     pendingChoices.add(LevelUpChoice(
                         id = "extension",
                         title = "Handle Extension",
@@ -2376,7 +2516,8 @@ class GameViewModel : ViewModel() {
                             LevelUpChoice("ranged_slingshot_spikes", "Sling: Barb-Wrapped Stones", "Wrap your lead shots in rusty iron barbs for +8 piercing damage and bleeding.", "ranged_upgrade", "slingshot_spikes"),
                             LevelUpChoice("ranged_slingshot_weapon_heads", "Sling: Weapon-Head Launcher", "Why hurl stones when you can sling mini battle-axes and morningstars?! Fires random weapon head shapes for massive hybrid damage!", "ranged_upgrade", "slingshot_weapon_heads"),
                             LevelUpChoice("ranged_slingshot_splash", "Sling: Shrapnel Stones", "Stones explode into sharp flint splinters upon hitting, dealing splash damage to nearby foes!", "ranged_upgrade", "slingshot_splash"),
-                            LevelUpChoice("ranged_slingshot_poison", "Sling: Swamp-Mud Poison", "Dip your stones in venomous Hastings swamp slime. Poisons foes, dealing damage over time!", "ranged_upgrade", "slingshot_poison")
+                            LevelUpChoice("ranged_slingshot_poison", "Sling: Swamp-Mud Poison", "Dip your stones in venomous Hastings swamp slime. Poisons foes, dealing damage over time!", "ranged_upgrade", "slingshot_poison"),
+                            LevelUpChoice("ranged_slingshot_plague", "Sling: Pestilent Eyeballs", "Sling the eyes of the plague dead over the line, as the besiegers of old did with whole corpses. Infects whoever they strike — and the rot piles onto any pestilence already in him.", "ranged_upgrade", "slingshot_plague")
                         )
                     } else {
                         listOf(
@@ -2385,13 +2526,79 @@ class GameViewModel : ViewModel() {
                             LevelUpChoice("ranged_bow_weapon_heads", "Ranged: Weapon-Tipped Shafts", "Fletch actual miniature iron morningstars and axes onto your arrows. Complete comedic over-engineering!", "ranged_upgrade", "bow_weapon_heads")
                         )
                     }
-                    
-                    val availableRanged = possibleUpgrades.filter { it.itemId !in state.rangedUpgrades }
-                    if (availableRanged.isNotEmpty()) {
-                        pendingChoices.add(availableRanged.random())
-                    }
+
+                    // Rare prizes a bow and a sling can both win. Multishot has no level gate on
+                    // purpose: a triple shot in the opening rounds is a story worth telling, and
+                    // the roll is thin enough that it stays a story. The other two want a run with
+                    // some road behind it.
+                    val rareRanged = listOf(
+                        LevelUpChoice(
+                            "ranged_cluster", "Ranged: Cluster Charge",
+                            "Pack every shot with flint scrap and iron nails. Each one bursts on impact, spraying ${CombatEngine.CLUSTER_FRAGMENTS} fragments through whoever is standing close.",
+                            "ranged_upgrade", "cluster"
+                        ) to (state.level >= 8 && Random.nextFloat() < 0.12f),
+                        LevelUpChoice(
+                            "ranged_volley", "Ranged: Arcing Volley",
+                            "Send a second shaft up with every attack. It falls on the rear ranks, well past where a flat shot dies — and it costs you nothing, it flies alongside your normal shot.",
+                            "ranged_upgrade", "volley"
+                        ) to (state.level >= 5 && Random.nextFloat() < 0.15f),
+                        LevelUpChoice(
+                            "ranged_multishot_double", "Ranged: Double Shot",
+                            "Two shafts to the string at once. Every attack looses an extra missile, forever.",
+                            "ranged_upgrade", "multishot_double"
+                        ) to (Random.nextFloat() < 0.05f),
+                        LevelUpChoice(
+                            "ranged_multishot_triple", "Ranged: Triple Shot",
+                            "Three shafts to the string, in defiance of all bowyery and most physics. Every attack looses two extra missiles.",
+                            "ranged_upgrade", "multishot_triple"
+                        ) to (Random.nextFloat() < 0.02f)
+                    ).filter { it.second }.map { it.first }
+                        .filter { it.itemId !in state.rangedUpgrades }
+
+                    // A rare prize that actually rolled takes the slot — rolling it and then
+                    // shuffling it back into the pool would be the same as never rolling it.
+                    val pick = rareRanged.firstOrNull()
+                        ?: possibleUpgrades.filter { it.itemId !in state.rangedUpgrades }.randomOrNull()
+                    if (pick != null) pendingChoices.add(pick)
                 }
                 
+                // 4c. Take the straps off Grimm. Only for a player actually riding the bear, and
+                // the card is blunt about the cost — an upside-only "unleash the bear" would be a
+                // trap dressed as a choice.
+                if (state.effectiveMount == Ancillary.WAR_BEAR && !state.hasUnmuzzledBear &&
+                    state.level >= 8
+                ) {
+                    pendingChoices.add(LevelUpChoice(
+                        id = "unmuzzle_bear",
+                        title = "Unmuzzle Grimm",
+                        description = "Cut the muzzle straps and let the bear fight. He mauls whatever you are fighting for heavy extra damage — but WARNING: a bear off the strap does not check who he is biting, and now and then he will maul one of your own retinue instead.",
+                        type = "unmuzzle_bear",
+                        itemId = "unmuzzle_bear"
+                    ))
+                }
+
+                // 4a. A helm for a bare head. You can start a run with nothing on your head and
+                // there was no way to ever change your mind. This is an offer, never a swap: it
+                // only appears while the head is actually bare, and only some of the time, so a
+                // deliberate bare-headed run isn't nagged every single level. The card says out
+                // loud what it costs, because the score bonus for going bare is large.
+                if (state.headgear.id == "helm_none" && state.level >= 3 && Random.nextFloat() < 0.35f) {
+                    val helmPool = GameData.HEADGEAR_PIECES.filter {
+                        it.id !in listOf("helm_none", "helm_jester") &&
+                            // The heavy iron waits until a run has some road behind it.
+                            (it.defense <= 45f || state.level >= 12)
+                    }
+                    helmPool.randomOrNull()?.let { helm ->
+                        pendingChoices.add(LevelUpChoice(
+                            id = "headgear_${helm.id}",
+                            title = helm.itemName,
+                            description = "${helm.description} +${helm.defense.toInt()} Armour — and it ends your bare-headed score bonus.",
+                            type = "headgear",
+                            itemId = helm.id
+                        ))
+                    }
+                }
+
                 // 4b. Counter "outs" — the whole of the light guidance: if the player has met a
                 // counter and lacks its answer, that answer joins the pool. Nothing is removed and
                 // nothing is auto-picked; they can still walk past it.
@@ -2448,6 +2655,7 @@ class GameViewModel : ViewModel() {
                 showLevelUpScreen = showLevelUp,
                 adRewardClaimedThisLevel = false, // a fresh level-up screen, a fresh offer
                 performanceScore = newPerf,
+                unpunishedStreak = newUnpunishedStreak,
                 bandagesCount = newBandagesCount,
                 showMusicDecision = if (won && (state.level % 5 == 0)) true else state.showMusicDecision,
                 pendingMusicOptions = if (won && (state.level % 5 == 0)) {
@@ -2603,6 +2811,9 @@ class GameViewModel : ViewModel() {
                     // Same leak class as activeMount: ladders were surviving the reset, so the
                     // next run scaled walls it never earned.
                     hasSiegeLadders = false,
+                    hasUnmuzzledBear = false,
+                    // A new man has not yet proved untouchable, whatever the last one managed.
+                    unpunishedStreak = 0,
                     isRetired = false,
                     seenCounters = emptySet(),
                     // Music state is per-run: moods were surviving the reset and stacking across

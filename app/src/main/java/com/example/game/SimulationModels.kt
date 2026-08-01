@@ -107,7 +107,9 @@ enum class DivineWeather(val id: String, val label: String, val description: Str
     LIGHTNING("weather_lightning", "Divine Bolt", "The heavens smite your mightiest foe."),
     FLOOD("weather_flood", "The Deluge", "A wall of water sweeps enemies from the field."),
     HAIL("weather_hail", "Hailstorm", "Fist-sized hail batters every foe to the ground."),
-    FROST("weather_frost", "Killing Frost", "Ice underfoot — the enemy host slips and falls."),
+    // Text matches the code on purpose: frost binds, hail fells. Promising a fall here made the
+    // miracle read as broken when the host merely crawled.
+    FROST("weather_frost", "Killing Frost", "Ice underfoot — the enemy host is bound to a crawl."),
     FROGS("weather_frogs", "Rain of Frogs", "The sky opens and frogs fall on EVERY man afield — friend, foe, and you. Chaos, as the chronicles promised.")
 }
 
@@ -233,6 +235,22 @@ object GameData {
      * A reward that reads "+1m reach" has to be worth the same to a small fighter as a large one.
      */
     const val EXTENSION_REACH_PX = 40f
+
+    /**
+     * Ceiling on melee reach, in metres. A haft long enough to hit everything on screen without
+     * ever closing the distance is not a build, it is an off switch — so reach stops here and the
+     * Handle Extension stops being offered once it does.
+     */
+    const val MAX_MELEE_REACH_M = 15f
+
+    /** Reach of a drawn weapon before body scale and haft extensions, in local pixels. */
+    fun localWeaponPixels(handleId: String, headReach: Float): Float =
+        GRIP_OFFSET_PX + haftPixels(handleId) * HAFT_BASIS_X + headReach * HEAD_OVERHANG_PX
+
+    /** Melee reach in metres, capped — the one answer the hitbox and the reward screen share. */
+    fun meleeReachMetres(handleId: String, headReach: Float, size: Float, extensions: Int): Float =
+        ((localWeaponPixels(handleId, headReach) * size + extensions * EXTENSION_REACH_PX) / 40f)
+            .coerceAtMost(MAX_MELEE_REACH_M)
 
     enum class WeaponHandle(
         override val id: String,
@@ -551,6 +569,8 @@ data class FighterState(
     var isOx: Boolean = false,
     var isMule: Boolean = false,
     var isBear: Boolean = false,
+    /** The straps are off. Grimm fights on his own account — see CombatEngine.bearMaul. */
+    var isBearUnmuzzled: Boolean = false,
     var isLord: Boolean = false,
     var hasSilkenGarments: Boolean = false, // lightens armour weight without losing protection
     val isWarPriest: Boolean = false, // never attacks; heals the worst-hurt foe near him
@@ -574,7 +594,6 @@ data class FighterState(
     var trampleCooldown: Float = 0f,
     var kills: Int = 0,
     var stuckProjectiles: MutableList<StuckProj> = mutableListOf(),
-    var lateGameMultiplier: Float = 1f,
     var bandagesCount: Int = 0,
     val archetype: EnemyArchetype? = null,
     var elevated: Boolean = false,
@@ -592,6 +611,15 @@ data class FighterState(
     var arrowEyeCritCooldown: Float = 4f,
     val bloodDecals: MutableList<Triple<Float, Float, Int>> = mutableListOf()
 ) {
+    /**
+     * Doses of each affliction currently on this body, indexed by [Dot.ordinal]. See [applyDot].
+     *
+     * Deliberately a body property rather than a constructor parameter: data-class copy() would
+     * hand every copy the SAME array, and the factories build bosses and retinues by copying a
+     * template — one poisoned housecarl would have poisoned all his brothers.
+     */
+    val dotStacks: IntArray = IntArray(Dot.entries.size)
+
     // Simulated Base Stats
     val totalMass: Float
         get() {
@@ -646,12 +674,11 @@ data class FighterState(
             // keeps exactly the range he has always had (40*size + 40 px of hit range), because
             // shortening him would be a balance change smuggled in under an art fix.
             val local = if (isBrawler) 60f else
-                GameData.GRIP_OFFSET_PX +
-                    GameData.haftPixels(weaponHandle.id) * GameData.HAFT_BASIS_X +
-                    weaponHead.reach * GameData.HEAD_OVERHANG_PX
-            return local * size +
+                GameData.localWeaponPixels(weaponHandle.id, weaponHead.reach)
+            return (local * size +
                 handleExtensionCount * GameData.EXTENSION_REACH_PX +
-                (if (isMounted) 60f else 0f)
+                (if (isMounted) 60f else 0f))
+                .coerceAtMost(GameData.MAX_MELEE_REACH_M * 40f)
         }
 
     /**
@@ -761,6 +788,20 @@ data class FighterState(
             val finalDelay = baseDelay * weightFactor * shieldFactor * (1f + handleSpeedPenalty) * crumpleFactor * playerBowFactor
             return max(0.3f, finalDelay) // lower cap
         }
+
+    /**
+     * The host's late-run edge, on damage and on foot speed.
+     *
+     * The player's own curve (+12% base damage a level, plus a tree of attachments and stacked
+     * armour) outruns anything the Saxons bring by about level 30 — past there the run stops being
+     * a fight. This is the counter-curve, and it is the single lever for "late levels are too easy":
+     * raise the rate or the ceiling here rather than buffing archetypes one at a time.
+     *
+     * Player-side bodies (the lord and his ancillaries, all isPlayer) are exempt by design.
+     */
+    val lateGameMultiplier: Float
+        get() = if (isPlayer) 1f
+        else 1f + ((level - 30).coerceAtLeast(0) * 0.02f).coerceAtMost(0.8f)
 
     /**
      * The naked Norman: fighting in nothing but your trousers is madness, and madness is rewarded.
@@ -880,8 +921,8 @@ val FighterState.ccResist: Float
     get() = when {
         // Undead flesh feels a blow less than living flesh — the tier multiplies the resistance
         // a boss already has rather than adding a second, separate rule.
-        bossType != null -> 0.2f * bossTier.ccResistScale
-        isBossRetinue -> 0.55f
+        bossType != null -> 0.1f * bossTier.ccResistScale
+        isBossRetinue -> 0.45f
         else -> 1f
     }
 
@@ -896,6 +937,72 @@ val FighterState.weaponDescription: String
         weaponHandle.id == "handle_fists" -> weaponHead.itemName
         else -> "${weaponHead.itemName} on ${weaponHandle.itemName}"
     }
+
+/**
+ * A gout of blood thrown clear across the linen itself when a great many men fall at once.
+ *
+ * Positions are fractions of the canvas rather than world pixels: the joke is that the tapestry
+ * — the artefact you are looking at, borders and all — got splashed, so it must not scroll or
+ * scale with the battlefield behind it. It fades and is gone.
+ */
+data class TapestrySplat(
+    val xFrac: Float,
+    val yFrac: Float,
+    val radius: Float,
+    val seed: Int,
+    var age: Float = 0f,
+    val maxAge: Float = 4.5f
+)
+
+/** The damage-over-time afflictions a body can be carrying. Order is the dotStacks index. */
+enum class Dot { POISON, BLEED, IGNITE, DISEASE }
+
+/**
+ * How many doses of one affliction a body can carry. Doses stack their bite, so this is also the
+ * cap on how fast any single damage-over-time can rot a man — three venoms is a death sentence
+ * already, and an uncapped stack would let one build delete a boss without swinging.
+ */
+const val MAX_DOT_STACKS = 3
+
+fun FighterState.dotSeconds(kind: Dot): Float = when (kind) {
+    Dot.POISON -> poisonDuration
+    Dot.BLEED -> bleedDuration
+    Dot.IGNITE -> igniteDuration
+    Dot.DISEASE -> diseaseDuration
+}
+
+private fun FighterState.setDotSeconds(kind: Dot, seconds: Float) {
+    when (kind) {
+        Dot.POISON -> poisonDuration = seconds
+        Dot.BLEED -> bleedDuration = seconds
+        Dot.IGNITE -> igniteDuration = seconds
+        Dot.DISEASE -> diseaseDuration = seconds
+    }
+}
+
+/**
+ * Lay a dose of an affliction on a body.
+ *
+ * Every source used to assign its duration outright, so a poisoned sling-stone landing on a man
+ * the hag had already envenomed simply reset his clock — two sources of the same rot were worth
+ * no more than one. A second dose now deepens it instead, to [MAX_DOT_STACKS], and the longer of
+ * the two clocks wins. Stacks clear when the affliction runs out (see CombatEngine's DOT ticks).
+ */
+fun FighterState.applyDot(kind: Dot, seconds: Float) {
+    val alreadyRotting = dotSeconds(kind) > 0f
+    dotStacks[kind.ordinal] =
+        if (alreadyRotting) (dotStacks[kind.ordinal] + 1).coerceAtMost(MAX_DOT_STACKS) else 1
+    setDotSeconds(kind, max(dotSeconds(kind), seconds))
+}
+
+/** Damage multiplier this body's current dose count earns for [kind]. Never below 1x while active. */
+fun FighterState.dotIntensity(kind: Dot): Float = dotStacks[kind.ordinal].coerceAtLeast(1).toFloat()
+
+/** Called when an affliction's clock runs out, so the next dose starts from one again. */
+fun FighterState.clearDot(kind: Dot) {
+    setDotSeconds(kind, 0f)
+    dotStacks[kind.ordinal] = 0
+}
 
 /**
  * The single door for every knockdown. Weather, grapples, wardogs and heavy blunt all came here
@@ -1022,6 +1129,8 @@ data class BattleSimState(
     val hasShieldbreaker: Boolean = false,
     /** Siege-ladder reward: you and your squad scale fortress walls right away. */
     val hasSiegeLadders: Boolean = false,
+    /** Grimm's straps are off: he mauls for you, and occasionally he mauls one of yours. */
+    val hasUnmuzzledBear: Boolean = false,
     val hasArmorPiercing: Boolean = false,
     // Counters the player has actually met. Drives which "out" card gets added to the reward pool.
     val seenCounters: Set<String> = emptySet(),
@@ -1065,7 +1174,13 @@ data class BattleSimState(
     val cometPortent: Boolean = false,
 
     val pendingSkipBonus: Int = 0, // score to award on next dismiss of level-up screen when skipped
-    val performanceScore: Float = 0.5f // dynamic difficulty: 0=struggling, 1=dominating
+    val performanceScore: Float = 0.5f, // dynamic difficulty: 0=struggling, 1=dominating
+    /**
+     * Consecutive levels finished having lost no more than a fifth of your health. The host reads
+     * this and answers it — see GameViewModel.UNPUNISHED_STREAK_TRIGGER. Resets the moment a level
+     * actually costs you something, so the pressure lifts as soon as the run gets hard again.
+     */
+    val unpunishedStreak: Int = 0
 ) {
     /** The name as it is written on the tapestry. Derived, so it can never drift from its parts. */
     val playerName: String

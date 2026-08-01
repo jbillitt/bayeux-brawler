@@ -85,6 +85,64 @@ class FighterStatsTest {
         assertEquals(drawnTip, f.meleeReachPixels, 0.5f)
     }
 
+    /** Reach stops at the cap however many hafts get lashed on — see GameData.MAX_MELEE_REACH_M. */
+    @Test
+    fun reachIsCappedInMetresAndPixelsAlike() {
+        val absurd = fighter(head = "head_pike", handle = "handle_pike_long", extensions = 40)
+        assertEquals(GameData.MAX_MELEE_REACH_M * 40f, absurd.meleeReachPixels, 0.001f)
+        assertEquals(GameData.MAX_MELEE_REACH_M, absurd.reach, 0.001f)
+        assertEquals(
+            GameData.MAX_MELEE_REACH_M,
+            GameData.meleeReachMetres("handle_pike_long", 2.5f, 1f, 40),
+            0.001f
+        )
+    }
+
+    /** The counter-curve is the host's alone: the player must never buff himself with it. */
+    @Test
+    fun lateGameCurveLiftsEnemiesOnlyAndStops() {
+        assertEquals(1f, fighter(level = 60).lateGameMultiplier, 0f)
+        assertEquals(1f, fighter(level = 30, isPlayer = false).lateGameMultiplier, 0f)
+        assertTrue(fighter(level = 50, isPlayer = false).lateGameMultiplier > 1f)
+        assertEquals(
+            fighter(level = 70, isPlayer = false).lateGameMultiplier,
+            fighter(level = 200, isPlayer = false).lateGameMultiplier,
+            0f
+        )
+    }
+
+    /** A second dose deepens the rot; a fresh one after it clears starts from one again. */
+    @Test
+    fun afflictionsStackToTheCapAndResetWhenCleared() {
+        val f = fighter()
+        f.applyDot(Dot.POISON, 5f)
+        assertEquals(1f, f.dotIntensity(Dot.POISON), 0f)
+
+        repeat(6) { f.applyDot(Dot.POISON, 3f) }
+        assertEquals(MAX_DOT_STACKS.toFloat(), f.dotIntensity(Dot.POISON), 0f)
+        // The longer clock wins — a short top-up must not cut an existing affliction short.
+        assertEquals(5f, f.poisonDuration, 0.001f)
+
+        // Afflictions are independent of one another.
+        assertEquals(1f, f.dotIntensity(Dot.BLEED), 0f)
+
+        f.clearDot(Dot.POISON)
+        assertEquals(0f, f.poisonDuration, 0f)
+        f.applyDot(Dot.POISON, 2f)
+        assertEquals(1f, f.dotIntensity(Dot.POISON), 0f)
+    }
+
+    /** copy() must not hand two fighters the same affliction array. */
+    @Test
+    fun afflictionsAreNotSharedBetweenCopies() {
+        val original = fighter()
+        original.applyDot(Dot.BLEED, 4f)
+        original.applyDot(Dot.BLEED, 4f)
+        val spawned = original.copy(id = FighterId("t2"))
+        assertEquals(0, spawned.dotStacks[Dot.BLEED.ordinal])
+        assertEquals(2, original.dotStacks[Dot.BLEED.ordinal])
+    }
+
     @Test
     fun playerDamageScalesTwelvePercentPerLevel() {
         val l1 = fighter(level = 1)

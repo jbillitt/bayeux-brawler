@@ -127,6 +127,9 @@ object Ads {
                 interstitial = null
             }
         }
+        // Start the quiet period from the moment one actually reaches the screen, so an ad that
+        // never showed cannot spend the window. See AdGate.MIN_INTERSTITIAL_GAP_MS.
+        AdGate.markInterstitialShown()
         ad.show(activity)
     }
 

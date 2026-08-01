@@ -355,7 +355,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, foot, bodyColor)
-            scope.drawPath(foot, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(foot, ThreadColor)
 
             // Spiral shell riding the back, rolled slightly off-true in death
             val shellCx = cx - dir * 30f
@@ -433,7 +433,7 @@ object TapestryRenderer {
             close()
         }
         drawStitchedFill(scope, cloak, cloakColor)
-        scope.drawPath(cloak, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(cloak, ThreadColor)
         // Fur collar
         scope.drawLine(Color(0xFFE7DCC4), Offset(cx - 30f, cy + 6f), Offset(cx + 30f, cy + 6f), strokeWidth = 9f, cap = StrokeCap.Round)
         when (boss) {
@@ -506,7 +506,11 @@ object TapestryRenderer {
             scope.withTransform({
                 rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f))
             }) {
-                drawStitchedStrap(this, Offset(cx - 10f, cy + 90f), Offset(cx - 24.5f, cy + 150.5f), legColorL)
+                // The strap is a 17px round-capped line, so its end bulges ~8.5px past this point
+                // in every direction. Ending it at the boot's SOLE put that bulge outside the
+                // boot entirely — the leg overshot the foot and poked out below and behind the
+                // heel. It now stops at the ankle, where the boot covers the join.
+                drawStitchedStrap(this, Offset(cx - 10f, cy + 90f), Offset(cx - 17f, cy + 143f), legColorL)
                 val bootPathL = Path().apply {
                     moveTo(cx - 23.5f, cy + 145.5f) // back heel
                     lineTo(cx - 24f, cy + 155f) // bottom heel
@@ -539,7 +543,9 @@ object TapestryRenderer {
         scope.withTransform({
             rotate(radToDeg(angleR), pivot = Offset(cx + 10f, cy + 90f))
         }) {
-            drawStitchedStrap(this, Offset(cx + 10f, cy + 90f), Offset(cx + 14.5f, cy + 145.5f), legColorR)
+            // Same as the back leg: stop at the ankle, inside the boot, not on the sole. The cap
+            // used to bulge left of the heel at x+6 when the boot only starts at x+12.
+            drawStitchedStrap(this, Offset(cx + 10f, cy + 90f), Offset(cx + 20f, cy + 143f), legColorR)
             val bootPathR = Path().apply {
                 moveTo(cx + 14f, cy + 145f) // back heel
                 lineTo(cx + 12f, cy + 155.5f) // bottom heel
@@ -668,7 +674,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, gown, Color(0xFF2F2C25))
-            scope.drawPath(gown, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(gown, ThreadColor)
             // Hunch: a great rounded hump rising behind the shoulders
             val hump = Path().apply {
                 moveTo(cx - 26f, cy + 26f)
@@ -677,7 +683,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, hump, Color(0xFF3E3A2E))
-            scope.drawPath(hump, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(hump, ThreadColor)
         }
 
         if (fighter.isWarPriest) {
@@ -723,7 +729,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, ragPath, fillCol)
-            scope.drawPath(ragPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(ragPath, ThreadColor)
         } else {
             // Add a traditional embroidered pattern trim at the bottom hem
             val hemPath = Path().apply {
@@ -734,11 +740,11 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, hemPath, Color(0xFFB08221)) // Gold/mustard border
-            scope.drawPath(hemPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(hemPath, ThreadColor)
         }
 
         // Torso outline
-        scope.drawPath(tunicPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(tunicPath, ThreadColor)
 
         // Textures
         when (fighter.armor.id) {
@@ -767,9 +773,9 @@ object TapestryRenderer {
                     close()
                 }
                 drawStitchedFill(scope, capL, extraArmor.color)
-                scope.drawPath(capL, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(capL, ThreadColor)
                 drawStitchedFill(scope, capR, extraArmor.color)
-                scope.drawPath(capR, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(capR, ThreadColor)
                 return@forEachIndexed
             }
             if (extraArmor.id == "armor_surcoat") {
@@ -783,7 +789,7 @@ object TapestryRenderer {
                     close()
                 }
                 drawStitchedFill(scope, surcoat, extraArmor.color)
-                scope.drawPath(surcoat, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(surcoat, ThreadColor)
                 return@forEachIndexed
             }
             val dx = 32f + i * 2f
@@ -796,7 +802,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, extraTunicPath, extraArmor.color)
-            scope.drawPath(extraTunicPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(extraTunicPath, ThreadColor)
             
             when (extraArmor.id) {
                 "armor_chainmail" -> drawChainmailTexture(scope, cx - 25f, cy + 20f, 50f, dy - 20f)
@@ -931,7 +937,7 @@ object TapestryRenderer {
             lineTo(hx + 10f, hy + 5f); lineTo(hx + 12f, hy + 40f); close()
         }
         drawStitchedFill(scope, neckPath, fur)
-        scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(neckPath, ThreadColor)
 
         // Muzzle geometry by face type
         val muzzleLen = when (fighter.faceNoseShape) {
@@ -957,7 +963,7 @@ object TapestryRenderer {
             close()
         }
         drawStitchedFill(scope, headPath, fur)
-        scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(headPath, ThreadColor)
         // Nose pad
         scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(hx + muzzleLen - 1f, hy + muzzleDrop + 1f))
 
@@ -1031,6 +1037,9 @@ object TapestryRenderer {
         }
     }
 
+    /** PROTOTYPE knob: 1f is the current even proportion, ~0.8 is the tapestry's small head. */
+    private val BAYEUX_HEAD_SCALE = 0.82f
+
     private fun drawHead(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         var headOffsetX = 0f
         var headOffsetY = 0f
@@ -1059,6 +1068,13 @@ object TapestryRenderer {
             translate(headOffsetX, headOffsetY)
             rotate(headRot, pivot = Offset(cx, cy - 25f))
             if (squash != 1f) scale(1f + (1f - squash) * 0.5f, squash, pivot = Offset(cx, cy + 12f))
+            // PROTOTYPE — Bayeux proportion. Figures on the tapestry have notably small heads on
+            // long bodies; ours are evenly proportioned, which is most of what makes them read as
+            // cartoon rather than as the artefact. Pivoted at the neck join so the head stays
+            // attached and only its size changes.
+            if (BAYEUX_HEAD_SCALE != 1f) {
+                scale(BAYEUX_HEAD_SCALE, BAYEUX_HEAD_SCALE, pivot = Offset(cx, cy + 15f))
+            }
         }) {
             val hx = cx
             val hy = cy - 25f
@@ -1080,7 +1096,7 @@ object TapestryRenderer {
             }
             val skinColor = skinTone(fighter)
         drawStitchedFill(scope, neckPath, skinColor)
-        scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(neckPath, ThreadColor)
 
         // 2. Head Profile
         val fhX = if (fighter.faceForehead == 1) 14f else if (fighter.faceForehead == 2) 4f else 8f
@@ -1124,7 +1140,7 @@ object TapestryRenderer {
             close()
         }
         drawStitchedFill(scope, headPath, skinColor)
-        scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(headPath, ThreadColor)
 
         if (fighter.warPaint == 1) {
             // Woad, daubed straight over the skin: two bars across the eyes and a stripe down the jaw.
@@ -1155,7 +1171,7 @@ object TapestryRenderer {
                 lineTo(hx - 6f, hy - 18f); lineTo(hx - 18f, hy - 10f); close()
             }
             drawStitchedFill(scope, brim, Color(0xFFD9B871))
-            scope.drawPath(brim, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(brim, ThreadColor)
             // Veil mesh: translucent panel with cross-hatch threads
             val veil = Path().apply {
                 moveTo(hx - 20f, hy - 6f); lineTo(hx + 20f, hy - 6f)
@@ -1184,7 +1200,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, hagNose, Color(0xFF6B8E23)) // green warty
-            scope.drawPath(hagNose, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(hagNose, ThreadColor)
             // Warts
             scope.drawCircle(Color(0xFF4A5D23), radius = 1.5f, center = Offset(hx + 20f, hy + 6f))
             scope.drawCircle(Color(0xFF4A5D23), radius = 1f, center = Offset(hx + 28f, hy + 5f))
@@ -1473,7 +1489,7 @@ object TapestryRenderer {
                 }
             }
             drawStitchedFill(scope, hairPath, fighter.hairColor)
-            scope.drawPath(hairPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(hairPath, ThreadColor)
 
             // Hag's dodgy crooked witch hat
             if (fighter.isKind("hag")) {
@@ -1485,7 +1501,7 @@ object TapestryRenderer {
                     close()
                 }
                 drawStitchedFill(scope, hatPath, hatColor)
-                scope.drawPath(hatPath, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(hatPath, ThreadColor)
                 val brimPath = Path().apply {
                     moveTo(hx - 21f, hy - 4f)
                     lineTo(hx + 17f, hy - 6f)
@@ -1494,7 +1510,7 @@ object TapestryRenderer {
                     close()
                 }
                 drawStitchedFill(scope, brimPath, hatColor)
-                scope.drawPath(brimPath, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(brimPath, ThreadColor)
             }
 
             // Draw facial hair
@@ -1536,7 +1552,7 @@ object TapestryRenderer {
             }
             if (hasLongBeard || fighter.faceMustache == 2) {
                 drawStitchedFill(scope, mustache, fighter.hairColor)
-                scope.drawPath(mustache, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(mustache, ThreadColor)
             } else {
                 scope.drawPath(mustache, fighter.hairColor, style = Stroke(width = 3.5f, cap = StrokeCap.Round))
             }
@@ -1556,7 +1572,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, coifPath, Color(0xFF868C91))
-            scope.drawPath(coifPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(coifPath, ThreadColor)
             drawChainmailTexture(scope, hx - 12f, hy - 4f, 24f, 18f)
         }
         
@@ -1569,7 +1585,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, helmPath, Color(0xFFBAC5CC)) // metallic steel
-            scope.drawPath(helmPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(helmPath, ThreadColor)
 
             // Nasal Guard (iron strip protecting the nose)
             val nasalPath = Path().apply {
@@ -1580,7 +1596,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, nasalPath, Color(0xFF727A80))
-            scope.drawPath(nasalPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(nasalPath, ThreadColor)
         } else if (helmId == "helm_cervelliere") {
             val skullCap = Path().apply {
                 moveTo(hx - 14f, hy)
@@ -1588,7 +1604,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, skullCap, Color(0xFF9EA3A8))
-            scope.drawPath(skullCap, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(skullCap, ThreadColor)
         } else if (helmId == "helm_phrygian") {
             // Iron cap whose peak curls forward over the brow — the Norman helm of the tapestry
             val cap = Path().apply {
@@ -1599,7 +1615,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, cap, Color(0xFF8C959B))
-            scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(cap, ThreadColor)
             scope.drawLine(ThreadColor, Offset(hx - 12f, hy - 6f), Offset(hx + 10f, hy - 10f), strokeWidth = 1.5f)
         } else if (helmId == "helm_mitre") {
             // Bishop Odo's cloth-of-gold mitre: two peaks with an orphrey band
@@ -1612,7 +1628,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, mitre, Color(0xFFD8C48A))
-            scope.drawPath(mitre, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(mitre, ThreadColor)
             scope.drawLine(Color(0xFF9E3624), Offset(hx - 12f, hy - 6f), Offset(hx + 12f, hy - 6f), strokeWidth = 3f)
             scope.drawLine(Color(0xFF9E3624), Offset(hx - 2f, hy - 24f), Offset(hx + 2f, hy - 4f), strokeWidth = 2f)
         } else if (helmId == "helm_straw") {
@@ -1624,14 +1640,14 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, brim, Color(0xFFD9B871))
-            scope.drawPath(brim, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(brim, ThreadColor)
             val crown = Path().apply {
                 moveTo(hx - 12f, hy - 1f)
                 quadraticTo(hx, hy - 20f, hx + 12f, hy - 1f)
                 close()
             }
             drawStitchedFill(scope, crown, Color(0xFFC9A45C))
-            scope.drawPath(crown, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(crown, ThreadColor)
             // straw texture
             for (i in -2..2) {
                 scope.drawLine(Color(0xFFA98643), Offset(hx + i * 5f, hy - 2f), Offset(hx + i * 5f + 2f, hy - 12f), strokeWidth = 1f)
@@ -1645,7 +1661,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, spangen, Color(0xFF7A8389))
-            scope.drawPath(spangen, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(spangen, ThreadColor)
             // Rivet bands
             scope.drawLine(Color(0xFFB08221), Offset(hx - 16f, hy), Offset(hx + 16f, hy), strokeWidth = 3f)
             scope.drawLine(Color(0xFFB08221), Offset(hx, hy), Offset(hx, hy - 20f), strokeWidth = 3f)
@@ -1656,7 +1672,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, kettle, Color(0xFF8B9298))
-            scope.drawPath(kettle, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(kettle, ThreadColor)
             // Wide brim
             val brim = Path().apply {
                 moveTo(hx - 22f, hy)
@@ -1666,7 +1682,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, brim, Color(0xFF8B9298))
-            scope.drawPath(brim, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(brim, ThreadColor)
         } else if (helmId == "helm_mask") {
             val mask = Path().apply {
                 moveTo(hx - 16f, hy - 20f)
@@ -1676,7 +1692,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, mask, Color(0xFF7B858B))
-            scope.drawPath(mask, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(mask, ThreadColor)
             // One eye slit. The head is drawn in profile, so the far eye is round the back of it.
             scope.drawLine(Color(0xFF222222), Offset(hx + 2f, hy - 2f), Offset(hx + 14f, hy + 2f), strokeWidth = 2.5f)
             // Breathing holes
@@ -1693,7 +1709,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, bucketPath, Color(0xFF727A80))
-            scope.drawPath(bucketPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(bucketPath, ThreadColor)
             
             // Eye slit
             val slitPath = Path().apply {
@@ -1720,7 +1736,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, hatPath, Color(0xFFD63C3C))
-            scope.drawPath(hatPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(hatPath, ThreadColor)
             // Bells
             scope.drawCircle(Color(0xFFFFD700), radius = 4f, center = Offset(hx - 30f, hy - 10f))
             scope.drawCircle(Color(0xFFFFD700), radius = 4f, center = Offset(hx, hy - 30f))
@@ -1735,7 +1751,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, cap, Color(0xFF7A868C))
-            scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(cap, ThreadColor)
             val antler = Color(0xFFBFA278)
             listOf(-1f, 1f).forEach { side ->
                 val beam = Path().apply {
@@ -1754,7 +1770,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, cap, Color(0xFF8C969E))
-            scope.drawPath(cap, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(cap, ThreadColor)
             // Wings sweeping back from the temples.
             listOf(-1f, 1f).forEach { side ->
                 val wing = Path().apply {
@@ -1764,7 +1780,7 @@ object TapestryRenderer {
                     close()
                 }
                 drawStitchedFill(scope, wing, Color(0xFFD8D2C4))
-                scope.drawPath(wing, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(wing, ThreadColor)
             }
         } else if (helmId == "helm_wolf") {
             // A hood of pelt: snout forward over the brow, ears up, pelt falling behind.
@@ -1776,7 +1792,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, cowl, Color(0xFF5A5048))
-            scope.drawPath(cowl, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(cowl, ThreadColor)
             // Ears.
             listOf(-6f, 8f).forEach { ex ->
                 val ear = Path().apply {
@@ -1786,7 +1802,7 @@ object TapestryRenderer {
                     close()
                 }
                 drawStitchedFill(scope, ear, Color(0xFF4A4038))
-                scope.drawPath(ear, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(ear, ThreadColor)
             }
             // The wolf's own eye, on the snout above the wearer's.
             scope.drawCircle(Color(0xFFD9B871), radius = 2f, center = Offset(hx + 10f, hy - 9.5f))
@@ -1799,7 +1815,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, triangle_3, Color(0xFFFAF6EB))
-            scope.drawPath(triangle_3, Color(0xFFBAC5CC), style = StitchedStroke)
+            scope.drawStitchedOutline(triangle_3, Color(0xFFBAC5CC))
             val triangle_4 = Path().apply {
                 moveTo(hx + 18f, hy - 1.5f)
                 lineTo(hx + 17.5f, hy + 2f)
@@ -1807,7 +1823,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, triangle_4, Color(0xFFFAF6EB))
-            scope.drawPath(triangle_4, Color(0xFFBAC5CC), style = StitchedStroke)
+            scope.drawStitchedOutline(triangle_4, Color(0xFFBAC5CC))
             val triangle_5 = Path().apply {
                 moveTo(hx + 13.5f, hy + 0.5f)
                 lineTo(hx + 13.5f, hy + 4f)
@@ -1815,7 +1831,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, triangle_5, Color(0xFFFAF6EB))
-            scope.drawPath(triangle_5, Color(0xFFBAC5CC), style = StitchedStroke)
+            scope.drawStitchedOutline(triangle_5, Color(0xFFBAC5CC))
 } else if (helmId == "helm_pot") {
             // A cauldron, upside down, jammed on. Flat base up, handle out the side.
             val pot = Path().apply {
@@ -1826,7 +1842,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, pot, Color(0xFF4A4E51))
-            scope.drawPath(pot, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(pot, ThreadColor)
             // Rim (the pot's foot, now its crown) and a soot band.
             scope.drawLine(Color(0xFF6E7477), Offset(hx - 17f, hy - 18f), Offset(hx + 17f, hy - 18f), strokeWidth = 3f)
             scope.drawLine(Color(0xFF2C2219), Offset(hx - 16f, hy - 6f), Offset(hx + 16f, hy - 6f), strokeWidth = 2f)
@@ -1854,7 +1870,7 @@ object TapestryRenderer {
                 close()
             }
             drawStitchedFill(scope, crownPath, Color(0xFFFFD700)) // Gold
-            scope.drawPath(crownPath, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(crownPath, ThreadColor)
             // Jewels
             scope.drawCircle(Color(0xFFBF3030), radius = 2f, center = Offset(hx - 10f, hy - 15f))
             scope.drawCircle(Color(0xFF305ABF), radius = 2f, center = Offset(hx, hy - 20f))
@@ -1978,7 +1994,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(tip, headColor)
-                scope.drawPath(tip, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(tip, ThreadColor)
             }
             "head_spear" -> {
                 // Broad leaf point — deliberately distinct from the pike's needle
@@ -1990,7 +2006,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(path, ThreadColor)
             }
             "head_pike" -> {
                 // Long slender needle on a collar — half again the spear's length, a fraction
@@ -2003,7 +2019,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(path, ThreadColor)
                 // Iron collar where needle meets haft
                 scope.drawLine(
                     headColor,
@@ -2046,7 +2062,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(blade, headColor)
-                scope.drawPath(blade, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(blade, ThreadColor)
                 // Langets: the iron straps binding the socket to the haft.
                 scope.drawLine(ThreadColor, at(-4f, -7f), at(-4f, 7f), strokeWidth = 2f)
                 scope.drawLine(ThreadColor, at(4f, -8f), at(4f, 11f), strokeWidth = 1.5f)
@@ -2107,7 +2123,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(macePath, headColor)
-                scope.drawPath(macePath, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(macePath, ThreadColor)
                 // Flanges
                 scope.drawLine(ThreadColor, at(0f, -8f), at(18f, -2f), strokeWidth = 2f)
                 scope.drawLine(ThreadColor, at(0f, 8f), at(18f, 2f), strokeWidth = 2f)
@@ -2135,7 +2151,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(path, ThreadColor)
                 // Fullers
                 scope.drawLine(ThreadColor, headPos, at(bladeLen, 0f), strokeWidth = 1.5f)
 
@@ -2211,7 +2227,7 @@ object TapestryRenderer {
                 // Outlined in its own fill, unlike every other head: the pouch strap is only a
                 // few units wide, so a thread outline swallows it whole and reads as a black
                 // smear. It needs no silhouette now the head stands clear of the sleeve.
-                scope.drawPath(square_1, Color(0xFF8A5E38), style = StitchedStroke)
+                scope.drawStitchedOutline(square_1, Color(0xFF8A5E38))
 }
             "head_longbow" -> {
                 // Same stave length as before (114 units), hung 12 lower: it ran -69/+45 about the
@@ -2320,7 +2336,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(path, ThreadColor)
             }
 
             "head_lucerne" -> {
@@ -2333,7 +2349,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(path, ThreadColor)
                 // Small spikes on hammer back
                 scope.drawLine(ThreadColor, androidx.compose.ui.geometry.Offset(headPos.x + 8f, headPos.y + 16f), androidx.compose.ui.geometry.Offset(headPos.x + 8f, headPos.y + 22f), strokeWidth = 2f)
                 scope.drawLine(ThreadColor, androidx.compose.ui.geometry.Offset(headPos.x + 12f, headPos.y + 13f), androidx.compose.ui.geometry.Offset(headPos.x + 16f, headPos.y + 18f), strokeWidth = 2f)
@@ -2347,7 +2363,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(path, ThreadColor)
                 // Crossguard
                 scope.drawLine(androidx.compose.ui.graphics.Color(0xFFCFB53B), androidx.compose.ui.geometry.Offset(headPos.x + 4f, headPos.y - 11.5f), androidx.compose.ui.geometry.Offset(headPos.x - 4.5f, headPos.y + 15f), strokeWidth = 5f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
             }
@@ -2376,7 +2392,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(path, ThreadColor)
             }
             "head_spiked_mace" -> {
                 scope.drawCircle(headColor, radius = 14f, center = headPos)
@@ -2406,7 +2422,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(path, ThreadColor)
                 // Knots and bumps
                 scope.drawCircle(Color(0xFF3E2723), radius = 3.5f, center = Offset(headPos.x + 25f, headPos.y - 10f))
                 scope.drawCircle(Color(0xFF3E2723), radius = 4.5f, center = Offset(headPos.x + 40f, headPos.y + 5f))
@@ -2432,7 +2448,7 @@ object TapestryRenderer {
                     close()
                 }
                 drawStitchedFill(scope, wrap, Color(0xFF3E2723))
-                scope.drawPath(wrap, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(wrap, ThreadColor)
                 // Binding cords
                 for (t in listOf(4f, 12f, 20f)) {
                     scope.drawLine(ThreadColor, at(t, -8f), at(t, 8f), strokeWidth = 1.8f)
@@ -2501,7 +2517,7 @@ object TapestryRenderer {
                     close()
                 }
                 scope.drawPath(path, headColor)
-                scope.drawPath(path, ThreadColor, style = StitchedStroke)
+                scope.drawStitchedOutline(path, ThreadColor)
             }
         }
     }
@@ -2670,7 +2686,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, path_0, Color(0xFF8A5E38))
-                    drawPath(path_0, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(path_0, ThreadColor)
                     val path_1 = Path().apply {
                         moveTo(-10f, 20f)
                         lineTo(-10f, 10f)
@@ -2686,7 +2702,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, path_1, Color(0xFF8A5E38))
-                    drawPath(path_1, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(path_1, ThreadColor)
                     val path_2 = Path().apply {
                         moveTo(40f, -40f)
                         lineTo(40f, -50f)
@@ -2696,7 +2712,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, path_2, Color(0xFF8A5E38))
-                    drawPath(path_2, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(path_2, ThreadColor)
                 }
                 // Weapon head welds to the branch's visual tip (60,-80 local), not the generic
                 // shaftEnd — there was a visible gap otherwise
@@ -2709,7 +2725,7 @@ object TapestryRenderer {
                         quadraticTo(6f, -18f, 2f, -40f)
                     }
                     drawPath(beam, fighter.weaponHandle.color, style = Stroke(width = 7f))
-                    drawPath(beam, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(beam, ThreadColor)
                     drawLine(fighter.weaponHandle.color, Offset(3f, -18f), Offset(16f, -26f), strokeWidth = 5f)
                     drawLine(fighter.weaponHandle.color, Offset(2f, -30f), Offset(14f, -40f), strokeWidth = 5f)
                 }
@@ -2744,7 +2760,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, bell, brass)
-                    drawPath(bell, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(bell, ThreadColor)
 
                     // Tapering tube from the mouthpiece out to the bell throat.
                     val tube = Path().apply {
@@ -2755,7 +2771,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, tube, brass)
-                    drawPath(tube, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(tube, ThreadColor)
 
                     // Ferrule bands: the join collars. Two short bars are the whole difference
                     // between "brass instrument" and "yellow pole".
@@ -2789,7 +2805,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, tubPath, Color(0xFF8B6B4A))
-                    drawPath(tubPath, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(tubPath, ThreadColor)
                     // Wooden plank slats inside tub
                     drawLine(ThreadColor, Offset(56.5f, 77.5f), Offset(89.5f, 32.5f), strokeWidth = 1f)
                     drawLine(ThreadColor, Offset(47.5f, 57.5f), Offset(55.5f, 79.5f), strokeWidth = 1f)
@@ -2822,7 +2838,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, plankPath, plankColor)
-                    drawPath(plankPath, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(plankPath, ThreadColor)
 
                     // Wood grain lines
                     drawLine(ThreadColor.copy(alpha = 0.5f), Offset(-13f, 4f), Offset(45f, -42f), strokeWidth = 1f)
@@ -2862,7 +2878,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, shank, iron)
-                    drawPath(shank, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(shank, ThreadColor)
 
                     // The ring at the grip end — where the cable bends on, and the giveaway
                     // silhouette detail the old drawing was missing entirely.
@@ -2877,7 +2893,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, stock, iron)
-                    drawPath(stock, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(stock, ThreadColor)
 
                     // Crown and arms. The arms sweep out from the crown and curve BACK TOWARD the
                     // ring — that returning hook is what makes an anchor an anchor, and drawing
@@ -2895,7 +2911,7 @@ object TapestryRenderer {
                             close()
                         }
                         drawStitchedFill(this, arm, iron)
-                        drawPath(arm, ThreadColor, style = StitchedStroke)
+                        drawStitchedOutline(arm, ThreadColor)
                     }
                 }
                 headPos = Offset(hx, hy - 80f)
@@ -2924,7 +2940,7 @@ object TapestryRenderer {
                         close()
                     }
                     drawStitchedFill(this, blade, fighter.weaponHandle.color)
-                    drawPath(blade, ThreadColor, style = StitchedStroke)
+                    drawStitchedOutline(blade, ThreadColor)
                     // Grain down the blade, so it reads as a shaved plank and not a paddle-shaped hole.
                     drawLine(ThreadColor.copy(alpha = 0.5f), Offset(handleLen - 30f, 0f), Offset(handleLen + 3f, 0f), strokeWidth = 1f)
                 }
@@ -3487,7 +3503,7 @@ object TapestryRenderer {
                     }
                 }
             }
-            drawPath(shieldPath, ThreadColor, style = StitchedStroke)
+            drawStitchedOutline(shieldPath, ThreadColor)
             
             if (fighter.shieldUpgrades.contains("shield_helmet")) {
                 val helmColor = Color(0xFF869299)
@@ -3499,7 +3515,7 @@ object TapestryRenderer {
                     close()
                 }
                 drawPath(helmPath, helmColor)
-                drawPath(helmPath, ThreadColor, style = StitchedStroke)
+                drawStitchedOutline(helmPath, ThreadColor)
                 // Nose guard
                 drawLine(helmColor, Offset(shx, shy - 2f), Offset(shx, shy + 12f), strokeWidth = 4f, cap = StrokeCap.Round)
                 drawLine(ThreadColor, Offset(shx, shy - 2f), Offset(shx, shy + 12f), strokeWidth = 1f)

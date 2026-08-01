@@ -148,7 +148,9 @@ object EnemyFactory {
             EnemyArchetype.NORMAN_LOYALIST -> 1.5f
             EnemyArchetype.MONK_MILITIA -> 0.65f
             EnemyArchetype.CYNOCEPHALUS -> 1.25f
-            EnemyArchetype.REBEL_SNAIL -> 6f // the marginalia knight's true nightmare: it does not die
+            // The marginalia knight's true nightmare: it does not die. It turns up late, by which
+            // point the player is fully snowballed, so it needs to be a wall rather than a joke.
+            EnemyArchetype.REBEL_SNAIL -> 18f
             else -> 1f
         }
         val shield = safeShield(kit[2])

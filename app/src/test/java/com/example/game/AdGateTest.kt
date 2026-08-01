@@ -58,6 +58,9 @@ class AdGateTest {
         assertFalse("the runtime switch must default to off", AdGate.testAdsEnabled)
     }
 
+    @org.junit.Before
+    fun clearAdClock() = AdGate.resetInterstitialClock()
+
     @Test
     fun theInterstitialFiresOnEveryThirdDeath() {
         assertFalse(AdGate.shouldShowInterstitial(1))
@@ -70,6 +73,40 @@ class AdGateTest {
     @Test
     fun deathZeroIsNotAnAdBreak() {
         assertFalse(AdGate.shouldShowInterstitial(0))
+    }
+
+    /**
+     * The churn case this guard exists for: someone stuck on a boss dies in quick bursts, so the
+     * death counter comes due again within a couple of minutes and serves an ad on the second
+     * death of a losing streak.
+     */
+    @Test
+    fun aSecondInterstitialIsHeldBackWhileTheLastOneIsStillRecent() {
+        val start = 1_000_000L
+        assertTrue("the first is always allowed", AdGate.shouldShowInterstitial(3, start))
+        AdGate.markInterstitialShown(start)
+
+        assertFalse(
+            "an ad 30s after the last one is the churn trigger",
+            AdGate.shouldShowInterstitial(6, start + 30_000L)
+        )
+        assertFalse(
+            "still too soon just under the gap",
+            AdGate.shouldShowInterstitial(6, start + AdGate.MIN_INTERSTITIAL_GAP_MS - 1)
+        )
+        assertTrue(
+            "once the quiet period is served, the count rules again",
+            AdGate.shouldShowInterstitial(6, start + AdGate.MIN_INTERSTITIAL_GAP_MS)
+        )
+    }
+
+    /** The clock must never override the count — a long gap does not make death 4 an ad break. */
+    @Test
+    fun theQuietPeriodElapsingDoesNotItselfTriggerAnAd() {
+        val start = 1_000_000L
+        AdGate.markInterstitialShown(start)
+        assertFalse(AdGate.shouldShowInterstitial(4, start + 10 * AdGate.MIN_INTERSTITIAL_GAP_MS))
+        assertFalse(AdGate.shouldShowInterstitial(5, start + 10 * AdGate.MIN_INTERSTITIAL_GAP_MS))
     }
 
     /**

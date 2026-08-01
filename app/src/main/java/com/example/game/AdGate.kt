@@ -15,6 +15,33 @@ object AdGate {
     const val ADS_PER_DEATHS = 3
 
     /**
+     * Shortest gap between two interstitials, whatever the death count says.
+     *
+     * The death counter alone has no sense of time. Someone stuck on a boss dies in short bursts,
+     * so deaths 3 and 6 can land four minutes apart — and an ad served on the second death of a
+     * losing streak arrives at the single most frustrating moment in the game, which is exactly
+     * where players stop opening the app again. The count decides IF, this decides NOT YET.
+     */
+    const val MIN_INTERSTITIAL_GAP_MS = 150_000L // 2.5 minutes
+
+    /** When the last interstitial was actually shown. 0 means none this process. */
+    @Volatile
+    private var lastInterstitialAtMs = 0L
+
+    /**
+     * Called when an interstitial genuinely reaches the screen — not when one is merely due.
+     * Recording at the decision point would spend the window on an ad that failed to load.
+     */
+    fun markInterstitialShown(nowMs: Long = System.currentTimeMillis()) {
+        lastInterstitialAtMs = nowMs
+    }
+
+    /** Test seam: forget the last-shown time so cases cannot leak into one another. */
+    fun resetInterstitialClock() {
+        lastInterstitialAtMs = 0L
+    }
+
+    /**
      * Runtime master switch, OFF by default so testers see no ads at all. Turned on from the
      * burger menu ("Enable test ads") when the ad placements themselves need exercising.
      * Deliberately not persisted: a tester who enables it should get a clean slate next launch.
@@ -37,8 +64,15 @@ object AdGate {
         testAdIds: Boolean = BuildConfig.USING_TEST_AD_IDS
     ): Boolean = enabled && !purchased && (!isDebug || testAdIds)
 
-    fun shouldShowInterstitial(totalDeaths: Int): Boolean =
-        totalDeaths > 0 && totalDeaths % ADS_PER_DEATHS == 0
+    fun shouldShowInterstitial(
+        totalDeaths: Int,
+        nowMs: Long = System.currentTimeMillis()
+    ): Boolean {
+        if (totalDeaths <= 0 || totalDeaths % ADS_PER_DEATHS != 0) return false
+        // The very first interstitial of the process has nothing to be too close to.
+        if (lastInterstitialAtMs == 0L) return true
+        return nowMs - lastInterstitialAtMs >= MIN_INTERSTITIAL_GAP_MS
+    }
 
     /** Convenience for callers: reads BuildConfig and the cached profile. */
     fun adsAllowedNow(): Boolean =

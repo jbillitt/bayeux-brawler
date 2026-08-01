@@ -150,6 +150,9 @@ class CombatEngine(private val ctx: BattleContext) {
         /** Nobody blocks everything, however braced and however far down the shaft they stand. */
         const val MAX_BLOCK_CHANCE = 0.85f
 
+        /** The sapper's handful of spoil, per landed blow. */
+        const val SAPPER_GRIT_CHANCE = 0.35f
+
         /** Tiny Terrence's chance to duck a missile outright. High on purpose; see the comment. */
         const val TERRENCE_DODGE = 0.75f
 
@@ -1170,7 +1173,27 @@ class CombatEngine(private val ctx: BattleContext) {
                     ctx.popup("-CRUMPLED-", currTarget.posX, 160f, Color.DarkGray)
                 }
 
-                // The moleman does not carry a weapon; he simply keeps hitting, and what he opens up
+                // The sapper comes up out of the ground with a pouch full of it, and throws a
+            // handful into the next man's face. Blinds and slows — he is a digger who fights
+            // dirty, not a swordsman, and a spade alone was a dull thing to field.
+            if (attacker.isKind("sapper") && totalDamage > 0f && !currTarget.isInanimate &&
+                Random.nextFloat() < SAPPER_GRIT_CHANCE
+            ) {
+                currTarget.slowDuration = maxOf(currTarget.slowDuration, 2.2f)
+                currTarget.panicDuration = maxOf(currTarget.panicDuration, 1.2f)
+                ctx.popup("GRIT IN THE EYES!", currTarget.posX, 155f, Color(0xFF6E5536))
+                repeat(8) {
+                    ctx.particle(BloodParticle(
+                        x = currTarget.posX + Random.nextInt(-12, 13),
+                        y = 130f + Random.nextInt(-10, 11),
+                        vx = Random.nextFloat() * 90f - 45f,
+                        vy = -40f - Random.nextFloat() * 50f,
+                        color = Color(0xFF6E5536), maxAge = 0.9f
+                    ))
+                }
+            }
+
+            // The moleman does not carry a weapon; he simply keeps hitting, and what he opens up
             // does not close. Bleed on every landed punch is the whole of his damage model.
             if (attacker.isKind("moleman") && totalDamage > 0f && !currTarget.isInanimate) {
                 currTarget.applyDot(Dot.BLEED, 4.5f)

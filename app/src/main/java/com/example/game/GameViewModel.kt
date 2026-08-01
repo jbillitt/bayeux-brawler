@@ -406,10 +406,10 @@ class GameViewModel : ViewModel() {
          * simply going well; at and past it the player has stopped being fought and starts getting
          * extra men and extra iron thrown at him until a level costs him something again.
          */
-        const val UNPUNISHED_STREAK_TRIGGER = 5
+        const val UNPUNISHED_STREAK_TRIGGER = 7
         /** Most extra bodies and armour layers the streak can ever add. */
-        const val UNPUNISHED_MAX_EXTRA_ENEMIES = 3
-        const val UNPUNISHED_MAX_EXTRA_ARMOUR = 2
+        const val UNPUNISHED_MAX_EXTRA_ENEMIES = 2
+        const val UNPUNISHED_MAX_EXTRA_ARMOUR = 1
     }
 
     /**
@@ -1228,6 +1228,8 @@ class GameViewModel : ViewModel() {
             enemies.add(FighterState(
                 id = FighterId("sapper#$i"), name = "Digger Dunstan", isPlayer = true,
                 maxHp = 120f + state.level * 4f, hp = 120f + state.level * 4f,
+                // A spade on a long haft, which is a real polearm, plus a pouch of the spoil he
+                // came up through: see CombatEngine, he flings grit in men's eyes.
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_axe" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_long" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1360,14 +1362,23 @@ class GameViewModel : ViewModel() {
         // spawn block, like the panoply, so it reaches whoever turned up. Beasts, the decoy and
         // the bare-fisted specialists (the moleman punches on purpose) are left alone.
         if (state.hasPointierSticks) {
+            // ADDS a head, never replaces one. Mad Boris keeps his axe and merely gets a spike
+            // lashed to it — swapping their weapons out took away the thing that made each
+            // follower his own man. One head type is chosen for the whole squad, because it is a
+            // batch of stock from the same armourer, not a lucky dip per man.
+            val stock = listOf("head_spear", "head_dagger", "head_axe", "head_pitchfork")
+                .random(battleContentRandom)
+            val issued = GameData.WEAPON_HEADS.first { it.id == stock }
             val armable = enemies.filter {
                 it.isPlayer && !it.isRanged && !it.isKind("wardog") && !it.isKind("raven") &&
                     !it.isKind("trojan_horse") && !it.isKind("moleman") &&
                     it.pallbearerIndex < 0
             }
             armable.filterIndexed { index, _ -> index % 2 == 0 }.forEach { ally ->
-                ally.weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_spear" }
-                if (ally.weaponHandle.id == "handle_fists") {
+                ally.extraAttachments = ally.extraAttachments + issued
+                // A man with nothing but fists needs something to lash it to.
+                if (ally.weaponHead.id == "head_bare" && ally.weaponHandle.id == "handle_fists") {
+                    ally.weaponHead = issued
                     ally.weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" }
                 }
             }

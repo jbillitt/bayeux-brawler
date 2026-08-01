@@ -4141,24 +4141,59 @@ object TapestryRenderer {
                     Color(0xFF8B5A2B), Color(0xFF2C2219), Color(0xFFC08030), Color(0xFF888888)
                 )[faceSeed % 4]
             }
-            val hairStyle = if (anc == com.example.game.Ancillary.LIL_GUY) 0 else (faceSeed / 5) % 3
+            // Four proper haircuts, every one a closed filled shape — the balding style used to
+            // be two stray 4px strokes, which is the "strange lines" in the parade line.
+            val hairStyle = if (anc == com.example.game.Ancillary.LIL_GUY) 0 else (faceSeed / 5) % 4
 
             withTransform({ scale(headScale, headScale, pivot = Offset(hx, hy)) }) {
                 val profile = headProfilePath(
-                    hx, hy, (faceSeed / 3) % 3, (faceSeed / 7) % 4, (faceSeed / 13) % 4
+                    hx, hy, (faceSeed / 3) % 6, (faceSeed / 7) % 6, (faceSeed / 13) % 6
                 )
                 drawStitchedFill(this, profile, Color(0xFFE8C5A4))
                 drawStitchedOutline(profile, ThreadColor)
 
-                // The crown cap every style starts from — a solid bowl over the skull.
+                // The bowl crop every style but the tonsure starts from.
                 val cap = Path().apply {
-                    moveTo(hx - 13f, hy + 2f)
-                    quadraticTo(hx - 14f, hy - 11f, hx + 1f, hy - 9f)
-                    quadraticTo(hx + 9f, hy - 8f, hx + 10f, hy - 1f)
-                    lineTo(hx - 13f, hy + 2f)
+                    moveTo(hx - 13f, hy + 3f)
+                    quadraticTo(hx - 15f, hy - 10f, hx - 2f, hy - 10f)
+                    quadraticTo(hx + 8f, hy - 10f, hx + 10f, hy - 1f)
+                    lineTo(hx + 6f, hy + 1f)
+                    quadraticTo(hx + 2f, hy - 6f, hx - 6f, hy - 5f)
+                    quadraticTo(hx - 11f, hy - 4f, hx - 10f, hy + 3f)
                     close()
                 }
-                if (hairStyle != 2) {
+                if (hairStyle == 2) {
+                    // A brother's tonsure: bare crown, a ring of hair round the back and a fringe.
+                    val ring = Path().apply {
+                        moveTo(hx - 13f, hy + 1f)
+                        quadraticTo(hx - 14f, hy - 6f, hx - 9f, hy - 7f)
+                        lineTo(hx - 8f, hy - 3f)
+                        quadraticTo(hx - 11f, hy - 2f, hx - 10f, hy + 2f)
+                        close()
+                    }
+                    drawStitchedFill(this, ring, hairCol)
+                    drawStitchedOutline(ring, ThreadColor)
+                    val fringe = Path().apply {
+                        moveTo(hx + 2f, hy - 7f)
+                        quadraticTo(hx + 8f, hy - 7f, hx + 10f, hy - 1f)
+                        lineTo(hx + 6f, hy + 1f)
+                        quadraticTo(hx + 5f, hy - 4f, hx + 2f, hy - 4f)
+                        close()
+                    }
+                    drawStitchedFill(this, fringe, hairCol)
+                    drawStitchedOutline(fringe, ThreadColor)
+                } else if (hairStyle == 3) {
+                    // Balding: a receding fringe, and nothing on the crown at all.
+                    val fringe = Path().apply {
+                        moveTo(hx - 12f, hy + 1f)
+                        quadraticTo(hx - 13f, hy - 7f, hx - 5f, hy - 7f)
+                        lineTo(hx - 4f, hy - 3f)
+                        quadraticTo(hx - 9f, hy - 3f, hx - 9f, hy + 2f)
+                        close()
+                    }
+                    drawStitchedFill(this, fringe, hairCol)
+                    drawStitchedOutline(fringe, ThreadColor)
+                } else {
                     drawStitchedFill(this, cap, hairCol)
                     drawStitchedOutline(cap, ThreadColor)
                 }
@@ -4179,31 +4214,40 @@ object TapestryRenderer {
                     drawStitchedFill(this, locks, hairCol)
                     drawStitchedOutline(locks, ThreadColor)
                 }
-                if (hairStyle == 2) {
-                    // Balding: a wisp over each ear and bare scalp between.
-                    drawLine(hairCol, Offset(hx - 12f, hy + 1f), Offset(hx - 8f, hy - 6f), strokeWidth = 4f, cap = StrokeCap.Round)
-                    drawLine(hairCol, Offset(hx + 2f, hy - 7f), Offset(hx + 7f, hy - 2f), strokeWidth = 4f, cap = StrokeCap.Round)
-                }
 
-                // Eyes: "X" if dead or dying, otherwise the side-facing dot everyone else wears.
+                // The same embroidered eye every other figure in the game wears: an almond of
+                // white, a dark pupil, a brow above it. A single flat dot was why the retinue
+                // read as faceless walking beside the host.
                 if (wrecked) {
-                    drawLine(Color(0xFF382F22), Offset(hx + 1f, hy - 1f), Offset(hx + 7f, hy + 5f), strokeWidth = 2f)
-                    drawLine(Color(0xFF382F22), Offset(hx + 7f, hy - 1f), Offset(hx + 1f, hy + 5f), strokeWidth = 2f)
+                    drawLine(ThreadColor, Offset(hx + 2f, hy + 1f), Offset(hx + 8f, hy + 7f), strokeWidth = 2f)
+                    drawLine(ThreadColor, Offset(hx + 8f, hy + 1f), Offset(hx + 2f, hy + 7f), strokeWidth = 2f)
                 } else {
-                    drawCircle(Color(0xFF382F22), radius = 2.2f, center = Offset(hx + 5f, hy + 2f))
-                    if (faceSeed % 3 == 0) {
-                        drawLine(Color(0xFF382F22), Offset(hx + 1f, hy - 1f), Offset(hx + 8f, hy - 1f), strokeWidth = 2f, cap = StrokeCap.Round)
+                    val sclera = Path().apply {
+                        moveTo(hx + 1f, hy + 4f)
+                        quadraticTo(hx + 4.5f, hy + 1f, hx + 8f, hy + 4f)
+                        quadraticTo(hx + 4.5f, hy + 7f, hx + 1f, hy + 4f)
+                        close()
                     }
-                    // A moustache on some of them — curved and tapering, like every other one now.
+                    drawPath(sclera, Color(0xFFF6EFE2))
+                    drawPath(sclera, ThreadColor, style = Stroke(width = 1.2f))
+                    drawCircle(ThreadColor, radius = 1.7f, center = Offset(hx + 5f, hy + 4f))
+                    // Brow, tilted off the seed so they are not all placid.
+                    val browTilt = if (faceSeed % 3 == 0) -2f else if (faceSeed % 3 == 1) 0f else 2f
+                    drawLine(
+                        hairCol, Offset(hx, hy - 1f), Offset(hx + 8f, hy - 1f + browTilt),
+                        strokeWidth = 1.8f, cap = StrokeCap.Round
+                    )
+                    // A moustache on some of them, in the shape every other face now uses: back
+                    // from under the nose along the lip, with the fall at the corner.
                     if ((faceSeed / 11) % 3 == 1) {
                         val tache = Path().apply {
-                            moveTo(hx + 5f, hy + 9f)
-                            quadraticTo(hx + 14f, hy + 9f, hx + 17f, hy + 19f)
-                            quadraticTo(hx + 13f, hy + 14f, hx + 6f, hy + 12f)
+                            moveTo(hx + 12f, hy + 10f)
+                            quadraticTo(hx + 6f, hy + 10f, hx + 2f, hy + 16f)
+                            quadraticTo(hx + 6f, hy + 13f, hx + 12f, hy + 13f)
                             close()
                         }
                         drawStitchedFill(this, tache, hairCol)
-                        drawStitchedOutline(tache, ThreadColor)
+                        drawPath(tache, hairCol, style = Stroke(width = 0.8f, cap = StrokeCap.Round))
                     }
                 }
             }

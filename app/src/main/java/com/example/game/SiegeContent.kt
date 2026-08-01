@@ -20,7 +20,15 @@ object SiegeRules {
     const val CLIMB_SECONDS = 0.75f
     const val DOWNHILL_DAMAGE_MULTIPLIER = 1.25f
     const val GROUND_FEET_OFFSET = 158f
-    const val PARAPET_ELEVATION_OFFSET = -150f
+    /**
+     * How far above the ground a man on the wall stands.
+     *
+     * Was -150, which put a defender's feet at y=208 and therefore his head off the top of the
+     * canvas entirely — the garrison rendered as a row of legs hanging under the battlements with
+     * everything above the waist clipped away. The wall's own walkway line and the siege ladder's
+     * top both derive from this same constant, so they all come down together and stay aligned.
+     */
+    const val PARAPET_ELEVATION_OFFSET = -105f
     /** Cap on a single blow against the gate, so no heavy build one-shots it. */
     const val MAX_GATE_HIT_FRACTION = 0.34f
 

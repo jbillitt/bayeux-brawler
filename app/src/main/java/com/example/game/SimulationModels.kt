@@ -551,7 +551,8 @@ data class FighterState(
     val speedBoost: Float = 0f,
 
     // Roguelike attachments and layers (Level Up Upgrades)
-    val extraAttachments: List<GearItem> = emptyList(),
+    // var: the Pointier Sticks reward lashes a head onto a follower's own weapon at spawn.
+    var extraAttachments: List<GearItem> = emptyList(),
     var extraArmors: List<GearItem> = emptyList(), // var: the retinue panoply reward layers gauntlets on at spawn
     val handleExtensionCount: Int = 0,
     val rangedUpgrades: List<String> = emptyList(),
@@ -873,7 +874,10 @@ data class FighterState(
      */
     val lateGameMultiplier: Float
         get() = if (isPlayer) 1f
-        else 1f + ((level - 30).coerceAtLeast(0) * 0.02f).coerceAtMost(0.8f)
+        // Softened from 2%/level capped at +80%. The counter-curve does not act alone — the
+        // unpunished streak and the rear-rank blocking pile onto the same player at the same
+        // time, and three compounding pressures is the game cheating rather than fighting.
+        else 1f + ((level - 30).coerceAtLeast(0) * 0.013f).coerceAtMost(0.45f)
 
     /**
      * The naked Norman: fighting in nothing but your trousers is madness, and madness is rewarded.

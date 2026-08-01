@@ -42,6 +42,24 @@ class SessionFeatureAuditTest {
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/$file")
     }
 
+    /**
+     * A GUARANTEED siege — the schedule is seeded, so a fixed level is a coin toss. Checks the
+     * garrison stands ON the wall with heads and bodies inside the canvas, which is what the
+     * -150 parapet offset made impossible.
+     */
+    @Test
+    fun siegeWallGarrisonIsFullyOnScreen() {
+        val seed = MedievalHarpPlayer.gameSeed
+        val siegeLevel = (5..80).firstOrNull { SiegeSchedule.isSiegeLevel(seed, it) } ?: 12
+        val vm = GameViewModel()
+        mutate(vm) { it.copy(level = siegeLevel) }
+        vm.startBattle()
+        advance(vm, 1.5f)
+        vm.setPaused(true)
+        mutate(vm) { it.copy(cameraX = 1500f) }
+        shoot(vm, "audit_siege_parapet.png")
+    }
+
     /** Mid-dig: both burrowers should be sinking at the dig site, throwing up spoil. */
     @Test
     fun diggersMidDescent() {

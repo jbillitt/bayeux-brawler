@@ -150,6 +150,10 @@ class CombatEngine(private val ctx: BattleContext) {
         /** Nobody blocks everything, however braced and however far down the shaft they stand. */
         const val MAX_BLOCK_CHANCE = 0.85f
 
+        /** The barrow-king's hurl: chance per landed blow, and how far it throws a man. */
+        const val BARROW_KING_HURL_CHANCE = 0.22f
+        const val BARROW_KING_HURL_PX = 130f
+
         /** A routed man runs faster than he marches. Multiplier on moveSpeed while panicking. */
         const val PANIC_RUN_MULT = 1.35f
 
@@ -1146,7 +1150,20 @@ class CombatEngine(private val ctx: BattleContext) {
                     ctx.popup("-CRUMPLED-", currTarget.posX, 160f, Color.DarkGray)
                 }
 
-                // Wardog trip mechanic!
+                // A barrow-king hits like a falling wall: now and then he simply hurls a man away.
+            // Only the SUPER_UNDEAD tier — the living bosses keep their footing-based fight.
+            // GameViewModel clamps everyone to the field, so nobody is hurled off the map for good.
+            if (attacker.bossTier == BossTier.SUPER_UNDEAD && !currTarget.isInanimate &&
+                Random.nextFloat() < BARROW_KING_HURL_CHANCE
+            ) {
+                val away = if (attacker.posX < currTarget.posX) 1f else -1f
+                currTarget.posX += away * BARROW_KING_HURL_PX
+                currTarget.tryCrumple(1.5f, chance = 0.5f)
+                ctx.sound(SoundType.CRUNCH)
+                ctx.popup("HURLED!", currTarget.posX, 150f, Color(0xFF9AA88C))
+            }
+
+            // Wardog trip mechanic!
                 if (attacker.isKind("wardog") && !currTarget.isPlayer &&
                     currTarget.tryCrumple(2f, chance = 0.25f)
                 ) {

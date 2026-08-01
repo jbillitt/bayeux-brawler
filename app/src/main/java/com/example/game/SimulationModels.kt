@@ -815,10 +815,18 @@ data class FighterState(
         get() {
             val baseSpeed = if (isPlayer) 75f else 60f // Pixels per second
             // Bigger characters move slower base speed
-            val sizeSpeed = baseSpeed / size
+            // Big builds were paying twice — the full size divisor AND the full mass penalty —
+            // which left them strictly worse than a Norman or a little man rather than a trade.
+            // Above average size the divisor is softened to 60% of the difference; at or below
+            // average nothing changes, so small and average builds keep every bit of their edge
+            // and stay the quicker ones.
+            val sizeSpeed = baseSpeed / (if (size > 1f) 1f + (size - 1f) * 0.6f else size)
             val crumplePenalty = if (crumpleDuration > 0f) 0.5f else 1.0f
             val slowPenalty = if (slowDuration > 0f) 0.4f else 1.0f
-            val penaltyFactor = 1f - (totalMass * 0.01f).coerceIn(0f, 0.45f) // weight isn't so immobilizing
+            // Carry weight: a bigger frame shoulders its kit better, so mass is judged against
+            // size. Never below 1, or a small build would be punished for being small.
+            val carried = totalMass / max(1f, size)
+            val penaltyFactor = 1f - (carried * 0.01f).coerceIn(0f, 0.45f) // weight isn't so immobilizing
             return (sizeSpeed * penaltyFactor) * (1f + speedBoost) * crumplePenalty * slowPenalty * lateGameMultiplier * nakedBoldness
         }
 

@@ -193,6 +193,8 @@ class GameViewModel : ViewModel() {
     private var lastLivingEnemyCount = 0
     private var multiKillCount = 0
     private var multiKillWindow = 0f
+    /** Size of the host when the horn blew — the gate on whether this battle can splash at all. */
+    private var battleHostSize = 0
 
     // Softlock watchdog: seconds since ANY hp (fighters, mounts, shields, gate) last changed.
     // If nothing has been hurt for a while mid-battle, something is stuck — see updateSimulation.
@@ -365,7 +367,17 @@ class GameViewModel : ViewModel() {
 
         // Tapestry splatter. Seconds the kill window stays open, and how many must fall inside it.
         const val MULTIKILL_WINDOW_SECS = 1.6f
-        const val MULTIKILL_THRESHOLD = 3
+        const val MULTIKILL_THRESHOLD = 4
+
+        /**
+         * Men on the field at the horn before the linen can be splashed at all.
+         *
+         * Blood thrown across the tapestry is meant to mark a slaughter, and cutting down three
+         * of the four men on a level-2 beach is not one — it just made the flourish routine before
+         * the player had seen a real battle. The opening levels field 2-4, so this holds it back
+         * until the host is genuinely a host.
+         */
+        const val MULTIKILL_MIN_HOST = 7
 
         /** Finish a level with at least this much health left and it counts as unpunished. */
         const val UNPUNISHED_HP_FRACTION = 0.8f
@@ -1278,6 +1290,7 @@ class GameViewModel : ViewModel() {
         _particlesState.value = emptyList() // clear blood from previous battle
         _tapestrySplats.value = emptyList()
         lastLivingEnemyCount = enemies.count { !it.isPlayer && !it.isDead && !it.isDying }
+        battleHostSize = lastLivingEnemyCount + pendingReinforcements
         multiKillCount = 0
         multiKillWindow = 0f
 
@@ -1609,7 +1622,7 @@ class GameViewModel : ViewModel() {
         // Multikill splatter. Counted off the living-enemy tally rather than through a new combat
         // hook: a body stops being living exactly once, whatever killed it, so this catches a
         // cleave, a hail of arrows and a divine bolt alike without CombatEngine knowing about it.
-        run {
+        if (battleHostSize >= MULTIKILL_MIN_HOST) {
             val livingNow = enemies.count { !it.isPlayer && !it.isDead && !it.isDying }
             val fellThisTick = (lastLivingEnemyCount - livingNow).coerceAtLeast(0)
             lastLivingEnemyCount = livingNow

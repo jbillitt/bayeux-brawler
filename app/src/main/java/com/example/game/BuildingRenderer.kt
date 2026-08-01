@@ -996,16 +996,26 @@ private fun drawShipBody(scope: DrawScope, cx: Float, cy: Float, hullPath: Path)
             scope.drawLine(Color(0x55000000), Offset(cx - 120f, yOffset), Offset(cx + 140f, yOffset), strokeWidth = 2f)
         }
 
-        // Dragon Prow
+        // Dragon Prow. On a real ship the beast's neck IS the stempost — one continuous carved
+        // timber rising out of the keel — so it must grow out of the planking, not perch on it.
+        //
+        // This used to start at the hull's topmost point and come back down to (+210, -80), a foot
+        // hanging in open air beyond the hull with a neck two lines wide between them. It read as
+        // a head balanced on a wire. The foot is now buried well down inside the hull, between the
+        // waterline and the deck, and the closing edge runs back through the planking — the hull
+        // is drawn first, so the overlap merges instead of butting.
         val prowPath = Path().apply {
-            moveTo(cx + 190f, cy - 90f)
-            quadraticTo(cx + 220f, cy - 120f, cx + 230f, cy - 140f) // Neck
-            quadraticTo(cx + 250f, cy - 150f, cx + 240f, cy - 130f) // Snout
-            quadraticTo(cx + 220f, cy - 110f, cx + 210f, cy - 80f) // Back of neck
+            moveTo(cx + 148f, cy + 12f)                             // foot, deep in the planking
+            quadraticTo(cx + 178f, cy - 60f, cx + 206f, cy - 116f)  // back of the neck, sweeping up
+            quadraticTo(cx + 224f, cy - 142f, cx + 252f, cy - 136f) // crown of the head
+            lineTo(cx + 268f, cy - 128f)                            // snout
+            quadraticTo(cx + 246f, cy - 112f, cx + 234f, cy - 100f) // under the jaw
+            quadraticTo(cx + 220f, cy - 60f, cx + 200f, cy - 16f)   // front of the neck, coming down
+            close()                                                 // broad base through the hull
         }
         drawStitchedFill(scope, prowPath, Color(0xFF8C6F47))
         scope.drawStitchedOutline(prowPath, ThreadColor)
-        scope.drawCircle(Color.Red, radius = 4f, center = Offset(cx + 235f, cy - 140f)) // Eye
+        scope.drawCircle(Color.Red, radius = 4f, center = Offset(cx + 240f, cy - 124f)) // Eye
 
         // Mast and Square Sail
         val mastPath = Path().apply {

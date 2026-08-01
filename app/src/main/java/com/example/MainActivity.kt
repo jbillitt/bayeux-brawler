@@ -2943,28 +2943,34 @@ fun BattlefieldScene(
                     // linen and read as berries rather than blood.
                     val gore = Color(0xFF6E1414).copy(alpha = fade * 0.88f)
 
+                    // The whole splat — gout, spatter and run-off — is ONE path filled ONCE.
+                    //
+                    // Drawing them as separate translucent shapes made every overlap compound: the
+                    // core where blobs met came out darker than 0.88, while the drip running onto
+                    // bare linen was exactly 0.88, so the run-off read as a different opacity from
+                    // the splat it belongs to. A single path has no overlaps to compound.
+                    val splatPath = Path()
+
                     // An irregular gout, never a disc: perfect circles read as polka dots against
                     // the flat embroidery. Jitter is seeded, so a splat does not crawl frame to
                     // frame while it fades.
-                    fun blob(bx: Float, by: Float, r: Float, salt: Int) {
-                        val path = Path()
+                    fun addBlob(bx: Float, by: Float, r: Float, salt: Int) {
                         for (i in 0 until 11) {
                             val a = i / 11f * 2f * Math.PI.toFloat()
                             val jitter = 0.62f + ((splat.seed * 31 + salt * 17 + i * 7919) % 100) / 130f
                             val px = bx + cos(a) * r * jitter
                             val py = by + sin(a) * r * jitter
-                            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                            if (i == 0) splatPath.moveTo(px, py) else splatPath.lineTo(px, py)
                         }
-                        path.close()
-                        drawPath(path, gore)
+                        splatPath.close()
                     }
 
-                    blob(cx, cy, splat.radius, 0)
+                    addBlob(cx, cy, splat.radius, 0)
                     // Satellite spatter thrown clear of the main gout.
                     for (i in 0 until 5) {
                         val a = ((splat.seed + i * 97) % 360) * (Math.PI.toFloat() / 180f)
                         val d = splat.radius * (1.15f + ((splat.seed + i * 31) % 70) / 100f)
-                        blob(
+                        addBlob(
                             cx + cos(a) * d,
                             cy + sin(a) * d,
                             splat.radius * (0.12f + ((splat.seed + i * 13) % 22) / 100f),
@@ -2972,13 +2978,17 @@ fun BattlefieldScene(
                         )
                     }
                     // The run-off, which lengthens as it ages — it is running down the cloth.
-                    drawLine(
-                        gore,
-                        Offset(cx, cy + splat.radius * 0.5f),
-                        Offset(cx, cy + splat.radius * (1.4f + splat.age * 0.5f)),
-                        strokeWidth = splat.radius * 0.18f,
-                        cap = StrokeCap.Round
-                    )
+                    // A tapering sliver rather than a stroked line, so it can join the same path.
+                    val dripTop = cy + splat.radius * 0.5f
+                    val dripEnd = cy + splat.radius * (1.4f + splat.age * 0.5f)
+                    val dripW = splat.radius * 0.09f
+                    splatPath.moveTo(cx - dripW, dripTop)
+                    splatPath.lineTo(cx + dripW, dripTop)
+                    splatPath.lineTo(cx + dripW * 0.45f, dripEnd)
+                    splatPath.lineTo(cx - dripW * 0.45f, dripEnd)
+                    splatPath.close()
+
+                    drawPath(splatPath, gore)
                 }
 
                 // 6. Draw Floating Comic popups (e.g. *CLANGUS*, *THWACKUS*)

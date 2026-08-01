@@ -1040,6 +1040,58 @@ object TapestryRenderer {
     /** PROTOTYPE knob: 1f is the current even proportion, ~0.8 is the tapestry's small head. */
     private val BAYEUX_HEAD_SCALE = 0.82f
 
+    /**
+     * The head, in profile, facing right — brow, nose, lip, chin and jaw.
+     *
+     * Shared so that every head in the game is the same head. The parade followers used to be
+     * drawn as plain circles, which made them read as a different species standing next to the
+     * men they follow.
+     */
+    private fun headProfilePath(
+        hx: Float, hy: Float, forehead: Int, noseShape: Int, biteShape: Int
+    ): Path {
+        val fhX = if (forehead == 1) 14f else if (forehead == 2) 4f else 8f
+        val fhY = if (forehead == 1) -6f else -2f
+        return Path().apply {
+            moveTo(hx - 12f, hy)
+            // Forehead
+            lineTo(hx + fhX, hy + fhY)
+            lineTo(hx + fhX + 1f, hy + 2f) // Brow indentation
+
+            // Nose tip and nostril
+            var noseTipX = hx + 23f
+            var noseTipY = hy + 6f
+            var nostrilX = hx + 10f
+            if (noseShape == 1) { // hook
+                noseTipY += 4f; noseTipX -= 2f
+            } else if (noseShape == 2) { // bulbous
+                noseTipX = hx + 16f; nostrilX = hx + 12f
+            } else if (noseShape == 3) { // pointy
+                noseTipX = hx + 25f
+            } else { // normal
+                noseTipX = hx + 18f
+            }
+            lineTo(noseTipX, noseTipY) // Nose tip
+            lineTo(nostrilX, hy + 9f) // Nostril/lip fold
+
+            // Jaw / Bite
+            var lipX = hx + 12f
+            var chinX = hx + 9f
+            if (biteShape == 1) { // underbite
+                lipX += 3f; chinX += 10f
+            } else if (biteShape == 2) { // overbite
+                lipX -= 4f; chinX -= 8f
+            } else if (biteShape == 3) { // lantern jaw
+                chinX += 14f
+            }
+            lineTo(lipX, hy + 13f) // Lip crease
+            val chinY = if (biteShape == 3) hy + 24f else hy + 18f
+            lineTo(chinX, chinY) // Chin
+            lineTo(hx - 12f, chinY)
+            close()
+        }
+    }
+
     private fun drawHead(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         var headOffsetX = 0f
         var headOffsetY = 0f
@@ -1099,46 +1151,9 @@ object TapestryRenderer {
         scope.drawStitchedOutline(neckPath, ThreadColor)
 
         // 2. Head Profile
-        val fhX = if (fighter.faceForehead == 1) 14f else if (fighter.faceForehead == 2) 4f else 8f
-        val fhY = if (fighter.faceForehead == 1) -6f else -2f
-        val headPath = Path().apply {
-            moveTo(hx - 12f, hy)
-            // Forehead
-            lineTo(hx + fhX, hy + fhY)
-            lineTo(hx + fhX + 1f, hy + 2f) // Brow indentation
-            
-            // Nose tip and nostril
-            var noseTipX = hx + 23f
-            var noseTipY = hy + 6f
-            var nostrilX = hx + 10f
-            if (fighter.faceNoseShape == 1) { // hook
-                noseTipY += 4f; noseTipX -= 2f
-            } else if (fighter.faceNoseShape == 2) { // bulbous
-                noseTipX = hx + 16f; nostrilX = hx + 12f
-            } else if (fighter.faceNoseShape == 3) { // pointy
-                noseTipX = hx + 25f
-            } else { // normal
-                noseTipX = hx + 18f
-            }
-            lineTo(noseTipX, noseTipY) // Nose tip
-            lineTo(nostrilX, hy + 9f) // Nostril/lip fold
-            
-            // Jaw / Bite
-            var lipX = hx + 12f
-            var chinX = hx + 9f
-            if (fighter.faceBiteShape == 1) { // underbite
-                lipX += 3f; chinX += 10f
-            } else if (fighter.faceBiteShape == 2) { // overbite
-                lipX -= 4f; chinX -= 8f
-            } else if (fighter.faceBiteShape == 3) { // lantern jaw
-                chinX += 14f
-            }
-            lineTo(lipX, hy + 13f) // Lip crease
-            val chinY = if (fighter.faceBiteShape == 3) hy + 24f else hy + 18f
-            lineTo(chinX, chinY) // Chin
-            lineTo(hx - 12f, chinY)
-            close()
-        }
+        val headPath = headProfilePath(
+            hx, hy, fighter.faceForehead, fighter.faceNoseShape, fighter.faceBiteShape
+        )
         drawStitchedFill(scope, headPath, skinColor)
         scope.drawStitchedOutline(headPath, ThreadColor)
 
@@ -1532,30 +1547,39 @@ object TapestryRenderer {
                     lineTo(hx - 8f, hy + 35f)
                     lineTo(hx - 12f, hy + 18f)
                     close()
-                } else if (fighter.faceMustache == 0) { // Handlebar: along the lip, tip curls up
-                    moveTo(hx + 8f, hy + 12f)
-                    quadraticTo(hx + 15f, hy + 13f, hx + 18f, hy + 9f)
-                } else if (fighter.faceMustache == 1) { // Drooping
-                    moveTo(hx + 8f, hy + 12f)
-                    quadraticTo(hx + 14f, hy + 13f, hx + 13f, hy + 18f)
-                } else if (fighter.faceMustache == 2) { // Bushy
-                    moveTo(hx + 8f, hy + 11f)
-                    lineTo(hx + 18f, hy + 12f)
-                    lineTo(hx + 14f, hy + 15f)
+                // The Englishmen of the tapestry are known by their moustaches: long, heavy things
+                // that spring from under the nose and sweep down past the corner of the mouth,
+                // tapering to a point. All four below are curved, filled, tapering masses.
+                //
+                // They used to be two single stroked quadratics — which draw as a bare quarter-
+                // circle scratch — and two three-point triangles. Neither reads as hair.
+                } else if (fighter.faceMustache == 0) { // Long drooping Saxon
+                    moveTo(hx + 5f, hy + 9f)
+                    quadraticTo(hx + 16f, hy + 9f, hx + 20f, hy + 22f)   // outer sweep, down
+                    quadraticTo(hx + 16f, hy + 15f, hx + 11f, hy + 13f)  // taper back up inside
+                    quadraticTo(hx + 8f, hy + 12f, hx + 5f, hy + 9f)     // home to the lip
                     close()
-                } else { // Classic Norman chevron
-                    moveTo(hx + 10f, hy + 10f)
-                    lineTo(hx + 16f, hy + 11f)
-                    lineTo(hx + 14f, hy + 14f)
+                } else if (fighter.faceMustache == 1) { // Longer and narrower, a real droop
+                    moveTo(hx + 5f, hy + 9f)
+                    quadraticTo(hx + 15f, hy + 10f, hx + 15f, hy + 26f)
+                    quadraticTo(hx + 12f, hy + 16f, hx + 5f, hy + 13f)
+                    close()
+                } else if (fighter.faceMustache == 2) { // Bushy, full across the lip
+                    moveTo(hx + 4f, hy + 8f)
+                    quadraticTo(hx + 18f, hy + 7f, hx + 23f, hy + 19f)
+                    quadraticTo(hx + 16f, hy + 13f, hx + 5f, hy + 14f)
+                    close()
+                } else { // Trimmer, but still a curve with mass — never a chevron
+                    moveTo(hx + 6f, hy + 9f)
+                    quadraticTo(hx + 14f, hy + 9f, hx + 17f, hy + 19f)
+                    quadraticTo(hx + 13f, hy + 14f, hx + 7f, hy + 12f)
                     close()
                 }
             }
-            if (hasLongBeard || fighter.faceMustache == 2) {
-                drawStitchedFill(scope, mustache, fighter.hairColor)
-                scope.drawStitchedOutline(mustache, ThreadColor)
-            } else {
-                scope.drawPath(mustache, fighter.hairColor, style = Stroke(width = 3.5f, cap = StrokeCap.Round))
-            }
+            // Every variant is a closed shape now, so every variant is filled and outlined like
+            // any other piece of the figure. Stroking them left a hairline scratch on the lip.
+            drawStitchedFill(scope, mustache, fighter.hairColor)
+            scope.drawStitchedOutline(mustache, ThreadColor)
 
         // 4. Helmet Overlay
         val helmId = fighter.headgear.id
@@ -3977,8 +4001,10 @@ object TapestryRenderer {
             val hx = cx
             val hy = cy + 25f + if (headRadius > 14f) 1f else 0f
             val faceSeed = appearanceSeed
-            drawCircle(Color(0xFFE8C5A4), radius = headRadius, center = Offset(hx, hy))
-            drawCircle(ThreadColor, radius = headRadius, center = Offset(hx, hy), style = Stroke(width = 2.5f))
+            // The same head every other man in the game wears, scaled to the follower's size.
+            // These were plain circles, which made the retinue read as a different species walking
+            // beside the host. The seed picks a brow, nose and jaw exactly as it does for a Saxon.
+            val headScale = headRadius / 15f
 
             // Hair: color and style picked from the seed
             val hairCol = if (anc == com.example.game.Ancillary.LIL_GUY) {
@@ -3989,45 +4015,69 @@ object TapestryRenderer {
                 )[faceSeed % 4]
             }
             val hairStyle = if (anc == com.example.game.Ancillary.LIL_GUY) 0 else (faceSeed / 5) % 3
-            when (hairStyle) {
-                0 -> { // classic bowl cap
-                    val capPath = Path().apply {
-                        addArc(androidx.compose.ui.geometry.Rect(hx - headRadius, hy - headRadius, hx + headRadius, hy), 180f, 180f)
-                    }
-                    drawStitchedFill(this, capPath, hairCol)
-                    drawPath(capPath, ThreadColor, style = Stroke(width = 2f))
+
+            withTransform({ scale(headScale, headScale, pivot = Offset(hx, hy)) }) {
+                val profile = headProfilePath(
+                    hx, hy, (faceSeed / 3) % 3, (faceSeed / 7) % 4, (faceSeed / 13) % 4
+                )
+                drawStitchedFill(this, profile, Color(0xFFE8C5A4))
+                drawStitchedOutline(profile, ThreadColor)
+
+                // The crown cap every style starts from — a solid bowl over the skull.
+                val cap = Path().apply {
+                    moveTo(hx - 13f, hy + 2f)
+                    quadraticTo(hx - 14f, hy - 11f, hx + 1f, hy - 9f)
+                    quadraticTo(hx + 9f, hy - 8f, hx + 10f, hy - 1f)
+                    lineTo(hx - 13f, hy + 2f)
+                    close()
                 }
-                1 -> { // longer locks down the neck
+                if (hairStyle != 2) {
+                    drawStitchedFill(this, cap, hairCol)
+                    drawStitchedOutline(cap, ThreadColor)
+                }
+                if (hairStyle == 1) {
+                    // Hair down the nape, HUGGING the back of the skull.
+                    //
+                    // This used to be three unclosed lines behind the head. The old comment claimed
+                    // leaving out close() avoided a filled triangle — but drawStitchedFill closes
+                    // any open subpath implicitly, so it filled anyway, and every follower wore a
+                    // spike of hair jutting out of the back of his head like a mullet.
                     val locks = Path().apply {
-                        addArc(androidx.compose.ui.geometry.Rect(hx - headRadius, hy - headRadius, hx + headRadius, hy), 180f, 180f)
-                        moveTo(hx - headRadius, hy)
-                        lineTo(hx - headRadius - 3f, hy + 14f)
-                        lineTo(hx - headRadius + 6f, hy + 8f)
-                        // No close() — closing creates a filled triangle sticking out the back of the head
+                        moveTo(hx - 13f, hy - 1f)
+                        quadraticTo(hx - 18f, hy + 7f, hx - 13f, hy + 15f)
+                        lineTo(hx - 6f, hy + 14f)
+                        quadraticTo(hx - 9f, hy + 6f, hx - 7f, hy - 1f)
+                        close()
                     }
                     drawStitchedFill(this, locks, hairCol)
-                    drawPath(locks, ThreadColor, style = Stroke(width = 2f))
+                    drawStitchedOutline(locks, ThreadColor)
                 }
-                else -> { // balding fringe
-                    drawLine(hairCol, Offset(hx - headRadius + 2f, hy - 4f), Offset(hx - headRadius + 6f, hy - 10f), strokeWidth = 4f, cap = StrokeCap.Round)
-                    drawLine(hairCol, Offset(hx + headRadius - 6f, hy - 10f), Offset(hx + headRadius - 2f, hy - 4f), strokeWidth = 4f, cap = StrokeCap.Round)
+                if (hairStyle == 2) {
+                    // Balding: a wisp over each ear and bare scalp between.
+                    drawLine(hairCol, Offset(hx - 12f, hy + 1f), Offset(hx - 8f, hy - 6f), strokeWidth = 4f, cap = StrokeCap.Round)
+                    drawLine(hairCol, Offset(hx + 2f, hy - 7f), Offset(hx + 7f, hy - 2f), strokeWidth = 4f, cap = StrokeCap.Round)
                 }
-            }
 
-            // Ridiculous eyes: "X" eyes if dead/dying, otherwise standard side-facing dot eye
-            if (wrecked) {
-                // Left X
-                drawLine(Color(0xFF382F22), Offset(hx + 3f, hy - 4f), Offset(hx + 9f, hy + 2f), strokeWidth = 2f)
-                drawLine(Color(0xFF382F22), Offset(hx + 9f, hy - 4f), Offset(hx + 3f, hy + 2f), strokeWidth = 2f)
-            } else {
-                drawCircle(Color(0xFF382F22), radius = 2.5f, center = Offset(hx + 6f, hy - 2f))
-                // Brow variant
-                if (faceSeed % 3 == 0) drawLine(Color(0xFF382F22), Offset(hx + 2f, hy - 6f), Offset(hx + 10f, hy - 5f), strokeWidth = 2f, cap = StrokeCap.Round)
-                // Nose or moustache variant
-                when ((faceSeed / 11) % 3) {
-                    0 -> drawLine(Color(0xFFD8AE84), Offset(hx + 10f, hy + 1f), Offset(hx + 14f, hy + 4f), strokeWidth = 3f, cap = StrokeCap.Round) // big nose
-                    1 -> drawLine(hairCol, Offset(hx + 4f, hy + 6f), Offset(hx + 12f, hy + 7f), strokeWidth = 2.5f, cap = StrokeCap.Round) // moustache
-                    else -> {}
+                // Eyes: "X" if dead or dying, otherwise the side-facing dot everyone else wears.
+                if (wrecked) {
+                    drawLine(Color(0xFF382F22), Offset(hx + 1f, hy - 1f), Offset(hx + 7f, hy + 5f), strokeWidth = 2f)
+                    drawLine(Color(0xFF382F22), Offset(hx + 7f, hy - 1f), Offset(hx + 1f, hy + 5f), strokeWidth = 2f)
+                } else {
+                    drawCircle(Color(0xFF382F22), radius = 2.2f, center = Offset(hx + 5f, hy + 2f))
+                    if (faceSeed % 3 == 0) {
+                        drawLine(Color(0xFF382F22), Offset(hx + 1f, hy - 1f), Offset(hx + 8f, hy - 1f), strokeWidth = 2f, cap = StrokeCap.Round)
+                    }
+                    // A moustache on some of them — curved and tapering, like every other one now.
+                    if ((faceSeed / 11) % 3 == 1) {
+                        val tache = Path().apply {
+                            moveTo(hx + 5f, hy + 9f)
+                            quadraticTo(hx + 14f, hy + 9f, hx + 17f, hy + 19f)
+                            quadraticTo(hx + 13f, hy + 14f, hx + 6f, hy + 12f)
+                            close()
+                        }
+                        drawStitchedFill(this, tache, hairCol)
+                        drawStitchedOutline(tache, ThreadColor)
+                    }
                 }
             }
         }

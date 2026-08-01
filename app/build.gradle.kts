@@ -33,8 +33,8 @@ android {
     applicationId = "com.headspace.bayeuxbrawlers"
     minSdk = 24
     targetSdk = 36
-    versionCode = 34
-    versionName = "v0.8.2 Bosham"
+    versionCode = 35
+    versionName = "v0.9 Pevensey"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

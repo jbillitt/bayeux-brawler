@@ -55,7 +55,7 @@ enum class Ancillary(
     CUPBEARER("anc_cupbearer", "Geoffrey", "Cupbearer", "Refills your goblet with fine wine mid-swing.", hpBoost = 40f, speedBoost = -0.1f, color = Color(0xFF632873)),
     ARCHER("anc_archer", "Robin", "Longbowman", "Fires covering arrows into the fray. Just mind your back.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFF4C613D)),
     MONK("anc_monk", "Brother Tuck", "Monk", "Blesses you with holy incense. Smells heavenly.", hpBoost = 30f, speedBoost = 0f, color = Color(0xFF5E4B3C)),
-    FANATIC("anc_fanatic", "Mad Boris", "Fanatic", "A screaming madman who charges the enemy naked with a huge axe.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFC02020)),
+    FANATIC("anc_fanatic", "Mad Boris", "Berserker", "Gone berserk. Charges the enemy naked with a huge axe, howling, and does not stop.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFC02020)),
     CHARIOT("anc_mount_chariot", "The Rattler", "Chariot", "A sturdy wooden chariot. Faster and deadlier than a horse, but hard to turn.", hpBoost = 100f, speedBoost = 0.6f, color = Color(0xFF8B5A2B)),
     STILTS("anc_mount_stilts", "Long Shanks", "Stilts", "Tall wooden poles. Elevates you above the common rabble.", hpBoost = -10f, speedBoost = -0.2f, color = Color(0xFFC2A077)),
     HAG("anc_hag", "Old Maud", "Hag", "Spawns in your backline, lobs mud, applies slow and minor poison.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF384033)),
@@ -105,6 +105,59 @@ val NON_PARADE_ANCILLARIES = setOf(
     Ancillary.FIREBRAND, Ancillary.BEEKEEPER,
     Ancillary.ARCHER, Ancillary.CROSSBOWMAN
 )
+
+/**
+ * Followers who take the field with a body and hit points, so a buff on them means something.
+ * Mounts, the throne, the trojan horse and the parade-only attendants are excluded — buffing a
+ * banner-carrier's hit points would be a boon the player never sees the effect of.
+ */
+val FIGHTING_FOLLOWERS = setOf(
+    Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG,
+    Ancillary.PLAGUE_PEASANT, Ancillary.GREASER, Ancillary.FIREBRAND, Ancillary.BEEKEEPER,
+    Ancillary.ARCHER, Ancillary.CROSSBOWMAN,
+    Ancillary.SAPPER, Ancillary.MOLEMAN, Ancillary.TINY_TERRENCE
+)
+
+/** The follower kind ("moleman") behind an ancillary id ("anc_moleman"), which is what ids use. */
+val Ancillary.fighterKind: String get() = id.removePrefix("anc_")
+
+/**
+ * What a follower's reward card says it does for you.
+ *
+ * Every follower used to get "Entourage follower: Max HP +X, speed +Y%". A "+" stat line reads as a
+ * buff to the player, and only the parade attendants' numbers actually are one — [totalHpBoost] sums
+ * those onto the player's base. A follower who FIGHTS arrives with a body and hit points of his own,
+ * and most of them boost nothing at all, so the line rendered as the literal "Max HP +0, speed +0%".
+ */
+fun followerStatLine(anc: Ancillary): String {
+    fun signed(n: Int) = if (n >= 0) "+$n" else "$n"
+    val playerBonus = buildList {
+        if (anc.hpBoost != 0f) add("Max HP ${signed(anc.hpBoost.toInt())}")
+        if (anc.speedBoost != 0f) add("speed ${signed((anc.speedBoost * 100).toInt())}%")
+    }.joinToString(", ")
+    return when {
+        anc.id in OBJECT_ANCILLARY_IDS -> "Fights on its own: ${anc.hpBoost.toInt()} HP of its own"
+        anc in FIGHTING_FOLLOWERS ->
+            if (playerBonus.isEmpty()) "Fights for you, with hit points of its own"
+            else "Fights for you, with hit points of its own. Also grants you $playerBonus"
+        playerBonus.isEmpty() -> "Attends you in the parade"
+        else -> "Attends you: your $playerBonus"
+    }
+}
+
+/** How much stronger one Retinue boon makes its man. Stacks multiplicatively per dose. */
+const val RETAINER_BOON_HP = 0.25f
+const val RETAINER_BOON_SPEED = 0.1f
+
+/** What a boon handed over, so the reward screen can say so plainly rather than "reward granted". */
+data class BoonOutcome(val headline: String, val detail: String)
+
+/**
+ * How often the herald calls at all. Every level made the offer part of the loop rather than an
+ * occasional windfall — even after the payout was cut, an offer on every single screen is a lot of
+ * ads to be asked to sit through.
+ */
+const val BOON_LEVEL_INTERVAL = 2
 
 /** Divine intervention, called down from the tapestry border once per battle-ish. */
 enum class DivineWeather(val id: String, val label: String, val description: String) {
@@ -548,7 +601,8 @@ data class FighterState(
      */
     var panicDuration: Float = 0f,
     
-    val speedBoost: Float = 0f,
+    /** var: the Retinue boon raises a promoted follower's speed at spawn, like the panoply below. */
+    var speedBoost: Float = 0f,
 
     // Roguelike attachments and layers (Level Up Upgrades)
     // var: the Pointier Sticks reward lashes a head onto a follower's own weapon at spawn.
@@ -1211,8 +1265,18 @@ data class BattleSimState(
     val unlockedGearIds: Set<String> = emptySet(),
     /** Milestone ids already earned, mirrored from GameProfile so the Trophies panel can read it. */
     val clearedMilestones: Set<String> = emptySet(),
-    /** One rewarded ad per level-up screen; the offer hides itself once taken. */
+    /** One boon per level-up screen, ad-watched or free; the offer hides itself once taken. */
     val adRewardClaimedThisLevel: Boolean = false,
+    /** Flat max HP banked from the Vigour boon. Added to the player's base, never to followers. */
+    val bonusMaxHp: Float = 0f,
+    /**
+     * Retainers the Retinue boon has singled out, by kind ("moleman", "archer"). A List, not a Set,
+     * for the same reason [unlockedAncillaries] is: repeats stack, and deduping them would silently
+     * throw away a boon the player watched an ad for.
+     */
+    val buffedFollowerKinds: List<String> = emptyList(),
+    /** What the last boon actually handed over, for the banner on the reward screen. Cleared on read. */
+    val lastBoon: BoonOutcome? = null,
     // A List, not a Set: duplicates ARE the feature — Twins/Thrice-Blessed add repeat copies,
     // which a Set silently deduped (stacking did nothing at the type level).
     val unlockedAncillaries: List<com.example.game.Ancillary> = emptyList(),
@@ -1283,7 +1347,12 @@ data class BattleSimState(
     /** Halley's own portent, straight off the tapestry: both hosts fight half again as fierce. */
     val cometPortent: Boolean = false,
 
-    val pendingSkipBonus: Int = 0, // score to award on next dismiss of level-up screen when skipped
+    /**
+     * Score awarded for declining the last battle's spoils, held so the next victory screen can
+     * say so. The score itself is already banked when the choice is made — this is only the
+     * receipt, and it lands a screen later because declining closes the screen it happened on.
+     */
+    val pendingSkipBonus: Int = 0,
     val performanceScore: Float = 0.5f, // dynamic difficulty: 0=struggling, 1=dominating
     /**
      * Consecutive levels finished having lost no more than a fifth of your health. The host reads
@@ -1306,6 +1375,10 @@ data class BattleSimState(
     // activeMount explicitly, which is the only case that fallback was ever really serving.
     val effectiveMount: Ancillary?
         get() = if (isThroneMode) null else activeMount
+
+    /** Whether this level-up screen is one the herald calls at. See [BOON_LEVEL_INTERVAL]. */
+    val boonLevel: Boolean
+        get() = level % BOON_LEVEL_INTERVAL == 0
 
     val totalHpBoost: Float
         get() = unlockedAncillaries.filter { it.id !in OBJECT_ANCILLARY_IDS }.sumOf { it.hpBoost.toDouble() }.toFloat() +

@@ -101,9 +101,9 @@ class LandscapeUiScreenshotTest {
         showLevelUpScreen = true,
         pendingLevelUpChoices = listOf(
             choice(
-                "follower_anc_fanatic", "follower", "Mad Boris the Fanatic",
-                "A wild-eyed zealot who charges ahead of the line screaming psalms. " +
-                    "(Entourage follower: Max HP +30, speed +10%)"
+                "follower_anc_fanatic", "follower", "Mad Boris the Berserker",
+                "Gone berserk. Charges the enemy naked with a huge axe, howling, and does not " +
+                    "stop. (Fights for you, with hit points of its own)"
             ),
             choice(
                 "attach_head_axe", "attachment", "Dane Axe",
@@ -122,7 +122,7 @@ class LandscapeUiScreenshotTest {
     fun rewardScreenWithTheAdOffer() {
         composeTestRule.setContent {
             composed(slot = 1) {
-                LevelUpScreen(uiState = rewardState(), onSelectChoice = {}, adOfferAvailable = true)
+                LevelUpScreen(uiState = rewardState(), onSelectChoice = {}, boonOfferAvailable = true)
             }
         }
         composeTestRule.onRoot()
@@ -134,11 +134,77 @@ class LandscapeUiScreenshotTest {
     fun rewardScreenWithoutTheAdOffer() {
         composeTestRule.setContent {
             composed(slot = 1) {
-                LevelUpScreen(uiState = rewardState(), onSelectChoice = {}, adOfferAvailable = false)
+                LevelUpScreen(uiState = rewardState(), onSelectChoice = {}, boonOfferAvailable = false)
             }
         }
         composeTestRule.onRoot()
             .captureRoboImage(filePath = "src/test/screenshots/landscape_reward_no_ad.png")
+    }
+
+    /**
+     * TEMPORARY: the three candidate tile shapes, each in the real column width, for choosing
+     * between. Delete two of these with the losing layouts.
+     */
+    /**
+     * The spoils screen as the player actually meets it: full-bleed, not in the 475dp middle column
+     * between the preview and the stats panel. Every card must be whole — no crop at either edge
+     * and no scrollbar, which is what the fixed 285dp card width used to cost.
+     */
+    @Test
+    fun rewardScreenFullBleed() {
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+                HeaderBar(uiState = rewardState(), musicOn = true, onToggleMusic = {})
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    LevelUpScreen(
+                        uiState = rewardState(), onSelectChoice = {}, boonOfferAvailable = true
+                    )
+                }
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/reward_full_bleed.png")
+    }
+
+    /** A hand of six, which must scroll and must show a scrollbar saying so. */
+    @Test
+    fun rewardScreenWithMoreSpoilsThanFit() {
+        val many = rewardState().let {
+            it.copy(pendingLevelUpChoices = it.pendingLevelUpChoices + listOf(
+                choice("armor_greaves", "armor", "Iron Greaves", "Shin plates, strapped over the boot."),
+                choice("comedy_goose", "comedy", "A Goose", "It is furious, and it is on your side."),
+                choice("attach_head_maul", "attachment", "Great Maul", "A blacksmith's hammer, grown past all sense.")
+            ))
+        }
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+                HeaderBar(uiState = many, musicOn = true, onToggleMusic = {})
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    LevelUpScreen(uiState = many, onSelectChoice = {}, boonOfferAvailable = false)
+                }
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/reward_many_spoils.png")
+    }
+
+    /** The credit for declining last battle's spoils, over the next victory screen. */
+    @Test
+    fun rewardScreenWithTheDeclinedSpoilsReceipt() {
+        val state = rewardState().copy(score = 41_200, pendingSkipBonus = 1750)
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(Color(0xFF6B5B3E))) {
+                HeaderBar(uiState = state, musicOn = true, onToggleMusic = {})
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    LevelUpScreen(uiState = state, onSelectChoice = {}, boonOfferAvailable = false)
+                }
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/reward_skip_bonus_notice.png")
     }
 
     /** The loadout screen: the densest selection surface in the game, and the most squeezed. */
@@ -272,7 +338,7 @@ class LandscapeUiScreenshotTest {
         var withAd = 0
         composeTestRule.setContent {
             Box(modifier = Modifier.fillMaxSize()) {
-                LevelUpScreen(uiState = rewardState(), onSelectChoice = {}, adOfferAvailable = true)
+                LevelUpScreen(uiState = rewardState(), onSelectChoice = {}, boonOfferAvailable = true)
             }
         }
         withAd = composeTestRule.onRoot().fetchSemanticsNode().size.height

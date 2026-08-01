@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.game.*
 import com.example.ui.theme.*
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -343,6 +344,46 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                     onDismiss = { viewModel.dismissBattleResult() }
                 )
             } else {
+                val rewardActivity = LocalContext.current as? android.app.Activity
+                // Buying the game ad-free must not cost you what the ad bought. The same boon, on
+                // the same budget, with nothing to sit through.
+                val boonIsFree = com.example.game.GameProfile.cached.adFreePurchased
+                val levelUp: @Composable () -> Unit = {
+                    LevelUpScreen(
+                        uiState = uiState,
+                        boonOfferAvailable = uiState.boonLevel &&
+                            !uiState.adRewardClaimedThisLevel &&
+                            uiState.pendingLevelUpChoices.isNotEmpty() &&
+                            (boonIsFree || (com.example.game.Ads.rewardedReady() && rewardActivity != null)),
+                        boonIsFree = boonIsFree,
+                        onClaimBoon = {
+                            if (boonIsFree) viewModel.grantAdReward()
+                            else rewardActivity?.let { act ->
+                                // Paid out on the SDK's earned callback only, never on dismissal.
+                                com.example.game.Ads.showRewarded(act) { viewModel.grantAdReward() }
+                            }
+                        },
+                        onClearBoonBanner = { viewModel.clearLastBoon() },
+                        onSelectChoice = { viewModel.selectLevelUpChoice(it) },
+                        onSelectMount = { viewModel.selectMount(it) },
+                        onStartBattle = { viewModel.startBattle() },
+                        onSkipReward = { viewModel.selectLevelUpChoice("") },
+                        onClearSkipBonus = { viewModel.clearSkipBonus() }
+                    )
+                }
+
+                // Choosing spoils takes the whole width. In the middle column the tiles got about
+                // 475dp between the preview and the stats panel, which cropped the third card off
+                // both this screen and the player's attention. Once the choice is made the screen
+                // falls back to the three columns, so the preview and the launch panel are never
+                // out of reach for longer than the decision itself.
+                val choosingSpoils = !showTrophies && !uiState.showMusicDecision &&
+                    (uiState.showLevelUpScreen || uiState.level > 1) &&
+                    uiState.pendingLevelUpChoices.isNotEmpty()
+
+                if (choosingSpoils) {
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f)) { levelUp() }
+                } else {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -397,28 +438,9 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                                 onSelect = { viewModel.selectMusicMood(it) }
                             )
                         } else if (uiState.showLevelUpScreen || uiState.level > 1) {
-                            // Decided here rather than inside the screen: LevelUpScreen is now a
-                            // pure function of its inputs, so the layout can be rendered — with
-                            // and without this offer — in the landscape screenshot harness.
-                            val rewardActivity = LocalContext.current as? android.app.Activity
-                            LevelUpScreen(
-                                uiState = uiState,
-                                adOfferAvailable = !uiState.adRewardClaimedThisLevel &&
-                                    uiState.pendingLevelUpChoices.isNotEmpty() &&
-                                    com.example.game.Ads.rewardedReady() &&
-                                    rewardActivity != null,
-                                onAdReward = {
-                                    rewardActivity?.let { act ->
-                                        // Paid out on the SDK's earned callback only, never on dismissal.
-                                        com.example.game.Ads.showRewarded(act) { viewModel.grantAdReward() }
-                                    }
-                                },
-                                onSelectChoice = { viewModel.selectLevelUpChoice(it) },
-                                onSelectMount = { viewModel.selectMount(it) },
-                                onStartBattle = { viewModel.startBattle() },
-                                onSkipReward = { viewModel.selectLevelUpChoice("") },
-                                onClearSkipBonus = { viewModel.clearSkipBonus() }
-                            )
+                            // The "Proceed to next battle" state — the choice itself was made
+                            // full-bleed above.
+                            levelUp()
                         } else {
                             GearSelectionTabs(
                                 uiState = uiState, 
@@ -444,6 +466,7 @@ fun MainBayeuxGameScreen(viewModel: GameViewModel, musicOn: Boolean, onToggleMus
                             onToggleThroneMode = { viewModel.toggleThroneMode() }
                         )
                     }
+                }
                 }
             }
         }
@@ -1253,6 +1276,190 @@ fun CharacterPreviewCard(
     }
 }
 
+/**
+ * Square. A rounded pane has to have its fill clipped to the curve or a wedge of colour escapes
+ * past the border at every corner, and it kept coming back; a square panel cannot have the bug at
+ * all, and an embroidered panel was never rounded in the first place.
+ */
+private val RewardTileShape = androidx.compose.ui.graphics.RectangleShape
+
+/**
+ * The narrowest a tile may be squeezed before the row starts scrolling instead. Low enough that the
+ * usual hand — three spoils and decline — still divides the width without a scrollbar.
+ */
+private val REWARD_TILE_MIN_WIDTH = 190.dp
+
+/** The kind's wool, its ink, and what to call it. */
+private fun rewardPalette(type: String): Triple<Color, Color, String> = when (type) {
+    "follower" -> Triple(Color(0xFFE3F2FD), TapestryBlue, "Entourage")
+    "attachment" -> Triple(Color(0xFFFFEBEE), TapestryRed, "Weapon Head")
+    "extension" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "Haft Upgrade")
+    "armor" -> Triple(Color(0xFFFFF8E1), Color(0xFF8D6E63), "Layered Armor")
+    "comedy" -> Triple(Color(0xFFFFE0E0), Color(0xFFC62828), "Comedy Gear")
+    else -> Triple(Color(0xFFF5F5F5), TapestryDark, "Upgrade")
+}
+
+/** A multiple arrives as a sigil, not as the word TWINS shouted in the title and again in the body. */
+private fun multipleSigil(choice: LevelUpChoice): String? = when {
+    choice.type == "follower_multiply" -> "×3"
+    choice.copies > 1 -> "+${choice.copies}"
+    else -> null
+}
+
+/**
+ * One spoil. Sized by its column, never by a fixed width: at 285dp the third card was cropped at
+ * the panel edge and the hand could only be read by scrolling, which is the whole complaint.
+ */
+@Composable
+private fun RewardTile(choice: LevelUpChoice, onSelect: (String) -> Unit) {
+    val (bannerColor, titleColor, tagLabel) = rewardPalette(choice.type)
+    val impact = buildImpactFor(choice)
+    Box(
+        // clip BEFORE background: Card filled its container as a rectangle and only stroked the
+        // rounded border over it, so a wedge of the pale fill escaped past the curve at every
+        // corner. Clipping to the shape first means nothing can sit outside it.
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+            .clip(RewardTileShape)
+            .background(bannerColor)
+            .border(2.dp, titleColor, RewardTileShape)
+            .clickable { onSelect(choice.id) }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(11.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                multipleSigil(choice)?.let {
+                    Text(
+                        it,
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        modifier = Modifier
+                            .background(TapestryRed, RoundedCornerShape(4.dp))
+                            .border(1.dp, TapestryDark, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 7.dp, vertical = 1.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    tagLabel,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = titleColor,
+                    modifier = Modifier
+                        .background(Color.White, RoundedCornerShape(4.dp))
+                        .border(1.dp, titleColor, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+                // Keeps the tag optically centred whether or not a badge is present
+                Spacer(modifier = Modifier.weight(1f))
+            }
+            Text(
+                choice.title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                lineHeight = 18.sp,
+                color = TapestryDark,
+                fontFamily = FontFamily.Serif,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                choice.description,
+                fontSize = 12.sp,
+                lineHeight = 14.sp,
+                color = TapestryDark.copy(alpha = 0.85f),
+                textAlign = TextAlign.Center,
+                overflow = TextOverflow.Ellipsis
+            )
+            // What this actually does to the build, in the same numbers the simulation uses.
+            if (impact.isNotEmpty()) {
+                Text(
+                    impact,
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = titleColor,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Box(
+                modifier = Modifier.size(36.dp).background(titleColor, RoundedCornerShape(18.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("⚔", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+/**
+ * Declining is a real choice and keeps a tile of its own beside the spoils — narrower, and in
+ * undyed linen rather than a kind's wool, so it reads as the option to take none of them.
+ */
+@Composable
+private fun DeclineSpoils(onSkip: () -> Unit) {
+    val ink = TapestryDark.copy(alpha = 0.45f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+            .clip(RewardTileShape)
+            .background(Color(0xFFF2EEE4))
+            .border(2.dp, ink, RewardTileShape)
+            .clickable { onSkip() }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(11.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "No Reward",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = TapestryDark.copy(alpha = 0.6f),
+                modifier = Modifier
+                    .background(Color.White, RoundedCornerShape(4.dp))
+                    .border(1.dp, ink, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+            Text(
+                "Decline all spoils",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                lineHeight = 17.sp,
+                color = TapestryDark,
+                fontFamily = FontFamily.Serif,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                "Take nothing, and be paid in score instead.",
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                color = TapestryDark.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center
+            )
+            Box(
+                modifier = Modifier.size(30.dp).background(ink, RoundedCornerShape(15.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("✗", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+
 @Composable
 fun LevelUpScreen(
     uiState: BattleSimState,
@@ -1261,22 +1468,13 @@ fun LevelUpScreen(
     onStartBattle: () -> Unit = {},
     onSkipReward: () -> Unit = {},
     onClearSkipBonus: () -> Unit = {},
-    /** Whether the rewarded-ad offer can be shown. Decided by the caller — see MainActivity. */
-    adOfferAvailable: Boolean = false,
-    onAdReward: () -> Unit = {}
+    /** Whether the boon offer can be shown. Decided by the caller — see MainActivity. */
+    boonOfferAvailable: Boolean = false,
+    /** True for players who bought the game ad-free: the boon is claimed outright, no ad. */
+    boonIsFree: Boolean = false,
+    onClaimBoon: () -> Unit = {},
+    onClearBoonBanner: () -> Unit = {}
 ) {
-    // Skip bonus popup
-    var showSkipBonusPopup by remember { mutableStateOf(false) }
-    var skipBonusAmount by remember { mutableStateOf(0) }
-    LaunchedEffect(uiState.pendingSkipBonus) {
-        if (uiState.pendingSkipBonus > 0) {
-            skipBonusAmount = uiState.pendingSkipBonus
-            showSkipBonusPopup = true
-            kotlinx.coroutines.delay(2000)
-            showSkipBonusPopup = false
-            onClearSkipBonus()
-        }
-    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1312,18 +1510,20 @@ fun LevelUpScreen(
                     color = TapestryDark.copy(alpha = 0.85f)
                 )
             }
-            // Opt-in only, and only when an ad is genuinely loaded — offering a reward that cannot
-            // be delivered is worse than not offering it. Absent in debug and for ad-free players.
-            if (adOfferAvailable) {
+            // Opt-in only, and only when the boon can actually be delivered — an ad-funded offer
+            // needs a loaded ad; an ad-free player needs neither. Absent in debug.
+            if (boonOfferAvailable) {
                 Button(
-                    onClick = onAdReward,
+                    onClick = onClaimBoon,
                     colors = ButtonDefaults.buttonColors(containerColor = TapestryMustard),
                     shape = RoundedCornerShape(6.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier.widthIn(max = 190.dp)
+                    modifier = Modifier.widthIn(max = 190.dp).testTag("boon_offer")
                 ) {
+                    // Names what arrives, not what it costs, and never promises which boon lands.
                     Text(
-                        "Watch a herald's message\nfor two more spoils",
+                        if (boonIsFree) "Claim a herald's favour\n(yours, ad-free)"
+                        else "Hear a herald's message\nfor a favour",
                         color = TapestryDark,
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp,
@@ -1352,188 +1552,42 @@ fun LevelUpScreen(
                 } else {
             val scrollState = rememberScrollState()
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
-                        .padding(bottom = 16.dp)
-                        .horizontalScroll(scrollState),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    for (index in uiState.pendingLevelUpChoices.indices) {
-                        val choice = uiState.pendingLevelUpChoices[index]
-                        val (bannerColor, titleColor, tagLabel) = when (choice.type) {
-                            "follower" -> Triple(Color(0xFFE3F2FD), TapestryBlue, "Entourage")
-                            "attachment" -> Triple(Color(0xFFFFEBEE), TapestryRed, "Weapon Head")
-                            "extension" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "Haft Upgrade")
-                            "armor" -> Triple(Color(0xFFFFF8E1), Color(0xFF8D6E63), "Layered Armor")
-                            "comedy" -> Triple(Color(0xFFFFE0E0), Color(0xFFC62828), "Comedy Gear")
-                            else -> Triple(Color(0xFFF5F5F5), TapestryDark, "Upgrade")
-                        }
-                        Card(
-                            modifier = Modifier
-                                .width(285.dp)
-                                .fillMaxHeight()
-                                .clickable { onSelectChoice(choice.id) },
-                            colors = CardDefaults.cardColors(containerColor = bannerColor),
-                            border = BorderStroke(2.dp, titleColor),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                // A multiple arrives as a sigil, not as the word TWINS shouted in
-                                // the title and again in the body.
-                                val multiple = when {
-                                    choice.type == "follower_multiply" -> "×3"
-                                    choice.copies > 1 -> "+${choice.copies}"
-                                    else -> null
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (multiple != null) {
-                                        Text(
-                                            multiple,
-                                            fontSize = 13.sp,
-                                            fontFamily = FontFamily.Serif,
-                                            fontWeight = FontWeight.Black,
-                                            color = Color.White,
-                                            modifier = Modifier
-                                                .background(TapestryRed, RoundedCornerShape(4.dp))
-                                                .border(1.dp, TapestryDark, RoundedCornerShape(4.dp))
-                                                .padding(horizontal = 7.dp, vertical = 1.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.weight(1f))
-                                    Text(
-                                        tagLabel,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = titleColor,
-                                        modifier = Modifier
-                                            .background(Color.White, RoundedCornerShape(4.dp))
-                                            .border(1.dp, titleColor, RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                    // Keeps the tag optically centred whether or not a badge is present
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                                Text(
-                                    choice.title,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = TapestryDark,
-                                    fontFamily = FontFamily.Serif,
-                                    textAlign = TextAlign.Center
-                                )
-                                Text(
-                                    choice.description,
-                                    fontSize = 12.sp,
-                                    lineHeight = 14.sp,
-                                    color = TapestryDark.copy(alpha = 0.85f),
-                                    textAlign = TextAlign.Center,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                // What this actually does to the build, in the same numbers the
-                                // simulation uses. Jesse: "doesnt show what the total effect to
-                                // build will do".
-                                val impact = buildImpactFor(choice)
-                                if (impact.isNotEmpty()) {
-                                    Text(
-                                        impact,
-                                        fontSize = 10.sp,
-                                        lineHeight = 12.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Bold,
-                                        color = titleColor,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .background(titleColor, RoundedCornerShape(18.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("⚔", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-
-                    // No-Reward card
-                    Card(
+                // Every tile the same width, decline included. They share the row when they fit,
+                // and the row scrolls once there are too many to — a hand can be more than four.
+                BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(bottom = 12.dp)) {
+                    val tiles = uiState.pendingLevelUpChoices.size + 1
+                    val gaps = 8.dp * (tiles - 1)
+                    // Floored to whole dp: an exact division rounds up by a fraction, and the row
+                    // came out a pixel wider than the box — enough to scroll and show a scrollbar
+                    // on a hand that actually fits.
+                    val tileWidth = ((maxWidth - gaps).value / tiles).toInt().dp
+                        .coerceAtLeast(REWARD_TILE_MIN_WIDTH)
+                    Row(
                         modifier = Modifier
-                            .width(260.dp)
-                            .fillMaxHeight()
-                            .clickable { onSkipReward() },
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
-                        border = BorderStroke(2.dp, TapestryDark.copy(alpha = 0.4f)),
-                        shape = RoundedCornerShape(12.dp)
+                            .fillMaxSize()
+                            .horizontalScroll(scrollState),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                "No Reward",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TapestryDark.copy(alpha = 0.6f),
-                                modifier = Modifier
-                                    .background(Color.White, RoundedCornerShape(4.dp))
-                                    .border(1.dp, TapestryDark.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                            Text(
-                                "Decline all spoils",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = TapestryDark,
-                                fontFamily = FontFamily.Serif,
-                                textAlign = TextAlign.Center
-                            )
-                            Text(
-                                "Thou art too proud for gifts. Earn bonus glory instead.",
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp,
-                                color = TapestryDark.copy(alpha = 0.7f),
-                                textAlign = TextAlign.Center,
-                                overflow = TextOverflow.Visible
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(TapestryDark.copy(alpha = 0.4f), RoundedCornerShape(18.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("✗", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        uiState.pendingLevelUpChoices.forEach { choice ->
+                            Box(modifier = Modifier.width(tileWidth).fillMaxHeight()) {
+                                RewardTile(choice = choice, onSelect = onSelectChoice)
                             }
+                        }
+                        Box(modifier = Modifier.width(tileWidth).fillMaxHeight()) {
+                            DeclineSpoils(onSkip = onSkipReward)
                         }
                     }
                 }
 
-                // Visual Scrollbar overlay
+                // The scrollbar, which only appears when there is in fact more row than screen.
                 if (scrollState.maxValue > 0) {
                     val scrollPercent = scrollState.value.toFloat() / scrollState.maxValue
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 4.dp)
                             .width(200.dp)
                             .height(6.dp)
-                            .background(Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+                            .background(TapestryDark.copy(alpha = 0.2f), RoundedCornerShape(3.dp))
                     ) {
                         Box(
                             modifier = Modifier
@@ -1545,25 +1599,82 @@ fun LevelUpScreen(
                     }
                 }
 
-                // Skip bonus popup overlay
-                if (showSkipBonusPopup) {
-                    Box(
+                // Which boon landed. A herald's favour is a random draw, so saying only "claimed"
+                // would leave the player guessing what changed — especially for Vigour and the
+                // Retinue, which alter nothing they can see on this screen.
+                uiState.lastBoon?.let { boon ->
+                    LaunchedEffect(boon) {
+                        kotlinx.coroutines.delay(4000)
+                        onClearBoonBanner()
+                    }
+                    Column(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(top = 8.dp)
-                            .background(TapestryRed, RoundedCornerShape(8.dp))
+                            .background(TapestryMustard, RoundedCornerShape(8.dp))
                             .border(2.dp, TapestryDark, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .testTag("boon_banner"),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "+$skipBonusAmount GLORY!",
+                            boon.headline,
                             fontFamily = FontFamily.Serif,
                             fontWeight = FontWeight.Black,
-                            fontSize = 18.sp,
-                            color = TapestryLight
+                            fontSize = 16.sp,
+                            color = TapestryDark
+                        )
+                        Text(
+                            boon.detail,
+                            fontSize = 11.sp,
+                            color = TapestryDark.copy(alpha = 0.8f)
                         )
                     }
                 }
+
+                // The credit for declining last battle's spoils. It used to read "+1750 GLORY!" in
+                // red — a currency the game does not have, never named as the score in the header,
+                // and appearing a screen after the decision with nothing to say why. It now names
+                // the number, the unit, and what earned it.
+                if (uiState.pendingSkipBonus > 0) {
+                    LaunchedEffect(uiState.pendingSkipBonus) {
+                        kotlinx.coroutines.delay(4000)
+                        onClearSkipBonus()
+                    }
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp)
+                            .background(TapestryLinenCard)
+                            .border(2.dp, TapestryDark)
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                            .testTag("skip_bonus_notice"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "+${"%,d".format(uiState.pendingSkipBonus)}",
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 20.sp,
+                            color = TapestryRed
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "SCORE",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp,
+                            color = TapestryRed.copy(alpha = 0.85f)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            "for declining last battle's spoils",
+                            fontSize = 11.sp,
+                            color = TapestryDark.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+
             }
         }
 
@@ -3033,8 +3144,7 @@ fun BattlefieldScene(
                     if (kotlin.math.abs(tx - at.x) <= INSPECT_GRAB_PX) {
                         drawHealthTag(
                             this,
-                            target.name,
-                            "${target.hp.toInt()} / ${target.maxHp.toInt()}",
+                            target,
                             tx.coerceIn(80f, size.width - 80f),
                             (at.y - 60f).coerceIn(70f, size.height - 60f)
                         )
@@ -3351,16 +3461,66 @@ private fun DivineWeatherOverlay(viewModel: GameViewModel) {
 internal const val INSPECT_GRAB_PX = 70f
 
 /**
- * The hold-to-inspect tag: a scrap of linen with a name and an exact hit-point count, drawn
- * above the finger for as long as it is held down.
+ * One affliction a body is carrying: the wool it is stitched in, what to call it, how many doses
+ * are held, and how many seconds are left on the clock. [capacity] is 0 for the effects that do
+ * not stack, so no empty knots are drawn against them.
+ */
+private class Affliction(
+    val wool: androidx.compose.ui.graphics.Color,
+    val label: String,
+    val doses: Int,
+    val capacity: Int,
+    val seconds: Float
+)
+
+/** The knots row is capped so the card cannot run off the top of the field. */
+private const val INSPECT_MAX_ROWS = 4
+private const val INSPECT_ROW_H = 20f
+
+/**
+ * Everything currently rotting, slowing or flattening this body, worst-first: the damage-over-time
+ * afflictions carry doses, the rest are on or off. The four Dots are read through [dotStacks] so a
+ * doubled venom shows as two knots rather than a refreshed clock.
+ */
+private fun afflictionsOf(f: FighterState): List<Affliction> = buildList {
+    // Dyed in the eight wools the rest of the tapestry uses — no new colour enters for the UI.
+    val dye = mapOf(
+        Dot.BLEED to TapestryRed,
+        Dot.POISON to TapestryGreen,
+        Dot.IGNITE to TapestryMustard,
+        Dot.DISEASE to androidx.compose.ui.graphics.Color(0xFF6E5536)
+    )
+    val name = mapOf(
+        Dot.BLEED to "Bleeding", Dot.POISON to "Poisoned",
+        Dot.IGNITE to "Alight", Dot.DISEASE to "Diseased"
+    )
+    Dot.entries.forEach { d ->
+        val secs = f.dotSeconds(d)
+        if (secs > 0f) add(
+            Affliction(dye.getValue(d), name.getValue(d), f.dotStacks[d.ordinal].coerceAtLeast(1), MAX_DOT_STACKS, secs)
+        )
+    }
+    if (f.crumpleDuration > 0f) add(Affliction(TapestryDark, "Crumpled", 1, 0, f.crumpleDuration))
+    if (f.panicDuration > 0f) add(Affliction(androidx.compose.ui.graphics.Color(0xFF5A6B63), "Blinded", 1, 0, f.panicDuration))
+    if (f.slowDuration > 0f) add(Affliction(TapestryBlue, "Slowed", 1, 0, f.slowDuration))
+}
+
+/**
+ * The hold-to-inspect tag: a scrap of linen with a name, an exact hit-point count, and the roll of
+ * what the body is currently carrying.
+ *
+ * Doses are stitched, not numbered — a filled knot per dose on a short thread in that affliction's
+ * own wool, hollow knots for the doses it could still take. It is the tally a herald would keep,
+ * it costs no width, and it is the one place this card is allowed to be decorative.
  */
 private fun drawHealthTag(
     scope: androidx.compose.ui.graphics.drawscope.DrawScope,
-    name: String,
-    hp: String,
+    target: FighterState,
     x: Float,
     y: Float
 ) {
+    val name = target.name
+    val hp = "${target.hp.toInt()} / ${target.maxHp.toInt()}"
     val namePaint = android.graphics.Paint().apply {
         isAntiAlias = true
         textSize = 22f
@@ -3372,20 +3532,66 @@ private fun drawHealthTag(
         textSize = 30f
         setColor(TapestryRed.toArgb())
     }
-    val halfW = maxOf(namePaint.measureText(name), hpPaint.measureText(hp)) / 2f + 14f
-    scope.drawRect(
-        color = TapestryLinenCard,
-        topLeft = Offset(x - halfW, y - 46f),
-        size = Size(halfW * 2f, 62f)
-    )
-    scope.drawRect(
-        color = TapestryDark,
-        topLeft = Offset(x - halfW, y - 46f),
-        size = Size(halfW * 2f, 62f),
-        style = Stroke(width = 2.5f)
-    )
+    val labelPaint = android.graphics.Paint(namePaint).apply {
+        textSize = 18f
+        textAlign = android.graphics.Paint.Align.LEFT
+    }
+    val clockPaint = android.graphics.Paint(labelPaint).apply {
+        textSize = 16f
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.NORMAL)
+        setColor(TapestryDark.copy(alpha = 0.65f).toArgb())
+        textAlign = android.graphics.Paint.Align.RIGHT
+    }
+
+    val all = afflictionsOf(target)
+    val shown = all.take(INSPECT_MAX_ROWS)
+    val overflow = all.size - shown.size
+    val tail = if (overflow > 0) "and $overflow more" else null
+    val rows = shown.size + (if (tail != null) 1 else 0)
+
+    // The knot thread reserves a fixed gutter so every label starts on the same left margin.
+    val knotGutter = 38f
+    val rowW = shown.maxOfOrNull { a ->
+        knotGutter + labelPaint.measureText(a.label) + 16f + clockPaint.measureText("${ceil(a.seconds).toInt()}s")
+    } ?: 0f
+    val tailW = tail?.let { knotGutter + labelPaint.measureText(it) } ?: 0f
+    val halfW = maxOf(namePaint.measureText(name), hpPaint.measureText(hp), rowW, tailW) / 2f + 14f
+
+    val top = y - 46f
+    val height = 62f + rows * INSPECT_ROW_H + (if (rows > 0) 6f else 0f)
+    scope.drawRect(TapestryLinenCard, topLeft = Offset(x - halfW, top), size = Size(halfW * 2f, height))
+    scope.drawRect(TapestryDark, topLeft = Offset(x - halfW, top), size = Size(halfW * 2f, height), style = Stroke(width = 2.5f))
     scope.drawContext.canvas.nativeCanvas.drawText(name, x, y - 26f, namePaint)
     scope.drawContext.canvas.nativeCanvas.drawText(hp, x, y + 6f, hpPaint)
+
+    if (rows == 0) return
+    // A thread ruled across the card separates who he is from what he is carrying.
+    val ruleY = top + 62f
+    scope.drawLine(
+        TapestryDark.copy(alpha = 0.35f),
+        Offset(x - halfW + 10f, ruleY), Offset(x + halfW - 10f, ruleY),
+        strokeWidth = 1.5f
+    )
+    val left = x - halfW + 12f
+    shown.forEachIndexed { i, a ->
+        val baseY = ruleY + 6f + i * INSPECT_ROW_H + 14f
+        val knotY = baseY - 5f
+        val slots = if (a.capacity > 0) a.capacity else 1
+        repeat(slots) { k ->
+            val kx = left + 5f + k * 9f
+            if (k < a.doses) {
+                scope.drawCircle(a.wool, radius = 3.4f, center = Offset(kx, knotY))
+            } else {
+                scope.drawCircle(a.wool.copy(alpha = 0.45f), radius = 3.4f, center = Offset(kx, knotY), style = Stroke(width = 1.2f))
+            }
+        }
+        scope.drawContext.canvas.nativeCanvas.drawText(a.label, left + knotGutter, baseY, labelPaint)
+        scope.drawContext.canvas.nativeCanvas.drawText("${ceil(a.seconds).toInt()}s", x + halfW - 12f, baseY, clockPaint)
+    }
+    tail?.let {
+        val baseY = ruleY + 6f + shown.size * INSPECT_ROW_H + 14f
+        scope.drawContext.canvas.nativeCanvas.drawText(it, left + knotGutter, baseY, clockPaint.apply { textAlign = android.graphics.Paint.Align.LEFT })
+    }
 }
 
 // --- Divine weather: header medallions and battle flourishes ---

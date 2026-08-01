@@ -871,7 +871,7 @@ class GameViewModel : ViewModel() {
         val totalArmorMass = state.armor.mass + state.headgear.mass + state.extraArmors.sumOf { id -> com.example.game.GameData.ARMOR_PIECES.find { it.id == id }?.mass?.toDouble() ?: 0.0 }.toFloat()
         val currentMount = state.effectiveMount
         val chariotCollapses = currentMount == com.example.game.Ancillary.CHARIOT && totalArmorMass > ARMOR_WEIGHT_LIMIT && !state.hasSilkenGarments
-        val baseHp = 100f + state.totalHpBoost
+        val baseHp = 100f + state.totalHpBoost + state.bonusMaxHp
         // Soften the size-HP penalty and give an extra evasion-HP buff so small builds stay viable
         // The haircut's own small contribution, added before the size scaling so it reads the same
         // proportionally on a big build as on a small one. Deliberately tiny — see HAIR_TRAITS.
@@ -1358,6 +1358,18 @@ class GameViewModel : ViewModel() {
             }
         }
 
+        // The Retinue boon, applied here for the same reason the panoply is: one pass over whoever
+        // actually turned up, rather than a branch in each of a dozen spawn blocks. Doses stack, so
+        // a kind promoted twice is buffed twice.
+        state.buffedFollowerKinds.groupingBy { it }.eachCount().forEach { (kind, doses) ->
+            val hpMul = Math.pow((1f + RETAINER_BOON_HP).toDouble(), doses.toDouble()).toFloat()
+            enemies.filter { it.isPlayer && it.isKind(kind) }.forEach { ally ->
+                ally.maxHp *= hpMul
+                ally.hp *= hpMul
+                ally.speedBoost += RETAINER_BOON_SPEED * doses
+            }
+        }
+
         // Pointier Sticks: half the melee entourage are issued a real head. Applied after every
         // spawn block, like the panoply, so it reaches whoever turned up. Beasts, the decoy and
         // the bare-fisted specialists (the moleman punches on purpose) are left alone.
@@ -1606,20 +1618,21 @@ class GameViewModel : ViewModel() {
     fun clearPendingInterstitial() { pendingInterstitial.value = false }
 
     /**
-     * Pay out the rewarded ad. Called only from the SDK's *earned* callback. Cards are appended, so
-     * the player keeps every choice they already had.
+     * Pay out the boon. Called from the SDK's *earned* callback, and directly for players who have
+     * bought the game ad-free — the same boon, on the same one-per-level budget, with no ad in the
+     * way. Paying to remove ads must not cost you the thing ads bought.
+     *
+     * The old payout was always two more cards, which was strictly the strongest option on the
+     * screen and made the level-up choice mostly about whether you sat through an ad. It is now one
+     * of four, three of which are smaller.
      */
-    fun grantAdReward() {
-        _uiState.update { state ->
-            val extra = rewardChoices(state).filter { new ->
-                state.pendingLevelUpChoices.none { it.id == new.id }
-            }
-            if (extra.isEmpty()) state
-            else state.copy(
-                pendingLevelUpChoices = state.pendingLevelUpChoices + extra,
-                adRewardClaimedThisLevel = true
-            )
-        }
+    fun grantAdReward(random: kotlin.random.Random = kotlin.random.Random.Default) {
+        _uiState.update { state -> Boons.apply(state, Boons.roll(state, random), random) }
+    }
+
+    /** The banner has been shown; stop showing it. */
+    fun clearLastBoon() {
+        _uiState.update { if (it.lastBoon == null) it else it.copy(lastBoon = null) }
     }
 
     /** True while the pause menu holds the battle. The loop keeps ticking but simulates nothing. */
@@ -2628,10 +2641,7 @@ class GameViewModel : ViewModel() {
                         // No shouted "TWINS!" in the title or the body any more — the card wears a
                         // "+2" badge instead, which says the same thing without eating two lines.
                         val twinTitle = "${anc.ancillaryName}$titleSuffix"
-                        // Objects field their own body, so their hpBoost is that body's — quoting
-                        // it as "Max HP +200" read as a player buff the Great Horse never grants.
-                        val statLine = if (anc.id in OBJECT_ANCILLARY_IDS) "Fights on its own: ${anc.hpBoost.toInt()} HP of its own"
-                                       else "Entourage follower: Max HP +${anc.hpBoost.toInt()}, speed +${(anc.speedBoost * 100).toInt()}%"
+                        val statLine = followerStatLine(anc)
                         // Two Brothers Tuck censing you at once is not a stat line, it is a verdict
                         // on the war you are prosecuting.
                         val body = if (isTwins && anc == Ancillary.MONK) "Thy cause be truly righteous."
@@ -3181,12 +3191,78 @@ class GameViewModel : ViewModel() {
         }
     }
 
+    /** The receipt for declining spoils has been shown; stop showing it. */
     fun clearSkipBonus() {
-        _uiState.update { it.copy(pendingSkipBonus = 0) }
+        _uiState.update { if (it.pendingSkipBonus == 0) it else it.copy(pendingSkipBonus = 0) }
     }
 
     override fun onCleared() {
         gameLoopJob?.cancel()
         super.onCleared()
+    }
+}
+
+/**
+ * The rewarded-ad payout.
+ *
+ * It used to be a flat "two more spoils", which was strictly the strongest thing on the level-up
+ * screen: the choice stopped being about the build and became about whether you sat through an ad.
+ * It is now one of four outcomes, three of them smaller, and the player is told which one landed.
+ *
+ * A top-level object rather than more of [GameViewModel]'s companion: it is pure state -> state and
+ * takes its Random, so the whole payout table is testable without a ViewModel.
+ */
+object Boons {
+    /** How often each comes up, out of the eligible total. */
+    enum class Boon(val weight: Int) { SPOILS(35), EXTRA_SPOILS(15), VIGOUR(25), RETAINER(25) }
+
+    /** Vigour scales with the run: 5 at level 1, capped at 50 by the mid-thirties. */
+    fun vigourFor(level: Int): Int = (5 + (level - 1) * 1.5f).toInt().coerceIn(5, 50)
+
+    /** Retinue needs a retainer to promote; with none on the books it cannot be rolled. */
+    fun roll(state: BattleSimState, random: kotlin.random.Random): Boon {
+        val eligible = Boon.entries.filter {
+            it != Boon.RETAINER || state.unlockedAncillaries.any { a -> a in FIGHTING_FOLLOWERS }
+        }
+        var n = random.nextInt(eligible.sumOf { it.weight })
+        return eligible.first { n -= it.weight; n < 0 }
+    }
+
+    fun apply(state: BattleSimState, boon: Boon, random: kotlin.random.Random): BattleSimState {
+        fun claimed(s: BattleSimState) = s.copy(adRewardClaimedThisLevel = true)
+        return when (boon) {
+            Boon.SPOILS, Boon.EXTRA_SPOILS -> {
+                val want = if (boon == Boon.EXTRA_SPOILS) 2 else 1
+                val extra = GameViewModel.rewardChoices(state, random)
+                    .filter { new -> state.pendingLevelUpChoices.none { it.id == new.id } }
+                    .take(want)
+                // No card left to hand over is not a payout: leave the offer standing.
+                if (extra.isEmpty()) state else claimed(state.copy(
+                    pendingLevelUpChoices = state.pendingLevelUpChoices + extra,
+                    lastBoon = BoonOutcome(
+                        if (extra.size > 1) "Two more spoils" else "One more spoil",
+                        "Added to the choices below."
+                    )
+                ))
+            }
+            Boon.VIGOUR -> {
+                val gain = vigourFor(state.level)
+                claimed(state.copy(
+                    bonusMaxHp = state.bonusMaxHp + gain,
+                    lastBoon = BoonOutcome("+$gain max health", "Yours for the rest of the run.")
+                ))
+            }
+            Boon.RETAINER -> {
+                val pick = state.unlockedAncillaries.filter { it in FIGHTING_FOLLOWERS }.random(random)
+                claimed(state.copy(
+                    buffedFollowerKinds = state.buffedFollowerKinds + pick.fighterKind,
+                    lastBoon = BoonOutcome(
+                        "${pick.ancillaryName} takes heart",
+                        "+${(RETAINER_BOON_HP * 100).toInt()}% health and " +
+                            "+${(RETAINER_BOON_SPEED * 100).toInt()}% speed, every battle from now."
+                    )
+                ))
+            }
+        }
     }
 }

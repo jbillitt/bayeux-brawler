@@ -187,6 +187,37 @@ class BattleScreenScreenshotTest {
             .captureRoboImage(filePath = "src/test/screenshots/battle_health_hold.png")
     }
 
+    /**
+     * The same hold on a man carrying more afflictions than the card will show, so both halves of
+     * the roll are visible: doses stitched as knots (bleed twice, ignite at the cap of three) and
+     * the overflow line where the rest are.
+     */
+    @Test
+    fun holdingAnAfflictedFighterListsWhatHeCarries() {
+        val vm = battleInProgress()
+        val target = vm.enemiesState.value.firstOrNull { !it.isPlayer && !it.isDead }
+        target?.apply {
+            repeat(2) { applyDot(Dot.BLEED, 9f) }
+            applyDot(Dot.POISON, 4f)
+            repeat(4) { applyDot(Dot.IGNITE, 6f) } // one over the cap: still three knots
+            applyDot(Dot.DISEASE, 12f)
+            slowDuration = 2.2f
+            panicDuration = 1.2f
+            crumpleDuration = 1.5f
+        }
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            MainBayeuxGameScreen(viewModel = vm, musicOn = false, onToggleMusic = {})
+        }
+        composeTestRule.onNodeWithTag("bayeux_tapestry_canvas").performTouchInput {
+            val fx = ((target?.posX ?: 500f) / 1000f).coerceIn(0.05f, 0.95f)
+            down(androidx.compose.ui.geometry.Offset(width * fx, height * 0.5f))
+        }
+        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/battle_health_afflicted.png")
+    }
+
     /** Sets any of the ViewModel's private list StateFlows, for states a paused battle won't reach. */
     private fun setPrivateList(vm: GameViewModel, fieldName: String, value: List<Any>) {
         val field = GameViewModel::class.java.getDeclaredField(fieldName).apply { isAccessible = true }

@@ -390,6 +390,15 @@ class GameViewModel : ViewModel() {
         /** How long the descent itself takes — he sinks at the dig site, throwing up spoil. */
         const val DIG_DOWN_SECS = 0.9f
 
+        // The Pounce. A melee build has no answer to a line of archers that walks backwards faster
+        // than the fight closes; this is that answer, on a long leash.
+        const val LEAP_COOLDOWN_SECS = 9f
+        const val LEAP_FLIGHT_SECS = 0.5f
+        /** How far off a bowman has to be before pouncing is worth it, and past which it is a fantasy. */
+        const val LEAP_MIN_GAP_PX = 260f
+        const val LEAP_MAX_GAP_PX = 620f
+        const val LEAP_ARC_PX = 130f
+
         /** Finish a level with at least this much health left and it counts as unpunished. */
         const val UNPUNISHED_HP_FRACTION = 0.8f
         /**
@@ -608,6 +617,7 @@ class GameViewModel : ViewModel() {
             val newHasFullShave = state.hasFullShave || choice.itemId == "full_shave"
             val newHasGreasedWeapon = state.hasGreasedWeapon || choice.itemId == "greased_weapon"
             val newHasPointierSticks = state.hasPointierSticks || choice.itemId == "pointier_sticks"
+            val newHasLeap = state.hasLeap || choice.itemId == "the_pounce"
             val newHasArmorPiercing = state.hasArmorPiercing || choice.itemId == "counter_armor_piercing"
             
             var newHeadgear = state.headgear
@@ -651,6 +661,7 @@ class GameViewModel : ViewModel() {
                 hasFullShave = newHasFullShave,
                 hasGreasedWeapon = newHasGreasedWeapon,
                 hasPointierSticks = newHasPointierSticks,
+                hasLeap = newHasLeap,
                 hasArmorPiercing = newHasArmorPiercing,
                 showLevelUpScreen = false,
                 pendingLevelUpChoices = emptyList()
@@ -1774,6 +1785,48 @@ class GameViewModel : ViewModel() {
             enemies.forEach { it.posX = it.posX.coerceIn(-40f, edge + 40f) }
         }
 
+        // The Pounce. Only a melee player, only at a bowman who is genuinely out of reach, and
+        // never over a wall: during an unbroken siege the landing is capped short of the gate, so
+        // it can never drop the player inside the fortress. Hills are handled by re-reading the
+        // slope on landing, exactly as walking does.
+        if (player.leapCooldown > 0f) player.leapCooldown -= dt
+        if (player.leapTimer > 0f) {
+            player.leapTimer -= dt
+            val t = 1f - (player.leapTimer / LEAP_FLIGHT_SECS).coerceIn(0f, 1f)
+            player.posX = player.leapFromX + (player.leapToX - player.leapFromX) * t
+            player.visualOffsetY = -LEAP_ARC_PX * kotlin.math.sin(t * Math.PI.toFloat())
+            player.animFrame += dt * 6f
+            if (player.leapTimer <= 0f) {
+                player.visualOffsetY = 0f
+                _uiState.value.hillState?.let { player.terrainLiftY = HillField.liftAt(player.posX, it) }
+                MedievalAudioSynth.playSound(SoundType.THWACK)
+            }
+        } else if (_uiState.value.hasLeap && !player.isRanged && !player.isDead &&
+            player.leapCooldown <= 0f && player.climbState == ClimbState.NONE &&
+            !player.elevated && !player.isLord && player.crumpleDuration <= 0f
+        ) {
+            val quarry = enemies.filter {
+                !it.isPlayer && !it.isDead && !it.isDying && !it.isCombatInactive &&
+                    !it.elevated && it.isRanged
+            }.minByOrNull { abs(it.posX - player.posX) }
+            val gap = quarry?.let { abs(it.posX - player.posX) } ?: 0f
+            if (quarry != null && gap in LEAP_MIN_GAP_PX..LEAP_MAX_GAP_PX) {
+                val toward = if (quarry.posX > player.posX) 1f else -1f
+                var landing = quarry.posX - toward * 55f
+                // Never through a standing gate.
+                if (siege != null && !siege.gateBroken) landing = landing.coerceAtMost(1800f - 90f)
+                landing = landing.coerceIn(30f, _uiState.value.levelWidth - 30f)
+                player.leapFromX = player.posX
+                player.leapToX = landing
+                player.leapTimer = LEAP_FLIGHT_SECS
+                player.leapCooldown = LEAP_COOLDOWN_SECS
+                player.isAttacking = false
+                player.swingProgress = 0f
+                addPopup("POUNCE!", player.posX, 150f, Color(0xFFD6A420))
+                MedievalAudioSynth.playSound(SoundType.SWOOSH)
+            }
+        }
+
         // The diggers, under the field. While burrowTimer runs they are parked far off the left
         // edge and flagged inactive, which is what keeps them untargetable, unhittable and out of
         // the draw — no new "is he underground" check needed anywhere else.
@@ -2698,6 +2751,20 @@ class GameViewModel : ViewModel() {
                 // 4. Ranged Upgrades (only if current weapon is ranged!)
                 if (state.weaponHead.isRanged) {
                     val isSlingshot = state.weaponHead.id == "head_slingshot"
+                    // A crossbowman was being sold "Ballista Spears... instead of arrows" and a
+                    // javelineer "Bodkin Barb-Points... onto your arrowheads". The mechanics were
+                    // right; the words described a weapon the player was not holding.
+                    val missile = when (state.weaponHead.id) {
+                        "head_crossbow" -> "bolt"
+                        "head_javelin" -> "javelin"
+                        else -> "arrow"
+                    }
+                    val missilePlural = missile + "s"
+                    val looses = when (state.weaponHead.id) {
+                        "head_crossbow" -> "looses"
+                        "head_javelin" -> "throws"
+                        else -> "looses"
+                    }
                     val possibleUpgrades = if (isSlingshot) {
                         listOf(
                             LevelUpChoice("ranged_slingshot_bigger", "Sling: Giant Cobble-Stones", "Hurl massive river boulders instead of pebbles! Deals +10 blunt damage and increases projectile size.", "ranged_upgrade", "slingshot_bigger"),
@@ -2709,9 +2776,9 @@ class GameViewModel : ViewModel() {
                         )
                     } else {
                         listOf(
-                            LevelUpChoice("ranged_bow_bigger", "Ranged: Ballista Spears", "Launch thick spear-shafts instead of arrows! High velocity, +15 damage, and knocks foes back.", "ranged_upgrade", "bow_bigger"),
-                            LevelUpChoice("ranged_bow_spikes", "Ranged: Bodkin Barb-Points", "Solder razor-sharp steel claws to your arrowheads. Ignores 50% armor and deals bleeding.", "ranged_upgrade", "bow_spikes"),
-                            LevelUpChoice("ranged_bow_weapon_heads", "Ranged: Weapon-Tipped Shafts", "Fletch actual miniature iron morningstars and axes onto your arrows. Complete comedic over-engineering!", "ranged_upgrade", "bow_weapon_heads")
+                            LevelUpChoice("ranged_bow_bigger", "Ranged: Ballista Spears", "Launch thick spear-shafts in place of $missilePlural. High velocity, +15 damage, and it knocks foes clean off their feet.", "ranged_upgrade", "bow_bigger"),
+                            LevelUpChoice("ranged_bow_spikes", "Ranged: Bodkin Barb-Points", "Solder razor-sharp steel claws to your ${missile}heads. Ignores half of a man's armour outright, and the wound keeps bleeding.", "ranged_upgrade", "bow_spikes"),
+                            LevelUpChoice("ranged_bow_weapon_heads", "Ranged: Weapon-Tipped Shafts", "Fletch actual miniature iron morningstars and axes onto your $missilePlural. Complete comedic over-engineering, and it hits like it.", "ranged_upgrade", "bow_weapon_heads")
                         )
                     }
 
@@ -2722,22 +2789,22 @@ class GameViewModel : ViewModel() {
                     val rareRanged = listOf(
                         LevelUpChoice(
                             "ranged_cluster", "Ranged: Cluster Charge",
-                            "Pack every shot with flint scrap and iron nails. Each one bursts on impact, spraying ${CombatEngine.CLUSTER_FRAGMENTS} fragments through whoever is standing close.",
+                            "Pack every $missile with flint scrap and iron nails. Each one bursts on impact, spraying ${CombatEngine.CLUSTER_FRAGMENTS} fragments through whoever is standing close.",
                             "ranged_upgrade", "cluster"
                         ) to (state.level >= 8 && Random.nextFloat() < 0.12f),
                         LevelUpChoice(
                             "ranged_volley", "Ranged: Arcing Volley",
-                            "Send a second shaft up with every attack. It falls on the rear ranks, well past where a flat shot dies — and it costs you nothing, it flies alongside your normal shot.",
+                            "Every attack $looses a second $missile high instead of flat. It falls on the rear ranks, far past where a level shot dies — and costs you nothing, it flies alongside your normal shot.",
                             "ranged_upgrade", "volley"
                         ) to (state.level >= 5 && Random.nextFloat() < 0.15f),
                         LevelUpChoice(
                             "ranged_multishot_double", "Ranged: Double Shot",
-                            "Two shafts to the string at once. Every attack looses an extra missile, forever.",
+                            "Two $missilePlural at once, every single attack, for the rest of the run.",
                             "ranged_upgrade", "multishot_double"
                         ) to (Random.nextFloat() < 0.05f),
                         LevelUpChoice(
                             "ranged_multishot_triple", "Ranged: Triple Shot",
-                            "Three shafts to the string, in defiance of all bowyery and most physics. Every attack looses two extra missiles.",
+                            "Three $missilePlural at once, in defiance of all bowyery and most physics. Every attack $looses two extra.",
                             "ranged_upgrade", "multishot_triple"
                         ) to (Random.nextFloat() < 0.02f)
                     ).filter { it.second }.map { it.first }
@@ -2806,6 +2873,20 @@ class GameViewModel : ViewModel() {
                         description = "Lash a real head onto whatever your followers are swinging. Half your melee entourage trade their fists and farm tools for an actual weapon.",
                         type = "pointier_sticks",
                         itemId = "pointier_sticks"
+                    ))
+                }
+
+                // 4f. The Pounce. Rare, and melee only — a bow has no need to close the distance,
+                // and handing it to one would just be free repositioning.
+                if (!state.hasLeap && !state.weaponHead.isRanged && state.level >= 7 &&
+                    Random.nextFloat() < 0.07f
+                ) {
+                    pendingChoices.add(LevelUpChoice(
+                        id = "the_pounce",
+                        title = "The Pounce",
+                        description = "Cover the ground to a distant bowman in a single bound, every ${LEAP_COOLDOWN_SECS.toInt()} seconds. Your retinue will run to catch you up. Melee only — and it will not carry you over a standing gate.",
+                        type = "leap",
+                        itemId = "the_pounce"
                     ))
                 }
 
@@ -3049,6 +3130,7 @@ class GameViewModel : ViewModel() {
                     hasFullShave = false,
                     hasGreasedWeapon = false,
                     hasPointierSticks = false,
+                    hasLeap = false,
                     // A new man has not yet proved untouchable, whatever the last one managed.
                     unpunishedStreak = 0,
                     isRetired = false,

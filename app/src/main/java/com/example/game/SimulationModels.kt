@@ -584,6 +584,11 @@ data class FighterState(
     var weightCutKg: Float = 0f,
     /** Lard on the blade: it comes back out of a man quicker. Global attack-speed buff. */
     var hasGreasedWeapon: Boolean = false,
+    /** Seconds left in a leap. While it runs the fighter is airborne and steers nowhere. */
+    var leapTimer: Float = 0f,
+    var leapFromX: Float = 0f,
+    var leapToX: Float = 0f,
+    var leapCooldown: Float = 0f,
     var burrowTimer: Float = 0f,
     /** True once he has surfaced, so he only makes the journey once per battle. */
     var hasSurfaced: Boolean = false,
@@ -1230,6 +1235,8 @@ data class BattleSimState(
     val hasGreasedWeapon: Boolean = false,
     /** Pointier Sticks: a share of the melee entourage is issued a real weapon head. */
     val hasPointierSticks: Boolean = false,
+    /** The Pounce: close on a distant bowman in one bound. Melee only. */
+    val hasLeap: Boolean = false,
     val hasArmorPiercing: Boolean = false,
     // Counters the player has actually met. Drives which "out" card gets added to the reward pool.
     val seenCounters: Set<String> = emptySet(),

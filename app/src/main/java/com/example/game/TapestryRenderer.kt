@@ -1921,6 +1921,87 @@ object TapestryRenderer {
         } // Close withTransform
     }
 
+    /**
+     * What a missile weapon accumulates as it is upgraded: gilt binding at the tips, etched
+     * chevrons down the limb, a masterwork cord wrap at the grip, barbed spurs, a volley pennon
+     * and extra strings for multishot.
+     *
+     * Reads rangedUpgrades directly, which nothing in the renderer did before — a fully upgraded
+     * bow was drawn exactly like a starting one.
+     */
+    private fun drawRangedEvolution(scope: DrawScope, fighter: FighterState, headPos: Offset) {
+        val ups = fighter.rangedUpgrades
+        if (ups.isEmpty() || !fighter.weaponHead.isRanged) return
+        val isSling = fighter.weaponHead.id == "head_slingshot"
+        val long = fighter.weaponHead.id == "head_longbow"
+        val span = if (isSling) 12f else if (long) 36f else 30f
+        val gilt = Color(0xFFC9A227)
+        val cord = Color(0xFF8E2B2B)
+
+        // Gilt binding at the limb tips: one band per upgrade taken, up to three.
+        val bands = ups.size.coerceAtMost(3)
+        for (b in 0 until bands) {
+            val off = span - b * 6f
+            scope.drawLine(gilt, Offset(headPos.x - 13f, headPos.y - off),
+                Offset(headPos.x - 7f, headPos.y - off), strokeWidth = 2f)
+            scope.drawLine(gilt, Offset(headPos.x - 13f, headPos.y + off),
+                Offset(headPos.x - 7f, headPos.y + off), strokeWidth = 2f)
+        }
+        // Etched chevrons down the belly of the limb — the engraver's work.
+        if (ups.size >= 2) {
+            for (c in -1..1) {
+                val y = headPos.y + c * 11f
+                scope.drawLine(ThreadColor.copy(alpha = 0.65f), Offset(headPos.x - 4f, y),
+                    Offset(headPos.x + 2f, y - 3f), strokeWidth = 1.2f)
+                scope.drawLine(ThreadColor.copy(alpha = 0.65f), Offset(headPos.x - 4f, y),
+                    Offset(headPos.x + 2f, y + 3f), strokeWidth = 1.2f)
+            }
+        }
+        // Masterwork: a red cord wrap at the grip.
+        if (ups.size >= 3) {
+            for (w in 0..2) {
+                scope.drawLine(cord, Offset(headPos.x - 15f, headPos.y - 4f + w * 4f),
+                    Offset(headPos.x - 9f, headPos.y - 4f + w * 4f), strokeWidth = 2.2f)
+            }
+        }
+        // Barbs: iron spurs stand off the limb.
+        if (ups.any { it.endsWith("_spikes") }) {
+            listOf(-1f, 1f).forEach { sgn ->
+                scope.drawLine(Color(0xFF9EA3A8),
+                    Offset(headPos.x - 10f, headPos.y + sgn * span * 0.55f),
+                    Offset(headPos.x - 18f, headPos.y + sgn * span * 0.75f), strokeWidth = 2f)
+            }
+        }
+        // Volley: a small pennon on the upper limb, for judging the wind.
+        if (ups.contains("volley")) {
+            val pennon = Path().apply {
+                moveTo(headPos.x - 12f, headPos.y - span)
+                lineTo(headPos.x - 26f, headPos.y - span - 5f)
+                lineTo(headPos.x - 12f, headPos.y - span + 7f)
+                close()
+            }
+            drawStitchedFill(scope, pennon, Color(0xFFB03131))
+            scope.drawStitchedOutline(pennon, ThreadColor)
+        }
+        // Multishot: a second and third string, plainly visible.
+        val strings = if (ups.contains("multishot_triple")) 2 else if (ups.contains("multishot_double")) 1 else 0
+        for (n in 1..strings) {
+            scope.drawLine(Color(0xFFE4D6B6),
+                Offset(headPos.x - 12f - n * 3f, headPos.y - span),
+                Offset(headPos.x - 12f - n * 3f, headPos.y + span), strokeWidth = 1.2f)
+        }
+        // Cluster charges ride on the belt as little clay pots.
+        if (ups.contains("cluster")) {
+            for (k in 0..1) {
+                scope.drawCircle(Color(0xFF7A5230), radius = 3f,
+                    center = Offset(headPos.x - 20f, headPos.y + 6f + k * 8f))
+                scope.drawCircle(ThreadColor, radius = 3f,
+                    center = Offset(headPos.x - 20f, headPos.y + 6f + k * 8f),
+                    style = Stroke(width = 1f))
+            }
+        }
+    }
+
     private fun drawWeaponHead(
         scope: DrawScope,
         headId: String,
@@ -3082,6 +3163,10 @@ object TapestryRenderer {
                     swingProgress = fighter.swingProgress,
                     isAttacking = fighter.isAttacking
                 )
+                // A melee weapon visibly grows as it is upgraded — welded heads, a longer haft.
+                // A bow looked identical on the last level as on the first, however much had been
+                // lashed to it, so this is the same evolution for missile weapons.
+                drawRangedEvolution(this, fighter, hPos)
             }
         }
 

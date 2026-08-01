@@ -2485,17 +2485,31 @@ fun BattlefieldScene(
         val worldBackdropCache = remember { TapestryBackdropCache() }
         // Press and hold a fighter to read his health. Bars tell you a boss is "nearly dead" for
         // about a minute; the number tells you whether that is true.
+        //
+        // Holding now TOGGLES the read-out open and it stays open, because a stat line you can
+        // only see while your thumb is covering the man you are reading about is not much use.
+        // The next tap anywhere closes it, and it is cleared whenever the battle ends so it can
+        // never be left hanging over the victory screen.
         val inspectAt = remember { mutableStateOf<Offset?>(null) }
+        val battleOver = uiState.battleWon || uiState.battleLost || !uiState.isBattleActive
+        LaunchedEffect(battleOver) { if (battleOver) inspectAt.value = null }
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("bayeux_tapestry_canvas")
                 .pointerInput(Unit) {
-                    detectTapGestures(onPress = { at ->
-                        inspectAt.value = at
-                        tryAwaitRelease()
-                        inspectAt.value = null
-                    })
+                    detectTapGestures(
+                        // A tap while a tag is open dismisses it, wherever it lands.
+                        onTap = { if (inspectAt.value != null) inspectAt.value = null },
+                        onLongPress = { at -> inspectAt.value = at },
+                        onPress = { at ->
+                            // Keep the press-and-hold feel: the tag appears under the finger at
+                            // once, and only survives the release if the hold was a long one.
+                            val hadTag = inspectAt.value != null
+                            if (!hadTag) inspectAt.value = at
+                            tryAwaitRelease()
+                        }
+                    )
                 }
         ) {
             // Force redraw on tick

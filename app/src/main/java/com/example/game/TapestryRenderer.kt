@@ -952,14 +952,19 @@ object TapestryRenderer {
             3 -> 10f  // lantern jaw
             else -> 5f
         }
+        // A dog's skull is domed and has a STOP — the step down from brow to muzzle that a
+        // straight line from crown to nose removes entirely, which is what made these read as
+        // an odd wedge rather than a hound. The marginalia cynocephalus is drawn the same way:
+        // round braincase, sharp stop, long muzzle carried level.
         val headPath = Path().apply {
-            moveTo(hx - 12f, hy + 14f)              // back of skull, low
-            lineTo(hx - 10f, hy - 6f)               // crown
-            lineTo(hx + 6f, hy - 4f)                // brow stop
-            lineTo(hx + muzzleLen, hy + muzzleDrop) // nose tip
-            lineTo(hx + muzzleLen - 3f, hy + muzzleDrop + 4f) // nose pad underside
-            lineTo(hx + 8f, hy + 9f + jawDrop)      // jaw line
-            lineTo(hx - 6f, hy + 16f)               // cheek ruff
+            moveTo(hx - 12f, hy + 14f)                          // back of skull, low
+            quadraticTo(hx - 14f, hy - 4f, hx - 4f, hy - 9f)    // domed braincase
+            quadraticTo(hx + 4f, hy - 12f, hx + 8f, hy - 5f)    // brow ridge
+            lineTo(hx + 7f, hy + muzzleDrop - 3f)               // the stop
+            lineTo(hx + muzzleLen, hy + muzzleDrop)             // nose tip
+            lineTo(hx + muzzleLen - 3f, hy + muzzleDrop + 4f)   // nose pad underside
+            lineTo(hx + 9f, hy + 7f + jawDrop)                  // jaw line back under the muzzle
+            quadraticTo(hx + 2f, hy + 15f, hx - 6f, hy + 16f)   // cheek ruff
             close()
         }
         drawStitchedFill(scope, headPath, fur)
@@ -1050,8 +1055,14 @@ object TapestryRenderer {
     private fun headProfilePath(
         hx: Float, hy: Float, forehead: Int, noseShape: Int, biteShape: Int
     ): Path {
-        val fhX = if (forehead == 1) 14f else if (forehead == 2) 4f else 8f
-        val fhY = if (forehead == 1) -6f else -2f
+        // Brows. 0-2 are the originals; 3-5 widen the crowd so a wave stops looking like one
+        // man cloned — a sloping brow, a heavy shelf, and a high domed forehead.
+        val fhX = when (forehead) {
+            1 -> 14f; 2 -> 4f; 3 -> 11f; 4 -> 16f; 5 -> 6f; else -> 8f
+        }
+        val fhY = when (forehead) {
+            1 -> -6f; 3 -> 1f; 4 -> -3f; 5 -> -9f; else -> -2f
+        }
         return Path().apply {
             moveTo(hx - 12f, hy)
             // Forehead
@@ -1062,14 +1073,13 @@ object TapestryRenderer {
             var noseTipX = hx + 23f
             var noseTipY = hy + 6f
             var nostrilX = hx + 10f
-            if (noseShape == 1) { // hook
-                noseTipY += 4f; noseTipX -= 2f
-            } else if (noseShape == 2) { // bulbous
-                noseTipX = hx + 16f; nostrilX = hx + 12f
-            } else if (noseShape == 3) { // pointy
-                noseTipX = hx + 25f
-            } else { // normal
-                noseTipX = hx + 18f
+            when (noseShape) {
+                1 -> { noseTipY += 4f; noseTipX -= 2f }          // hook
+                2 -> { noseTipX = hx + 16f; nostrilX = hx + 12f } // bulbous
+                3 -> noseTipX = hx + 25f                          // pointy
+                4 -> { noseTipX = hx + 17f; noseTipY -= 3f }      // snub, turned up
+                5 -> { noseTipX = hx + 21f; noseTipY += 2f; nostrilX = hx + 9f } // broken, bent
+                else -> noseTipX = hx + 18f                       // normal
             }
             lineTo(noseTipX, noseTipY) // Nose tip
             lineTo(nostrilX, hy + 9f) // Nostril/lip fold
@@ -1077,15 +1087,15 @@ object TapestryRenderer {
             // Jaw / Bite
             var lipX = hx + 12f
             var chinX = hx + 9f
-            if (biteShape == 1) { // underbite
-                lipX += 3f; chinX += 10f
-            } else if (biteShape == 2) { // overbite
-                lipX -= 4f; chinX -= 8f
-            } else if (biteShape == 3) { // lantern jaw
-                chinX += 14f
+            when (biteShape) {
+                1 -> { lipX += 3f; chinX += 10f }  // underbite
+                2 -> { lipX -= 4f; chinX -= 8f }   // overbite
+                3 -> chinX += 14f                   // lantern jaw
+                4 -> { lipX -= 1f; chinX -= 4f }   // weak, receding chin
+                5 -> { lipX += 2f; chinX += 6f }   // square, jutting
             }
             lineTo(lipX, hy + 13f) // Lip crease
-            val chinY = if (biteShape == 3) hy + 24f else hy + 18f
+            val chinY = when (biteShape) { 3 -> hy + 24f; 5 -> hy + 21f; 4 -> hy + 16f; else -> hy + 18f }
             lineTo(chinX, chinY) // Chin
             lineTo(hx - 12f, chinY)
             close()

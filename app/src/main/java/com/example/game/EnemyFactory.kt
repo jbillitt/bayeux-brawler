@@ -382,7 +382,13 @@ object EnemyFactory {
             Color(0xFFC08030), Color(0xFF5A442E), Color(0xFF8A7156), Color(0xFF2C2219), Color(0xFF888888),
             Color(0xFF6E4B22), Color(0xFFD8C08A), Color(0xFF9C4A1E)
         )
-        val hairStyles = listOf("short", "long", "bald")
+        // Widened from short/long/bald. Every one of these is already drawn by TapestryRenderer
+        // for player unlocks; the host had simply never been allowed any of them, so a wave of
+        // Saxons was three haircuts between them.
+        val hairStyles = listOf(
+            "short", "long", "bald", "hair_braids", "hair_topknot",
+            "hair_germanic", "hair_tonsure_norman"
+        )
 
         val startX = spawnX(index)
 
@@ -403,9 +409,9 @@ object EnemyFactory {
             size = sizeMultiplier,
             hairColor = hairColors.random(rng),
             hairStyle = hairStyles.random(rng),
-            faceNoseShape = rng.nextInt(4),
-            faceBiteShape = rng.nextInt(4),
-            faceForehead = rng.nextInt(3),
+            faceNoseShape = rng.nextInt(6),
+            faceBiteShape = rng.nextInt(6),
+            faceForehead = rng.nextInt(6),
             faceMustache = rng.nextInt(4),
             // Old blood in the Saxon line: about one in seven daubs himself in woad before a fight
             warPaint = if (rng.nextFloat() < 0.15f) 1 else 0,

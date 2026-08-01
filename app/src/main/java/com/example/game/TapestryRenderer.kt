@@ -610,6 +610,22 @@ object TapestryRenderer {
             !wearsMonkRobe(fighter) &&
             !fighter.isKind("hag") && !fighter.isKind("fanatic_boris") && !fighter.isKind("plague_peasant")
 
+    /** The Moleman's digging claws — three pale sickles off the knuckles. Nobody else grows them. */
+    private fun drawClaws(scope: DrawScope, hx: Float, hy: Float, fighter: FighterState) {
+        if (!fighter.isKind("moleman")) return
+        for (i in -1..1) {
+            val ty = hy + i * 4.5f
+            val claw = Path().apply {
+                moveTo(hx + 2f, ty - 1.8f)
+                quadraticTo(hx + 9f, ty - 3.5f, hx + 14f, ty + 1.5f)
+                quadraticTo(hx + 8f, ty + 0.5f, hx + 2f, ty + 1.8f)
+                close()
+            }
+            scope.drawPath(claw, Color(0xFFE3D9C0))
+            scope.drawPath(claw, ThreadColor, style = Stroke(width = 1.2f))
+        }
+    }
+
     private fun drawTorso(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val monkRobe = wearsMonkRobe(fighter)
         val longRobe = fighter.archetype == EnemyArchetype.MONK_MILITIA
@@ -637,15 +653,18 @@ object TapestryRenderer {
 
         if (isBarechested(fighter)) {
             // Sparse chest thatch. Seeded off the fighter's id so it does not crawl about between frames.
+            // The Moleman is "something hairy that swims through soil": a full pelt from collar to
+            // hem, not a thatch, which is most of what tells him apart from a bare-chested levy.
+            val pelt = fighter.isKind("moleman")
             val hairRng = Random(fighter.id.raw.hashCode())
-            repeat(14) {
-                val hx = cx - 18f + hairRng.nextFloat() * 36f
-                val hy = cy + 26f + hairRng.nextFloat() * 44f
+            repeat(if (pelt) 44 else 14) {
+                val hx = cx - (if (pelt) 26f else 18f) + hairRng.nextFloat() * (if (pelt) 52f else 36f)
+                val hy = cy + (if (pelt) 18f else 26f) + hairRng.nextFloat() * (if (pelt) 68f else 44f)
                 val curl = Path().apply {
                     moveTo(hx, hy)
-                    quadraticTo(hx + 2f, hy + 3f, hx - 1f + hairRng.nextFloat() * 3f, hy + 6f)
+                    quadraticTo(hx + 2f, hy + 3f, hx - 1f + hairRng.nextFloat() * 3f, hy + (if (pelt) 8f else 6f))
                 }
-                scope.drawPath(curl, fighter.hairColor.copy(alpha = 0.75f), style = Stroke(width = 1.6f, cap = StrokeCap.Round))
+                scope.drawPath(curl, fighter.hairColor.copy(alpha = if (pelt) 0.9f else 0.75f), style = Stroke(width = if (pelt) 2.1f else 1.6f, cap = StrokeCap.Round))
             }
 
             if (fighter.warPaint == 1) {
@@ -3367,6 +3386,7 @@ object TapestryRenderer {
             } else {
                 scope.drawCircle(skinTone(fighter), radius = 6f, center = Offset(cx + 25f, cy + 30f))
                 scope.drawCircle(ThreadColor, radius = 6f, center = Offset(cx + 25f, cy + 30f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+                drawClaws(scope, cx + 25f, cy + 30f, fighter)
             }
             if (fighter.brawlerUpgrades.contains("brass_knuckles")) {
                 scope.drawRect(Color(0xFFB5A642), topLeft = Offset(cx + 27f, cy + 26f), size = androidx.compose.ui.geometry.Size(5f, 9f))
@@ -3530,6 +3550,7 @@ object TapestryRenderer {
                     drawStitchedStrap(this, Offset(cx + 23f, cy + 25f), Offset(hx, hy), sleeveColor, stitched = sleeveColor != skinTone(fighter))
                     scope.drawCircle(skinTone(fighter), radius = 5f, center = Offset(hx, hy))
                     scope.drawCircle(ThreadColor, radius = 5f, center = Offset(hx, hy), style = Stroke(width = 2f))
+                    drawClaws(scope, hx, hy, fighter)
                 }
             }
             return
@@ -4153,31 +4174,36 @@ object TapestryRenderer {
                 drawStitchedOutline(profile, ThreadColor)
 
                 // The bowl crop every style but the tonsure starts from.
+                //
+                // Every shape here is SOLID, not a hairline crescent. StitchedStroke is 4f wide and
+                // centred on the path, so it eats 2 units inward from each edge: a 4-unit-thick
+                // crescent is entirely swallowed but for a 1-unit ribbon of fill floating inside
+                // the black outline, which reads as a second haircut sitting over the first.
+                // Nothing here goes below ~8 units thick.
                 val cap = Path().apply {
                     moveTo(hx - 13f, hy + 3f)
                     quadraticTo(hx - 15f, hy - 10f, hx - 2f, hy - 10f)
                     quadraticTo(hx + 8f, hy - 10f, hx + 10f, hy - 1f)
                     lineTo(hx + 6f, hy + 1f)
-                    quadraticTo(hx + 2f, hy - 6f, hx - 6f, hy - 5f)
-                    quadraticTo(hx - 11f, hy - 4f, hx - 10f, hy + 3f)
+                    lineTo(hx - 10f, hy + 3f)
                     close()
                 }
                 if (hairStyle == 2) {
                     // A brother's tonsure: bare crown, a ring of hair round the back and a fringe.
                     val ring = Path().apply {
-                        moveTo(hx - 13f, hy + 1f)
-                        quadraticTo(hx - 14f, hy - 6f, hx - 9f, hy - 7f)
-                        lineTo(hx - 8f, hy - 3f)
-                        quadraticTo(hx - 11f, hy - 2f, hx - 10f, hy + 2f)
+                        moveTo(hx - 13f, hy + 2f)
+                        quadraticTo(hx - 15f, hy - 8f, hx - 7f, hy - 8f)
+                        lineTo(hx - 5f, hy - 1f)
+                        quadraticTo(hx - 10f, hy - 1f, hx - 9f, hy + 3f)
                         close()
                     }
                     drawStitchedFill(this, ring, hairCol)
                     drawStitchedOutline(ring, ThreadColor)
                     val fringe = Path().apply {
-                        moveTo(hx + 2f, hy - 7f)
-                        quadraticTo(hx + 8f, hy - 7f, hx + 10f, hy - 1f)
-                        lineTo(hx + 6f, hy + 1f)
-                        quadraticTo(hx + 5f, hy - 4f, hx + 2f, hy - 4f)
+                        moveTo(hx + 1f, hy - 8f)
+                        quadraticTo(hx + 9f, hy - 8f, hx + 11f, hy - 1f)
+                        lineTo(hx + 6f, hy + 2f)
+                        quadraticTo(hx + 5f, hy - 2f, hx + 1f, hy - 2f)
                         close()
                     }
                     drawStitchedFill(this, fringe, hairCol)
@@ -4185,10 +4211,10 @@ object TapestryRenderer {
                 } else if (hairStyle == 3) {
                     // Balding: a receding fringe, and nothing on the crown at all.
                     val fringe = Path().apply {
-                        moveTo(hx - 12f, hy + 1f)
-                        quadraticTo(hx - 13f, hy - 7f, hx - 5f, hy - 7f)
-                        lineTo(hx - 4f, hy - 3f)
-                        quadraticTo(hx - 9f, hy - 3f, hx - 9f, hy + 2f)
+                        moveTo(hx - 13f, hy + 2f)
+                        quadraticTo(hx - 14f, hy - 8f, hx - 4f, hy - 8f)
+                        lineTo(hx - 3f, hy - 1f)
+                        quadraticTo(hx - 9f, hy - 1f, hx - 8f, hy + 3f)
                         close()
                     }
                     drawStitchedFill(this, fringe, hairCol)
@@ -4207,8 +4233,8 @@ object TapestryRenderer {
                     val locks = Path().apply {
                         moveTo(hx - 13f, hy - 1f)
                         quadraticTo(hx - 18f, hy + 7f, hx - 13f, hy + 15f)
-                        lineTo(hx - 6f, hy + 14f)
-                        quadraticTo(hx - 9f, hy + 6f, hx - 7f, hy - 1f)
+                        lineTo(hx - 4f, hy + 14f)
+                        quadraticTo(hx - 8f, hy + 6f, hx - 5f, hy - 1f)
                         close()
                     }
                     drawStitchedFill(this, locks, hairCol)

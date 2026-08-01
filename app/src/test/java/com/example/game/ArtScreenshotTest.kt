@@ -381,6 +381,35 @@ class ArtScreenshotTest {
     }
 
     /**
+     * The Moleman beside a plain bare-chested levy, since bare skin is all they used to have to tell
+     * them apart. Eyeball the pelt reaching collar to hem and a claw off each hand.
+     */
+    @Test
+    @Config(qualifiers = "+w1100dp-h700dp")
+    fun molemanAgainstAPlainBareChest() {
+        fun bare(id: String) = FighterState(
+            id = FighterId(id), name = id, isPlayer = true, maxHp = 260f, hp = 260f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 100f, targetX = 100f, facingRight = true, size = 1.15f,
+            hairColor = Color(0xFF3A2E24), hairStyle = "long"
+        )
+        composeTestRule.setContent {
+            Row(modifier = Modifier.fillMaxSize().background(linen)) {
+                listOf(bare("moleman#0"), bare("brawler#0")).forEach { fighter ->
+                    Canvas(modifier = Modifier.width(520.dp).height(700.dp)) {
+                        TapestryRenderer.drawCharacter(this, fighter, scale = 2.4f, isBattleActive = true)
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/moleman.png")
+    }
+
+    /**
      * The three new armour layers, each stacked over chainmail the way they are worn in play, plus
      * all three at once. Asserts nothing — eyeball that greaves sit on the shins, spaulders cap the
      * shoulders without floating, and the surcoat hangs over the mail without hiding it.

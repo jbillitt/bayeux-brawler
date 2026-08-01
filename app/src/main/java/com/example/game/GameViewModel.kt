@@ -1668,6 +1668,16 @@ class GameViewModel : ViewModel() {
             }
         }
 
+        // Nobody leaves the field for good. Knockbacks — the barrow-king's hurl, a ballista spear,
+        // a body throw — can shove a fighter past the edge of the level, where he would keep
+        // walking back from off-screen or simply never be reachable again. A little slack outside
+        // the bounds so a shove still reads as a shove, then he is on the map and can return.
+        run {
+            val edge = _uiState.value.levelWidth
+            player.posX = player.posX.coerceIn(-40f, edge + 40f)
+            enemies.forEach { it.posX = it.posX.coerceIn(-40f, edge + 40f) }
+        }
+
         // Hill terrain: lift every fighter to the slope under his feet so the high-ground bonus
         // and the render both key off the same value. Left at 0 on flat fields.
         val hill = _uiState.value.hillState

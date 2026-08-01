@@ -1553,33 +1553,36 @@ object TapestryRenderer {
                 //
                 // They used to be two single stroked quadratics — which draw as a bare quarter-
                 // circle scratch — and two three-point triangles. Neither reads as hair.
+                // Kept well INSIDE the nose. In profile the moustache sits on the lip and drops
+                // toward the jaw; when it reached out as far as the nose tip (hx+18..25) it read
+                // as a second nose rather than as hair, which is a perspective error, not a
+                // styling one. Nothing here goes past hx+14.
                 } else if (fighter.faceMustache == 0) { // Long drooping Saxon
-                    moveTo(hx + 5f, hy + 9f)
-                    quadraticTo(hx + 16f, hy + 9f, hx + 20f, hy + 22f)   // outer sweep, down
-                    quadraticTo(hx + 16f, hy + 15f, hx + 11f, hy + 13f)  // taper back up inside
-                    quadraticTo(hx + 8f, hy + 12f, hx + 5f, hy + 9f)     // home to the lip
+                    moveTo(hx + 4f, hy + 10f)
+                    quadraticTo(hx + 11f, hy + 11f, hx + 13f, hy + 21f)
+                    quadraticTo(hx + 10f, hy + 15f, hx + 4f, hy + 13f)
                     close()
                 } else if (fighter.faceMustache == 1) { // Longer and narrower, a real droop
-                    moveTo(hx + 5f, hy + 9f)
-                    quadraticTo(hx + 15f, hy + 10f, hx + 15f, hy + 26f)
-                    quadraticTo(hx + 12f, hy + 16f, hx + 5f, hy + 13f)
+                    moveTo(hx + 4f, hy + 10f)
+                    quadraticTo(hx + 10f, hy + 11f, hx + 10f, hy + 24f)
+                    quadraticTo(hx + 8f, hy + 16f, hx + 4f, hy + 13f)
                     close()
                 } else if (fighter.faceMustache == 2) { // Bushy, full across the lip
-                    moveTo(hx + 4f, hy + 8f)
-                    quadraticTo(hx + 18f, hy + 7f, hx + 23f, hy + 19f)
-                    quadraticTo(hx + 16f, hy + 13f, hx + 5f, hy + 14f)
+                    moveTo(hx + 3f, hy + 9f)
+                    quadraticTo(hx + 12f, hy + 9f, hx + 14f, hy + 18f)
+                    quadraticTo(hx + 10f, hy + 14f, hx + 4f, hy + 14f)
                     close()
                 } else { // Trimmer, but still a curve with mass — never a chevron
-                    moveTo(hx + 6f, hy + 9f)
-                    quadraticTo(hx + 14f, hy + 9f, hx + 17f, hy + 19f)
-                    quadraticTo(hx + 13f, hy + 14f, hx + 7f, hy + 12f)
+                    moveTo(hx + 5f, hy + 10f)
+                    quadraticTo(hx + 10f, hy + 10f, hx + 12f, hy + 17f)
+                    quadraticTo(hx + 9f, hy + 14f, hx + 6f, hy + 13f)
                     close()
                 }
             }
-            // Every variant is a closed shape now, so every variant is filled and outlined like
-            // any other piece of the figure. Stroking them left a hairline scratch on the lip.
+            // Filled in hair colour with a hairline edge in the SAME colour — a heavy ThreadColor
+            // outline on something this small swallowed the shape and read as a black smear.
             drawStitchedFill(scope, mustache, fighter.hairColor)
-            scope.drawStitchedOutline(mustache, ThreadColor)
+            scope.drawPath(mustache, fighter.hairColor, style = Stroke(width = 0.8f, cap = StrokeCap.Round))
 
         // 4. Helmet Overlay
         val helmId = fighter.headgear.id

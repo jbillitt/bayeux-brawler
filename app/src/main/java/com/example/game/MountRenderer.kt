@@ -40,7 +40,7 @@ internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
                 scope.drawCircle(Color(0xFFEFE6D4).copy(alpha = 0.5f), radius = 6f + spotRng.nextFloat() * 4f, center = Offset(sx, sy))
             }
         }
-        scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(bodyPath, ThreadColor)
 
         // Draw tail
         val tailPath = Path().apply {
@@ -50,7 +50,7 @@ internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
             close()
         }
         drawStitchedFill(scope, tailPath, Color(0xFF2C2219))
-        scope.drawPath(tailPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(tailPath, ThreadColor)
 
         val neckPath = Path().apply {
             moveTo(cx + 25f, cy + 85f)
@@ -60,7 +60,7 @@ internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
             close()
         }
         drawStitchedFill(scope, neckPath, horseColor)
-        scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(neckPath, ThreadColor)
 
         val headPath = Path().apply {
             moveTo(cx + 50f, cy + 20f)
@@ -71,7 +71,7 @@ internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
             close()
         }
         drawStitchedFill(scope, headPath, horseColor)
-        scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(headPath, ThreadColor)
         scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(cx + 70f, cy + 22f))
 
         scope.drawLine(Color(0xFF2C2219), Offset(cx + 42f, cy + 26f), Offset(cx + 56f, cy + 31f), strokeWidth = 5f, cap = StrokeCap.Round)
@@ -101,7 +101,7 @@ internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
             close()
         }
         drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
-        scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(saddlePath, ThreadColor)
 
         // Stirrups (leather strap + iron loop), swinging with the rider's leg. A chariot horse is
         // driven from a cart, not ridden, so it hangs none.
@@ -162,7 +162,7 @@ internal fun drawWarOx(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
         addOval(androidx.compose.ui.geometry.Rect(cx - 62f, cy + 58f, cx + 58f, cy + 132f))
     }
     drawStitchedFill(scope, bodyPath, hide)
-    scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(bodyPath, ThreadColor)
 
     // Shoulder hump — the ox's silhouette read at a glance.
     val humpPath = Path().apply {
@@ -171,7 +171,7 @@ internal fun drawWarOx(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
         close()
     }
     drawStitchedFill(scope, humpPath, hide)
-    scope.drawPath(humpPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(humpPath, ThreadColor)
 
     val tailPath = Path().apply {
         moveTo(cx - 58f, cy + 72f)
@@ -180,7 +180,7 @@ internal fun drawWarOx(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
         close()
     }
     drawStitchedFill(scope, tailPath, Color(0xFF2C2219))
-    scope.drawPath(tailPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(tailPath, ThreadColor)
 
     // Head hangs low, as a yoked beast carries it.
     val headPath = Path().apply {
@@ -192,7 +192,7 @@ internal fun drawWarOx(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
         close()
     }
     drawStitchedFill(scope, headPath, hide)
-    scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(headPath, ThreadColor)
     scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(cx + 74f, cy + 72f))
 
     // Horns, one sweeping each way off the poll. Drawn long and pale on purpose: they are the whole
@@ -221,7 +221,7 @@ internal fun drawWarOx(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
         close()
     }
     drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
-    scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(saddlePath, ThreadColor)
 
     // Yoke rope to the muzzle, in place of reins.
     scope.drawPath(Path().apply {
@@ -242,7 +242,7 @@ internal fun drawPackMule(scope: DrawScope, cx: Float, cy: Float, fighter: Fight
         addOval(androidx.compose.ui.geometry.Rect(cx - 44f, cy + 72f, cx + 44f, cy + 128f))
     }
     drawStitchedFill(scope, bodyPath, hide)
-    scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(bodyPath, ThreadColor)
 
     val tailPath = Path().apply {
         moveTo(cx - 40f, cy + 82f)
@@ -251,7 +251,7 @@ internal fun drawPackMule(scope: DrawScope, cx: Float, cy: Float, fighter: Fight
         close()
     }
     drawStitchedFill(scope, tailPath, Color(0xFF2C2219))
-    scope.drawPath(tailPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(tailPath, ThreadColor)
 
     val neckPath = Path().apply {
         moveTo(cx + 20f, cy + 90f)
@@ -261,7 +261,7 @@ internal fun drawPackMule(scope: DrawScope, cx: Float, cy: Float, fighter: Fight
         close()
     }
     drawStitchedFill(scope, neckPath, hide)
-    scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(neckPath, ThreadColor)
 
     val headPath = Path().apply {
         moveTo(cx + 38f, cy + 44f)
@@ -272,7 +272,7 @@ internal fun drawPackMule(scope: DrawScope, cx: Float, cy: Float, fighter: Fight
         close()
     }
     drawStitchedFill(scope, headPath, hide)
-    scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(headPath, ThreadColor)
     scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(cx + 56f, cy + 48f))
 
     // The ears are the whole joke — absurdly long, and the mule's only dignity.
@@ -295,7 +295,7 @@ internal fun drawPackMule(scope: DrawScope, cx: Float, cy: Float, fighter: Fight
             close()
         }
         drawStitchedFill(scope, p, pannier)
-        scope.drawPath(p, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(p, ThreadColor)
     }
 
     val saddlePath = Path().apply {
@@ -306,7 +306,7 @@ internal fun drawPackMule(scope: DrawScope, cx: Float, cy: Float, fighter: Fight
         close()
     }
     drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
-    scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(saddlePath, ThreadColor)
 
     scope.drawPath(Path().apply {
         moveTo(cx + 60f, cy + 58f)
@@ -322,7 +322,7 @@ internal fun drawPackMule(scope: DrawScope, cx: Float, cy: Float, fighter: Fight
         close()
     }
     drawStitchedFill(scope, square_7, Color(0xFF9E3624))
-    scope.drawPath(square_7, Color(0xFF7A1F14), style = StitchedStroke)
+    scope.drawStitchedOutline(square_7, Color(0xFF7A1F14))
     scope.drawCircle(Color(0xFF7A1F14), radius = 2f, center = Offset(cx + 64f, cy + 69f))
     scope.drawCircle(Color(0xFF7A1F14), radius = 1.5f, center = Offset(cx + 64f, cy + 69f), style = StitchedStroke)
 }
@@ -339,7 +339,7 @@ internal fun drawWarBear(scope: DrawScope, cx: Float, cy: Float, fighter: Fighte
         addOval(androidx.compose.ui.geometry.Rect(cx - 56f, cy + 56f, cx + 52f, cy + 126f))
     }
     drawStitchedFill(scope, bodyPath, fur)
-    scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(bodyPath, ThreadColor)
 
     // Shoulder mass, forward and high — the bear leads with it.
     val shoulderPath = Path().apply {
@@ -348,7 +348,7 @@ internal fun drawWarBear(scope: DrawScope, cx: Float, cy: Float, fighter: Fighte
         close()
     }
     drawStitchedFill(scope, shoulderPath, fur)
-    scope.drawPath(shoulderPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(shoulderPath, ThreadColor)
 
     // A stub tail, not a horse's fall of hair.
     scope.drawCircle(Color(0xFF2C2219), radius = 7f, center = Offset(cx - 54f, cy + 84f))
@@ -362,7 +362,7 @@ internal fun drawWarBear(scope: DrawScope, cx: Float, cy: Float, fighter: Fighte
         close()
     }
     drawStitchedFill(scope, headPath, fur)
-    scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(headPath, ThreadColor)
     scope.drawCircle(Color(0xFFEFE6D4), radius = 3f, center = Offset(cx + 62f, cy + 48f))
     scope.drawCircle(ThreadColor, radius = 1.5f, center = Offset(cx + 62f, cy + 48f))
 
@@ -386,7 +386,7 @@ internal fun drawWarBear(scope: DrawScope, cx: Float, cy: Float, fighter: Fighte
         close()
     }
     drawStitchedFill(scope, saddlePath, if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D))
-    scope.drawPath(saddlePath, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(saddlePath, ThreadColor)
 
     scope.drawPath(Path().apply {
         moveTo(cx + 78f, cy + 56f)
@@ -429,7 +429,7 @@ internal fun drawTrojanHorse(scope: DrawScope, cx: Float, cy: Float, fighter: Fi
             close()
         }
         drawStitchedFill(scope, bodyPath, wood)
-        scope.drawPath(bodyPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(bodyPath, ThreadColor)
         // Plank seams
         scope.drawLine(darkWood, Offset(cx - 60f, cy + 47f), Offset(cx + 58f, cy + 42f), strokeWidth = 3f)
         scope.drawLine(darkWood, Offset(cx - 58f, cy + 64f), Offset(cx + 60f, cy + 59f), strokeWidth = 3f)
@@ -446,7 +446,7 @@ internal fun drawTrojanHorse(scope: DrawScope, cx: Float, cy: Float, fighter: Fi
             close()
         }
         drawStitchedFill(scope, neckPath, wood)
-        scope.drawPath(neckPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(neckPath, ThreadColor)
         val headPath = Path().apply {
             moveTo(cx + 56f, cy - 55f)
             lineTo(cx + 98f, cy - 48f)
@@ -455,7 +455,7 @@ internal fun drawTrojanHorse(scope: DrawScope, cx: Float, cy: Float, fighter: Fi
             close()
         }
         drawStitchedFill(scope, headPath, wood)
-        scope.drawPath(headPath, ThreadColor, style = StitchedStroke)
+        scope.drawStitchedOutline(headPath, ThreadColor)
         scope.drawCircle(ThreadColor, radius = 3f, center = Offset(cx + 78f, cy - 44f))
         // Plank mane ridge and rope tail
         scope.drawLine(darkWood, Offset(cx + 40f, cy + 30f), Offset(cx + 64f, cy - 44f), strokeWidth = 5f)
@@ -635,7 +635,7 @@ private fun drawBeastHelm(scope: DrawScope, hx: Float, hy: Float, r: Float) {
         close()
     }
     drawStitchedFill(scope, dome, steel)
-    scope.drawPath(dome, ThreadColor, style = StitchedStroke)
+    scope.drawStitchedOutline(dome, ThreadColor)
     // Nasal bar and the spangen rib, so it reads as a helm and not a bald patch
     scope.drawLine(ThreadColor, Offset(hx + r * 0.35f, hy - r * 0.2f), Offset(hx + r * 0.6f, hy + r * 0.5f), strokeWidth = 2f)
     scope.drawLine(ThreadColor, Offset(hx, hy - r * 1.6f), Offset(hx, hy), strokeWidth = 1.5f)
@@ -678,7 +678,7 @@ internal fun drawWardog(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
             close()
         }
         drawStitchedFill(scope, triangle_1, Color(0xFFFAF6EB))
-        scope.drawPath(triangle_1, Color(0xFFBAC5CC), style = StitchedStroke)
+        scope.drawStitchedOutline(triangle_1, Color(0xFFBAC5CC))
 }
 
 internal fun drawRaven(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
@@ -711,7 +711,7 @@ internal fun drawRaven(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
             close()
         }
         drawStitchedFill(scope, triangle_1, Color(0xFF000000))
-        scope.drawPath(triangle_1, Color(0xFF000000), style = StitchedStroke)
+        scope.drawStitchedOutline(triangle_1, Color(0xFF000000))
         val triangle_2 = Path().apply {
             moveTo(cx + 23f, cy - 122.5f)
             lineTo(cx + 31f, cy - 115.5f)
@@ -719,7 +719,7 @@ internal fun drawRaven(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
             close()
         }
         drawStitchedFill(scope, triangle_2, Color(0xFFEFEA07))
-        scope.drawPath(triangle_2, Color(0xFFEFEA07), style = StitchedStroke)
+        scope.drawStitchedOutline(triangle_2, Color(0xFFEFEA07))
         val triangle_3 = Path().apply {
             moveTo(cx - 10f, cy - 126.5f)
             lineTo(cx - 10.5f, cy - 116f)
@@ -727,7 +727,7 @@ internal fun drawRaven(scope: DrawScope, cx: Float, cy: Float, fighter: FighterS
             close()
         }
         drawStitchedFill(scope, triangle_3, Color(0xFF000000))
-        scope.drawPath(triangle_3, Color(0xFF000000), style = StitchedStroke)
+        scope.drawStitchedOutline(triangle_3, Color(0xFF000000))
 }
     
     // Background objects are static between damage events, but their stitched fills cost

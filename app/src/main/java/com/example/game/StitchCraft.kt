@@ -7,6 +7,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -16,11 +18,90 @@ import kotlin.random.Random
 // Shared Bayeux-tapestry stitch style: thread colour, stroke styles, stitched fills and cloth textures
     // Style configuration
 internal val ThreadColor = Color(0xFF2C2219) // Dark charcoal/brown wool thread outline
+
+/**
+ * The hand-worked line.
+ *
+ * The real tapestry has no straight edges in it: every outline is wool pulled through linen by a
+ * person, so it wanders. Drawing mathematically perfect curves is the single biggest reason the art
+ * reads as "flat medieval cartoon" rather than as the artefact. [jitteredPath] roughens outlines,
+ * and every outline in the game goes through [drawStitchedOutline], so one dial moves all of them.
+ *
+ * Set [LINE_WOBBLE_DEVIATION] to 0f for the old perfectly-smooth line.
+ */
+internal const val LINE_WOBBLE_SEGMENT = 7f
+internal const val LINE_WOBBLE_DEVIATION = 0.8f
+
 internal val StitchedStroke = Stroke(
-        width = 4f, 
-        cap = StrokeCap.Round, 
+        width = 4f,
+        cap = StrokeCap.Round,
         join = StrokeJoin.Round
+        // Deliberately NO pathEffect. android's DiscretePathEffect would do this in one line, but
+        // it takes no seed: it re-rolls its deviations on every single draw, so every outline in
+        // the game would crawl and boil at 60fps. See jitteredPath for what replaced it.
     )
+
+/**
+ * Deterministic jitter offsets, in units of ±1, keyed by contour length and sample count.
+ *
+ * Both keys are translation-invariant, which is the whole trick: a fighter walking across the
+ * field hands us paths whose coordinates change every frame, but whose LENGTH does not — so the
+ * same contour draws with the same deviations wherever it is on screen, and nothing wavers.
+ * Rotation is safe for the same reason; limb rotations happen in the canvas matrix, so the path
+ * we are handed is unrotated.
+ *
+ * ponytail: unbounded map, but keys are quantised contour lengths — a few hundred entries at most,
+ * the same bound the stitch cache above lives with.
+ */
+private val jitterOffsets = HashMap<Int, FloatArray>()
+
+private fun offsetsFor(lengthKey: Int, samples: Int): FloatArray =
+    jitterOffsets.getOrPut(lengthKey * 31 + samples) {
+        var s = (lengthKey.toLong() * 2654435761L) xor (samples.toLong() * 40503L)
+        FloatArray(samples * 2) {
+            s = s * 6364136223846793005L + 1442695040888963407L
+            (((s ushr 33).toInt() % 2001) - 1000) / 1000f
+        }
+    }
+
+/**
+ * A copy of [source] with its outline nudged off true, the way a stitched line wanders.
+ *
+ * Walks each contour at [LINE_WOBBLE_SEGMENT] intervals and displaces every sample by a fixed
+ * amount drawn from [offsetsFor]. The displacement depends only on the contour's own geometry, so
+ * it is identical every frame for the same shape — this is what makes it safe to animate.
+ */
+internal fun jitteredPath(source: Path): Path {
+    if (LINE_WOBBLE_DEVIATION <= 0f) return source
+    val measure = android.graphics.PathMeasure(source.asAndroidPath(), false)
+    val out = android.graphics.Path()
+    val point = FloatArray(2)
+    do {
+        val length = measure.length
+        if (length <= LINE_WOBBLE_SEGMENT) continue
+        val samples = (length / LINE_WOBBLE_SEGMENT).toInt() + 1
+        val offsets = offsetsFor((length * 4f).toInt(), samples)
+        for (i in 0 until samples) {
+            val distance = (i * LINE_WOBBLE_SEGMENT).coerceAtMost(length)
+            measure.getPosTan(distance, point, null)
+            val x = point[0] + offsets[i * 2] * LINE_WOBBLE_DEVIATION
+            val y = point[1] + offsets[i * 2 + 1] * LINE_WOBBLE_DEVIATION
+            if (i == 0) out.moveTo(x, y) else out.lineTo(x, y)
+        }
+        // Shapes here are closed outlines; join the last stitch back to the first so the wobble
+        // cannot leave a notch at the seam.
+        if (measure.isClosed) out.close()
+    } while (measure.nextContour())
+    return if (out.isEmpty) source else out.asComposePath()
+}
+
+/**
+ * The one door every stitched outline in the game goes through, so the hand-worked line can never
+ * be applied inconsistently and can never be applied twice.
+ */
+internal fun DrawScope.drawStitchedOutline(path: Path, color: Color = ThreadColor) {
+    drawPath(jitteredPath(path), color, style = StitchedStroke)
+}
 internal val FillLineStroke = Stroke(
         width = 2f,
         cap = StrokeCap.Round

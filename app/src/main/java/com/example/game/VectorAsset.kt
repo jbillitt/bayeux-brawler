@@ -215,7 +215,7 @@ internal fun DrawScope.drawVectorAsset(
         }
         // Every shape gets the tapestry outline unless it asked for its own stroke
         if (layer.stroke == null && layer.fill != null) {
-            scope.drawPath(path, ThreadColor, style = StitchedStroke)
+            scope.drawStitchedOutline(path, ThreadColor)
         }
     }
 }

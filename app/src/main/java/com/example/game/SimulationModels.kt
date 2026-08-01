@@ -2,6 +2,7 @@ package com.example.game
 
 import androidx.compose.ui.graphics.Color
 import kotlin.math.max
+import kotlin.math.sin
 import kotlin.random.Random
 
 // --- ITEM TYPES & DEFINITIONS ---
@@ -707,15 +708,60 @@ data class FighterState(
      * feet at y=358 inside the same 200-based space particles live in.
      */
     val weaponHeadWorld: Pair<Float, Float>
+        get() = weaponHeadWorldAt(0f)
+
+    /**
+     * World position of a head sitting [along] pixels further down the haft than the main head —
+     * 0 for the head itself, negative to sit back toward the grip, and a large negative for the
+     * butt of a double-ended pole.
+     *
+     * Tracks the swing and the walk. It used to be a static function of the haft alone, so a
+     * torch's flame and smoke stayed pinned to where the weapon rests while the weapon itself
+     * swung through an arc — the fire visibly detached from the brand on every attack.
+     */
+    fun weaponHeadWorldAt(along: Float): Pair<Float, Float> {
+        val haft = GameData.haftPixels(weaponHandle.id) +
+            handleExtensionCount * (GameData.EXTENSION_REACH_PX / GameData.HAFT_BASIS_X / size)
+        val reachOut = GameData.GRIP_OFFSET_PX + (haft + along) * GameData.HAFT_BASIS_X
+        val localY = 230f - (haft + along) * 0.447f
+        // The arc: the weapon comes up and over as swingProgress runs 0..1, so the head both
+        // rises and draws back toward the body at the top of the swing.
+        val swing = if (isAttacking) sin(swingProgress.coerceIn(0f, 1f) * Math.PI.toFloat()) else 0f
+        val bob = if (!isAttacking) sin(animFrame) * 3f else 0f
+        val out = (reachOut - swing * 18f) * size
+        return Pair(
+            posX + if (facingRight) out else -out,
+            358f + (localY - 358f) * size + terrainLiftY - swing * 55f + bob
+        )
+    }
+
+    /**
+     * Every burning head this fighter is carrying, in world space.
+     *
+     * A player who welds five brands onto one haft is carrying five fires, and a double-ended pole
+     * burns at both ends. Smoke was emitted from a single hard-coded head position, so all of that
+     * came out of one point.
+     */
+    val torchHeadsWorld: List<Pair<Float, Float>>
         get() {
-            val haft = GameData.haftPixels(weaponHandle.id) +
-                handleExtensionCount * (GameData.EXTENSION_REACH_PX / GameData.HAFT_BASIS_X / size)
-            val out = (GameData.GRIP_OFFSET_PX + haft * GameData.HAFT_BASIS_X) * size
-            val localY = 230f - haft * 0.447f
-            return Pair(
-                posX + if (facingRight) out else -out,
-                358f + (localY - 358f) * size + terrainLiftY
-            )
+            val mainBurns = weaponHead.id == "head_torch"
+            val weldedBrands = extraAttachments.count { it.id == "head_torch" }
+            if (!mainBurns && weldedBrands == 0) return emptyList()
+            val heads = mutableListOf<Pair<Float, Float>>()
+            if (mainBurns) heads += weaponHeadWorldAt(0f)
+            // Welded brands are lashed just back from the head, staggered down the shaft.
+            var welded = 0
+            extraAttachments.forEach { att ->
+                if (att.id == "head_torch") {
+                    heads += weaponHeadWorldAt(-9f - welded * 8f)
+                    welded++
+                }
+            }
+            // A double-ended pole carries a second head at the butt, and it burns too.
+            if (mainBurns && weaponHandle.id == "handle_double_ended") {
+                heads += weaponHeadWorldAt(-2f * GameData.haftPixels(weaponHandle.id))
+            }
+            return heads
         }
 
     /** Reach in metres, for the stat panels. Ranged weapons keep their own flight range. */

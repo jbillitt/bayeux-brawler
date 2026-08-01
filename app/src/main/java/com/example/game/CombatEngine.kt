@@ -1118,8 +1118,11 @@ class CombatEngine(private val ctx: BattleContext) {
                 // and the Torch weapon head, which advertises exactly that and did nothing. Melee
                 // only, by construction: this is the swing path. Only the torch BEARER may burn the
                 // player — see applyIgnite — so a foe who happens to roll a Torch cannot.
+                // A welded-on brand burns exactly as well as one held in the hand — a player who
+                // lashes a Burning Brand to his axe is carrying fire and should set men alight.
                 val bearsFire = attacker.archetype == EnemyArchetype.TORCH_BEARER ||
-                    attacker.weaponHead.id == "head_torch"
+                    attacker.weaponHead.id == "head_torch" ||
+                    attacker.extraAttachments.any { it.id == "head_torch" }
                 if (bearsFire && totalDamage > 0f) {
                     applyIgnite(currTarget, onPlayer = attacker.archetype == EnemyArchetype.TORCH_BEARER)
                 }

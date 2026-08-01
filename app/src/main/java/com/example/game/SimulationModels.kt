@@ -67,6 +67,9 @@ enum class Ancillary(
     GREASER("anc_greaser", "Slippery Sam", "Greaser", "Lobs pots of rendered fat from your backline. Foes skid over and flounder in the muck.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD9C77A)),
     FIREBRAND("anc_firebrand", "Cinder Cedric", "Firebrand", "Hurls burning torches from your backline. Foes catch alight, and siege gates burn down far quicker.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFE07020)),
     BEEKEEPER("anc_beekeeper", "Humble Bede", "Bee Keeper", "Lobs whole hives from your backline, as the siege manuals advise. All who stand near the burst are stung.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFD6A420)),
+    SAPPER("anc_sapper", "Digger Dunstan", "Sapper", "Goes under the field with a great spade and comes up behind the enemy line, where nobody is looking. Fights as an ordinary man once he surfaces.", hpBoost = 15f, speedBoost = 0f, color = Color(0xFF6B5B4A)),
+    MOLEMAN("anc_moleman", "The Moleman", "Burrower", "Something hairy that swims through soil with its hands and erupts behind the enemy. Punches, and the wounds keep bleeding. Very hard to kill.", hpBoost = 40f, speedBoost = 0f, color = Color(0xFF3A2E24)),
+    TINY_TERRENCE("anc_tiny_terrence", "Tiny Terrence", "Skirmisher", "A very small man who runs very fast, straight past the melee, to put two daggers into the archers. Almost impossible to shoot.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFF9E6B3A)),
     // Earned mounts (C2). Each is granted by a Milestone, never offered as a level-up card.
     WAR_OX("anc_mount_ox", "Bregu", "War Ox", "A plough ox in barding. Immensely strong, immensely slow, and entirely unbothered by arrows.", hpBoost = 160f, speedBoost = -0.25f, color = Color(0xFF6B5B4A)),
     PACK_MULE("anc_mount_mule", "Chestnut", "Pack Mule", "A baggage mule, protesting. A ridiculous mount for a conqueror, and the chroniclers will say so.", hpBoost = 20f, speedBoost = -0.35f, color = Color(0xFF8A7156)),
@@ -571,6 +574,18 @@ data class FighterState(
     var isBear: Boolean = false,
     /** The straps are off. Grimm fights on his own account — see CombatEngine.bearMaul. */
     var isBearUnmuzzled: Boolean = false,
+    /**
+     * Seconds still to spend underground. While this is above zero the digger is not on the field
+     * at all: he cannot be hit, cannot be targeted, and is not drawn. He surfaces behind the
+     * enemy line when it reaches zero. Used by the sapper and the moleman.
+     */
+    /** Kilos shed by felt shoes, paper undergarments and a full shave. Subtracted from totalMass. */
+    var weightCutKg: Float = 0f,
+    /** Lard on the blade: it comes back out of a man quicker. Global attack-speed buff. */
+    var hasGreasedWeapon: Boolean = false,
+    var burrowTimer: Float = 0f,
+    /** True once he has surfaced, so he only makes the journey once per battle. */
+    var hasSurfaced: Boolean = false,
     var isLord: Boolean = false,
     var hasSilkenGarments: Boolean = false, // lightens armour weight without losing protection
     val isWarPriest: Boolean = false, // never attacks; heals the worst-hurt foe near him
@@ -635,7 +650,10 @@ data class FighterState(
             if (shieldUpgrades.contains("oak_reinforcing")) shieldUpgradesMass += 2.5f
             if (shieldUpgrades.contains("iron_plating")) shieldUpgradesMass += 5.0f
             if (shieldUpgrades.contains("shield_helmet")) shieldUpgradesMass += 3.0f
-            return gearBase + armourBase + attachmentsMass + armorsMass + extensionMass + shieldUpgradesMass
+            // Shed weight (felt shoes, paper undergarments, a full shave) comes straight off the
+            // total, and can never take a fighter below nothing.
+            return (gearBase + armourBase + attachmentsMass + armorsMass + extensionMass +
+                shieldUpgradesMass - weightCutKg).coerceAtLeast(0f)
         }
 
     val totalArmor: Float
@@ -785,7 +803,10 @@ data class FighterState(
             // Bows can't dual-wield and pay full price for a shieldless build, so the player's
             // draw hand works faster to compensate.
             val playerBowFactor = if (isPlayer && weaponHead.id in listOf("head_bow", "head_longbow")) 0.6f else 1f
-            val finalDelay = baseDelay * weightFactor * shieldFactor * (1f + handleSpeedPenalty) * crumpleFactor * playerBowFactor
+            // Lard. A greased blade draws and recovers faster — the late-game answer for a build
+            // that has taken silken garments and then has nothing else to buy for speed.
+            val greaseFactor = if (hasGreasedWeapon) GREASED_WEAPON_SPEEDUP else 1f
+            val finalDelay = baseDelay * weightFactor * shieldFactor * (1f + handleSpeedPenalty) * crumpleFactor * playerBowFactor * greaseFactor
             return max(0.3f, finalDelay) // lower cap
         }
 
@@ -961,6 +982,20 @@ data class TapestrySplat(
     var age: Float = 0f,
     val maxAge: Float = 4.5f
 )
+
+/** How much quicker a lard-greased weapon swings. Tunable; the late-game speed lever. */
+const val GREASED_WEAPON_SPEEDUP = 0.85f
+
+/** Total kilos a run has shed through the weight-cutting rewards. */
+val BattleSimState.weightCutKg: Float
+    get() = (if (hasFeltShoes) FELT_SHOES_KG else 0f) +
+        (if (hasPaperUndergarments) PAPER_UNDERGARMENTS_KG else 0f) +
+        (if (hasFullShave) FULL_SHAVE_KG else 0f)
+
+/** Kilos shed by each of the weight-cutting rewards. */
+const val FELT_SHOES_KG = 3.5f
+const val PAPER_UNDERGARMENTS_KG = 2.5f
+const val FULL_SHAVE_KG = 1.5f
 
 /** The damage-over-time afflictions a body can be carrying. Order is the dotStacks index. */
 enum class Dot { POISON, BLEED, IGNITE, DISEASE }
@@ -1139,6 +1174,16 @@ data class BattleSimState(
     val hasSiegeLadders: Boolean = false,
     /** Grimm's straps are off: he mauls for you, and occasionally he mauls one of yours. */
     val hasUnmuzzledBear: Boolean = false,
+    // Ways to shed kilos once silken garments are spent — otherwise a late build only ever gets
+    // heavier and slower, with nothing left to buy.
+    val hasFeltShoes: Boolean = false,
+    val hasPaperUndergarments: Boolean = false,
+    /** A full shave, head to toe. Removes the hair from the picture as well as the weight. */
+    val hasFullShave: Boolean = false,
+    /** Lard on the blade: a global attack-speed buff. */
+    val hasGreasedWeapon: Boolean = false,
+    /** Pointier Sticks: a share of the melee entourage is issued a real weapon head. */
+    val hasPointierSticks: Boolean = false,
     val hasArmorPiercing: Boolean = false,
     // Counters the player has actually met. Drives which "out" card gets added to the reward pool.
     val seenCounters: Set<String> = emptySet(),

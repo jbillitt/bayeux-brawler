@@ -1557,25 +1557,25 @@ object TapestryRenderer {
                 // toward the jaw; when it reached out as far as the nose tip (hx+18..25) it read
                 // as a second nose rather than as hair, which is a perspective error, not a
                 // styling one. Nothing here goes past hx+14.
-                } else if (fighter.faceMustache == 0) { // Long drooping Saxon
-                    moveTo(hx + 4f, hy + 10f)
-                    quadraticTo(hx + 11f, hy + 11f, hx + 13f, hy + 21f)
-                    quadraticTo(hx + 10f, hy + 15f, hx + 4f, hy + 13f)
+                } else if (fighter.faceMustache == 0) { // Full, sitting along the lip
+                    moveTo(hx + 2f, hy + 10f)
+                    quadraticTo(hx + 8f, hy + 10f, hx + 11f, hy + 15f)
+                    quadraticTo(hx + 8f, hy + 13f, hx + 2f, hy + 13f)
                     close()
-                } else if (fighter.faceMustache == 1) { // Longer and narrower, a real droop
-                    moveTo(hx + 4f, hy + 10f)
-                    quadraticTo(hx + 10f, hy + 11f, hx + 10f, hy + 24f)
-                    quadraticTo(hx + 8f, hy + 16f, hx + 4f, hy + 13f)
+                } else if (fighter.faceMustache == 1) { // A touch longer at the corner
+                    moveTo(hx + 2f, hy + 10f)
+                    quadraticTo(hx + 8f, hy + 11f, hx + 10f, hy + 17f)
+                    quadraticTo(hx + 7f, hy + 14f, hx + 2f, hy + 13f)
                     close()
-                } else if (fighter.faceMustache == 2) { // Bushy, full across the lip
-                    moveTo(hx + 3f, hy + 9f)
-                    quadraticTo(hx + 12f, hy + 9f, hx + 14f, hy + 18f)
-                    quadraticTo(hx + 10f, hy + 14f, hx + 4f, hy + 14f)
+                } else if (fighter.faceMustache == 2) { // Bushy, wide across the lip, barely falls
+                    moveTo(hx + 1f, hy + 9f)
+                    quadraticTo(hx + 9f, hy + 9f, hx + 12f, hy + 14f)
+                    quadraticTo(hx + 8f, hy + 13f, hx + 2f, hy + 14f)
                     close()
-                } else { // Trimmer, but still a curve with mass — never a chevron
-                    moveTo(hx + 5f, hy + 10f)
-                    quadraticTo(hx + 10f, hy + 10f, hx + 12f, hy + 17f)
-                    quadraticTo(hx + 9f, hy + 14f, hx + 6f, hy + 13f)
+                } else { // Trim
+                    moveTo(hx + 3f, hy + 10f)
+                    quadraticTo(hx + 7f, hy + 10f, hx + 9f, hy + 14f)
+                    quadraticTo(hx + 6f, hy + 13f, hx + 3f, hy + 13f)
                     close()
                 }
             }

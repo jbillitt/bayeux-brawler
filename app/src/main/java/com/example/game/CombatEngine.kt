@@ -150,6 +150,9 @@ class CombatEngine(private val ctx: BattleContext) {
         /** Nobody blocks everything, however braced and however far down the shaft they stand. */
         const val MAX_BLOCK_CHANCE = 0.85f
 
+        /** Tiny Terrence's chance to duck a missile outright. High on purpose; see the comment. */
+        const val TERRENCE_DODGE = 0.75f
+
         /** How long a kiter is on the ground after tripping on the rough. */
         const val KITE_STUMBLE_FALL_SECS = 0.9f
         /** Share of missile damage a timber body actually takes. */
@@ -1164,7 +1167,13 @@ class CombatEngine(private val ctx: BattleContext) {
                     ctx.popup("-CRUMPLED-", currTarget.posX, 160f, Color.DarkGray)
                 }
 
-                // A barrow-king hits like a falling wall: now and then he simply hurls a man away.
+                // The moleman does not carry a weapon; he simply keeps hitting, and what he opens up
+            // does not close. Bleed on every landed punch is the whole of his damage model.
+            if (attacker.isKind("moleman") && totalDamage > 0f && !currTarget.isInanimate) {
+                currTarget.applyDot(Dot.BLEED, 4.5f)
+            }
+
+            // A barrow-king hits like a falling wall: now and then he simply hurls a man away.
             // Only the SUPER_UNDEAD tier — the living bosses keep their footing-based fight.
             // GameViewModel clamps everyone to the field, so nobody is hurled off the map for good.
             if (attacker.bossTier == BossTier.SUPER_UNDEAD && !currTarget.isInanimate &&
@@ -1436,8 +1445,11 @@ class CombatEngine(private val ctx: BattleContext) {
         if (proj.clusterCount > 0) burstCluster(proj, proj.posX, proj.posY)
         val eyeCritCandidate = proj.sourceFighterId == ctx.player?.id && proj.type.isArrowLike &&
             defender.bossType == BossType.HAROLD_GODWINSON && defender.arrowEyeCritWindow > 0f
-        // Speed Advantage: Ranged deflection based on speed
-        val deflectionChance = (defender.moveSpeed * 0.002f).coerceIn(0f, 0.35f)
+        // Speed Advantage: Ranged deflection based on speed. Tiny Terrence is a very small man
+        // moving very fast, and being nearly unshootable is the only reason he survives the run
+        // across the field — he has almost no hp and no armour worth the name.
+        val deflectionChance = if (defender.isKind("tiny_terrence")) TERRENCE_DODGE
+            else (defender.moveSpeed * 0.002f).coerceIn(0f, 0.35f)
         if (!eyeCritCandidate && Random.nextFloat() < deflectionChance) {
             ctx.sound(SoundType.SWOOSH)
             ctx.popup("DEFLECT!", defender.posX, 120f, Color.Gray)

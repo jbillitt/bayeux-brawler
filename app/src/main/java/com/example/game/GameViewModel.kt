@@ -1684,7 +1684,9 @@ class GameViewModel : ViewModel() {
                 if (e.isPlayer || e.isDead || e.isDying) return@forEach
                 // The archetype carries a club-and-flame; the Burning Brand weapon head IS a lit
                 // torch. Both burn, whoever is holding them.
-                if (e.archetype == EnemyArchetype.TORCH_BEARER || e.weaponHead.id == "head_torch") {
+                // Every brand he carries, each tracked to where it actually is this frame.
+                e.torchHeadsWorld.forEach { (tx, ty) -> addFlameAndSmokeParticles(tx, ty) }
+                if (e.archetype == EnemyArchetype.TORCH_BEARER && e.torchHeadsWorld.isEmpty()) {
                     val (tx, ty) = e.weaponHeadWorld
                     addFlameAndSmokeParticles(tx, ty)
                 }
@@ -1696,9 +1698,8 @@ class GameViewModel : ViewModel() {
             if (player.igniteDuration > 0f && !player.isDead) {
                 addFlameAndSmokeParticles(player.posX, 190f)
             }
-            if (player.weaponHead.id == "head_torch" && !player.isDead && !player.isDying) {
-                val (tx, ty) = player.weaponHeadWorld
-                addFlameAndSmokeParticles(tx, ty)
+            if (!player.isDead && !player.isDying) {
+                player.torchHeadsWorld.forEach { (tx, ty) -> addFlameAndSmokeParticles(tx, ty) }
             }
         }
 

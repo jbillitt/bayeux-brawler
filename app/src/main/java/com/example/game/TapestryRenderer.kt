@@ -1557,25 +1557,25 @@ object TapestryRenderer {
                 // toward the jaw; when it reached out as far as the nose tip (hx+18..25) it read
                 // as a second nose rather than as hair, which is a perspective error, not a
                 // styling one. Nothing here goes past hx+14.
-                } else if (fighter.faceMustache == 0) { // Full, sitting along the lip
-                    moveTo(hx + 2f, hy + 10f)
-                    quadraticTo(hx + 8f, hy + 10f, hx + 11f, hy + 15f)
-                    quadraticTo(hx + 8f, hy + 13f, hx + 2f, hy + 13f)
+                } else if (fighter.faceMustache == 0) { // Full, drooping at the corner
+                    moveTo(hx + 12f, hy + 10f)
+                    quadraticTo(hx + 6f, hy + 10f, hx + 2f, hy + 16f)
+                    quadraticTo(hx + 6f, hy + 13f, hx + 12f, hy + 13f)
                     close()
-                } else if (fighter.faceMustache == 1) { // A touch longer at the corner
-                    moveTo(hx + 2f, hy + 10f)
-                    quadraticTo(hx + 8f, hy + 11f, hx + 10f, hy + 17f)
-                    quadraticTo(hx + 7f, hy + 14f, hx + 2f, hy + 13f)
+                } else if (fighter.faceMustache == 1) { // A longer fall past the mouth
+                    moveTo(hx + 12f, hy + 10f)
+                    quadraticTo(hx + 5f, hy + 10f, hx + 1f, hy + 19f)
+                    quadraticTo(hx + 5f, hy + 13f, hx + 12f, hy + 13f)
                     close()
-                } else if (fighter.faceMustache == 2) { // Bushy, wide across the lip, barely falls
-                    moveTo(hx + 1f, hy + 9f)
-                    quadraticTo(hx + 9f, hy + 9f, hx + 12f, hy + 14f)
-                    quadraticTo(hx + 8f, hy + 13f, hx + 2f, hy + 14f)
+                } else if (fighter.faceMustache == 2) { // Bushy, level, barely falls at all
+                    moveTo(hx + 13f, hy + 9f)
+                    quadraticTo(hx + 6f, hy + 9f, hx + 1f, hy + 13f)
+                    quadraticTo(hx + 6f, hy + 13f, hx + 13f, hy + 13f)
                     close()
                 } else { // Trim
-                    moveTo(hx + 3f, hy + 10f)
-                    quadraticTo(hx + 7f, hy + 10f, hx + 9f, hy + 14f)
-                    quadraticTo(hx + 6f, hy + 13f, hx + 3f, hy + 13f)
+                    moveTo(hx + 12f, hy + 10f)
+                    quadraticTo(hx + 7f, hy + 10f, hx + 4f, hy + 14f)
+                    quadraticTo(hx + 7f, hy + 13f, hx + 12f, hy + 13f)
                     close()
                 }
             }
@@ -1886,22 +1886,27 @@ object TapestryRenderer {
         // A crown is worn by an enemy lord — and by any player who equips one. It used to hang on
         // isLord alone, so the King's Crown headgear rendered as nothing at all.
         if (fighter.isLord || fighter.headgear.id == "helm_crown") {
+            // Seat the band ON something. It was pinned at hy-10 whatever was underneath, and
+            // the skull's own top edge is only around hy-4 — so it hovered above a bare head and
+            // floated well clear of a helm.
+            val wearsHelm = fighter.headgear.id !in listOf("helm_none", "helm_crown")
+            val seat = if (wearsHelm) hy - 13f else hy - 4f
             val crownPath = Path().apply {
-                moveTo(hx - 12f, hy - 10f)
-                lineTo(hx - 15f, hy - 25f)
-                lineTo(hx - 5f, hy - 15f)
-                lineTo(hx, hy - 30f)
-                lineTo(hx + 5f, hy - 15f)
-                lineTo(hx + 15f, hy - 25f)
-                lineTo(hx + 12f, hy - 10f)
+                moveTo(hx - 12f, seat)
+                lineTo(hx - 15f, seat - 15f)
+                lineTo(hx - 5f, seat - 5f)
+                lineTo(hx, seat - 20f)
+                lineTo(hx + 5f, seat - 5f)
+                lineTo(hx + 15f, seat - 15f)
+                lineTo(hx + 12f, seat)
                 close()
             }
             drawStitchedFill(scope, crownPath, Color(0xFFFFD700)) // Gold
             scope.drawStitchedOutline(crownPath, ThreadColor)
             // Jewels
-            scope.drawCircle(Color(0xFFBF3030), radius = 2f, center = Offset(hx - 10f, hy - 15f))
-            scope.drawCircle(Color(0xFF305ABF), radius = 2f, center = Offset(hx, hy - 20f))
-            scope.drawCircle(Color(0xFF30BF5A), radius = 2f, center = Offset(hx + 10f, hy - 15f))
+            scope.drawCircle(Color(0xFFBF3030), radius = 2f, center = Offset(hx - 10f, seat - 5f))
+            scope.drawCircle(Color(0xFF305ABF), radius = 2f, center = Offset(hx, seat - 10f))
+            scope.drawCircle(Color(0xFF30BF5A), radius = 2f, center = Offset(hx + 10f, seat - 5f))
         }
         } // Close withTransform
     }
@@ -2743,7 +2748,11 @@ object TapestryRenderer {
                 }
                 // Weapon head welds to the branch's visual tip (60,-80 local), not the generic
                 // shaftEnd — there was a visible gap otherwise
-                headPos = Offset(hx + 60f, hy - 80f)
+                // headPos rides extScale because the haft art beside it does. These bespoke
+                // hafts draw fixed paths inside a scale(extScale) transform, but pinned the head
+                // at a constant offset — so every lashed-on extension lengthened the drawn shaft
+                // and left the head hanging in the air where the short shaft used to end.
+                headPos = Offset(hx + 60f * extScale, hy - 80f * extScale)
             } else if (fighter.weaponHandle.id == "handle_antler") {
                 // A forked antler: main beam plus two tines off the outside edge.
                 scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
@@ -2756,7 +2765,11 @@ object TapestryRenderer {
                     drawLine(fighter.weaponHandle.color, Offset(3f, -18f), Offset(16f, -26f), strokeWidth = 5f)
                     drawLine(fighter.weaponHandle.color, Offset(2f, -30f), Offset(14f, -40f), strokeWidth = 5f)
                 }
-                headPos = Offset(hx + 2f, hy - 40f)
+                // headPos rides extScale because the haft art beside it does. These bespoke
+                // hafts draw fixed paths inside a scale(extScale) transform, but pinned the head
+                // at a constant offset — so every lashed-on extension lengthened the drawn shaft
+                // and left the head hanging in the air where the short shaft used to end.
+                headPos = Offset(hx + 2f * extScale, hy - 40f * extScale)
             } else if (fighter.weaponHandle.id == "handle_trumpet") {
                 // A herald's straight buisine, gripped at the mouthpiece with the bell swung
                 // outward — the bell is the business end, so that is where the weapon head goes.
@@ -2811,7 +2824,11 @@ object TapestryRenderer {
                 }
                 // The head lashes to the bell rim, the end that goes into the enemy — local
                 // (0,-64) carried through the 30 degree cant above.
-                headPos = Offset(hx + 32f, hy - 55.4f)
+                // headPos rides extScale because the haft art beside it does. These bespoke
+                // hafts draw fixed paths inside a scale(extScale) transform, but pinned the head
+                // at a constant offset — so every lashed-on extension lengthened the drawn shaft
+                // and left the head hanging in the air where the short shaft used to end.
+                headPos = Offset(hx + 32f * extScale, hy - 55.4f * extScale)
             } else if (fighter.weaponHandle.id == "handle_wheelbarrow") {
                 // Sideways profile view: wooden shaft, tub/hopper box, front wheel & axle, support leg.
                 scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
@@ -2848,7 +2865,11 @@ object TapestryRenderer {
                     drawLine(ThreadColor, Offset(wheelCenter.x, wheelCenter.y - wheelRadius), Offset(wheelCenter.x, wheelCenter.y + wheelRadius), strokeWidth = 1.5f)
                     drawCircle(Color(0xFF33261A), radius = 3.5f, center = wheelCenter)
                 }
-                headPos = Offset(hx + 142.5f, hy + 0.5f)
+                // headPos rides extScale because the haft art beside it does. These bespoke
+                // hafts draw fixed paths inside a scale(extScale) transform, but pinned the head
+                // at a constant offset — so every lashed-on extension lengthened the drawn shaft
+                // and left the head hanging in the air where the short shaft used to end.
+                headPos = Offset(hx + 142.5f * extScale, hy + 0.5f * extScale)
             } else if (fighter.weaponHandle.id == "handle_plank") {
                 // Nail-Studded Plank: wide wooden board bristling with rusted iron nails
                 scope.withTransform({ translate(hx, hy); scale(extScale, extScale, pivot = Offset.Zero) }) {
@@ -2888,7 +2909,11 @@ object TapestryRenderer {
                         drawCircle(darkRust, radius = 2f, center = headPt)
                     }
                 }
-                headPos = Offset(hx + 45f, hy - 42f)
+                // headPos rides extScale because the haft art beside it does. These bespoke
+                // hafts draw fixed paths inside a scale(extScale) transform, but pinned the head
+                // at a constant offset — so every lashed-on extension lengthened the drawn shaft
+                // and left the head hanging in the air where the short shaft used to end.
+                headPos = Offset(hx + 45f * extScale, hy - 42f * extScale)
             } else if (fighter.weaponHandle.id == "handle_anchor") {
                 // An Admiralty-pattern anchor, gripped at the ring with the crown swung outward.
                 //
@@ -2941,7 +2966,11 @@ object TapestryRenderer {
                         drawStitchedOutline(arm, ThreadColor)
                     }
                 }
-                headPos = Offset(hx, hy - 80f)
+                // headPos rides extScale because the haft art beside it does. These bespoke
+                // hafts draw fixed paths inside a scale(extScale) transform, but pinned the head
+                // at a constant offset — so every lashed-on extension lengthened the drawn shaft
+                // and left the head hanging in the air where the short shaft used to end.
+                headPos = Offset(hx, hy - 80f * extScale)
             } else if (fighter.weaponHandle.id == "handle_oar") {
                 // A ship's oar: a long loom with a flat blade spooned onto the far end. It rode
                 // the generic straight-haft path, which draws nothing but a line — an oar with

@@ -2890,7 +2890,7 @@ fun BattlefieldScene(
                         val r = 4.5f * proj.sizeMultiplier
                         val stoneColor = if (proj.isPoisonous) Color(0xFF2E7D32) else Color(0xFF535C61)
                         val outlineColor = if (proj.isPoisonous) Color(0xFF81C784) else TapestryDark
-                        
+
                         drawCircle(stoneColor, radius = r, center = Offset(sx, sy))
                         drawCircle(outlineColor, radius = r, center = Offset(sx, sy), style = Stroke(width = 2.0f))
                         drawLine(Color.DarkGray, Offset(sx - r * 0.5f, sy - r * 0.5f), Offset(sx + r * 0.5f, sy + r * 0.5f), strokeWidth = 1.5f)
@@ -2930,6 +2930,55 @@ fun BattlefieldScene(
                             center = Offset(px, py)
                         )
                     }
+                }
+
+                // 5b. Blood thrown clear onto the linen itself after a knot of men falls together.
+                // Positioned in canvas fractions, not world pixels: the conceit is that the
+                // artefact got splashed, so it must not pan with the battlefield behind it.
+                viewModel.tapestrySplats.value.forEach { splat ->
+                    val fade = (1f - (splat.age / splat.maxAge)).coerceIn(0f, 1f)
+                    val cx = splat.xFrac * size.width
+                    val cy = splat.yFrac * size.height
+                    // Oxblood, and opaque. A bright red at low alpha came out pink over the cream
+                    // linen and read as berries rather than blood.
+                    val gore = Color(0xFF6E1414).copy(alpha = fade * 0.88f)
+
+                    // An irregular gout, never a disc: perfect circles read as polka dots against
+                    // the flat embroidery. Jitter is seeded, so a splat does not crawl frame to
+                    // frame while it fades.
+                    fun blob(bx: Float, by: Float, r: Float, salt: Int) {
+                        val path = Path()
+                        for (i in 0 until 11) {
+                            val a = i / 11f * 2f * Math.PI.toFloat()
+                            val jitter = 0.62f + ((splat.seed * 31 + salt * 17 + i * 7919) % 100) / 130f
+                            val px = bx + cos(a) * r * jitter
+                            val py = by + sin(a) * r * jitter
+                            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                        }
+                        path.close()
+                        drawPath(path, gore)
+                    }
+
+                    blob(cx, cy, splat.radius, 0)
+                    // Satellite spatter thrown clear of the main gout.
+                    for (i in 0 until 5) {
+                        val a = ((splat.seed + i * 97) % 360) * (Math.PI.toFloat() / 180f)
+                        val d = splat.radius * (1.15f + ((splat.seed + i * 31) % 70) / 100f)
+                        blob(
+                            cx + cos(a) * d,
+                            cy + sin(a) * d,
+                            splat.radius * (0.12f + ((splat.seed + i * 13) % 22) / 100f),
+                            i + 1
+                        )
+                    }
+                    // The run-off, which lengthens as it ages — it is running down the cloth.
+                    drawLine(
+                        gore,
+                        Offset(cx, cy + splat.radius * 0.5f),
+                        Offset(cx, cy + splat.radius * (1.4f + splat.age * 0.5f)),
+                        strokeWidth = splat.radius * 0.18f,
+                        cap = StrokeCap.Round
+                    )
                 }
 
                 // 6. Draw Floating Comic popups (e.g. *CLANGUS*, *THWACKUS*)

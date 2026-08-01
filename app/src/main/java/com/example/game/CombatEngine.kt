@@ -125,6 +125,38 @@ class CombatEngine(private val ctx: BattleContext) {
 
         /** Consecutive staggers before a fighter powers through and finishes his swing anyway. */
         const val MAX_INTERRUPT_STREAK = 3
+
+        // Rare ranged rewards. All tunable; these are the fun knobs, not the balance-critical ones.
+        /** Fragments a cluster charge sprays on impact. */
+        const val CLUSTER_FRAGMENTS = 4
+        /** Each fragment's share of the parent shot's damage. */
+        const val CLUSTER_FRAGMENT_DAMAGE = 0.35f
+        /** How much further a lofted volley shot travels than the flat shot beside it. */
+        const val VOLLEY_RANGE_MULT = 1.45f
+        /** Delay between the flat shot and its lofted twin, so they read as two loosings. */
+        const val VOLLEY_DELAY_SECS = 0.12f
+        /** Ground a ballista spear shoves a man back. Its card promised a knockback; nothing did it. */
+        const val BALLISTA_KNOCKBACK_PX = 45f
+
+        // The unmuzzled bear, all tunable. The friendly-fire chance is the price of the reward and
+        // is deliberately low enough to be a story rather than a tax.
+        const val BEAR_MAUL_CHANCE = 0.3f
+        const val BEAR_MAUL_DAMAGE = 34f
+        const val BEAR_FRIENDLY_FIRE_CHANCE = 0.18f
+        const val BEAR_FRIENDLY_FIRE_PX = 110f
+
+        /** Extra block chance per metre a shielded foe stands beyond LONG_MELEE_REACH of the swing. */
+        const val REAR_RANK_BLOCK_PER_M = 0.04f
+        /** Nobody blocks everything, however braced and however far down the shaft they stand. */
+        const val MAX_BLOCK_CHANCE = 0.85f
+
+        /** A routed man runs faster than he marches. Multiplier on moveSpeed while panicking. */
+        const val PANIC_RUN_MULT = 1.35f
+
+        /** Bosses swing quicker than their bulk earns them. Tunable; the boss-fight pacing knob. */
+        const val BOSS_SWING_SPEEDUP = 0.8f
+        /** A boss keeps both arms until this fraction of his hp is left. */
+        const val BOSS_ARM_LOSS_HP_FRACTION = 0.15f
     }
 
     /**
@@ -300,8 +332,9 @@ class CombatEngine(private val ctx: BattleContext) {
                         )
                     )
                 }
-                applyDotDamage(POISON_DPS, dt, fighter)
+                applyDotDamage(POISON_DPS * fighter.dotIntensity(Dot.POISON), dt, fighter)
             }
+            if (fighter.poisonDuration <= 0f) fighter.clearDot(Dot.POISON)
         }
 
         if (fighter.igniteDuration > 0f) {
@@ -310,8 +343,10 @@ class CombatEngine(private val ctx: BattleContext) {
                 if (Random.nextFloat() < dt * 1.5f) {
                     ctx.popup("ARDENS!", fighter.posX, 130f, Color(0xFFE07020))
                 }
-                applyDotDamage(if (fighter === ctx.player) PLAYER_IGNITE_DPS else IGNITE_DPS, dt, fighter)
+                val igniteDps = if (fighter === ctx.player) PLAYER_IGNITE_DPS else IGNITE_DPS
+                applyDotDamage(igniteDps * fighter.dotIntensity(Dot.IGNITE), dt, fighter)
             }
+            if (fighter.igniteDuration <= 0f) fighter.clearDot(Dot.IGNITE)
         }
         if (fighter.arrowEyeCritWindow > 0f) {
             fighter.arrowEyeCritWindow = (fighter.arrowEyeCritWindow - dt).coerceAtLeast(0f)
@@ -331,8 +366,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 if (Random.nextFloat() < dt * 1.5f) {
                     ctx.popup("BLEED!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFFA62B2B))
                 }
-                applyDotDamage(BLEED_DPS, dt, fighter)
+                applyDotDamage(BLEED_DPS * fighter.dotIntensity(Dot.BLEED), dt, fighter)
             }
+            if (fighter.bleedDuration <= 0f) fighter.clearDot(Dot.BLEED)
         }
 
         // Plague: rot away, then breathe in whatever the neighbours are carrying
@@ -342,19 +378,23 @@ class CombatEngine(private val ctx: BattleContext) {
                 if (Random.nextFloat() < dt * 1.2f) {
                     ctx.popup("PESTILENCE!", fighter.posX + Random.nextInt(-10, 10), 130f, Color(0xFF6B7D4A))
                 }
-                applyDotDamage(DISEASE_DPS, dt, fighter)
+                applyDotDamage(DISEASE_DPS * fighter.dotIntensity(Dot.DISEASE), dt, fighter)
             }
+            if (fighter.diseaseDuration <= 0f) fighter.clearDot(Dot.DISEASE)
         }
         if (carrierNear(fighter)) {
             if (fighter === ctx.player) {
                 // The peasant is your own man, so you only risk it by standing in his miasma
                 if (!fighter.isContagious && Random.nextFloat() < PLAYER_CATCH_CHANCE_PER_SEC * dt) {
-                    fighter.diseaseDuration = DISEASE_DURATION
+                    fighter.applyDot(Dot.DISEASE, DISEASE_DURATION)
                     fighter.isContagious = true
                     ctx.popup("YOU FEEL UNWELL...", fighter.posX, 150f, Color(0xFF6B7D4A))
                 }
             } else if (!fighter.isPlayer) {
-                fighter.diseaseDuration = DISEASE_DURATION
+                // Standing in the miasma only ever tops the clock back up — a man cannot catch the
+                // same plague twice a second, so no stack is added while he is already rotting.
+                if (fighter.diseaseDuration <= 0f) fighter.applyDot(Dot.DISEASE, DISEASE_DURATION)
+                else fighter.diseaseDuration = DISEASE_DURATION
             }
         }
 
@@ -504,6 +544,27 @@ class CombatEngine(private val ctx: BattleContext) {
             }
         }
 
+        // Routed. He is not fighting anyone now — he is running from a frog, and the direction is
+        // whatever the panic tick last wrote into targetX.
+        //
+        // This branch is the whole miracle. Panic used to set targetX and nothing else, and enemy
+        // movement steers off `target.posX` — the chosen foe — so targetX was read by nobody: the
+        // host fought straight through a Rain of Frogs while the player's own men fell over, which
+        // is why the miracle looked like it was aimed at the wrong army.
+        if (fighter.panicDuration > 0f && !fighter.isPlayer && fighter.crumpleDuration <= 0f) {
+            fighter.isAttacking = false
+            fighter.swingProgress = 0f
+            fighter.hasLandedStrike = false
+            val direction = if (fighter.targetX > fighter.posX) 1f else -1f
+            // A man on a parapet blunders about up there rather than sprinting off a wall.
+            if (!fighter.elevated && abs(fighter.targetX - fighter.posX) > 8f) {
+                fighter.posX += direction * fighter.moveSpeed * PANIC_RUN_MULT * dt
+                fighter.animFrame += dt * 14f // legs going like a hare
+            }
+            fighter.facingRight = direction > 0f
+            return
+        }
+
         // Elevated wall defenders hold their parapet — they shoot but never walk off the castle
         // to chase, which was dragging archers left into mid-air off the wall's footprint.
         if (fighter.elevated && !fighter.isPlayer && target != null && !target.isDead &&
@@ -628,8 +689,13 @@ class CombatEngine(private val ctx: BattleContext) {
         }
 
         var cooldown = fighter.attackSpeedDelay
+        // A boss is big, and big means slow: at his size the mass and shield factors had him
+        // swinging so rarely that a stacked player could simply stand there and out-trade him.
+        if (fighter.bossType != null) cooldown *= BOSS_SWING_SPEEDUP
         if (!fighter.isPlayer && fighter.isRanged && fighter.level > 15) {
-            cooldown *= 0.7f // Ranged Escalation: Faster attack speed
+            // Ranged Escalation. The second step is for the level-40+ sieges, where a wall of
+            // archers had stopped being a threat at all by the time the player got there.
+            cooldown *= if (fighter.level > 40) 0.5f else 0.7f
         }
         if (!fighter.isPlayer && fighter.isRanged && fighter.level <= EARLY_RANGED_LEVEL) {
             cooldown *= EARLY_RANGED_SLOW // early rounds: ranged foes fire slower so range isn't dominant at the start
@@ -660,12 +726,26 @@ class CombatEngine(private val ctx: BattleContext) {
             if (!attacker.isPlayer && attacker.level > 20) {
                 hitCount += 1 // Ranged Escalation: Multishot
             }
+            // The rare multishot rewards. Nocking two or three shafts at once is the whole prize,
+            // so they add to the count rather than replacing the dual-wield or escalation shots.
+            if (attacker.rangedUpgrades.contains("multishot_double")) hitCount += 1
+            if (attacker.rangedUpgrades.contains("multishot_triple")) hitCount += 2
 
             for (hitIdx in 0 until hitCount) {
                 if (hitIdx == 0) fireRangedShot(attacker, hitIdx)
                 else schedule(0.16f * hitIdx) {
                     if (!attacker.isDead && attacker.climbState == ClimbState.NONE) {
                         fireRangedShot(attacker, hitIdx)
+                    }
+                }
+            }
+
+            // Volley: one extra shaft goes up rather than out, and comes down on the back ranks.
+            // It rides alongside the normal attack — this is an addition, never a replacement.
+            if (attacker.rangedUpgrades.contains("volley")) {
+                schedule(VOLLEY_DELAY_SECS) {
+                    if (!attacker.isDead && attacker.climbState == ClimbState.NONE) {
+                        fireRangedShot(attacker, 0, arcing = true)
                     }
                 }
             }
@@ -805,8 +885,33 @@ class CombatEngine(private val ctx: BattleContext) {
         }
     }
 
+    /**
+     * The unmuzzled bear. Take the straps off Grimm and he stops being transport and starts being
+     * a second combatant: he mauls whatever his rider is swinging at, and every so often it is one
+     * of the rider's own men in his jaws instead. The reward card states that trade plainly.
+     */
+    private fun bearMaul(rider: FighterState, target: FighterState) {
+        if (!rider.isBear || !rider.isBearUnmuzzled) return
+        if (Random.nextFloat() >= BEAR_MAUL_CHANCE) return
+        applyFlatDamage(BEAR_MAUL_DAMAGE, target, isPlayerSource = rider.isPlayer, attacker = rider, weaponNote = "a bear's jaws")
+        ctx.popup("GRIMM MAULS!", target.posX, 165f, Color(0xFF8B4513))
+        ctx.sound(SoundType.CRUNCH)
+
+        // ...and sometimes it is one of your own in the jaws. Never the rider himself: being
+        // thrown and eaten by your own mount is a run-ender, not a drawback.
+        if (Random.nextFloat() < BEAR_FRIENDLY_FIRE_CHANCE) {
+            val ally = ctx.enemies.filter {
+                it.isPlayer && it !== rider && !it.isDead && !it.isDying &&
+                    abs(it.posX - rider.posX) < BEAR_FRIENDLY_FIRE_PX
+            }.randomOrNull() ?: return
+            applyFlatDamage(BEAR_MAUL_DAMAGE * 0.6f, ally, isPlayerSource = true, attacker = rider, weaponNote = "a bear's jaws")
+            ctx.popup("GRIMM BITES HIS OWN!", ally.posX, 165f, Color(0xFFB03030))
+        }
+    }
+
     // One swing sweeping through all gathered targets, with piercing falloff
     private fun meleeSweep(attacker: FighterState, targets: List<FighterState>, dmgScale: Float, isPiercingWeapon: Boolean) {
+        targets.firstOrNull { !it.isDead && !it.isDying }?.let { bearMaul(attacker, it) }
         // This swing's own miss roll. A dual-wielder throws two of these, and one going wide says
         // nothing about the other hand.
         if (attacker.isDualWielding && Random.nextFloat() < DUAL_WIELD_MISS_CHANCE) {
@@ -859,6 +964,19 @@ class CombatEngine(private val ctx: BattleContext) {
 
             val shieldBypass = if (attacker.weaponHead.id == "head_flail" || attacker.weaponHead.id == "head_war_flail" || attacker.weaponHandle.id == "handle_flail_chain") 0.4f else 0f
             blockChance *= (1f - shieldBypass)
+
+            // Braced at the far end of the arc. A weapon with enormous reach was sweeping whole
+            // rows of shielded men, none of whom ever got the shield up — but a man standing a
+            // dozen paces off watches that head travel the entire way and has every chance to
+            // cover himself. The further out he is, the better he brings the shield across.
+            // Shields only: the isBlocked test below still requires one, so this changes nothing
+            // for the bare-armed ranks. Enemies only — long enemy reach is rare and the player
+            // has his own dodge and block rolls already.
+            val reachMetres = abs(attacker.posX - currTarget.posX) / 40f
+            if (!currTarget.isPlayer && reachMetres > LONG_MELEE_REACH) {
+                blockChance += (reachMetres - LONG_MELEE_REACH) * REAR_RANK_BLOCK_PER_M
+            }
+            blockChance = blockChance.coerceAtMost(MAX_BLOCK_CHANCE)
 
             val isBlocked = currTarget.shield.id != "shield_none" && Random.nextFloat() < blockChance
 
@@ -925,7 +1043,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 // maxOf rather than += so repeated hits refresh the wound instead of stacking it
                 // into an instant kill.
                 if (attacker.weaponHandle.id == "handle_plank") {
-                    currTarget.poisonDuration = maxOf(currTarget.poisonDuration, PLANK_POISON_SECONDS)
+                    currTarget.applyDot(Dot.POISON, PLANK_POISON_SECONDS)
                 }
 
                 if (attacker.archetype == EnemyArchetype.DANE_AXE_EXECUTIONER && totalDamage > 0f) {
@@ -989,18 +1107,23 @@ class CombatEngine(private val ctx: BattleContext) {
 
                 // Brawler Bleeding (Spiked Wraps)
                 if (attacker.brawlerUpgrades.contains("spiked_wraps") && totalDamage > 0f && Random.nextFloat() < 0.5f) {
-                    currTarget.bleedDuration = 4.0f
+                    currTarget.applyDot(Dot.BLEED, 4.0f)
                     ctx.popup("+BLEEDING+", currTarget.posX, 120f, Color(0xFFA62B2B))
                 }
 
                 // Limb loss mechanic! (heavy slash)
-                val canLoseArm = (!currTarget.isPlayer || (currTarget.hp / currTarget.maxHp < 0.10f)) &&
-                    !currTarget.isInanimate
+                // Losing an arm ends a fight, so the two bodies a battle is built around keep both
+                // until they are nearly finished. The player already had that grace; a boss who
+                // takes it in the opening exchange spends the whole duel as a punching bag.
+                val hpFraction = currTarget.hp / currTarget.maxHp
+                val armThreshold = if (currTarget.bossType != null) BOSS_ARM_LOSS_HP_FRACTION else 0.10f
+                val spared = currTarget.isPlayer || currTarget.bossType != null
+                val canLoseArm = (!spared || hpFraction < armThreshold) && !currTarget.isInanimate
                 if (slash > 18f && Random.nextFloat() < 0.2f * currTarget.ccResist &&
                     !currTarget.missingArm && canLoseArm
                 ) {
                     currTarget.missingArm = true
-                    currTarget.bleedDuration = ARM_BLEED_SECONDS // the stump bleeds out
+                    currTarget.applyDot(Dot.BLEED, ARM_BLEED_SECONDS) // the stump bleeds out
                     // Disarm off-hand/shield logically
                     if (currTarget.isDualWielding || currTarget.shield.id != "shield_none") {
                         currTarget.isDualWielding = false
@@ -1055,8 +1178,13 @@ class CombatEngine(private val ctx: BattleContext) {
         }
     }
 
-    // One ranged shot (arrow/stone/javelin) with all upgrade modifiers
-    private fun fireRangedShot(attacker: FighterState, hitIdx: Int) {
+    /**
+     * One ranged shot (arrow/stone/javelin) with all upgrade modifiers.
+     *
+     * [arcing] is the Volley reward: the same shot lobbed high so it drops on the rear ranks well
+     * past normal range, fired alongside the flat shot rather than instead of it.
+     */
+    private fun fireRangedShot(attacker: FighterState, hitIdx: Int, arcing: Boolean = false) {
         val isPlayer = attacker.isPlayer
         val dir = if (attacker.facingRight) 1f else -1f
         var startX = attacker.posX + (dir * 25f)
@@ -1081,6 +1209,9 @@ class CombatEngine(private val ctx: BattleContext) {
         var splash = false
         var poison = false
         var ballista = false
+        var plaguing = false
+        var armorPierce = 0f
+        var cluster = 0
         var finalDmg = attacker.baseDamage *
             if (attacker.elevated && !attacker.isPlayer) SiegeRules.DOWNHILL_DAMAGE_MULTIPLIER else 1f
         var finalPierce = attacker.damagePierce
@@ -1103,6 +1234,10 @@ class CombatEngine(private val ctx: BattleContext) {
             if (attacker.rangedUpgrades.contains("slingshot_spikes")) {
                 spikes = true
                 finalPierce += 8f
+                armorPierce = 0.25f // barbs find the gaps in mail
+            }
+            if (attacker.rangedUpgrades.contains("slingshot_plague")) {
+                plaguing = true
             }
             if (attacker.rangedUpgrades.contains("slingshot_weapon_heads")) {
                 val heads = listOf("head_axe", "head_sword", "head_morningstar", "head_claymore", "head_halberd")
@@ -1146,12 +1281,27 @@ class CombatEngine(private val ctx: BattleContext) {
             if (attacker.rangedUpgrades.contains("bow_spikes")) {
                 spikes = true
                 finalPierce *= 1.8f
+                armorPierce = 0.5f // the card has always said "ignores 50% armor"; now it does
             }
             if (attacker.rangedUpgrades.contains("bow_weapon_heads")) {
                 val heads = listOf("head_axe", "head_sword", "head_morningstar")
                 launchedWep = heads.random()
                 finalDmg *= 1.4f
             }
+        }
+
+        // Cluster charge: a pot of flint and iron scrap that bursts on the mark. Rolled here so it
+        // rides on top of whatever else the shot is carrying.
+        if (attacker.rangedUpgrades.contains("cluster")) {
+            cluster = CLUSTER_FRAGMENTS
+        }
+
+        // Volley: lofted high, so it comes down well past where a flat shot dies. Applied last of
+        // the trajectory maths or the bow/sling branches above would overwrite it.
+        if (arcing) {
+            velY = -190f
+            velX *= VOLLEY_RANGE_MULT
+            gravMult = 0.85f
         }
 
         var projId = "proj_${System.currentTimeMillis()}_${Random.nextInt(100)}"
@@ -1213,13 +1363,46 @@ class CombatEngine(private val ctx: BattleContext) {
             isPoisonous = poison,
             isBallista = ballista,
             isIgniting = igniting,
+            // Was computed for javelins ("glide!") and every arcing shot and then never passed, so
+            // every missile in the game fell at the same rate regardless.
+            gravityMult = gravMult,
+            isPlaguing = plaguing,
+            armorPierceFraction = armorPierce,
+            clusterCount = cluster,
             sourceFighterId = attacker.id,
             launchLiftY = elevationVisualOffset(attacker)
         ))
     }
 
+    /** Burst a cluster charge at the point of impact: scrap sprayed both ways off the mark. */
+    private fun burstCluster(proj: Projectile, atX: Float, atY: Float) {
+        repeat(proj.clusterCount) { i ->
+            val spread = (i - (proj.clusterCount - 1) / 2f)
+            ctx.spawnProjectile(Projectile(
+                id = "cluster_${System.currentTimeMillis()}_${Random.nextInt(1000)}_$i",
+                isPlayerOwned = proj.isPlayerOwned,
+                posX = atX,
+                posY = atY,
+                velocityX = spread * 150f + (Random.nextFloat() * 60f - 30f),
+                velocityY = -120f - Random.nextFloat() * 60f,
+                damage = proj.damage * CLUSTER_FRAGMENT_DAMAGE,
+                pierce = proj.pierce * CLUSTER_FRAGMENT_DAMAGE,
+                blunt = proj.blunt * CLUSTER_FRAGMENT_DAMAGE,
+                type = ProjectileType.ROCK,
+                sizeMultiplier = 0.45f,
+                armorPierceFraction = proj.armorPierceFraction,
+                // No clusterCount: fragments must never burst again, or one shot fills the field.
+                sourceFighterId = proj.sourceFighterId,
+                launchLiftY = proj.launchLiftY
+            ))
+        }
+        ctx.sound(SoundType.CRUNCH)
+    }
+
     fun applyProjectileDamage(proj: Projectile, defender: FighterState) {
         if (defender.climbState != ClimbState.NONE) return
+        // A cluster charge bursts wherever it stops, deflected or blocked or buried in a man.
+        if (proj.clusterCount > 0) burstCluster(proj, proj.posX, proj.posY)
         val eyeCritCandidate = proj.sourceFighterId == ctx.player?.id && proj.type.isArrowLike &&
             defender.bossType == BossType.HAROLD_GODWINSON && defender.arrowEyeCritWindow > 0f
         // Speed Advantage: Ranged deflection based on speed
@@ -1256,7 +1439,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
             }
         } else {
-            val armorFactor = (1f - (defender.totalArmor / 100f)).coerceIn(0.15f, 1f)
+            // A bodkin or a barb ignores part of the mail outright, per armorPierceFraction.
+            val effectiveArmor = defender.totalArmor * (1f - proj.armorPierceFraction)
+            val armorFactor = (1f - (effectiveArmor / 100f)).coerceIn(0.15f, 1f)
             val eyeCrit = eyeCritCandidate
             val totalDamage = ((proj.damage * armorFactor) + (proj.blunt * 0.6f)) *
                 if (eyeCrit) 3f else 1f
@@ -1273,10 +1458,28 @@ class CombatEngine(private val ctx: BattleContext) {
                 defender.stuckProjectiles.add(StuckProj(proj.type, proj.sizeMultiplier, proj.velocityX, proj.velocityY, false, proj.isBallista))
                 if (defender.stuckProjectiles.size > 12) defender.stuckProjectiles.removeAt(0)
             }
-            // Apply Poison Upgrade
+
+            // Ballista Spears say "knocks foes back" on the card and did nothing of the kind.
+            // Never against the player: being shoved around by archery is not a fight.
+            if (proj.isBallista && !defender.isPlayer && !defender.isInanimate) {
+                val shove = if (proj.velocityX >= 0f) BALLISTA_KNOCKBACK_PX else -BALLISTA_KNOCKBACK_PX
+                defender.posX += shove * defender.ccResist
+                defender.tryCrumple(1.2f, chance = 0.35f)
+            }
+            // Apply Poison Upgrade. Stacks with the hag's venom and with the plague peasant's rot
+            // rather than overwriting either — see FighterState.applyDot.
             if (proj.isPoisonous) {
-                defender.poisonDuration = 5.0f
-                ctx.popup("+POISONED+", defender.posX, 120f, Color(0xFF2E7D32))
+                defender.applyDot(Dot.POISON, 5.0f)
+                val doses = defender.dotStacks[Dot.POISON.ordinal]
+                ctx.popup(
+                    if (doses > 1) "+POISONED x$doses+" else "+POISONED+",
+                    defender.posX, 120f, Color(0xFF2E7D32)
+                )
+            }
+            // Plague-tipped shot: the sling's answer to a peasant's miasma, and it stacks on it.
+            if (proj.isPlaguing) {
+                defender.applyDot(Dot.DISEASE, DISEASE_DURATION)
+                ctx.popup("+PESTILENT+", defender.posX, 135f, Color(0xFF6B7D4A))
             }
             if (proj.isIgniting) applyIgnite(defender)
 
@@ -1309,7 +1512,7 @@ class CombatEngine(private val ctx: BattleContext) {
             // Hag Mud effect
             if (proj.id.startsWith("hag_mud_")) {
                 defender.slowDuration = 3.0f
-                defender.poisonDuration = 3.0f
+                defender.applyDot(Dot.POISON, 3.0f)
                 ctx.popup("SLIMED!", defender.posX, 140f, Color(0xFF384033))
                 repeat(8) {
                     ctx.particle(
@@ -1335,7 +1538,7 @@ class CombatEngine(private val ctx: BattleContext) {
 
             // Apply Spikes Bleed
             if (proj.hasSpikes) {
-                defender.bleedDuration = 4.0f
+                defender.applyDot(Dot.BLEED, 4.0f)
                 ctx.popup("+BLEEDING+", defender.posX, 120f, Color(0xFFA62B2B))
             }
 
@@ -1466,7 +1669,7 @@ class CombatEngine(private val ctx: BattleContext) {
                 ctx.enemies.filter {
                     !it.isPlayer && !it.isDead && abs(it.posX - defender.posX) <= DEATH_PLAGUE_BURST_PX
                 }.forEach { victim ->
-                    victim.diseaseDuration = DISEASE_DURATION
+                    victim.applyDot(Dot.DISEASE, DISEASE_DURATION)
                     victim.isContagious = true // it spreads on from here — that's a plague
                 }
             }
@@ -1495,8 +1698,14 @@ class CombatEngine(private val ctx: BattleContext) {
     fun applyIgnite(defender: FighterState, onPlayer: Boolean = false) {
         val isPlayer = defender === ctx.player
         if (isPlayer && !onPlayer) return
-        if (defender.igniteDuration > 0f) return          // never stacks, never re-arms mid-burn
-        defender.igniteDuration = if (isPlayer) PLAYER_IGNITE_DURATION else IGNITE_DURATION
+        // The player's burn still never stacks and never re-arms mid-burn: a chain-ignite is an
+        // unavoidable death rather than a fight. A foe touched by a second brand burns harder.
+        if (isPlayer) {
+            if (defender.igniteDuration > 0f) return
+            defender.igniteDuration = PLAYER_IGNITE_DURATION
+        } else {
+            defender.applyDot(Dot.IGNITE, IGNITE_DURATION)
+        }
         ctx.popup("IGNIS!", defender.posX, 120f, Color(0xFFE07020))
     }
 

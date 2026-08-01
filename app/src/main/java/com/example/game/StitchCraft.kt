@@ -30,7 +30,7 @@ internal val ThreadColor = Color(0xFF2C2219) // Dark charcoal/brown wool thread 
  * Set [LINE_WOBBLE_DEVIATION] to 0f for the old perfectly-smooth line.
  */
 internal const val LINE_WOBBLE_SEGMENT = 7f
-internal const val LINE_WOBBLE_DEVIATION = 0.8f
+internal const val LINE_WOBBLE_DEVIATION = 0.45f
 
 internal val StitchedStroke = Stroke(
         width = 4f,

@@ -150,6 +150,14 @@ class CombatEngine(private val ctx: BattleContext) {
         /** Nobody blocks everything, however braced and however far down the shaft they stand. */
         const val MAX_BLOCK_CHANCE = 0.85f
 
+        /** Tiny Terrence's chance to duck a missile outright. High on purpose; see the comment. */
+        const val TERRENCE_DODGE = 0.75f
+
+        /** How long a kiter is on the ground after tripping on the rough. */
+        const val KITE_STUMBLE_FALL_SECS = 0.9f
+        /** Share of missile damage a timber body actually takes. */
+        const val INANIMATE_RANGED_SOAK = 0.35f
+
         /** The barrow-king's hurl: chance per landed blow, and how far it throws a man. */
         const val BARROW_KING_HURL_CHANCE = 0.22f
         const val BARROW_KING_HURL_PX = 130f
@@ -621,7 +629,12 @@ class CombatEngine(private val ctx: BattleContext) {
                 // trip on rough ground — a brief slow that costs this frame's shot. Riders never slip.
                 if (!fighter.isMounted && fighter.slowDuration <= 0f &&
                     Random.nextFloat() < KITE_STUMBLE_CHANCE_PER_SEC * dt) {
-                    fighter.slowDuration = 0.8f // stumbled — legs slow, no shot this beat
+                    // A stumble you can SEE. This only set slowDuration, which reads as "he walked
+                    // a bit slower for a moment" and was invisible — the kiter never appeared to
+                    // trip at all. He goes down on the spot now, briefly, and loses the shot.
+                    fighter.slowDuration = 0.8f
+                    fighter.tryCrumple(KITE_STUMBLE_FALL_SECS)
+                    ctx.popup("STUMBLE!", fighter.posX, 145f, Color(0xFF8A7156))
                 } else {
                     val direction = if (target.posX > fighter.posX) -1f else 1f
                     fighter.posX += direction * fighter.moveSpeed * KITE_RETREAT_MULT *
@@ -1086,6 +1099,8 @@ class CombatEngine(private val ctx: BattleContext) {
                     // The occasional bone crunch only ever comes off an unarmoured body.
                     val isCrunch = blunt > 15f && Random.nextFloat() < 0.4f
                     ctx.sound(when {
+                        // Carpentry. The horse was screaming like a man every time it was hit.
+                        currTarget.isInanimate -> SoundType.SHIELD_BLOCK
                         currTarget.wearsMetalArmour -> SoundType.ARMOUR_HIT
                         isCrunch -> SoundType.CRUNCH
                         else -> SoundType.FLESH
@@ -1110,7 +1125,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
 
                 // Brawler Bleeding (Spiked Wraps)
-                if (attacker.brawlerUpgrades.contains("spiked_wraps") && totalDamage > 0f && Random.nextFloat() < 0.5f) {
+                if (attacker.brawlerUpgrades.contains("spiked_wraps") && totalDamage > 0f &&
+                    !currTarget.isInanimate && Random.nextFloat() < 0.5f
+                ) {
                     currTarget.applyDot(Dot.BLEED, 4.0f)
                     ctx.popup("+BLEEDING+", currTarget.posX, 120f, Color(0xFFA62B2B))
                 }
@@ -1150,7 +1167,13 @@ class CombatEngine(private val ctx: BattleContext) {
                     ctx.popup("-CRUMPLED-", currTarget.posX, 160f, Color.DarkGray)
                 }
 
-                // A barrow-king hits like a falling wall: now and then he simply hurls a man away.
+                // The moleman does not carry a weapon; he simply keeps hitting, and what he opens up
+            // does not close. Bleed on every landed punch is the whole of his damage model.
+            if (attacker.isKind("moleman") && totalDamage > 0f && !currTarget.isInanimate) {
+                currTarget.applyDot(Dot.BLEED, 4.5f)
+            }
+
+            // A barrow-king hits like a falling wall: now and then he simply hurls a man away.
             // Only the SUPER_UNDEAD tier — the living bosses keep their footing-based fight.
             // GameViewModel clamps everyone to the field, so nobody is hurled off the map for good.
             if (attacker.bossTier == BossTier.SUPER_UNDEAD && !currTarget.isInanimate &&
@@ -1422,8 +1445,11 @@ class CombatEngine(private val ctx: BattleContext) {
         if (proj.clusterCount > 0) burstCluster(proj, proj.posX, proj.posY)
         val eyeCritCandidate = proj.sourceFighterId == ctx.player?.id && proj.type.isArrowLike &&
             defender.bossType == BossType.HAROLD_GODWINSON && defender.arrowEyeCritWindow > 0f
-        // Speed Advantage: Ranged deflection based on speed
-        val deflectionChance = (defender.moveSpeed * 0.002f).coerceIn(0f, 0.35f)
+        // Speed Advantage: Ranged deflection based on speed. Tiny Terrence is a very small man
+        // moving very fast, and being nearly unshootable is the only reason he survives the run
+        // across the field — he has almost no hp and no armour worth the name.
+        val deflectionChance = if (defender.isKind("tiny_terrence")) TERRENCE_DODGE
+            else (defender.moveSpeed * 0.002f).coerceIn(0f, 0.35f)
         if (!eyeCritCandidate && Random.nextFloat() < deflectionChance) {
             ctx.sound(SoundType.SWOOSH)
             ctx.popup("DEFLECT!", defender.posX, 120f, Color.Gray)
@@ -1456,14 +1482,21 @@ class CombatEngine(private val ctx: BattleContext) {
                 }
             }
         } else {
+            // Arrows bury themselves in a thick timber flank and do very little. The men inside
+            // are another matter — once they burst out they are ordinary flesh.
+            val timberSoak = if (defender.isInanimate) INANIMATE_RANGED_SOAK else 1f
             // A bodkin or a barb ignores part of the mail outright, per armorPierceFraction.
             val effectiveArmor = defender.totalArmor * (1f - proj.armorPierceFraction)
             val armorFactor = (1f - (effectiveArmor / 100f)).coerceIn(0.15f, 1f)
             val eyeCrit = eyeCritCandidate
             val totalDamage = ((proj.damage * armorFactor) + (proj.blunt * 0.6f)) *
-                if (eyeCrit) 3f else 1f
+                (if (eyeCrit) 3f else 1f) * timberSoak
             // Missile striking home: iron rings, everything else thuds
-            ctx.sound(if (defender.wearsMetalArmour) SoundType.ARMOUR_HIT else SoundType.FLESH)
+            ctx.sound(when {
+                defender.isInanimate -> SoundType.SHIELD_BLOCK // timber, not a man
+                defender.wearsMetalArmour -> SoundType.ARMOUR_HIT
+                else -> SoundType.FLESH
+            })
             applyFlatDamage(totalDamage, defender, proj.isPlayerOwned, attacker = shooterOf(proj), weaponNote = missileNote(proj))
             if (eyeCrit) {
                 defender.arrowEyeCritWindow = 0f
@@ -1554,7 +1587,7 @@ class CombatEngine(private val ctx: BattleContext) {
             }
 
             // Apply Spikes Bleed
-            if (proj.hasSpikes) {
+            if (proj.hasSpikes && !defender.isInanimate) { // timber does not bleed
                 defender.applyDot(Dot.BLEED, 4.0f)
                 ctx.popup("+BLEEDING+", defender.posX, 120f, Color(0xFFA62B2B))
             }

@@ -216,7 +216,10 @@ class GameViewModel : ViewModel() {
         val STACKABLE_ANCILLARIES = setOf(
             Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.LIL_GUY,
             Ancillary.HAG, Ancillary.FANATIC, Ancillary.GREASER, Ancillary.PLAGUE_PEASANT,
-            Ancillary.FIREBRAND, Ancillary.BEEKEEPER
+            Ancillary.FIREBRAND, Ancillary.BEEKEEPER,
+            // The diggers and the skirmisher stack like the rest — twins and trios of them are
+            // exactly the sort of nonsense the reward screen already knows how to offer.
+            Ancillary.SAPPER, Ancillary.MOLEMAN, Ancillary.TINY_TERRENCE
         )
 
         // Every live particle is a draw call per frame, so this is a frame-budget number, not a
@@ -378,6 +381,14 @@ class GameViewModel : ViewModel() {
          * until the host is genuinely a host.
          */
         const val MULTIKILL_MIN_HOST = 7
+
+        // The diggers. Short trips: they are meant to open a second front early in the fight,
+        // not be absent for half of it. The moleman swims through soil with his hands and is the
+        // quicker of the two; the sapper is shifting earth with a spade.
+        const val SAPPER_BURROW_SECONDS = 4.2f
+        const val MOLEMAN_BURROW_SECONDS = 2.8f
+        /** How long the descent itself takes — he sinks at the dig site, throwing up spoil. */
+        const val DIG_DOWN_SECS = 0.9f
 
         /** Finish a level with at least this much health left and it counts as unpunished. */
         const val UNPUNISHED_HP_FRACTION = 0.8f
@@ -592,6 +603,11 @@ class GameViewModel : ViewModel() {
             val newHasShieldbreaker = state.hasShieldbreaker || choice.itemId == "counter_shieldbreaker"
             val newHasSiegeLadders = state.hasSiegeLadders || choice.type == "siege_ladders"
             val newHasUnmuzzledBear = state.hasUnmuzzledBear || choice.type == "unmuzzle_bear"
+            val newHasFeltShoes = state.hasFeltShoes || choice.itemId == "felt_shoes"
+            val newHasPaperUnder = state.hasPaperUndergarments || choice.itemId == "paper_undergarments"
+            val newHasFullShave = state.hasFullShave || choice.itemId == "full_shave"
+            val newHasGreasedWeapon = state.hasGreasedWeapon || choice.itemId == "greased_weapon"
+            val newHasPointierSticks = state.hasPointierSticks || choice.itemId == "pointier_sticks"
             val newHasArmorPiercing = state.hasArmorPiercing || choice.itemId == "counter_armor_piercing"
             
             var newHeadgear = state.headgear
@@ -630,6 +646,11 @@ class GameViewModel : ViewModel() {
                 hasShieldbreaker = newHasShieldbreaker,
                 hasSiegeLadders = newHasSiegeLadders,
                 hasUnmuzzledBear = newHasUnmuzzledBear,
+                hasFeltShoes = newHasFeltShoes,
+                hasPaperUndergarments = newHasPaperUnder,
+                hasFullShave = newHasFullShave,
+                hasGreasedWeapon = newHasGreasedWeapon,
+                hasPointierSticks = newHasPointierSticks,
                 hasArmorPiercing = newHasArmorPiercing,
                 showLevelUpScreen = false,
                 pendingLevelUpChoices = emptyList()
@@ -863,7 +884,7 @@ class GameViewModel : ViewModel() {
             facingRight = true,
             size = state.characterSize,
             hairColor = state.hairColor,
-            hairStyle = state.hairStyle,
+            hairStyle = if (state.hasFullShave) "bald" else state.hairStyle,
             faceNoseShape = state.faceNoseShape,
             faceBiteShape = state.faceBiteShape,
             faceForehead = state.faceForehead,
@@ -887,6 +908,9 @@ class GameViewModel : ViewModel() {
             isBearUnmuzzled = state.hasUnmuzzledBear,
             isLord = state.isThroneMode,
             hasSilkenGarments = state.hasSilkenGarments,
+            weightCutKg = state.weightCutKg,
+            hasGreasedWeapon = state.hasGreasedWeapon,
+            // A full shave takes the hair off the picture too, not just off the scales.
             bandagesCount = state.bandagesCount
         )
         
@@ -1169,16 +1193,70 @@ class GameViewModel : ViewModel() {
 
         // One horse per copy, like the pets below — a `contains` check meant a TWINS
         // card handed you two entries in the list and still rolled out a single horse.
+        val trojanHp = 450f + (state.level - 1) * 55f
         repeat(state.unlockedAncillaries.count { it == Ancillary.TROJAN_HORSE }) { i ->
             enemies.add(FighterState(
                 // 200hp died to the enemy line long before it mattered; it exists to soak.
-                id = FighterId("trojan_horse#$i"), name = "Trojan Horse", isPlayer = true, maxHp = 450f, hp = 450f,
+                // Fixed 450 collapsed almost instantly once the host started hitting properly,
+                // so the decoy stopped decoying anything past the midgame.
+                id = FighterId("trojan_horse#$i"), name = "Trojan Horse", isPlayer = true,
+                maxHp = trojanHp, hp = trojanHp,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
                 posX = 180f - i * 40f, targetX = 180f - i * 40f, facingRight = true, size = 1.8f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = false
+            ))
+        }
+
+        // The diggers. Both go under the field at the horn and surface behind the enemy line,
+        // where a host that is all facing forward has nobody watching its back. burrowTimer keeps
+        // them off the field entirely until then — untargetable, undrawn, unhittable.
+        repeat(state.unlockedAncillaries.count { it == Ancillary.SAPPER }) { i ->
+            enemies.add(FighterState(
+                id = FighterId("sapper#$i"), name = "Digger Dunstan", isPlayer = true,
+                maxHp = 120f + state.level * 4f, hp = 120f + state.level * 4f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_axe" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_long" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_kettle" },
+                posX = 120f + i * 24f, targetX = 120f + i * 24f, facingRight = true, size = 1.0f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFF6B5B4A), hairStyle = "short",
+                burrowTimer = SAPPER_BURROW_SECONDS
+            ))
+        }
+        repeat(state.unlockedAncillaries.count { it == Ancillary.MOLEMAN }) { i ->
+            enemies.add(FighterState(
+                id = FighterId("moleman#$i"), name = "The Moleman", isPlayer = true,
+                // Very hard to kill: that is the whole of him, since he arrives alone and
+                // surrounded with no armour and no weapon.
+                maxHp = 260f + state.level * 9f, hp = 260f + state.level * 9f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 132f + i * 24f, targetX = 132f + i * 24f, facingRight = true, size = 1.15f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFF3A2E24), hairStyle = "long",
+                burrowTimer = MOLEMAN_BURROW_SECONDS
+            ))
+        }
+        // Tiny Terrence: fast, tiny, two daggers, and he runs straight past the shield wall for
+        // the archers behind it. Survivable by being impossible to shoot rather than by hp.
+        repeat(state.unlockedAncillaries.count { it == Ancillary.TINY_TERRENCE }) { i ->
+            enemies.add(FighterState(
+                id = FighterId("tiny_terrence#$i"), name = "Tiny Terrence", isPlayer = true,
+                maxHp = 70f + state.level * 3f, hp = 70f + state.level * 3f,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_dagger" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_dagger" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_leather" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 100f + i * 22f, targetX = 100f + i * 22f, facingRight = true, size = 0.62f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFF9E6B3A), hairStyle = "short",
+                isDualWielding = true, speedBoost = 1.15f
             ))
         }
 
@@ -1264,6 +1342,23 @@ class GameViewModel : ViewModel() {
             if (allyHpBonus > 0f) enemies.filter { it.isPlayer }.forEach { ally ->
                 ally.maxHp += allyHpBonus
                 ally.hp += allyHpBonus
+            }
+        }
+
+        // Pointier Sticks: half the melee entourage are issued a real head. Applied after every
+        // spawn block, like the panoply, so it reaches whoever turned up. Beasts, the decoy and
+        // the bare-fisted specialists (the moleman punches on purpose) are left alone.
+        if (state.hasPointierSticks) {
+            val armable = enemies.filter {
+                it.isPlayer && !it.isRanged && !it.isKind("wardog") && !it.isKind("raven") &&
+                    !it.isKind("trojan_horse") && !it.isKind("moleman") &&
+                    it.pallbearerIndex < 0
+            }
+            armable.filterIndexed { index, _ -> index % 2 == 0 }.forEach { ally ->
+                ally.weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_spear" }
+                if (ally.weaponHandle.id == "handle_fists") {
+                    ally.weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" }
+                }
             }
         }
 
@@ -1678,6 +1773,64 @@ class GameViewModel : ViewModel() {
             enemies.forEach { it.posX = it.posX.coerceIn(-40f, edge + 40f) }
         }
 
+        // The diggers, under the field. While burrowTimer runs they are parked far off the left
+        // edge and flagged inactive, which is what keeps them untargetable, unhittable and out of
+        // the draw — no new "is he underground" check needed anywhere else.
+        enemies.forEach { digger ->
+            if (digger.burrowTimer > 0f && !digger.isDead && !digger.isDying) {
+                digger.burrowTimer -= dt
+                digger.isCombatInactive = true
+                val total = if (digger.isKind("moleman")) MOLEMAN_BURROW_SECONDS else SAPPER_BURROW_SECONDS
+                val elapsed = total - digger.burrowTimer
+                if (elapsed < DIG_DOWN_SECS) {
+                    // Still going down, in plain sight, so it reads as digging rather than as a
+                    // man who simply vanished. He sinks into the ground throwing up spoil.
+                    digger.visualOffsetY = 95f * (elapsed / DIG_DOWN_SECS).coerceIn(0f, 1f)
+                    digger.animFrame += dt * 12f
+                    if (Random.nextFloat() < dt * 26f) {
+                        particleBuffer.add(BloodParticle(
+                            x = digger.posX + Random.nextInt(-16, 17),
+                            y = 330f + Random.nextInt(-6, 7),
+                            vx = Random.nextFloat() * 90f - 45f,
+                            vy = -70f - Random.nextFloat() * 70f,
+                            color = if (Random.nextFloat() < 0.5f) Color(0xFF5A452C) else Color(0xFF6E5536),
+                            maxAge = 0.8f + Random.nextFloat() * 0.5f
+                        ))
+                    }
+                } else {
+                    digger.posX = -600f
+                    digger.visualOffsetY = 0f
+                }
+                if (digger.burrowTimer <= 0f && !digger.hasSurfaced) {
+                    digger.hasSurfaced = true
+                    digger.isCombatInactive = false
+                    // Up behind the rearmost man on the field — which in a siege is behind the
+                    // wall, exactly where the relief column is queued and nobody is watching.
+                    val rear = enemies
+                        .filter { !it.isPlayer && !it.isDead && !it.isDying }
+                        .maxByOrNull { it.posX }?.posX ?: (player.posX + 400f)
+                    digger.posX = rear + 90f
+                    digger.targetX = digger.posX
+                    digger.facingRight = false
+                    _uiState.value.hillState?.let { digger.terrainLiftY = HillField.liftAt(digger.posX, it) }
+                    digger.visualOffsetY = 0f
+                    // Spoil thrown up as he breaks the surface, same as the hole he left behind.
+                    repeat(14) {
+                        particleBuffer.add(BloodParticle(
+                            x = digger.posX + Random.nextInt(-20, 21),
+                            y = 330f + Random.nextInt(-8, 9),
+                            vx = Random.nextFloat() * 150f - 75f,
+                            vy = -110f - Random.nextFloat() * 90f,
+                            color = if (it % 2 == 0) Color(0xFF5A452C) else Color(0xFF6E5536),
+                            maxAge = 1.0f + Random.nextFloat() * 0.6f
+                        ))
+                    }
+                    MedievalAudioSynth.playTrojanBurst()
+                    addPopup("FROM BELOW!", digger.posX, 150f, Color(0xFF8A7156))
+                }
+            }
+        }
+
         // Hill terrain: lift every fighter to the slope under his feet so the high-ground bonus
         // and the render both key off the same value. Left at 0 on flat fields.
         val hill = _uiState.value.hillState
@@ -1780,20 +1933,31 @@ class GameViewModel : ViewModel() {
         // 4. Update Enemy Fighter States (and allied NPCs like Fanatic!)
         enemies.forEach { enemy ->
             val wasDead = enemy.isDead
-            val pTarget = if (enemy.isPlayer) {
-                enemies.filter {
+            var pTarget = if (enemy.isPlayer) {
+                val reachable = enemies.filter {
                     !it.isDead && !it.isDying && !it.isPlayer && !it.isCombatInactive &&
                         it.climbState == ClimbState.NONE &&
                         (enemy.isRanged || it.elevated == enemy.elevated)
-                }.minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
+                }
+                // Tiny Terrence has one job and it is not the shield wall: he runs past the melee
+                // entirely and goes for whoever is shooting. Only falls back to the nearest body
+                // when there is nothing left with a bow.
+                if (enemy.isKind("tiny_terrence")) {
+                    reachable.filter { it.isRanged }.minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
+                        ?: reachable.minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
+                } else {
+                    reachable.minByOrNull { kotlin.math.abs(it.posX - enemy.posX) }
+                }
             } else {
                 // Nobody stabs the gift horse. The whole trick is that the host wheels it in
                 // gladly — so it is never a target, at any point, and rolls through untouched.
                 (enemies.filter {
                     !it.isDead && !it.isDying && it.isPlayer && !it.isCombatInactive &&
                         it.climbState == ClimbState.NONE &&
-                        (enemy.isRanged || it.elevated == enemy.elevated) &&
-                        !it.isKind("trojan_horse")
+                        (enemy.isRanged || it.elevated == enemy.elevated)
+                    // The horse used to be excluded here, so nothing ever attacked the decoy whose
+                    // whole purpose is to be attacked — most visibly when it rolled up to a siege
+                    // wall and the garrison ignored it completely.
                 } + listOfNotNull(
                     player.takeIf {
                         !it.isDead && !it.isDying && it.climbState == ClimbState.NONE &&
@@ -2600,6 +2764,50 @@ class GameViewModel : ViewModel() {
                     ))
                 }
 
+                // 4d. Ways to shed kilos and buy speed once silken garments are gone. Without
+                // these a late build only ever gets heavier: every armour and attachment card adds
+                // mass, and mass is attack speed and foot speed. Each is offered once.
+                run {
+                    val cuts = mutableListOf<LevelUpChoice>()
+                    if (!state.hasFeltShoes) cuts.add(LevelUpChoice(
+                        "felt_shoes", "Felt Shoes",
+                        "Swap your boots for stitched felt. Sheds ${FELT_SHOES_KG.toInt()}kg — you will swing and move quicker, and your feet will regret it.",
+                        "weight_cut", "felt_shoes"
+                    ))
+                    if (!state.hasPaperUndergarments) cuts.add(LevelUpChoice(
+                        "paper_undergarments", "Paper Undergarments",
+                        "The monks had spare vellum. Sheds ${PAPER_UNDERGARMENTS_KG.toInt()}kg of linen you will not miss until it rains.",
+                        "weight_cut", "paper_undergarments"
+                    ))
+                    if (!state.hasFullShave) cuts.add(LevelUpChoice(
+                        "full_shave", "The Full Shave",
+                        "Every hair, head to toe, off with a seax. Sheds ${FULL_SHAVE_KG.toInt()}kg and a great deal of dignity. You will be bald for the rest of the run.",
+                        "weight_cut", "full_shave"
+                    ))
+                    if (!state.hasGreasedWeapon) cuts.add(LevelUpChoice(
+                        "greased_weapon", "Grease the Blade",
+                        "A pot of rendered lard, worked into the steel. Every weapon you ever carry swings ${((1f - GREASED_WEAPON_SPEEDUP) * 100).toInt()}% faster, for the rest of the run.",
+                        "weight_cut", "greased_weapon"
+                    ))
+                    // Only from the point where weight actually starts to bite.
+                    if (cuts.isNotEmpty() && state.level >= 6 && Random.nextFloat() < 0.3f) {
+                        pendingChoices.add(cuts.random())
+                    }
+                }
+
+                // 4e. Pointier Sticks: arm the rabble. Half the melee entourage stop punching.
+                if (!state.hasPointierSticks && state.level >= 5 &&
+                    state.unlockedAncillaries.isNotEmpty() && Random.nextFloat() < 0.25f
+                ) {
+                    pendingChoices.add(LevelUpChoice(
+                        id = "pointier_sticks",
+                        title = "Pointier Sticks",
+                        description = "Lash a real head onto whatever your followers are swinging. Half your melee entourage trade their fists and farm tools for an actual weapon.",
+                        type = "pointier_sticks",
+                        itemId = "pointier_sticks"
+                    ))
+                }
+
                 // 4a. A helm for a bare head. You can start a run with nothing on your head and
                 // there was no way to ever change your mind. This is an offer, never a swap: it
                 // only appears while the head is actually bare, and only some of the time, so a
@@ -2835,6 +3043,11 @@ class GameViewModel : ViewModel() {
                     // next run scaled walls it never earned.
                     hasSiegeLadders = false,
                     hasUnmuzzledBear = false,
+                    hasFeltShoes = false,
+                    hasPaperUndergarments = false,
+                    hasFullShave = false,
+                    hasGreasedWeapon = false,
+                    hasPointierSticks = false,
                     // A new man has not yet proved untouchable, whatever the last one managed.
                     unpunishedStreak = 0,
                     isRetired = false,

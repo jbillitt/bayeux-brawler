@@ -1169,10 +1169,14 @@ class GameViewModel : ViewModel() {
 
         // One horse per copy, like the pets below — a `contains` check meant a TWINS
         // card handed you two entries in the list and still rolled out a single horse.
+        val trojanHp = 450f + (state.level - 1) * 55f
         repeat(state.unlockedAncillaries.count { it == Ancillary.TROJAN_HORSE }) { i ->
             enemies.add(FighterState(
                 // 200hp died to the enemy line long before it mattered; it exists to soak.
-                id = FighterId("trojan_horse#$i"), name = "Trojan Horse", isPlayer = true, maxHp = 450f, hp = 450f,
+                // Fixed 450 collapsed almost instantly once the host started hitting properly,
+                // so the decoy stopped decoying anything past the midgame.
+                id = FighterId("trojan_horse#$i"), name = "Trojan Horse", isPlayer = true,
+                maxHp = trojanHp, hp = trojanHp,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
@@ -1792,8 +1796,10 @@ class GameViewModel : ViewModel() {
                 (enemies.filter {
                     !it.isDead && !it.isDying && it.isPlayer && !it.isCombatInactive &&
                         it.climbState == ClimbState.NONE &&
-                        (enemy.isRanged || it.elevated == enemy.elevated) &&
-                        !it.isKind("trojan_horse")
+                        (enemy.isRanged || it.elevated == enemy.elevated)
+                    // The horse used to be excluded here, so nothing ever attacked the decoy whose
+                    // whole purpose is to be attacked — most visibly when it rolled up to a siege
+                    // wall and the garrison ignored it completely.
                 } + listOfNotNull(
                     player.takeIf {
                         !it.isDead && !it.isDying && it.climbState == ClimbState.NONE &&

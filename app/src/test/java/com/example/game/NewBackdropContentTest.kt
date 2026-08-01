@@ -116,6 +116,18 @@ class NewBackdropContentTest {
     fun `Hardrada receives the Stamford Bridge backdrop through standard objects`() {
         val objects = BattlegroundContent.objectsForBattle(1066L, 20, 2500f, 0f)
         assertEquals(listOf(BackgroundObjectType.STAMFORD_BRIDGE), objects.map { it.type })
-        assertEquals(208f, SiegeRules.parapetFeetY(1f), 0f)
+        // Derived, not a magic 208: that literal pinned the old -150 parapet offset, which put a
+        // defender's head off the top of the canvas. What actually matters is that the walkway
+        // follows the constant, and that a man standing on it fits on screen — a figure is about
+        // 190px tall from his feet, so his crown must stay below the top edge.
+        assertEquals(
+            200f + SiegeRules.GROUND_FEET_OFFSET + SiegeRules.PARAPET_ELEVATION_OFFSET,
+            SiegeRules.parapetFeetY(1f),
+            0f
+        )
+        assertTrue(
+            "a defender on the wall must fit on screen: feet at ${SiegeRules.parapetFeetY(1f)}",
+            SiegeRules.parapetFeetY(1f) - 190f > 0f
+        )
     }
 }

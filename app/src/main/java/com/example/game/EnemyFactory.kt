@@ -116,7 +116,10 @@ object EnemyFactory {
             // alight, and that must be something you can see coming and back away from — a
             // ranged igniter is unavoidable chip damage, which is not a fight.
             EnemyArchetype.TORCH_BEARER ->
-                listOf("head_club", "handle_short", "shield_none", "armor_padded", "helm_none")
+                // He holds an actual lit brand now. He was kitted with a club and the smoke was
+                // pinned on by archetype instead, which is why you saw a man swinging a cudgel
+                // with fire coming out of his fist.
+                listOf("head_torch", "handle_short", "shield_none", "armor_padded", "helm_none")
             EnemyArchetype.DANE_AXE_EXECUTIONER ->
                 listOf("head_axe", "handle_pike_long", "shield_none", "armor_chainmail", "helm_conical")
             EnemyArchetype.MONK_MILITIA ->
@@ -131,6 +134,15 @@ object EnemyFactory {
                 listOf("head_axe", "handle_medium", "shield_none", "armor_chainmail", "helm_conical")
             EnemyArchetype.BERSERKER ->
                 listOf("head_axe", "handle_iron", "shield_none", "armor_bare", "helm_none")
+            // 25 blunt on the maul clears the >18 threshold that floors a man, which is the
+            // whole point of him: he is the host's answer to a player horde.
+            EnemyArchetype.HAMMER_SERJEANT ->
+                listOf("head_maul", "handle_long", "shield_none", "armor_chainmail", "helm_conical")
+            // Nothing heavy anywhere on him. He is here to be past your line before it turns.
+            EnemyArchetype.OUTRIDER ->
+                listOf("head_dagger", "handle_short", "shield_none", "armor_leather", "helm_none")
+            EnemyArchetype.BOMBARDIER ->
+                listOf("head_slingshot", "handle_fists", "shield_none", "armor_padded", "helm_none")
             else ->
                 listOf("head_sword", "handle_medium", "shield_buckler", "armor_padded", "helm_none")
         }
@@ -139,8 +151,12 @@ object EnemyFactory {
             EnemyArchetype.DANE_AXE_EXECUTIONER -> 1.25f
             EnemyArchetype.NORMAN_LOYALIST -> 1.15f
             EnemyArchetype.MONK_MILITIA -> 0.9f
-            EnemyArchetype.CYNOCEPHALUS -> 1.05f
+            // Damage goes as size squared, so this is most of "dog-heads hit harder" — 1.05 to
+            // 1.25 is a third again on every bite.
+            EnemyArchetype.CYNOCEPHALUS -> 1.25f
             EnemyArchetype.REBEL_SNAIL -> 1.35f
+            EnemyArchetype.HAMMER_SERJEANT -> 1.35f
+            EnemyArchetype.OUTRIDER -> 0.9f
             else -> 1f
         }
         hp *= when (archetype) {
@@ -148,6 +164,10 @@ object EnemyFactory {
             EnemyArchetype.NORMAN_LOYALIST -> 1.5f
             EnemyArchetype.MONK_MILITIA -> 0.65f
             EnemyArchetype.CYNOCEPHALUS -> 1.25f
+            EnemyArchetype.HAMMER_SERJEANT -> 1.6f
+            // Fast and fragile, or he is simply better than everything else on the field.
+            EnemyArchetype.OUTRIDER -> 0.55f
+            EnemyArchetype.BOMBARDIER -> 0.7f
             // The marginalia knight's true nightmare: it does not die. It turns up late, by which
             // point the player is fully snowballed, so it needs to be a wall rather than a joke.
             EnemyArchetype.REBEL_SNAIL -> 18f
@@ -164,6 +184,9 @@ object EnemyFactory {
                 EnemyArchetype.NORMAN_LOYALIST -> "Knight of William"
                 EnemyArchetype.CYNOCEPHALUS -> "Dog-Head of the East"
                 EnemyArchetype.REBEL_SNAIL -> "The Rebel Snail"
+                EnemyArchetype.HAMMER_SERJEANT -> "Serjeant of the Maul"
+                EnemyArchetype.OUTRIDER -> "Outrider"
+                EnemyArchetype.BOMBARDIER -> "Bombardier of Cathay"
                 else -> archetype.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
             },
             isPlayer = false,
@@ -271,6 +294,11 @@ object EnemyFactory {
             if (r < 0.15f) EnemyArchetype.MACEMAN else if (r < 0.3f) EnemyArchetype.PIKEMAN else if (r < 0.45f) EnemyArchetype.SHIELD_WALL else if (r < 0.6f) EnemyArchetype.BERSERKER else if (r < 0.7f) EnemyArchetype.KNIGHT_DISMOUNTED else if (r < 0.8f) EnemyArchetype.CHARIOT_ARCHER else if (r < 0.95f) EnemyArchetype.CAVALRY else EnemyArchetype.LORD
         } else {
             when {
+                // Rare, and late. He answers a player who has stopped being one man and become a
+                // horde: a maul that puts followers on their backs, and legs that get behind them.
+                level >= 40 && r < 0.03f -> EnemyArchetype.BOMBARDIER
+                level >= 25 && r < 0.10f -> EnemyArchetype.HAMMER_SERJEANT
+                level >= 25 && r < 0.17f -> EnemyArchetype.OUTRIDER
                 level >= 30 && r < 0.05f -> EnemyArchetype.NORMAN_LOYALIST
                 r < 0.12f -> EnemyArchetype.ARCHER
                 r < 0.20f -> EnemyArchetype.TORCH_BEARER
@@ -347,7 +375,7 @@ object EnemyFactory {
                 safeHead("head_longbow"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_leather"), safeHelm("helm_kettle")
             )
             EnemyArchetype.TORCH_BEARER -> listOf(
-                safeHead("head_club"), safeHandle("handle_short"), safeShield("shield_none"), safeArmor("armor_padded"), safeHelm("helm_none")
+                safeHead("head_torch"), safeHandle("handle_short"), safeShield("shield_none"), safeArmor("armor_padded"), safeHelm("helm_none")
             )
             EnemyArchetype.DANE_AXE_EXECUTIONER -> listOf(
                 safeHead("head_axe"), safeHandle("handle_pike_long"), safeShield("shield_none"), safeArmor("armor_chainmail"), safeHelm("helm_conical")
@@ -363,6 +391,15 @@ object EnemyFactory {
             )
             EnemyArchetype.REBEL_SNAIL -> listOf(
                 safeHead("head_bare"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
+            )
+            EnemyArchetype.HAMMER_SERJEANT -> listOf(
+                safeHead("head_maul"), safeHandle("handle_long"), safeShield("shield_none"), safeArmor("armor_chainmail"), safeHelm("helm_conical")
+            )
+            EnemyArchetype.OUTRIDER -> listOf(
+                safeHead("head_dagger"), safeHandle("handle_short"), safeShield("shield_none"), safeArmor("armor_leather"), safeHelm("helm_none")
+            )
+            EnemyArchetype.BOMBARDIER -> listOf(
+                safeHead("head_slingshot"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_padded"), safeHelm("helm_none")
             )
         }
 

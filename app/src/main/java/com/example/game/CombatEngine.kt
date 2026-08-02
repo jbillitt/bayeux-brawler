@@ -172,6 +172,13 @@ class CombatEngine(private val ctx: BattleContext) {
 
         /** Bosses swing quicker than their bulk earns them. Tunable; the boss-fight pacing knob. */
         const val BOSS_SWING_SPEEDUP = 0.6f  // 0.8 → 0.6: bosses were out-traded by a stacked player
+
+        /** From here the host arcs a second shaft over the front rank onto the player's archers. */
+        const val ENEMY_VOLLEY_LEVEL = 25
+        /** From here a heavy enemy blunt weapon can floor the player's FOLLOWERS. Never the player. */
+        const val ENEMY_KNOCKDOWN_LEVEL = 25
+        /** From here enemy slingers dip their stones. */
+        const val ENEMY_SLING_POISON_LEVEL = 30
         /** A boss keeps both arms until this fraction of his hp is left. */
         const val BOSS_ARM_LOSS_HP_FRACTION = 0.15f
     }
@@ -579,7 +586,11 @@ class CombatEngine(private val ctx: BattleContext) {
         // movement steers off `target.posX` — the chosen foe — so targetX was read by nobody: the
         // host fought straight through a Rain of Frogs while the player's own men fell over, which
         // is why the miracle looked like it was aimed at the wrong army.
-        if (fighter.panicDuration > 0f && !fighter.isPlayer && fighter.crumpleDuration <= 0f) {
+        // A boss does not run from a frog. He never disengages: no panic, and no spacing shuffle
+        // further down — once he is on you he stays on you until one of you is down.
+        if (fighter.panicDuration > 0f && !fighter.isPlayer && fighter.bossType == null &&
+            fighter.crumpleDuration <= 0f
+        ) {
             fighter.isAttacking = false
             fighter.swingProgress = 0f
             fighter.hasLandedStrike = false
@@ -610,7 +621,10 @@ class CombatEngine(private val ctx: BattleContext) {
         if (target != null && !target.isDead && fighter.crumpleDuration <= 0f) {
             val dist = abs(fighter.posX - target.posX)
             val reachPixels = fighter.reachPixels
-            val rangeMult = if (!fighter.isPlayer && fighter.level > 5) 0.8f + (fighter.level - 5) * 0.05f else 0.8f
+            var rangeMult = if (!fighter.isPlayer && fighter.level > 5) 0.8f + (fighter.level - 5) * 0.05f else 0.8f
+            // A sling outranges a self bow in life, and the host's slingers were the shortest-ranged
+            // thing on the field. They stand off and whirl now.
+            if (!fighter.isPlayer && fighter.weaponHead.id == "head_slingshot") rangeMult *= 1.35f
             // Only ranged fighters kite to keep their distance; melee (including fists) holds ground
             // and stands to trade blows once in range, so a fists player is never stalled just outside
             // reach by an enemy backpedaling from a weapon it doesn't have.
@@ -674,7 +688,7 @@ class CombatEngine(private val ctx: BattleContext) {
                         triggerAttack(fighter)
                     }
                 }
-            } else if (!fighter.isRanged && fighter.reach > LONG_MELEE_REACH &&
+            } else if (!fighter.isRanged && fighter.bossType == null && fighter.reach > LONG_MELEE_REACH &&
                        dist < reachPixels * LONG_MELEE_DEADZONE && fighter.moveSpeed > 0f) {
                 // Polearm spacing: a foe has crowded inside the point of a long weapon, where a pike is
                 // useless. Shuffle back to keep him at the tip — but keep swinging, and retreat is slow
@@ -788,7 +802,11 @@ class CombatEngine(private val ctx: BattleContext) {
 
             // Volley: one extra shaft goes up rather than out, and comes down on the back ranks.
             // It rides alongside the normal attack — this is an addition, never a replacement.
-            if (attacker.rangedUpgrades.contains("volley")) {
+            // The host learns it too. A late-game player stands behind a screen of his own archers,
+            // and a flat shot never reaches them — an arcing one drops on the back rank, which is
+            // exactly where his bowmen are standing.
+            val enemyVolley = !attacker.isPlayer && attacker.level >= ENEMY_VOLLEY_LEVEL
+            if (attacker.rangedUpgrades.contains("volley") || enemyVolley) {
                 schedule(VOLLEY_DELAY_SECS) {
                     if (!attacker.isDead && attacker.climbState == ClimbState.NONE) {
                         fireRangedShot(attacker, 0, arcing = true)
@@ -1191,8 +1209,13 @@ class CombatEngine(private val ctx: BattleContext) {
                     ctx.particle(BloodParticle(x = currTarget.posX, y = 140f, vx = (Random.nextFloat() * 100f - 50f), vy = -200f - Random.nextFloat() * 100f, color = Color(0xFF8B0000), isSmoke = false))
                 }
 
-                // Crumple mechanic! (heavy blunt) - enemies can't knock the player down, only the reverse
-                if (blunt > 18f && !attacker.isKind("raven") && !currTarget.isPlayer &&
+                // Crumple mechanic (heavy blunt). The player HIMSELF is never floored by the host —
+                // being knocked about is not a fight. His followers are fair game from
+                // ENEMY_KNOCKDOWN_LEVEL, which is the counter to a late-game horde: a serjeant with
+                // a maul wading into the retinue puts several of them on their backs at once.
+                val canFloor = currTarget !== ctx.player &&
+                    (attacker.isPlayer || attacker.level >= ENEMY_KNOCKDOWN_LEVEL)
+                if (blunt > 18f && !attacker.isKind("raven") && canFloor &&
                     currTarget.tryCrumple(2.5f, chance = 0.25f)
                 ) {
                     ctx.sound(SoundType.CRUNCH)
@@ -1315,6 +1338,19 @@ class CombatEngine(private val ctx: BattleContext) {
         if (!attacker.isPlayer && attacker.level > 25) {
             velX *= 1.5f // Ranged Escalation: Projectile speed
             velY *= 1.2f
+        }
+
+        // The bombardier's pot. Reuses the splash machinery the player's own burst shot uses, so
+        // it cleaves his massed archers exactly the way his cleaves the host's.
+        if (attacker.archetype == EnemyArchetype.BOMBARDIER) {
+            splash = true
+            sizeMult = 1.6f
+            finalBlunt += 12f
+            gravMult = 1.4f   // a lobbed pot, not a flat shot
+        }
+        // The host's slingers learn their trade too: further, and eventually envenomed.
+        if (!attacker.isPlayer && isSlingshot && attacker.level >= ENEMY_SLING_POISON_LEVEL) {
+            poison = true
         }
 
         if (isSlingshot) {
@@ -1650,19 +1686,18 @@ class CombatEngine(private val ctx: BattleContext) {
             if (proj.isSplash) {
                 ctx.popup("SPLASH SPLIT!", defender.posX, 110f, Color(0xFF8A7156))
                 val splashDmg = (totalDamage * 0.5f).coerceAtLeast(2f)
-                if (proj.isPlayerOwned) {
-                    ctx.enemies.forEach { enemy ->
-                        if (enemy != defender && !enemy.isDead && !enemy.isDying && abs(enemy.posX - defender.posX) < 120f) {
-                            applyFlatDamage(splashDmg, enemy, proj.isPlayerOwned, attacker = shooterOf(proj), weaponNote = missileNote(proj))
-                            ctx.popup("SPLASH!", enemy.posX, 140f, Color(0xFF9E3624))
-                        }
-                    }
-                } else {
-                    ctx.player?.let { player ->
-                        if (player != defender && !player.isDead && !player.isDying && abs(player.posX - defender.posX) < 120f) {
-                            applyFlatDamage(splashDmg, player, proj.isPlayerOwned, attacker = shooterOf(proj), weaponNote = missileNote(proj))
-                            ctx.popup("SPLASH!", player.posX, 140f, Color(0xFF9E3624))
-                        }
+                // Symmetrical. An enemy splash used to reach ctx.player and nobody else, so a
+                // horde of followers stood inside a burst untouched while the same upgrade in the
+                // player's hands cleaved a whole rank. The player's own branch had no side filter
+                // either and was quietly splashing his own retinue.
+                val bystanders = ctx.enemies.filter { it.isPlayer != proj.isPlayerOwned } +
+                    listOfNotNull(ctx.player?.takeUnless { proj.isPlayerOwned })
+                bystanders.forEach { other ->
+                    if (other !== defender && !other.isDead && !other.isDying &&
+                        abs(other.posX - defender.posX) < 120f
+                    ) {
+                        applyFlatDamage(splashDmg, other, proj.isPlayerOwned, attacker = shooterOf(proj), weaponNote = missileNote(proj))
+                        ctx.popup("SPLASH!", other.posX, 140f, Color(0xFF9E3624))
                     }
                 }
             }

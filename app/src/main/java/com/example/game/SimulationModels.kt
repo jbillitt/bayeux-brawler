@@ -35,7 +35,13 @@ enum class EnemyArchetype {
     /** Dog-headed men of the mappae mundi; join the Saxon host from level 25. */
     CYNOCEPHALUS,
     /** The marginalia made flesh: a giant snail. Glacial, enormous HP, bites. */
-    REBEL_SNAIL
+    REBEL_SNAIL,
+    /** The host's answer to a horde: a maul big enough to put the player's followers on their backs. */
+    HAMMER_SERJEANT,
+    /** Fast, lightly armed, and past your shield wall before it has turned around. */
+    OUTRIDER,
+    /** Rare, from level 40. Lobs bursting pots at the player's massed archers. */
+    BOMBARDIER
 }
 
 enum class Ancillary(
@@ -861,12 +867,15 @@ data class FighterState(
             // Player gets 12% extra base damage per level survived to scale up against high level mobs
             val scaleLvl = if (isPlayer) 1.0f + (level - 1) * 0.12f else 1.0f
             val doubleEndedMultiplier = if (isPlayer && weaponHandle.id == "handle_double_ended") 1.5f else 1.0f
+            // One place, so a boss hits harder with whatever he happens to be holding — his swing
+            // already cleaves the crowd, it just was not worth being in the arc of.
+            val bossScale = if (bossType != null) BOSS_DAMAGE_MULT else 1.0f
             if (missingArm) {
                 // Reduced to fist-fighting
                 val fist = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
-                return fist.blunt * size * size * scaleLvl
+                return fist.blunt * size * size * scaleLvl * bossScale
             }
-            return (base + attachmentsDmg) * scaleLvl * doubleEndedMultiplier
+            return (base + attachmentsDmg) * scaleLvl * doubleEndedMultiplier * bossScale
         }
 
     val damagePierce: Float
@@ -1193,6 +1202,9 @@ fun FighterState.tryCrumple(seconds: Float, chance: Float = 1f): Boolean {
 
 /** How long after standing up a boss cannot be knocked down again. */
 const val BOSS_CC_IMMUNITY_SECS = 4f
+
+/** Every boss swing, melee or missile, lands this much harder than his weapon alone would say. */
+const val BOSS_DAMAGE_MULT = 1.45f
 
 // Grapples a bare-fisted brawler can roll on attack
 enum class WrestlingMove { CHOKE_SLAM, BODY_THROW, SUPLEX }

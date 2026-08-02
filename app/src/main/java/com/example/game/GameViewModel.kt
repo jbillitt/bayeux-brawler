@@ -1732,6 +1732,7 @@ class GameViewModel : ViewModel() {
         // has to be identifiable across the field before he is in reach. Same tick budget as the
         // incense for the same reason: particles are draw calls.
         if (incenseTick == 0) {
+            flameSwayPhase += 0.55f
             _enemiesState.value.forEach { e ->
                 if (e.isPlayer || e.isDead || e.isDying) return@forEach
                 // The archetype carries a club-and-flame; the Burning Brand weapon head IS a lit
@@ -2450,28 +2451,36 @@ class GameViewModel : ViewModel() {
      * coloured confetti.
      */
     private fun addFlameAndSmokeParticles(x: Float, y: Float) {
-        val flame = List(2) {
+        // The lean of the flame is a slow shared sine, not a fresh coin flip per particle. Two
+        // independent random velocities every tick made the fire strobe rather than gutter; the
+        // wobble now travels along the flame the way a real one leans and comes back, with only a
+        // little jitter riding on top of it.
+        val sway = kotlin.math.sin(flameSwayPhase) * 9f
+        val flame = List(2) { i ->
             BloodParticle(
-                x = x + Random.nextInt(-3, 4),
-                y = y - Random.nextInt(0, 6),
-                vx = Random.nextFloat() * 22f - 11f,
-                vy = Random.nextFloat() * -70f - 30f,
-                color = if (Random.nextBoolean()) Color(0xFFE8A33A) else Color(0xFFD4562A),
+                x = x + sway * 0.5f + Random.nextInt(-2, 3),
+                y = y - i * 3f,
+                vx = sway + (Random.nextFloat() * 6f - 3f),
+                vy = -46f - i * 12f - Random.nextFloat() * 14f,
+                color = if (i == 0) Color(0xFFE8A33A) else Color(0xFFD4562A),
                 isSmoke = true,
-                maxAge = 0.5f + Random.nextFloat() * 0.4f
+                maxAge = 0.62f + Random.nextFloat() * 0.18f
             )
         }
         val smoke = BloodParticle(
-            x = x + Random.nextInt(-4, 5),
+            x = x + sway * 0.8f + Random.nextInt(-2, 3),
             y = y - 14f,
-            vx = Random.nextFloat() * 26f - 13f,
-            vy = Random.nextFloat() * -42f - 16f,
+            vx = sway * 1.4f + (Random.nextFloat() * 8f - 4f),
+            vy = -30f - Random.nextFloat() * 14f,
             color = Color(0xFF6E6A63),
             isSmoke = true,
             maxAge = 1.8f + Random.nextFloat() * 1.2f
         )
         particleBuffer.addAll(flame + smoke)
     }
+
+    /** Advanced once per particle tick; every flame on the field leans together off this. */
+    private var flameSwayPhase = 0f
 
     private fun addIncenseParticles(x: Float, y: Float, count: Int = 2) {
         val newParticles = List(count) {

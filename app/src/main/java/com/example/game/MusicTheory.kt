@@ -29,10 +29,36 @@ fun modeOffset(mode: Mode, degree: Int): Int {
 
 fun degreeToMidi(spec: SongSpec, degree: Int): Int = spec.finalMidi + modeOffset(spec.mode, degree)
 
-/** Root, modal fifth, and octave for the ground chord. */
+/**
+ * Root, modal fifth, and octave for the ground chord.
+ *
+ * "The degree four steps up" is not always a fifth. On vii in ionian, and on iv and ii in
+ * phrygian, it comes out six semitones above the root — a tritone. Held under a drone by the pads
+ * and rolled across the harp it is the discordant twang, and the grounds visit those degrees
+ * often. The fourth is consonant in every mode and is what a medieval ear would have reached for
+ * anyway, so a would-be tritone becomes an open fourth rather than a diminished chord.
+ */
 fun groundChordMidis(spec: SongSpec, groundDegree: Int): List<Int> {
     val root = degreeToMidi(spec, groundDegree)
-    return listOf(root, degreeToMidi(spec, groundDegree + 4), root + 12)
+    val fifth = degreeToMidi(spec, groundDegree + 4)
+    val safeFifth = if (fifth - root == 6) degreeToMidi(spec, groundDegree + 3) else fifth
+    return listOf(root, safeFifth, root + 12)
+}
+
+/**
+ * The degrees of a rolled chord on [groundDegree], stacked as far as [reach] steps, with any
+ * tritone against the root left out rather than strummed.
+ *
+ * Same problem as [groundChordMidis] and the same answer, but a strum stacks further up: the
+ * tenth and the twelfth are the third and the fifth again an octave higher, so a bad fifth poisons
+ * two of the six strings, not one.
+ */
+fun strumDegrees(spec: SongSpec, groundDegree: Int, reach: List<Int>): List<Int> {
+    val root = degreeToMidi(spec, groundDegree)
+    return reach.filter { step ->
+        val semis = Math.floorMod(degreeToMidi(spec, groundDegree + step) - root, 12)
+        semis != 6
+    }
 }
 
 fun melodyRng(seed: Long) = Random(seed)

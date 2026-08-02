@@ -365,7 +365,8 @@ object TapestryRenderer {
      */
     /**
      * The Gaping Frog. Squat, wide and low, in the plague peasant's sick ochre-green, with the
-     * mouth open the whole time it is hunting — the tell is that you can see the inside of it.
+     * mouth shut in a long satisfied grin until it strikes, at which point the jaw opens ahead of
+     * the tongue and shuts again behind it.
      *
      * The tongue is drawn straight off [FighterState.tongueExtend], the same 0..1 the rules run on,
      * so what you see is exactly the state the frog is in: shut, reaching, stuck, or reeling in.
@@ -428,16 +429,34 @@ object TapestryRenderer {
                 )
             }
 
-            // The gape. Open whenever it is hunting, which is the warning.
-            val gape = 1f
-            val mouth = Path().apply {
-                moveTo(cx + dir * 44f, cy + 96f)
-                quadraticTo(cx + dir * 78f, cy + 92f, cx + dir * 90f, cy + 104f)
-                quadraticTo(cx + dir * 76f, cy + (104f + 26f * gape), cx + dir * 44f, cy + 112f)
-                close()
+            // The gape, driven by the tongue rather than pinned open. A frog with its mouth
+            // permanently agape reads as a frog with a broken jaw; the whole tell is that it OPENS
+            // — and the shut state is a long, extremely pleased froggy grin.
+            // Opens ahead of the tongue and closes behind it, so the jaw leads the strike.
+            val gape = (fighter.tongueExtend * 2.2f).coerceIn(0f, 1f)
+            if (gape > 0.05f) {
+                val mouth = Path().apply {
+                    moveTo(cx + dir * 44f, cy + 96f)
+                    quadraticTo(cx + dir * 78f, cy + 92f, cx + dir * 90f, cy + 104f)
+                    quadraticTo(cx + dir * 76f, cy + (104f + 26f * gape), cx + dir * 44f, cy + 112f)
+                    close()
+                }
+                drawStitchedFill(scope, mouth, mouthDark)
+                scope.drawStitchedOutline(mouth, ThreadColor)
+            } else {
+                // Shut: one long line from the shoulder right round to the snout, turned up at the
+                // corner. It is the width of the line that makes a frog look smug.
+                val grin = Path().apply {
+                    moveTo(cx + dir * 42f, cy + 104f)
+                    quadraticTo(cx + dir * 70f, cy + 112f, cx + dir * 89f, cy + 100f)
+                }
+                scope.drawPath(grin, ThreadColor, style = Stroke(width = 4f, cap = StrokeCap.Round))
+                // The upturned corner, which is the whole joke.
+                scope.drawLine(
+                    ThreadColor, Offset(cx + dir * 42f, cy + 104f), Offset(cx + dir * 36f, cy + 98f),
+                    strokeWidth = 4f, cap = StrokeCap.Round
+                )
             }
-            drawStitchedFill(scope, mouth, mouthDark)
-            scope.drawStitchedOutline(mouth, ThreadColor)
 
             // Eye: high, domed, on top of the skull the way a frog's is
             val eyeX = cx + dir * 30f
@@ -1351,38 +1370,43 @@ object TapestryRenderer {
                 strokeWidth = 11f, cap = StrokeCap.Round
             )
 
-            // THE eye. Enormous, and the whole reason for the design.
+            // THE eye. Enormous, and the whole reason for the design. Sat a touch higher than it
+            // used to and a shade smaller, because the face below it had nowhere to go: the nose
+            // bridge started at hy+2 and the eyeball reached hy+17, so a brown stroke ran straight
+            // out of the middle of his pupil.
             val ex = hx
-            val ey = hy - 2f
-            scope.drawCircle(Color.White, radius = 19f, center = Offset(ex, ey))
-            scope.drawCircle(ThreadColor, radius = 19f, center = Offset(ex, ey), style = StitchedStroke)
-            scope.drawCircle(Color(0xFFB8892E), radius = 11f, center = Offset(ex, ey))
-            scope.drawCircle(ThreadColor, radius = 5.5f, center = Offset(ex, ey))
+            val ey = hy - 6f
+            scope.drawCircle(Color.White, radius = 17f, center = Offset(ex, ey))
+            scope.drawCircle(ThreadColor, radius = 17f, center = Offset(ex, ey), style = StitchedStroke)
+            scope.drawCircle(Color(0xFFB8892E), radius = 10f, center = Offset(ex, ey))
+            scope.drawCircle(ThreadColor, radius = 5f, center = Offset(ex, ey))
             // Catchlight, so it reads as wet rather than as a painted disc
-            scope.drawCircle(Color.White, radius = 3f, center = Offset(ex - 5f, ey - 6f))
+            scope.drawCircle(Color.White, radius = 3f, center = Offset(ex - 5f, ey - 5f))
 
-            // Flat broad nose below the eye, and flared nostrils
+            // Flat broad nose, clear of the eyeball's bottom edge at hy+11. A ridge across rather
+            // than a bridge down — there is no room for a bridge under an eye that size, and the
+            // one that was there ran through the eye rather than under it.
             scope.drawLine(
-                skinDark, Offset(hx, hy + 2f), Offset(hx, hy + 11f),
+                skinDark, Offset(hx - 6f, hy + 15f), Offset(hx + 6f, hy + 15f),
                 strokeWidth = 4f, cap = StrokeCap.Round
             )
-            listOf(-5f, 5f).forEach { dx ->
-                scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(hx + dx, hy + 12f))
+            listOf(-7f, 7f).forEach { dx ->
+                scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(hx + dx, hy + 16f))
             }
 
             // The snarl, with two tusks coming up out of the lower jaw
             val mouth = Path().apply {
-                moveTo(hx - 16f, hy + 17f)
-                quadraticTo(hx, hy + 23f, hx + 16f, hy + 16f)
-                quadraticTo(hx, hy + 14f, hx - 16f, hy + 17f)
+                moveTo(hx - 16f, hy + 24f)
+                quadraticTo(hx, hy + 30f, hx + 16f, hy + 23f)
+                quadraticTo(hx, hy + 21f, hx - 16f, hy + 24f)
                 close()
             }
             drawStitchedFill(scope, mouth, Color(0xFF3A2622))
             listOf(-9f, 9f).forEach { dx ->
                 val tusk = Path().apply {
-                    moveTo(hx + dx - 3f, hy + 19f)
-                    lineTo(hx + dx + 3f, hy + 19f)
-                    lineTo(hx + dx, hy + 10f)
+                    moveTo(hx + dx - 3f, hy + 26f)
+                    lineTo(hx + dx + 3f, hy + 26f)
+                    lineTo(hx + dx, hy + 18f)
                     close()
                 }
                 drawStitchedFill(scope, tusk, Color(0xFFE7DCC4))

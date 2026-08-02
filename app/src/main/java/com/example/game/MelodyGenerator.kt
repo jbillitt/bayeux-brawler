@@ -23,23 +23,75 @@ private fun rhythmPatterns(spec: SongSpec): List<List<Float>> {
             listOf(0.5f, 1f, 0.5f, 0.5f, 1f, 0.5f)
         )
     }
+    // Doublets and triplets against the prevailing beat, and the odd run. Without them a bar can
+    // only ever be a handful of shapes, which is why one tune ends up sounding like the last one
+    // however different its mode and ground are. A triplet in 4/4 is three notes in the time of
+    // two; a doublet in 6/8 is two in the time of three — each is the borrowed division of the
+    // other metre, and they are the cheapest thing that makes a phrase sound composed.
+    //
+    // But NOT in every song, or the borrowed divisions become the new sameness. Roughly two songs
+    // in five have this vocabulary at all; the rest keep the plain metre and are told apart by it.
+    val borrowed = usesBorrowedDivisions(spec)
     return when (spec.beatsPerBar) {
         6 -> listOf(  // 6/8, beat = quaver, strong {0,3}
             listOf(3f, 3f), listOf(2f, 1f, 3f), listOf(3f, 2f, 1f),
             listOf(1f, 1f, 1f, 3f), listOf(2f, 1f, 2f, 1f)
+        ) + if (!borrowed) emptyList() else listOf(
+            listOf(1.5f, 1.5f, 3f),                       // doublet, then the compound beat
+            listOf(3f, 1.5f, 1.5f),                       // ...and the other way round
+            listOf(1f, 1f, 1f, 1f, 1f, 1f),               // a run right through the bar
+            listOf(0.5f, 0.5f, 0.5f, 0.5f, 1f, 3f)        // four quick, then broad
         )
         3 -> listOf(  // 3/4 minuet
             listOf(1f, 1f, 1f), listOf(1.5f, 0.5f, 1f), listOf(1f, 0.5f, 0.5f, 1f), listOf(2f, 1f)
+        ) + if (!borrowed) emptyList() else listOf(
+            listOf(1f / 3f, 1f / 3f, 1f / 3f, 1f, 1f),    // triplet on the first beat
+            listOf(1f, 1f / 3f, 1f / 3f, 1f / 3f, 1f),    // and on the second
+            listOf(0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f)    // a run of six
         )
         else -> listOf( // 4/4 broad
             listOf(2f, 2f), listOf(2f, 1f, 1f), listOf(1f, 1f, 2f), listOf(3f, 1f), listOf(1f, 1f, 1f, 1f)
+        ) + if (!borrowed) emptyList() else listOf(
+            listOf(2f / 3f, 2f / 3f, 2f / 3f, 1f, 1f),    // triplet across the first two beats
+            listOf(1f, 1f, 2f / 3f, 2f / 3f, 2f / 3f),    // ...and across the last two
+            listOf(0.5f, 0.5f, 0.5f, 0.5f, 2f),           // a run of four into a long note
+            listOf(2f, 0.5f, 0.5f, 0.5f, 0.5f),           // long note, then the run out of it
+            listOf(1.5f, 0.5f, 1.5f, 0.5f)                // dotted, twice — a limping gait
         )
     }
+}
+
+/**
+ * Does this song borrow the other metre's divisions — triplets in a duple bar, doublets in a
+ * compound one — and take the quick runs?
+ *
+ * Per song, off the seed, so it is a trait of the piece rather than something that happens to
+ * every piece. Applying a new vocabulary to all of them only moves where the sameness lives.
+ */
+private fun usesBorrowedDivisions(spec: SongSpec): Boolean =
+    Random(spec.seed xor 0x3B9ACA07L).nextFloat() < 0.42f
+
+/**
+ * How readily this song's harper breaks a long note into a stepwise run. Two songs in five never
+ * do it at all; the rest range from occasional to habitual. Same reasoning as above — the point is
+ * that runs are a thing SOME tunes do.
+ */
+private fun runAppetite(spec: SongSpec): Float {
+    val r = Random(spec.seed xor 0x1F123BB5L)
+    return if (r.nextFloat() < 0.4f) 0f else 0.25f + r.nextFloat() * 0.45f
 }
 
 private fun strongBeats(beatsPerBar: Int): Set<Float> = when (beatsPerBar) {
     6 -> setOf(0f, 3f); 3 -> setOf(0f); else -> setOf(0f, 2f)
 }
+
+/**
+ * Is this offset a strong beat? Compared with a tolerance rather than by equality, because a bar
+ * containing a triplet arrives at its second strong beat via 2/3 + 2/3 + 2/3 and lands on
+ * 2.0000002 — which is not 2f, so the whole downbeat would quietly stop being a downbeat.
+ */
+private fun isStrong(beatsPerBar: Int, beat: Float): Boolean =
+    strongBeats(beatsPerBar).any { kotlin.math.abs(it - beat) < 0.02f }
 
 // Melody register: keep degrees within [7, 16] approximately D4-A5 for finals 45-52.
 private const val DEG_LO = 7
@@ -84,7 +136,6 @@ private fun generateStrain(
         val barStart = bar * bpb
         val isCadBar = bar == 3 || bar == 7
         var beat = 0f
-        val strong = strongBeats(spec.beatsPerBar)
         val noteCount = rhythm.size
         for ((i, dur) in rhythm.withIndex()) {
             val degree: Int
@@ -107,7 +158,7 @@ private fun generateStrain(
                 }
             } else if (bar == 0 && i <= 1 && spec.family == Family.TINTAGEL) {
                 degree = if (i == 0) base else base + 3   // final, then the rising 4th/5th gesture
-            } else if (strong.contains(beat)) {
+            } else if (isStrong(spec.beatsPerBar, beat)) {
                 degree = nearestChordDegree(spec, bar, targets[bar] + rng.nextInt(-1, 2))
             } else {
                 val toward = targets[bar]
@@ -128,7 +179,14 @@ private fun toNotes(spec: SongSpec, raw: List<Pair<Float, Pair<Float, Int>>>, st
     raw.map { (beat, dn) ->
         val (dur, degree) = dn
         val midi = if (degree == FICTA) spec.finalMidi + 12 - 1 else degreeToMidi(spec, degree)
-        val vel = if (strongBeats(spec.beatsPerBar).contains(beat % spec.beatsPerBar)) 1.0f else 0.85f
+        // Velocity ceiling by what the song is FOR. A brawl leans on the beat; a coronation is
+        // played by someone being paid to be tasteful. Same shape, different weight of hand.
+        val ceiling = when (spec.family) {
+            Family.BRAWL -> 1.0f
+            Family.THRONE -> 0.72f
+            else -> 0.9f
+        }
+        val vel = if (isStrong(spec.beatsPerBar, beat % spec.beatsPerBar)) ceiling else ceiling * 0.82f
         NoteEvent(strainStartBeat + beat, dur, midi, vel)
     }
 
@@ -154,10 +212,28 @@ private fun ornament(spec: SongSpec, notes: List<NoteEvent>, rng: Random): List<
                 out.add(NoteEvent(n.startBeat + g, n.durBeats - g, n.midi, n.velocity))
             }
         } else if (divide) {
-            val half = n.durBeats / 2f
-            val step = degreeToMidi(spec, nearestDegreeFor(spec, n.midi) + Integer.signum(next.midi - n.midi))
-            out.add(NoteEvent(n.startBeat, half, n.midi, n.velocity))
-            out.add(NoteEvent(n.startBeat + half, half, step, n.velocity * 0.9f))
+            // A run rather than a plain division, some of the time: four stepwise notes walking
+            // toward wherever the next note is. Divisions in two are what the piece already did to
+            // every long note, and doing only that is a large part of why the tunes ran together.
+            // Stepwise by construction — no interval wider than a second inside a run.
+            val gapDegrees = nearestDegreeFor(spec, next.midi) - nearestDegreeFor(spec, n.midi)
+            if (rng.nextFloat() < runAppetite(spec) && kotlin.math.abs(gapDegrees) >= 2) {
+                val stepDir = Integer.signum(gapDegrees)
+                val startDeg = nearestDegreeFor(spec, n.midi)
+                val each = n.durBeats / 4f
+                for (k in 0 until 4) {
+                    out.add(NoteEvent(
+                        n.startBeat + k * each, each,
+                        degreeToMidi(spec, startDeg + stepDir * k),
+                        n.velocity * (1f - 0.06f * k)
+                    ))
+                }
+            } else {
+                val half = n.durBeats / 2f
+                val step = degreeToMidi(spec, nearestDegreeFor(spec, n.midi) + Integer.signum(next.midi - n.midi))
+                out.add(NoteEvent(n.startBeat, half, n.midi, n.velocity))
+                out.add(NoteEvent(n.startBeat + half, half, step, n.velocity * 0.9f))
+            }
         } else out.add(n)
     }
     return out

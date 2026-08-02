@@ -397,6 +397,54 @@ class RegressionGuardTest {
     }
 
     @Test
+    fun `no chord in any mode on any ground contains a tritone against its root`() {
+        // The discordant twang. "The degree four steps up" is a fifth in most modes on most
+        // degrees, and six semitones — a tritone — on vii in ionian and on iv in phrygian, which
+        // the grounds visit constantly. Held under a drone and rolled across a harp it is the
+        // noise Joshua could hear.
+        Mode.values().forEach { mode ->
+            val spec = SongSpec(
+                seed = 1L, family = Family.GREENSLEEVES, mode = mode, finalMidi = 50,
+                beatsPerBar = 4, secondsPerBeat = 0.5f, bpm = 120,
+                ground = List(8) { GroundBar(it) }, totalBars = 8,
+                ornamentDensity = 0.2f, moods = emptyList()
+            )
+            (0..6).forEach { degree ->
+                val chord = groundChordMidis(spec, degree)
+                assertFalse(
+                    "$mode on degree $degree strums a tritone: $chord",
+                    chord.any { (it - chord[0]) % 12 == 6 }
+                )
+                val strum = strumDegrees(spec, degree, listOf(0, 2, 4, 7, 9, 11))
+                val root = degreeToMidi(spec, degree)
+                strum.forEach { step ->
+                    assertFalse(
+                        "$mode on degree $degree rolls a tritone at step $step",
+                        (degreeToMidi(spec, degree + step) - root).mod(12) == 6
+                    )
+                }
+                assertTrue("a strum needs at least a root and a third", strum.size >= 3)
+            }
+        }
+    }
+
+    @Test
+    fun `borrowed divisions and runs are a trait of some songs, not of all of them`() {
+        // Adding triplets and runs to every tune only moves where the sameness lives. Each is
+        // rolled once per song off its seed, so a run of songs is a mix of plain and florid.
+        fun spec(seed: Long) = SongSpec(
+            seed = seed, family = Family.GREENSLEEVES, mode = Mode.DORIAN, finalMidi = 50,
+            beatsPerBar = 4, secondsPerBeat = 0.5f, bpm = 120,
+            ground = List(8) { GroundBar(0) }, totalBars = 16,
+            ornamentDensity = 0.3f, moods = emptyList()
+        )
+        // Melody generation is deterministic per seed, so "some do and some don't" is checkable.
+        val noteCounts = (1L..40L).map { generateSong(spec(it), melodyRng(it)).melody.size }
+        assertTrue("every song generated the same number of notes — nothing varies",
+            noteCounts.toSet().size > 5)
+    }
+
+    @Test
     fun `twins are rarer than a plain follower and rarer still is the triple`() {
         val random = kotlin.random.Random(7)
         val twinRate = (0 until 4000).count { rollFollowerCopies(random) == 2 } / 4000f

@@ -645,11 +645,14 @@ fun harpStrumEvents(spec: SongSpec): List<NoteEvent> {
         // the rest of them.
         val big = bar % 8 == 7 || (placement == StrumPlacement.PHRASE_START && bar % 8 == 0)
         val g = spec.ground[bar % 8].bassDegree
-        val degrees = when {
+        // Any step that comes out a tritone above the root is dropped rather than rolled — see
+        // strumDegrees. On vii in ionian and iv in phrygian that is the fifth AND the twelfth, and
+        // two poisoned strings out of six is the "weird discordant noise".
+        val degrees = strumDegrees(spec, g, when {
             big && wide -> listOf(0, 2, 4, 7, 9, 11)
             big -> listOf(0, 2, 4, 7, 9)
             else -> listOf(0, 2, 4, 7)
-        }
+        })
         // Cadential strums sit late in the bar; announcing ones sit on the downbeat.
         val start = when (placement) {
             StrumPlacement.PHRASE_END -> bar * bpb + bpb - (if (big) 1.5f else 1f)

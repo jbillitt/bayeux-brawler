@@ -170,6 +170,22 @@ class RegressionGuardTest {
     }
 
     @Test
+    fun `a late siege garrison is armed better than an early one`() {
+        // The garrison has to keep up with a player who is stacking armour, or a deep siege turns
+        // into a walk. Crossbows go through what bows stopped scratching.
+        fun crossbowsIn(level: Int, wallSize: Int = 8): Int {
+            val every = parapetCrossbowEvery(level)
+            return (0 until wallSize).count { every != Int.MAX_VALUE && it % every == 0 }
+        }
+        assertEquals("an early wall is all bows", 0, crossbowsIn(10))
+        assertTrue("from 25 some of the wall carries crossbows", crossbowsIn(25) > 0)
+        assertTrue(
+            "and a deep siege carries more of them than a mid one",
+            crossbowsIn(45) > crossbowsIn(25)
+        )
+    }
+
+    @Test
     fun `a Blemmya wears nothing that would hide the face on his chest`() {
         val blemmya = EnemyFactory.createArchetype(EnemyArchetype.BLEMMYA, 0, level = 40)
         // He has no head, so a helm would float. And a kite shield covers the whole torso, which

@@ -689,6 +689,15 @@ data class FighterState(
     var tongueExtend: Float = 0f,
     /** Seconds left of being crunched in a frog's mouth: too big to swallow, too held to fight. */
     var beingChewedSecs: Float = 0f,
+    /**
+     * Where a siege defender is posted. He leaves it to deal with something that got in behind the
+     * wall, and walks back to it afterwards rather than wandering off and leaving the gate open.
+     * NaN means "no post" — everyone who is not a garrison defender.
+     */
+    var stationX: Float = Float.NaN,
+    /** Watchdog bookkeeping: how long this fighter has sat in the gate arch without taking a hit. */
+    var gateWedgeSecs: Float = 0f,
+    var gateWedgeHp: Float = -1f,
     /** Who the cyclops has picked up. He holds one man at a time and eats him. */
     var devouringId: FighterId? = null,
     /** 0..1 through the meal: 0 lifting him off the ground, 1 finished. Drives the animation. */

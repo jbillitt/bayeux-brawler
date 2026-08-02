@@ -99,6 +99,17 @@ internal fun createLilGuyDart(
 /** One throw every this many seconds, per Lil Guy on your back. Steady, not a coin flip. */
 internal const val LIL_GUY_THROW_SECONDS = 1.4f
 
+/**
+ * Every Nth man on the parapet carries a crossbow instead of a bow, so the garrison keeps up with
+ * a player who is stacking armour. Bows the whole way early; from 25 every third; from 45 every
+ * other. [Int.MAX_VALUE] means "nobody" — the modulo at the call site then never matches.
+ */
+internal fun parapetCrossbowEvery(level: Int): Int = when {
+    level >= 45 -> 2
+    level >= 25 -> 3
+    else -> Int.MAX_VALUE
+}
+
 internal fun rollFollowerCopies(random: Random = Random.Default): Int =
     if (random.nextFloat() < 0.05f) 2 else 1   // 0.15 → 0.06 → 0.05; tripling carries the rarity now
 
@@ -389,6 +400,16 @@ class GameViewModel : ViewModel() {
         const val SIEGE_WAKE_RADIUS_PX = 220f
         /** Where the castle gate stands. Matches BattlegroundContent.siegeObjects. */
         const val SIEGE_GATE_X = 1800f
+        /** How far inside the gate a tunnel comes up. Just through the door, not at the back. */
+        const val DIGGER_INSIDE_GATE_PX = 120f
+        /** Close enough to his post to count as standing on it again. */
+        const val SIEGE_STATION_SLACK_PX = 25f
+        /** Half the gate arch, for the wedge watchdog. Matches the gate object's 120px width. */
+        const val SIEGE_ARCH_HALF_WIDTH_PX = 60f
+        /** Sat in the arch this long without taking a hit, and something is stuck. */
+        const val SIEGE_WEDGE_SECS = 6f
+        /** Nothing reachable for this long, and the garrison is sent out so the battle can end. */
+        const val SIEGE_STALL_SECS = 8f
 
         // The Gaping Frog. Reach is long on purpose — the whole threat is that it does not have
         // to close with your line to start eating it.
@@ -997,12 +1018,18 @@ class GameViewModel : ViewModel() {
                 val defenderArmour = GameData.ARMOR_PIECES
                     .filter { it.id in listOf("armor_coif", "armor_gauntlets", "armor_boots") }
                     .take(if (state.level >= 50) 2 else if (state.level >= 30) 1 else 0)
+                val crossbowEvery = parapetCrossbowEvery(state.level)
                 val wall = List(parapetCount) { index ->
                     EnemyFactory.createArchetype(EnemyArchetype.WALL_ARCHER, index, state.level).apply {
                         elevated = true
                         posX = 1850f + index * 90f
                         targetX = posX
+                        stationX = posX
                         extraArmors = defenderArmour
+                        if (crossbowEvery != Int.MAX_VALUE && index % crossbowEvery == 0) {
+                            GameData.WEAPON_HEADS.firstOrNull { it.id == "head_crossbow" }
+                                ?.let { weaponHead = it }
+                        }
                     }
                 }
                 val queue = List(queueCount) { index ->
@@ -1013,17 +1040,38 @@ class GameViewModel : ViewModel() {
                         // Deep sieges send the marginalia out of the gate: a snail squatting in the
                         // gateway that has to be chewed through, and dog-heads down the column.
                         state.level >= 40 && index == 3 -> EnemyArchetype.REBEL_SNAIL
+                        // A second snail deeper in from 55: the late gateway is genuinely plugged.
+                        state.level >= 55 && index == 7 -> EnemyArchetype.REBEL_SNAIL
+                        // The garrison's own maul men from 35, to meet a player who arrives with a
+                        // horde rather than alone.
+                        state.level >= 35 && index % 5 == 4 -> EnemyArchetype.HAMMER_SERJEANT
                         state.level >= 30 && index % 4 == 3 -> EnemyArchetype.CYNOCEPHALUS
                         else -> EnemyArchetype.HOUSECARL
                     }
                     EnemyFactory.createArchetype(type, parapetCount + index, state.level).apply {
                         posX = 2050f + index * 65f
                         targetX = posX
+                        stationX = posX
                         isCombatInactive = true
                         // The snail's shell is its armour; strapping mail to it is nonsense.
                         if (type != EnemyArchetype.REBEL_SNAIL) extraArmors = defenderArmour
                     }
                 }
+                // The sally: from level 40 a few foxes are posted in the gateway itself, and they
+                // come OUT to meet the player rather than waiting behind the door. The gate shuts
+                // behind them, so killing them does not open the way in.
+                val sally = if (state.level >= 40) {
+                    List(2 + siegeOrdinal.coerceAtMost(2)) { index ->
+                        EnemyFactory.createArchetype(
+                            EnemyArchetype.CRAFTY_FOX, parapetCount + queueCount + index, state.level
+                        ).apply {
+                            posX = SIEGE_GATE_X - 60f - index * 55f
+                            targetX = posX
+                            // Deliberately NOT stationed and NOT queued: they are out in the open
+                            // from the first frame and fight like any other field enemy.
+                        }
+                    }
+                } else emptyList()
                 val gateHp = 360f + state.level * 22f
                 siegeState = SiegeState(
                     gateHp = gateHp,
@@ -1032,7 +1080,7 @@ class GameViewModel : ViewModel() {
                     queuedFighterIds = queue.map { it.id }.toSet(),
                     siegeLadders = state.hasSiegeLadders
                 )
-                (wall + queue).toMutableList()
+                (wall + queue + sally).toMutableList()
             }
             else -> List(enemiesCount) { index ->
                 EnemyFactory.randomSaxon(index, state.level, contentRandom)
@@ -1851,6 +1899,8 @@ class GameViewModel : ViewModel() {
                     }
                 }
             }
+            tickGarrisonStations(siege, dt)
+            tickSiegeWatchdogs(siege, dt)
         }
 
         // Nobody leaves the field for good. Knockbacks — the barrow-king's hurl, a ballista spear,
@@ -1944,7 +1994,16 @@ class GameViewModel : ViewModel() {
                     val rear = enemies
                         .filter { !it.isPlayer && !it.isDead && !it.isDying }
                         .maxByOrNull { it.posX }?.posX ?: (player.posX + 400f)
-                    digger.posX = rear + 90f
+                    val siegeNow = _uiState.value.siegeState
+                    digger.posX = if (siegeNow != null && !siegeNow.gateBroken) {
+                        // In a siege he comes up JUST inside the gate, not at the back of the
+                        // relief column. Surfacing behind the rearmost man put him the whole depth
+                        // of the map away, alone, where the column ate him one at a time and the
+                        // player never saw the tunnel pay off.
+                        SIEGE_GATE_X + DIGGER_INSIDE_GATE_PX
+                    } else {
+                        rear + 90f
+                    }
                     digger.targetX = digger.posX
                     digger.facingRight = false
                     _uiState.value.hillState?.let { digger.terrainLiftY = HillField.liftAt(digger.posX, it) }
@@ -2546,6 +2605,108 @@ class GameViewModel : ViewModel() {
             }
         }
     }
+
+    /**
+     * A garrison defender who left his post to deal with something goes back to it.
+     *
+     * A sapper coming up inside the gate pulls men off the door; without this they simply stayed
+     * where the fight ended, which left the gateway unmanned and turned a tunnel into a permanent
+     * hole in the defence. Once nothing hostile is near him, the gate is still shut and the player
+     * is not on the wall, he walks back to [FighterState.stationX] and stands down again.
+     */
+    private fun tickGarrisonStations(siege: SiegeState, dt: Float) {
+        if (siege.gateBroken) return
+        val player = _playerState.value ?: return
+        if (player.elevated || player.climbState != ClimbState.NONE) return
+        val enemies = _enemiesState.value
+        val hostiles = enemies.filter { it.isPlayer && !it.isDead && !it.isDying } + player
+
+        enemies.forEach { def ->
+            if (def.stationX.isNaN() || def.isDead || def.isDying || def.elevated) return@forEach
+            if (def.isCombatInactive) return@forEach
+            // Still something to fight? Then he is not going anywhere.
+            if (hostiles.any { abs(it.posX - def.posX) <= SIEGE_WAKE_RADIUS_PX }) return@forEach
+
+            val gap = def.stationX - def.posX
+            if (abs(gap) <= SIEGE_STATION_SLACK_PX) {
+                def.posX = def.stationX
+                def.targetX = def.stationX
+                def.isCombatInactive = true
+                def.isAttacking = false
+                def.swingProgress = 0f
+            } else {
+                val dir = if (gap > 0f) 1f else -1f
+                def.posX += dir * def.moveSpeed * dt
+                def.facingRight = dir > 0f
+                def.animFrame += dt * 9f
+            }
+        }
+    }
+
+    /**
+     * Watchdogs for the two ways a siege used to become unfinishable, checked once a second rather
+     * than every frame because both are "has nothing changed for a long time" questions.
+     *
+     * 1. Nobody reachable. Every living defender is behind a shut gate and out of the player's
+     *    reach, and the player is not moving on the gate either — the battle can no longer
+     *    progress. Waking the garrison hands him something to fight.
+     * 2. A man wedged in the gateway. The gate arch is narrow and a big body (a snail, the trojan
+     *    horse) could end up straddling it with fighters on both sides unable to path past. If
+     *    anyone sits inside the arch for [SIEGE_WEDGE_SECS] without his health changing, he is
+     *    nudged clear of it.
+     */
+    private fun tickSiegeWatchdogs(siege: SiegeState, dt: Float) {
+        siegeWatchdogTimer += dt
+        if (siegeWatchdogTimer < 1f) return
+        siegeWatchdogTimer = 0f
+
+        val player = _playerState.value ?: return
+        val enemies = _enemiesState.value
+        val living = enemies.filter { !it.isPlayer && !it.isDead && !it.isDying }
+        if (living.isEmpty()) return
+
+        // 1. Deadlock: everyone left is parked behind a shut gate.
+        val anyReachable = living.any { foe ->
+            !foe.isCombatInactive && (foe.elevated == player.elevated || player.isRanged) &&
+                abs(foe.posX - player.posX) <= player.reachPixels * 1.5f
+        }
+        if (!siege.gateBroken && !anyReachable && living.all { it.isCombatInactive || it.posX >= SIEGE_GATE_X }) {
+            siegeStalledSecs += 1f
+            if (siegeStalledSecs >= SIEGE_STALL_SECS) {
+                siegeStalledSecs = 0f
+                living.forEach { if (it.isCombatInactive) it.isCombatInactive = false }
+                addPopup("THE GARRISON SALLIES!", SIEGE_GATE_X, 130f, Color(0xFF9E3624))
+            }
+        } else {
+            siegeStalledSecs = 0f
+        }
+
+        // 2. Anyone wedged in the gate arch, on either side.
+        (living + player).forEach { f ->
+            if (abs(f.posX - SIEGE_GATE_X) > SIEGE_ARCH_HALF_WIDTH_PX) {
+                f.gateWedgeSecs = 0f
+                f.gateWedgeHp = f.hp
+                return@forEach
+            }
+            if (f.hp != f.gateWedgeHp) {
+                f.gateWedgeSecs = 0f
+                f.gateWedgeHp = f.hp
+                return@forEach
+            }
+            f.gateWedgeSecs += 1f
+            if (f.gateWedgeSecs >= SIEGE_WEDGE_SECS) {
+                f.gateWedgeSecs = 0f
+                // Push him out the side he came from, so the arch clears without teleporting him
+                // through a wall he has not broken.
+                val out = if (f.isPlayer) -1f else 1f
+                f.posX = SIEGE_GATE_X + out * (SIEGE_ARCH_HALF_WIDTH_PX + 30f)
+                f.targetX = f.posX
+            }
+        }
+    }
+
+    private var siegeWatchdogTimer = 0f
+    private var siegeStalledSecs = 0f
 
     /**
      * Polyphemus eating. He reaches down, picks a man off the field, and spends

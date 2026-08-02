@@ -863,7 +863,10 @@ class ArtScreenshotTest {
      */
     @Test
     fun newMounts() {
-        fun rider(id: String, ox: Boolean = false, mule: Boolean = false, bear: Boolean = false) =
+        fun rider(
+            id: String, ox: Boolean = false, mule: Boolean = false, bear: Boolean = false,
+            sleigh: Boolean = false
+        ) =
             FighterState(
                 id = FighterId(id), name = id, isPlayer = true, maxHp = 100f, hp = 100f,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
@@ -873,7 +876,7 @@ class ArtScreenshotTest {
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
                 posX = 150f, targetX = 150f, facingRight = true, size = 1.0f,
                 hairColor = Color(0xFF5A442E), hairStyle = "short",
-                isMounted = true, isOx = ox, isMule = mule, isBear = bear,
+                isMounted = true, isOx = ox, isMule = mule, isBear = bear, isSleigh = sleigh,
                 animFrame = 1.2f // mid-stride, so the walk cycle is visible
             )
 
@@ -881,6 +884,7 @@ class ArtScreenshotTest {
             rider("war_ox", ox = true),
             rider("pack_mule", mule = true),
             rider("war_bear", bear = true),
+            rider("dog_sleigh", sleigh = true),
             rider("horse_for_comparison")
         )
 

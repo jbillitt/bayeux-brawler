@@ -24,8 +24,10 @@ internal const val STILTS_LIFT_PX = 90f
  */
 internal fun gnashOpening(fighter: FighterState): Float {
     if (fighter.isDead || fighter.isDying) return 0f
+    // Wide when the animal is actually biting something — the jaw has to be visibly OPEN, not
+    // merely working. A shallow chew is what it does the rest of the time.
     val rate = if (fighter.isAttacking) 16f else 5f
-    val depth = if (fighter.isAttacking) 9f else 3.5f
+    val depth = if (fighter.isAttacking) 15f else 3.5f
     return depth * (0.5f + 0.5f * sin(fighter.animFrame * rate))
 }
 internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState, withStirrups: Boolean = true) {
@@ -431,6 +433,88 @@ internal fun drawWarBear(scope: DrawScope, cx: Float, cy: Float, fighter: Fighte
         moveTo(cx + 78f, cy + 56f)
         quadraticTo(cx + 46f, cy + 70f, cx + 2f, cy + 72f)
     }, Color(0xFF382F22), style = Stroke(width = 3f))
+}
+
+/**
+ * Skoll and Hati: two great hounds in harness, dragging a sledge with the rider standing on it.
+ *
+ * Drawn back-to-front on purpose — sledge, traces, then the dogs — so the harness lines run behind
+ * the animals rather than across them. Both dogs work their jaws off the same [gnashOpening] the
+ * bear and Buster use; the near one is drawn a shade lighter so they read as two animals rather
+ * than as one four-legged blur.
+ */
+internal fun drawDogSleigh(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+    val anim = fighter.animFrame
+    val running = !fighter.isDead && !fighter.isDying
+    val legSwing = if (running) sin(anim * 1.4f) * 26f else 0f
+    val wood = Color(0xFF7A5B33)
+    val darkWood = Color(0xFF4E3A20)
+    val gnash = gnashOpening(fighter)
+    // Ground is cy + 158 for a size-1 figure — the deck and the dogs' feet are pinned to it, or
+    // the rider stands underneath his own sledge and the team runs through the air above him.
+    val ground = cy + 158f
+
+    // The sledge: a low deck on a curved runner, and the rider standing on the deck.
+    val deck = Path().apply {
+        moveTo(cx - 46f, ground - 14f)
+        lineTo(cx + 18f, ground - 14f)
+        lineTo(cx + 18f, ground)
+        lineTo(cx - 46f, ground)
+        close()
+    }
+    drawStitchedFill(scope, deck, wood)
+    scope.drawStitchedOutline(deck, ThreadColor)
+    // A rail at the back to hold on to, and the runner curling up at the front.
+    scope.drawLine(darkWood, Offset(cx - 46f, ground - 14f), Offset(cx - 54f, ground - 52f), strokeWidth = 5f, cap = StrokeCap.Round)
+    scope.drawLine(darkWood, Offset(cx - 54f, ground - 52f), Offset(cx - 34f, ground - 46f), strokeWidth = 4f, cap = StrokeCap.Round)
+    val runner = Path().apply {
+        moveTo(cx - 56f, ground + 8f)
+        lineTo(cx + 22f, ground + 8f)
+        quadraticTo(cx + 42f, ground + 8f, cx + 40f, ground - 8f)
+    }
+    scope.drawPath(runner, darkWood, style = Stroke(width = 6f, cap = StrokeCap.Round))
+    scope.drawLine(darkWood, Offset(cx - 34f, ground), Offset(cx - 34f, ground + 8f), strokeWidth = 4f)
+    scope.drawLine(darkWood, Offset(cx + 6f, ground), Offset(cx + 6f, ground + 8f), strokeWidth = 4f)
+
+    // Traces, from the sledge's nose out to each dog's shoulder.
+    listOf(88f, 140f).forEach { reach ->
+        scope.drawLine(
+            Color(0xFF5A4632), Offset(cx + 22f, ground - 12f),
+            Offset(cx + reach, ground - 34f), strokeWidth = 3f
+        )
+    }
+
+    // Two hounds abreast, the far one drawn first so the near one overlaps it. Deliberately NOT
+    // Buster's colouring — a pale wolf-grey and a rust red, so the pack in front of a sledge never
+    // reads as the wardog who runs loose beside you.
+    listOf(
+        Triple(88f, Color(0xFF8A8478), -legSwing),
+        Triple(140f, Color(0xFF9E5B32), legSwing)
+    ).forEach { (leadX, coat, swing) ->
+        val dx = cx + leadX
+        val body = Path().apply {
+            addOval(androidx.compose.ui.geometry.Rect(dx - 30f, ground - 46f, dx + 26f, ground - 18f))
+        }
+        drawStitchedFill(scope, body, coat)
+        scope.drawStitchedOutline(body, ThreadColor)
+        drawBeastLegs(scope, dx - 2f, cy, swing, coat, Color(0xFF241C15),
+            topY = ground - 20f, length = 20f, width = 8f, spread = 22f)
+        // Tail up, the way a running dog carries it.
+        scope.drawLine(coat, Offset(dx - 28f, ground - 40f), Offset(dx - 44f, ground - 56f), strokeWidth = 5f, cap = StrokeCap.Round)
+        // Head and pricked ear.
+        scope.drawLine(coat, Offset(dx + 18f, ground - 42f), Offset(dx + 34f, ground - 48f), strokeWidth = 16f, cap = StrokeCap.Round)
+        scope.drawLine(ThreadColor, Offset(dx + 28f, ground - 56f), Offset(dx + 24f, ground - 66f), strokeWidth = 5f, cap = StrokeCap.Round)
+        // The jaw. Upper and lower drawn apart by the gnash, so a biting dog is visibly open-mouthed.
+        scope.drawLine(coat, Offset(dx + 34f, ground - 50f), Offset(dx + 52f, ground - 52f), strokeWidth = 8f, cap = StrokeCap.Round)
+        scope.drawLine(coat, Offset(dx + 34f, ground - 44f + gnash * 0.3f), Offset(dx + 50f, ground - 44f + gnash), strokeWidth = 6f, cap = StrokeCap.Round)
+        for (i in 0..2) {
+            val tx = dx + 38f + i * 4.5f
+            scope.drawLine(Color(0xFFEFE6D4), Offset(tx, ground - 49f), Offset(tx + 1f, ground - 45f), strokeWidth = 2f)
+            scope.drawLine(Color(0xFFEFE6D4), Offset(tx, ground - 44f + gnash), Offset(tx + 1f, ground - 48f + gnash), strokeWidth = 2f)
+        }
+        scope.drawCircle(Color(0xFFEFE6D4), radius = 2.5f, center = Offset(dx + 30f, ground - 51f))
+        scope.drawCircle(ThreadColor, radius = 1.3f, center = Offset(dx + 30f, ground - 51f))
+    }
 }
 
     // The great wooden decoy: planked angular horse on a wheeled platform

@@ -71,6 +71,7 @@ enum class Ancillary(
     MONK("anc_monk", "Brother Tuck", "Monk", "Blesses you with holy incense. Smells heavenly.", hpBoost = 30f, speedBoost = 0f, color = Color(0xFF5E4B3C)),
     FANATIC("anc_fanatic", "Mad Boris", "Berserker", "Gone berserk. Charges the enemy naked with a huge axe, howling, and does not stop.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFC02020)),
     CHARIOT("anc_mount_chariot", "The Rattler", "Chariot", "A sturdy wooden chariot. Faster and deadlier than a horse, but hard to turn.", hpBoost = 100f, speedBoost = 0.6f, color = Color(0xFF8B5A2B)),
+    DOG_SLEIGH("anc_mount_sleigh", "Skoll and Hati", "Dog Sleigh", "Two enormous hounds in harness, dragging a sledge with you on it. Quick over anything, entirely uninterested in your instructions, and they bite whoever they pass.", hpBoost = 70f, speedBoost = 0.65f, color = Color(0xFF6B5B4A)),
     STILTS("anc_mount_stilts", "Long Shanks", "Stilts", "Tall wooden poles. Elevates you above the common rabble.", hpBoost = -10f, speedBoost = -0.2f, color = Color(0xFFC2A077)),
     HAG("anc_hag", "Old Maud", "Hag", "Spawns in your backline, lobs mud, applies slow and minor poison.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF384033)),
     TROJAN_HORSE("anc_trojan_horse", "The Great Horse", "Decoy", "Rolls forward, absorbs hits, spawns 3 knights on death.", hpBoost = 200f, speedBoost = 0f, color = Color(0xFF8B5A2B)),
@@ -97,7 +98,7 @@ enum class Ancillary(
 /** Mounts, by ancillary id. Their hp/speed stats apply only when the mount is actually ridden. */
 val MOUNT_ANCILLARY_IDS = setOf(
     "anc_mount_horse", "anc_mount_chariot", "anc_mount_stilts",
-    "anc_mount_ox", "anc_mount_mule", "anc_mount_bear"
+    "anc_mount_ox", "anc_mount_mule", "anc_mount_bear", "anc_mount_sleigh"
 )
 
 /**
@@ -116,7 +117,7 @@ val OBJECT_ANCILLARY_IDS = MOUNT_ANCILLARY_IDS + "anc_trojan_horse"
  */
 val NON_PARADE_ANCILLARIES = setOf(
     Ancillary.WARHORSE, Ancillary.CHARIOT, Ancillary.STILTS,
-    Ancillary.WAR_OX, Ancillary.PACK_MULE, Ancillary.WAR_BEAR,
+    Ancillary.WAR_OX, Ancillary.PACK_MULE, Ancillary.WAR_BEAR, Ancillary.DOG_SLEIGH,
     Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG,
     Ancillary.TROJAN_HORSE, Ancillary.PLAGUE_PEASANT, Ancillary.GREASER,
     Ancillary.FIREBRAND, Ancillary.BEEKEEPER,
@@ -717,6 +718,8 @@ data class FighterState(
     var isOx: Boolean = false,
     var isMule: Boolean = false,
     var isBear: Boolean = false,
+    /** Two hounds in harness dragging a sledge. They bite what they run past — see CombatEngine. */
+    var isSleigh: Boolean = false,
     /** The straps are off. Grimm fights on his own account — see CombatEngine.bearMaul. */
     var isBearUnmuzzled: Boolean = false,
     /**

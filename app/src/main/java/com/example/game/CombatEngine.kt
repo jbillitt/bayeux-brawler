@@ -164,6 +164,11 @@ class CombatEngine(private val ctx: BattleContext) {
         const val BEAR_FRIENDLY_FIRE_CHANCE = 0.18f
         const val BEAR_FRIENDLY_FIRE_PX = 110f
 
+        // The sledge dogs. Two rolls per swing rather than one big one, so the pair reads as a
+        // pair — and much smaller than the bear's maul, because there is no downside to pay for.
+        const val SLEIGH_BITE_CHANCE = 0.4f
+        const val SLEIGH_BITE_DAMAGE = 16f
+
         /** Extra block chance per metre a shielded foe stands beyond LONG_MELEE_REACH of the swing. */
         const val REAR_RANK_BLOCK_PER_M = 0.04f
         /** Nobody blocks everything, however braced and however far down the shaft they stand. */
@@ -1044,9 +1049,36 @@ class CombatEngine(private val ctx: BattleContext) {
         }
     }
 
+    /**
+     * Skoll and Hati in harness. Two dogs at the front of a sledge cannot be steered and are not
+     * trying to help: they take whatever the sledge brings them alongside. Two bites, each its own
+     * roll, and no friendly fire — they are in front, and everything in front is the enemy.
+     */
+    private fun sleighBite(rider: FighterState, target: FighterState) {
+        if (!rider.isSleigh) return
+        var bit = 0
+        repeat(2) {
+            if (Random.nextFloat() < SLEIGH_BITE_CHANCE) {
+                applyFlatDamage(
+                    SLEIGH_BITE_DAMAGE, target, isPlayerSource = rider.isPlayer,
+                    attacker = rider, weaponNote = "a sledge-dog's teeth"
+                )
+                bit++
+            }
+        }
+        if (bit == 0) return
+        ctx.popup(if (bit > 1) "BOTH HOUNDS!" else "THE HOUNDS BITE!", target.posX, 160f, Color(0xFF6B5B4A))
+        MedievalAudioSynth.playDogBark("sleigh_${rider.id.raw}")
+        // Dogs at the legs put men down. Never the rider of anything — a horseman is above them.
+        if (!target.isMounted) target.tryCrumple(1.1f, chance = 0.25f)
+    }
+
     // One swing sweeping through all gathered targets, with piercing falloff
     private fun meleeSweep(attacker: FighterState, targets: List<FighterState>, dmgScale: Float, isPiercingWeapon: Boolean) {
-        targets.firstOrNull { !it.isDead && !it.isDying }?.let { bearMaul(attacker, it) }
+        targets.firstOrNull { !it.isDead && !it.isDying }?.let {
+            bearMaul(attacker, it)
+            sleighBite(attacker, it)
+        }
         // This swing's own miss roll. A dual-wielder throws two of these, and one going wide says
         // nothing about the other hand.
         if (attacker.isDualWielding && Random.nextFloat() < DUAL_WIELD_MISS_CHANCE) {

@@ -220,6 +220,8 @@ object TapestryRenderer {
                         drawPackMule(this, cx, cy, fighter)
                     } else if (fighter.isBear) {
                         drawWarBear(this, cx, cy, fighter)
+                    } else if (fighter.isSleigh) {
+                        drawDogSleigh(this, cx, cy, fighter)
                     } else {
                         drawHorse(this, cx, cy, fighter)
                     }
@@ -292,6 +294,9 @@ object TapestryRenderer {
                     else if (fighter.isMounted && fighter.isOx) -38f
                     else if (fighter.isMounted && fighter.isMule) -22f
                     else if (fighter.isMounted && fighter.isBear) -40f
+                    // He STANDS on the sledge deck rather than sitting astride anything, so the
+                    // lift is the deck's own height and no more.
+                    else if (fighter.isMounted && fighter.isSleigh) -8f
                     else if (fighter.isMounted) -35f else 0f
                 val adjustedMountOffsetY = mountOffsetY / effectiveSize
                 withTransform({ translate(0f, adjustedMountOffsetY) }) {

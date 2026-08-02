@@ -1036,13 +1036,14 @@ class GameViewModel : ViewModel() {
             shieldUpgrades = state.shieldUpgrades,
             brawlerUpgrades = state.brawlerUpgrades,
             shieldHp = shieldHpFor(state.shield, state.shieldUpgrades),
-            isMounted = currentMount == Ancillary.WARHORSE || (currentMount == Ancillary.CHARIOT && !chariotCollapses) || currentMount == Ancillary.STILTS || currentMount == Ancillary.WAR_OX || currentMount == Ancillary.PACK_MULE || currentMount == Ancillary.WAR_BEAR || state.isThroneMode,
-            mountHp = if (state.isThroneMode) 100f else if (currentMount == Ancillary.STILTS) 40f else if (currentMount == Ancillary.CHARIOT && !chariotCollapses) 100f else if (currentMount == Ancillary.WARHORSE) 80f else if (currentMount == Ancillary.WAR_OX) 140f else if (currentMount == Ancillary.PACK_MULE) 40f else if (currentMount == Ancillary.WAR_BEAR) 100f else 0f,
+            isMounted = currentMount == Ancillary.WARHORSE || (currentMount == Ancillary.CHARIOT && !chariotCollapses) || currentMount == Ancillary.STILTS || currentMount == Ancillary.WAR_OX || currentMount == Ancillary.PACK_MULE || currentMount == Ancillary.WAR_BEAR || currentMount == Ancillary.DOG_SLEIGH || state.isThroneMode,
+            mountHp = if (state.isThroneMode) 100f else if (currentMount == Ancillary.STILTS) 40f else if (currentMount == Ancillary.CHARIOT && !chariotCollapses) 100f else if (currentMount == Ancillary.WARHORSE) 80f else if (currentMount == Ancillary.WAR_OX) 140f else if (currentMount == Ancillary.PACK_MULE) 40f else if (currentMount == Ancillary.WAR_BEAR) 100f else if (currentMount == Ancillary.DOG_SLEIGH) 70f else 0f,
             isChariot = currentMount == Ancillary.CHARIOT && !chariotCollapses,
             isStilts = !state.isThroneMode && currentMount == Ancillary.STILTS,
             isOx = !state.isThroneMode && currentMount == Ancillary.WAR_OX,
             isMule = !state.isThroneMode && currentMount == Ancillary.PACK_MULE,
             isBear = !state.isThroneMode && currentMount == Ancillary.WAR_BEAR,
+            isSleigh = !state.isThroneMode && currentMount == Ancillary.DOG_SLEIGH,
             isBearUnmuzzled = state.hasUnmuzzledBear,
             isLord = state.isThroneMode,
             hasSilkenGarments = state.hasSilkenGarments,
@@ -2633,6 +2634,13 @@ class GameViewModel : ViewModel() {
         // `enemies` — his bodies are the copies held in unlockedAncillaries.
         repeat(_uiState.value.unlockedAncillaries.count { it == Ancillary.MONK }) { i ->
             if (Random.nextFloat() < dt * 0.1f) MedievalAudioSynth.playMonkChant("monk#$i")
+        }
+        // Skoll and Hati are dogs too, and they are in harness rather than on the field, so they
+        // are not in `enemies` either. Two voice keys so the pair can bark over each other.
+        if (player.isSleigh && !player.isDead) {
+            repeat(2) { i ->
+                if (Random.nextFloat() < dt * 0.12f) MedievalAudioSynth.playDogBark("sleigh#$i")
+            }
         }
 
         // Softlock watchdog: if no hp anywhere (fighters, mounts, shields, gate) has moved for a

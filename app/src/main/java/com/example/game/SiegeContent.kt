@@ -163,7 +163,10 @@ enum class BossType(val level: Int, val latinName: String) {
     // The giants of Albion, out of the deep legend at the map's edge. Their retinue is a pack
     // of cynocephali — the dog-headed men of the mappae mundi.
     GOG(40, "GOG GIGAS"),
-    MAGOG(50, "MAGOG GIGAS")
+    MAGOG(50, "MAGOG GIGAS"),
+    // The third and worst of the giants: one eye, and the habit Homer gave him. He does not kill
+    // your retinue so much as work through it.
+    POLYPHEMUS(60, "POLYPHEMUS MONOCULUS")
 }
 
 /**
@@ -196,7 +199,7 @@ object BossSchedule {
     /** The five originals, in the order the campaign first meets them. */
     private val CYCLE = listOf(
         BossType.HAROLD_GODWINSON, BossType.HARALD_HARDRADA, BossType.WILLIAM_THE_BASTARD,
-        BossType.GOG, BossType.MAGOG
+        BossType.GOG, BossType.MAGOG, BossType.POLYPHEMUS
     )
 
     /**
@@ -212,7 +215,9 @@ object BossSchedule {
         level == 30 -> BossType.WILLIAM_THE_BASTARD
         level == 40 -> BossType.GOG
         level == 50 -> BossType.MAGOG
-        level > 50 && level % 10 == 0 -> CYCLE[((level - 60) / 10) % CYCLE.size]
+        level == 60 -> BossType.POLYPHEMUS
+        // The undead rotation starts after the last original, so 70 is the first one to get back up.
+        level > 60 && level % 10 == 0 -> CYCLE[((level - 70) / 10) % CYCLE.size]
         else -> null
     }
 

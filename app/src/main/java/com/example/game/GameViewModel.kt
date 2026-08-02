@@ -396,6 +396,13 @@ class GameViewModel : ViewModel() {
         const val FROG_TONGUE_OUT_SECS = 0.35f
         const val FROG_TONGUE_IN_SECS = 0.55f
         const val FROG_TONGUE_COOLDOWN_SECS = 2.6f
+
+        // Polyphemus. The meal is long on purpose: it is a window in which he is not hitting
+        // anyone else, so losing a man to it is survivable if you use the time.
+        const val CYCLOPS_GRAB_REACH_PX = 110f
+        const val CYCLOPS_MEAL_SECS = 4.5f
+        const val CYCLOPS_MEAL_COOLDOWN_SECS = 3f
+        const val CYCLOPS_BITES = 3
         const val SAPPER_BURROW_SECONDS = 4.2f
         const val MOLEMAN_BURROW_SECONDS = 2.8f
         /** How long the descent itself takes — he sinks at the dig site, throwing up spoil. */
@@ -1899,6 +1906,7 @@ class GameViewModel : ViewModel() {
         }
 
         tickGiantFrogs(dt)
+        tickCyclops(dt)
 
         // The diggers, under the field. While burrowTimer runs they are parked far off the left
         // edge and flagged inactive, which is what keeps them untargetable, unhittable and out of
@@ -2539,6 +2547,80 @@ class GameViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Polyphemus eating. He reaches down, picks a man off the field, and spends
+     * [CYCLOPS_MEAL_SECS] working through him while the rest of your retinue hits his ankles.
+     *
+     * The held man is lifted clear of the ground (visualOffsetY) and cannot act. Killing the
+     * cyclops mid-meal drops him, alive, on whatever health he had left — so there is a reason to
+     * hurry rather than a scripted death you can only watch.
+     */
+    private fun tickCyclops(dt: Float) {
+        val enemies = _enemiesState.value
+        val player = _playerState.value ?: return
+        enemies.forEach { giant ->
+            if (giant.bossType != BossType.POLYPHEMUS) return@forEach
+
+            val meal = giant.devouringId?.let { id -> enemies.firstOrNull { it.id == id } }
+
+            // Dead giants let go. So do giants whose meal died or vanished.
+            if (giant.isDead || giant.isDying || (giant.devouringId != null && meal == null)) {
+                meal?.let { it.visualOffsetY = 0f }
+                giant.devouringId = null
+                giant.devourProgress = 0f
+                return@forEach
+            }
+
+            if (meal == null) {
+                if (giant.attackCooldown > 0f) return@forEach
+                // Never the player, and never the trojan horse — the same rule the frog uses. He
+                // eats your FOLLOWERS, which is what makes a big retinue a liability against him.
+                val grabbable = enemies.filter {
+                    it.isPlayer && it !== player && !it.isDead && !it.isDying &&
+                        !it.isInanimate && !it.isLord && it.beingChewedSecs <= 0f &&
+                        abs(it.posX - giant.posX) <= CYCLOPS_GRAB_REACH_PX * giant.size
+                }.minByOrNull { abs(it.posX - giant.posX) } ?: return@forEach
+                giant.devouringId = grabbable.id
+                giant.devourProgress = 0f
+                grabbable.crumpleDuration = 0f
+                addPopup("SEIZED!", grabbable.posX, 170f, Color(0xFF9E3624))
+                MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                return@forEach
+            }
+
+            giant.devourProgress += dt / CYCLOPS_MEAL_SECS
+            // Held up beside his head, kicking. Dragged along if the giant moves.
+            meal.posX = giant.posX + (if (giant.facingRight) 1f else -1f) * 55f * giant.size
+            meal.visualOffsetY = -150f * giant.size * kotlin.math.min(1f, giant.devourProgress * 4f)
+            meal.crumpleDuration = maxOf(meal.crumpleDuration, 0.2f)
+            meal.isAttacking = false
+
+            // Bitten in stages rather than drained smoothly, so you can see him being eaten.
+            val bite = (giant.devourProgress * CYCLOPS_BITES).toInt()
+            if (bite > (giant.devourProgress - dt / CYCLOPS_MEAL_SECS).let { (it * CYCLOPS_BITES).toInt() }) {
+                engine.applyFlatDamage(meal.maxHp / CYCLOPS_BITES * 1.35f, meal, isPlayerSource = false)
+                MedievalAudioSynth.playSound(SoundType.CRUNCH)
+                repeat(6) {
+                    particleBuffer.add(BloodParticle(
+                        x = meal.posX + Random.nextInt(-14, 15),
+                        y = 120f + Random.nextInt(-10, 11),
+                        vx = Random.nextFloat() * 120f - 60f,
+                        vy = -80f - Random.nextFloat() * 70f,
+                        color = Color(0xFF8B0000)
+                    ))
+                }
+            }
+
+            if (giant.devourProgress >= 1f || meal.isDead || meal.isDying) {
+                meal.visualOffsetY = 0f
+                giant.devouringId = null
+                giant.devourProgress = 0f
+                giant.attackCooldown = CYCLOPS_MEAL_COOLDOWN_SECS
+                giant.hp = (giant.hp + meal.maxHp * 0.5f).coerceAtMost(giant.maxHp)
+            }
+        }
+    }
+
     /** The instant the tongue lands. Decides swallow, crunch, or a flat smack for the player. */
     private fun onTongueContact(frog: FighterState, victim: FighterState) {
         MedievalAudioSynth.playSound(SoundType.CRUNCH)
@@ -2653,7 +2735,8 @@ class GameViewModel : ViewModel() {
                 BossType.HAROLD_GODWINSON -> add(Milestone.BEAT_HAROLD)
                 BossType.HARALD_HARDRADA -> { add(Milestone.BEAT_HARDRADA); add(Milestone.HARDRADA_BRAIDS) }
                 BossType.WILLIAM_THE_BASTARD -> add(Milestone.BEAT_WILLIAM)
-                BossType.GOG, BossType.MAGOG -> add(Milestone.BEAT_GIANT)
+                // Polyphemus is a giant of Albion as far as the chronicle is concerned.
+                BossType.GOG, BossType.MAGOG, BossType.POLYPHEMUS -> add(Milestone.BEAT_GIANT)
                 null -> {}
             }
             if (bossBeaten != null && usedFistsOnly) add(Milestone.BARE_FISTED_BOSS)

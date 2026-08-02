@@ -492,6 +492,62 @@ class ArtScreenshotTest {
     }
 
     /**
+     * Polyphemus beside Gog, and the meal in progress: a follower lifted off the ground the way
+     * tickCyclops holds him.
+     *
+     * Eyeball that the cyclops has ONE eye and no second eyebrow across it, that he is visibly
+     * bigger than the other giant, and that the held man reads as held rather than as floating.
+     */
+    @Test
+    fun cyclopsAndHisMeal() {
+        // createBoss parks them at 1250f, which is off the side of a harness canvas.
+        val cyclops = EnemyFactory.createBoss(BossType.POLYPHEMUS, 60).copy(posX = 150f, targetX = 150f)
+        val gog = EnemyFactory.createBoss(BossType.GOG, 40).copy(posX = 130f, targetX = 130f)
+        val held = FighterState(
+            id = FighterId("held"), name = "Wretched Aldwin", isPlayer = true, maxHp = 60f, hp = 22f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 150f, targetX = 150f, facingRight = false, size = 1f,
+            hairColor = Color(0xFF3A2E24), hairStyle = "short",
+            crumpleDuration = 0.5f, visualOffsetY = -150f
+        )
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                Row {
+                    // Scale is low because these two are drawn 3x a man's height and the head runs
+                    // off the top of the canvas otherwise. This row is for the SILHOUETTE — that
+                    // the cyclops is obviously the bigger of the two giants.
+                    Canvas(modifier = Modifier.width(190.dp).height(200.dp)) {
+                        TapestryRenderer.drawCharacter(this, cyclops, scale = 0.26f, isBattleActive = true)
+                    }
+                    Canvas(modifier = Modifier.width(150.dp).height(200.dp)) {
+                        TapestryRenderer.drawCharacter(this, gog, scale = 0.26f, isBattleActive = true)
+                    }
+                }
+                Row {
+                    // Same fighter shrunk to man-size so the FACE is legible: one eye, one brow,
+                    // no second eyebrow drawn across it. At giant scale the head is 30px and the
+                    // eye cannot be checked at all.
+                    Canvas(modifier = Modifier.width(200.dp).height(420.dp)) {
+                        TapestryRenderer.drawCharacter(
+                            this,
+                            cyclops.copy(size = 1f, posX = 95f, facingRight = true),
+                            scale = 1.9f, isBattleActive = true
+                        )
+                    }
+                    Canvas(modifier = Modifier.width(150.dp).height(420.dp)) {
+                        TapestryRenderer.drawCharacter(this, held, scale = 1.1f, isBattleActive = true)
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/cyclops.png")
+    }
+
+    /**
      * The three new armour layers, each stacked over chainmail the way they are worn in play, plus
      * all three at once. Asserts nothing — eyeball that greaves sit on the shins, spaulders cap the
      * shoulders without floating, and the surcoat hangs over the mail without hiding it.

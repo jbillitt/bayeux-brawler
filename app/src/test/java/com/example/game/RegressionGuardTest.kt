@@ -3,6 +3,7 @@ package com.example.game
 import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -148,6 +149,24 @@ class RegressionGuardTest {
             "bomb reach ${bomb.reach} should sit near the javelin's ${javelin.reach}, not the bow's ${longbow.reach}",
             bomb.reach < longbow.reach && bomb.reach <= javelin.reach
         )
+    }
+
+    @Test
+    fun `the cyclops is the biggest thing on the field and keeps his own boss level`() {
+        val cyclops = EnemyFactory.createBoss(BossType.POLYPHEMUS, 60)
+        val gog = EnemyFactory.createBoss(BossType.GOG, 40)
+        assertTrue(
+            "the cyclops should tower over the other giants: ${cyclops.size} vs ${gog.size}",
+            cyclops.size > gog.size
+        )
+        assertEquals("level 60 is his", BossType.POLYPHEMUS, BossSchedule.forLevel(60))
+        // The originals must keep theirs — inserting him at 60 pushed the undead rotation back one
+        // step, and getting that wrong silently reshuffles every boss past 60.
+        assertEquals(BossType.GOG, BossSchedule.forLevel(40))
+        assertEquals(BossType.MAGOG, BossSchedule.forLevel(50))
+        (70..120 step 10).forEach {
+            assertNotNull("level $it must still field a boss", BossSchedule.forLevel(it))
+        }
     }
 
     @Test

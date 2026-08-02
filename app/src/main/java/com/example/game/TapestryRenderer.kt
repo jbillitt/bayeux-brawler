@@ -36,6 +36,13 @@ object TapestryRenderer {
      * deliberately separate numbers — the tongue must look like it arrives just past its victim.
      */
     private const val FROG_TONGUE_DRAW_PX = 210f
+
+    /**
+     * The cyclops head is drawn this much larger than a man's, about the neck join. The design is
+     * Harryhausen's rather than Homer's, and the whole read of it is that the head — and the eye in
+     * it — is too big for the body carrying it.
+     */
+    private const val CYCLOPS_HEAD_SCALE = 1.85f
     private val PlagueBubo = Color(0xFF6B4A1F) // dark swollen lumps against the yellow
 
     /** The war-priest's habit — monk's undyed wool, so he reads as a churchman among soldiers. */
@@ -547,6 +554,7 @@ object TapestryRenderer {
             BossType.WILLIAM_THE_BASTARD -> Color(0xFF7A1B18) // Norman blood-red
             BossType.GOG -> Color(0xFF4A5D23)                 // moss and bog
             BossType.MAGOG -> Color(0xFF384048)               // storm-slate
+            BossType.POLYPHEMUS -> Color(0xFF6B4A2A)          // untanned hide, still hairy
         }
         val cloak = Path().apply {
             moveTo(cx - 26f, cy + 8f)
@@ -572,7 +580,7 @@ object TapestryRenderer {
             BossType.WILLIAM_THE_BASTARD ->
                 // Golden hem befitting the would-be king
                 scope.drawLine(Color(0xFFD6A420), Offset(cx - 58f, cy + 116f), Offset(cx + 58f, cy + 116f), strokeWidth = 5f)
-            BossType.GOG, BossType.MAGOG ->
+            BossType.GOG, BossType.MAGOG, BossType.POLYPHEMUS ->
                 // A necklace of bleached skulls across the collar
                 listOf(-34f, -12f, 12f, 34f).forEach { dx ->
                     scope.drawCircle(Color(0xFFE7DCC4), 6f, Offset(cx + dx, cy + 16f))
@@ -596,6 +604,7 @@ object TapestryRenderer {
             BossType.WILLIAM_THE_BASTARD -> Color(0xFF9E3624)
             BossType.GOG -> Color(0xFF6E5536)   // raw hide banners
             BossType.MAGOG -> Color(0xFF384033)
+            BossType.POLYPHEMUS -> Color(0xFF7A5A38)
         }
         val banner = Path().apply {
             moveTo(poleX, cy - 80f)
@@ -1068,6 +1077,126 @@ object TapestryRenderer {
      * (pricked/floppy/torn), faceBiteShape = jaw (fangs bared / lolling tongue / underbite).
      * Fur takes the fighter's hairColor so a pack reads as individuals.
      */
+    /**
+     * Polyphemus, after Harryhausen rather than after Homer: a big brutish skull far larger than a
+     * man's, one enormous eye under a shelf of brow, a single horn, pointed animal ears, a flat
+     * broad nose and a snarl with tusks in it.
+     *
+     * A full replacement head like [drawDogHead], drawn inside the same transform so it still pops
+     * off when he is decapitated. Everything is scaled up by [CYCLOPS_HEAD_SCALE] about the neck
+     * join, because the point of the design is that the head is too big for the body.
+     */
+    private fun drawCyclopsHead(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val hx = cx
+        val hy = cy - 25f
+        val skin = skinTone(fighter)
+        val skinDark = androidx.compose.ui.graphics.lerp(skin, Color.Black, 0.28f)
+        val hair = fighter.hairColor
+
+        scope.withTransform({
+            scale(CYCLOPS_HEAD_SCALE, CYCLOPS_HEAD_SCALE, pivot = Offset(hx, hy + 40f))
+        }) {
+            // Thick neck running straight into the jaw — no chin to speak of
+            val neck = Path().apply {
+                moveTo(hx - 15f, hy + 42f); lineTo(hx - 13f, hy + 6f)
+                lineTo(hx + 13f, hy + 6f); lineTo(hx + 15f, hy + 42f); close()
+            }
+            drawStitchedFill(scope, neck, skin)
+            scope.drawStitchedOutline(neck, ThreadColor)
+
+            // Ears: pointed, set low and back, like an animal's
+            listOf(-1f, 1f).forEach { side ->
+                val ear = Path().apply {
+                    moveTo(hx + side * 26f, hy - 6f)
+                    lineTo(hx + side * 42f, hy - 20f)
+                    lineTo(hx + side * 30f, hy + 8f)
+                    close()
+                }
+                drawStitchedFill(scope, ear, skinDark)
+                scope.drawStitchedOutline(ear, ThreadColor)
+            }
+
+            // The skull: broad and square across the brow, narrowing to a heavy jaw
+            val skull = Path().apply {
+                moveTo(hx - 28f, hy + 6f)
+                quadraticTo(hx - 34f, hy - 26f, hx - 16f, hy - 38f)
+                quadraticTo(hx, hy - 46f, hx + 16f, hy - 38f)
+                quadraticTo(hx + 34f, hy - 26f, hx + 28f, hy + 6f)
+                quadraticTo(hx + 20f, hy + 22f, hx, hy + 24f)
+                quadraticTo(hx - 20f, hy + 22f, hx - 28f, hy + 6f)
+                close()
+            }
+            drawStitchedFill(scope, skull, skin)
+            scope.drawStitchedOutline(skull, ThreadColor)
+
+            // The horn. One, off-centre, the way a real growth would be.
+            val horn = Path().apply {
+                moveTo(hx - 6f, hy - 40f)
+                lineTo(hx + 8f, hy - 40f)
+                quadraticTo(hx + 8f, hy - 60f, hx - 2f, hy - 68f)
+                quadraticTo(hx - 4f, hy - 52f, hx - 6f, hy - 40f)
+                close()
+            }
+            drawStitchedFill(scope, horn, Color(0xFFD8CBA8))
+            scope.drawStitchedOutline(horn, ThreadColor)
+
+            // Shaggy hair round the back and sides of the skull
+            for (i in 0..5) {
+                val t = i / 5f
+                val sx = hx - 30f + t * 60f
+                scope.drawLine(
+                    hair, Offset(sx, hy - 34f + kotlin.math.abs(t - 0.5f) * 14f),
+                    Offset(sx - 6f, hy - 48f + kotlin.math.abs(t - 0.5f) * 16f),
+                    strokeWidth = 5f, cap = StrokeCap.Round
+                )
+            }
+
+            // The brow: a single heavy shelf right across the face
+            scope.drawLine(
+                skinDark, Offset(hx - 24f, hy - 18f), Offset(hx + 24f, hy - 18f),
+                strokeWidth = 11f, cap = StrokeCap.Round
+            )
+
+            // THE eye. Enormous, and the whole reason for the design.
+            val ex = hx
+            val ey = hy - 2f
+            scope.drawCircle(Color.White, radius = 19f, center = Offset(ex, ey))
+            scope.drawCircle(ThreadColor, radius = 19f, center = Offset(ex, ey), style = StitchedStroke)
+            scope.drawCircle(Color(0xFFB8892E), radius = 11f, center = Offset(ex, ey))
+            scope.drawCircle(ThreadColor, radius = 5.5f, center = Offset(ex, ey))
+            // Catchlight, so it reads as wet rather than as a painted disc
+            scope.drawCircle(Color.White, radius = 3f, center = Offset(ex - 5f, ey - 6f))
+
+            // Flat broad nose below the eye, and flared nostrils
+            scope.drawLine(
+                skinDark, Offset(hx, hy + 2f), Offset(hx, hy + 11f),
+                strokeWidth = 4f, cap = StrokeCap.Round
+            )
+            listOf(-5f, 5f).forEach { dx ->
+                scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(hx + dx, hy + 12f))
+            }
+
+            // The snarl, with two tusks coming up out of the lower jaw
+            val mouth = Path().apply {
+                moveTo(hx - 16f, hy + 17f)
+                quadraticTo(hx, hy + 23f, hx + 16f, hy + 16f)
+                quadraticTo(hx, hy + 14f, hx - 16f, hy + 17f)
+                close()
+            }
+            drawStitchedFill(scope, mouth, Color(0xFF3A2622))
+            listOf(-9f, 9f).forEach { dx ->
+                val tusk = Path().apply {
+                    moveTo(hx + dx - 3f, hy + 19f)
+                    lineTo(hx + dx + 3f, hy + 19f)
+                    lineTo(hx + dx, hy + 10f)
+                    close()
+                }
+                drawStitchedFill(scope, tusk, Color(0xFFE7DCC4))
+                scope.drawStitchedOutline(tusk, ThreadColor)
+            }
+        }
+    }
+
     private fun drawDogHead(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val hx = cx
         val hy = cy - 25f
@@ -1284,6 +1413,11 @@ object TapestryRenderer {
             val hx = cx
             val hy = cy - 25f
 
+            if (fighter.bossType == BossType.POLYPHEMUS) {
+                drawCyclopsHead(scope, cx, cy, fighter)
+                return@withTransform
+            }
+
             if (fighter.archetype == EnemyArchetype.CYNOCEPHALUS) {
                 // Dog-headed man of the mappae mundi: full replacement head, still inside the
                 // decapitation/squash transform so his head pops off like anyone else's.
@@ -1387,7 +1521,22 @@ object TapestryRenderer {
         val hasLongBeard = !fighter.isPlayer && faceRng.nextFloat() < 0.15f
 
         // 3. Embroidered eye and facial features
-        if (hasEyepatch) {
+        if (fighter.bossType == BossType.POLYPHEMUS) {
+            // One eye, and it is enormous — the whole silhouette hangs on it, so it is drawn
+            // instead of the ordinary almond rather than on top of it, and centred on the brow
+            // where two eyes would otherwise sit.
+            val ex = hx + 4.5f
+            val ey = hy + 3f
+            scope.drawCircle(Color.White, radius = 9f, center = Offset(ex, ey))
+            scope.drawCircle(ThreadColor, radius = 9f, center = Offset(ex, ey), style = Stroke(width = 2f))
+            scope.drawCircle(Color(0xFF8A5E38), radius = 5f, center = Offset(ex, ey))
+            scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(ex, ey))
+            // A single heavy brow right across it
+            scope.drawLine(
+                ThreadColor, Offset(ex - 11f, ey - 10f), Offset(ex + 11f, ey - 8f),
+                strokeWidth = 5f, cap = StrokeCap.Round
+            )
+        } else if (hasEyepatch) {
             // Draw black eyepatch over the eye
             scope.drawPath(Path().apply {
                 moveTo(hx - 1f, hy + 2f)
@@ -1418,8 +1567,9 @@ object TapestryRenderer {
             }
         }
         
-        // Eyebrow variants: bushy, angry-slanted, raised, or the classic blocky line
-        when ((kotlin.math.abs(fighter.id.raw.hashCode()) / 13) % 4) {
+        // Eyebrow variants: bushy, angry-slanted, raised, or the classic blocky line.
+        // The cyclops brought his own single brow above; a second one lands across his eye.
+        if (fighter.bossType != BossType.POLYPHEMUS) when ((kotlin.math.abs(fighter.id.raw.hashCode()) / 13) % 4) {
             0 -> scope.drawLine(ThreadColor, Offset(hx - 1f, hy - 1f), Offset(hx + 9f, hy + 1f), strokeWidth = 4f, cap = StrokeCap.Round) // bushy
             1 -> scope.drawLine(ThreadColor, Offset(hx, hy + 2f), Offset(hx + 8f, hy - 2f), strokeWidth = 2.5f, cap = StrokeCap.Round) // angry slant
             2 -> scope.drawLine(ThreadColor, Offset(hx, hy - 3f), Offset(hx + 8f, hy - 2f), strokeWidth = 2.5f, cap = StrokeCap.Round) // raised/surprised

@@ -683,6 +683,10 @@ data class FighterState(
     var tongueExtend: Float = 0f,
     /** Seconds left of being crunched in a frog's mouth: too big to swallow, too held to fight. */
     var beingChewedSecs: Float = 0f,
+    /** Who the cyclops has picked up. He holds one man at a time and eats him. */
+    var devouringId: FighterId? = null,
+    /** 0..1 through the meal: 0 lifting him off the ground, 1 finished. Drives the animation. */
+    var devourProgress: Float = 0f,
     var visualOffsetY: Float = 0f,
     // Hill terrain: how far this fighter is lifted by the slope under his feet (negative = higher
     // up the hill). 0 in every non-hill battle, so the high-ground damage bonus and the render

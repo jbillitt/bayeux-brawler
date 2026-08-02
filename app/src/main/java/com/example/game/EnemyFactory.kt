@@ -215,14 +215,18 @@ object EnemyFactory {
     }
 
     fun createBoss(type: BossType, level: Int, tier: BossTier = BossTier.LIVING): FighterState {
-        val isGiant = type == BossType.GOG || type == BossType.MAGOG
+        // Polyphemus counts as a giant everywhere the giants are special-cased — stump, woad, bare
+        // head — and then goes further on size and hit points.
+        val isGiant = type == BossType.GOG || type == BossType.MAGOG || type == BossType.POLYPHEMUS
+        val isCyclops = type == BossType.POLYPHEMUS
         val base = when (type) {
             BossType.HAROLD_GODWINSON -> createArchetype(EnemyArchetype.HOUSECARL, 90, level)
-            BossType.HARALD_HARDRADA, BossType.GOG, BossType.MAGOG -> createArchetype(EnemyArchetype.BERSERKER, 90, level)
+            BossType.HARALD_HARDRADA, BossType.GOG, BossType.MAGOG, BossType.POLYPHEMUS ->
+                createArchetype(EnemyArchetype.BERSERKER, 90, level)
             BossType.WILLIAM_THE_BASTARD -> createArchetype(EnemyArchetype.NORMAN_LOYALIST, 90, level)
         }
         val scaling = 1f + (level - type.level).coerceAtLeast(0) * 0.05f
-        val hp = baseHpFor(level) * (if (isGiant) 13f else 9.5f) * scaling * tier.hpScale
+        val hp = baseHpFor(level) * (if (isCyclops) 17f else if (isGiant) 13f else 9.5f) * scaling * tier.hpScale
         return base.copy(
             id = FighterId("boss_${type.name.lowercase()}" + if (tier == BossTier.LIVING) "" else "_${tier.name.lowercase()}"),
             name = tier.titlePrefix + when (type) {
@@ -231,9 +235,10 @@ object EnemyFactory {
                 BossType.WILLIAM_THE_BASTARD -> "William the Bastard"
                 BossType.GOG -> "Gog, Giant of Albion"
                 BossType.MAGOG -> "Magog, Giant of Albion"
+                BossType.POLYPHEMUS -> "Polyphemus, the One-Eyed"
             },
             maxHp = hp, hp = hp,
-            size = if (isGiant) 2.3f else if (type == BossType.HARALD_HARDRADA) 1.75f else 1.6f,
+            size = if (isCyclops) 3.1f else if (isGiant) 2.3f else if (type == BossType.HARALD_HARDRADA) 1.75f else 1.6f,
             // The giants swing a whole tree stump capped with a mallet head, bare-headed and woaded.
             weaponHead = if (isGiant) safeHead("head_maul") else base.weaponHead,
             weaponHandle = if (isGiant) safeHandle("handle_stump") else base.weaponHandle,
@@ -248,6 +253,7 @@ object EnemyFactory {
                 tier != BossTier.LIVING -> Color(0xFF9AA88C)
                 type == BossType.GOG -> Color(0xFF4A5D23)
                 type == BossType.MAGOG -> Color(0xFF384048)
+                type == BossType.POLYPHEMUS -> Color(0xFF6B4A2A)
                 else -> base.hairColor
             },
             // Late-run bosses punch through the player's stacked armour: welded lucerne beaks add
@@ -270,8 +276,16 @@ object EnemyFactory {
             BossType.WILLIAM_THE_BASTARD -> EnemyArchetype.NORMAN_LOYALIST
             // The giants march with a pack of dog-headed men
             BossType.GOG, BossType.MAGOG -> EnemyArchetype.CYNOCEPHALUS
+            // The cyclops keeps a flock, and the men who herd it: serjeants with mauls, so the
+            // fight is not simply "stand still and be eaten".
+            BossType.POLYPHEMUS -> EnemyArchetype.HAMMER_SERJEANT
         }
-        val count = if (type == BossType.HARALD_HARDRADA) 8 else if (type == BossType.GOG || type == BossType.MAGOG) 6 else 5
+        val count = when (type) {
+            BossType.HARALD_HARDRADA -> 8
+            BossType.GOG, BossType.MAGOG -> 6
+            BossType.POLYPHEMUS -> 4
+            else -> 5
+        }
         val retinue = List(count) { index ->
             val base = createArchetype(retinueType, index, level)
             val eliteHp = base.maxHp * 1.9f

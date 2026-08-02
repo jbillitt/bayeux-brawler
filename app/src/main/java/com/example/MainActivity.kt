@@ -865,10 +865,18 @@ fun HeaderBar(
         ) {
             Text(
                 text = FlavourText.battleName(MedievalHarpPlayer.gameSeed, uiState.level),
+                // weight(fill = false) makes the title yield: in a Row, unweighted children are
+                // measured FIRST at their intrinsic size, so the weather charges always get their
+                // space and the title takes only what is left over. Without this a long battle
+                // name simply grew and shoved the charges off the end of the band, where they
+                // could be neither seen nor pressed — and they are the only way to spend a relic.
+                modifier = Modifier.weight(1f, fill = false),
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 color = TapestryDark,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             uiState.divineWeathers.forEach { weather ->

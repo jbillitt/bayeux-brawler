@@ -66,6 +66,30 @@ class BattleScreenScreenshotTest {
         setPaused(true)
     }
 
+    /**
+     * The titulus band carrying every weather charge at once. The charges are the only way to
+     * spend a relic, so they must never be pushed off the end of the band by a long battle name —
+     * which is exactly what an unconstrained title Text in the same Row used to do.
+     *
+     * Eyeball the top band: five charges, all fully on screen, none clipped at the right edge.
+     */
+    @Test
+    fun titleNeverCrowdsOutTheWeatherCharges() {
+        val vm = battleInProgress()
+        mutate(vm) {
+            it.copy(
+                divineWeathers = DivineWeather.values().toList(),
+                weatherCooldowns = emptyMap(),
+                isBattleActive = true, battleWon = false, battleLost = false
+            )
+        }
+        composeTestRule.setContent {
+            MainBayeuxGameScreen(viewModel = vm, musicOn = false, onToggleMusic = {})
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/header_weather_charges.png")
+    }
+
     @Test
     fun weatherWashesTheScreenAfterTheCameraHasPanned() {
         val vm = battleInProgress()

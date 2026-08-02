@@ -898,6 +898,36 @@ object TapestryRenderer {
         // Torso outline
         scope.drawStitchedOutline(tunicPath, ThreadColor)
 
+        // The Blemmya's face, which is where his chest would be. Drawn after the tunic outline so
+        // it sits ON him rather than under the cloth, and sized to fill the torso — the whole
+        // silhouette gag is that the face is the body.
+        if (fighter.archetype == EnemyArchetype.BLEMMYA) {
+            val fx = cx
+            val fy = cy + 42f
+            val skin = skinTone(fighter)
+            // A broad bare patch of chest for the face to live on
+            scope.drawCircle(skin, radius = 26f, center = Offset(fx, fy))
+            scope.drawCircle(ThreadColor, radius = 26f, center = Offset(fx, fy), style = StitchedStroke)
+            // Two wide-set eyes up on the collarbones
+            listOf(-11f, 11f).forEach { dx ->
+                scope.drawCircle(Color.White, radius = 6.5f, center = Offset(fx + dx, fy - 9f))
+                scope.drawCircle(ThreadColor, radius = 6.5f, center = Offset(fx + dx, fy - 9f), style = Stroke(width = 1.5f))
+                scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(fx + dx, fy - 9f))
+            }
+            // Heavy brows, because he is not pleased about any of this
+            scope.drawLine(ThreadColor, Offset(fx - 18f, fy - 18f), Offset(fx - 5f, fy - 15f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+            scope.drawLine(ThreadColor, Offset(fx + 18f, fy - 18f), Offset(fx + 5f, fy - 15f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+            // A wide mouth across the belly
+            val mouth = Path().apply {
+                moveTo(fx - 15f, fy + 6f)
+                quadraticTo(fx, fy + 20f, fx + 15f, fy + 6f)
+                quadraticTo(fx, fy + 11f, fx - 15f, fy + 6f)
+                close()
+            }
+            drawStitchedFill(scope, mouth, Color(0xFF3A2622))
+            scope.drawStitchedOutline(mouth, ThreadColor)
+        }
+
         // Textures
         when (fighter.armor.id) {
             "armor_chainmail" -> drawChainmailTexture(scope, cx - 22f, cy + 20f, 44f, 65f)
@@ -1197,6 +1227,109 @@ object TapestryRenderer {
         }
     }
 
+    /** Reynard of the margins: a fox's head on a man's shoulders, sharp muzzle and pricked ears. */
+    private fun drawFoxHead(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val hx = cx
+        val hy = cy - 25f
+        val fur = Color(0xFFB4622A)
+        val furDark = androidx.compose.ui.graphics.lerp(fur, Color.Black, 0.3f)
+        val dir = if (fighter.facingRight) 1f else -1f
+
+        val neck = Path().apply {
+            moveTo(hx - 10f, hy + 40f); lineTo(hx - 8f, hy + 4f)
+            lineTo(hx + 8f, hy + 4f); lineTo(hx + 10f, hy + 40f); close()
+        }
+        drawStitchedFill(scope, neck, fur)
+        scope.drawStitchedOutline(neck, ThreadColor)
+
+        // Tall triangular ears, black-tipped
+        listOf(-1f, 1f).forEach { side ->
+            val ear = Path().apply {
+                moveTo(hx + side * 6f, hy - 14f)
+                lineTo(hx + side * 15f, hy - 34f)
+                lineTo(hx + side * 19f, hy - 10f)
+                close()
+            }
+            drawStitchedFill(scope, ear, fur)
+            scope.drawStitchedOutline(ear, ThreadColor)
+            scope.drawCircle(furDark, radius = 3f, center = Offset(hx + side * 15f, hy - 31f))
+        }
+
+        // Skull plus a long narrow muzzle running forward
+        val skull = Path().apply {
+            moveTo(hx - 15f, hy - 10f)
+            quadraticTo(hx, hy - 20f, hx + 15f, hy - 10f)
+            lineTo(hx + dir * 34f, hy + 6f)
+            lineTo(hx + dir * 32f, hy + 12f)
+            quadraticTo(hx, hy + 18f, hx - 15f, hy + 6f)
+            close()
+        }
+        drawStitchedFill(scope, skull, fur)
+        scope.drawStitchedOutline(skull, ThreadColor)
+
+        // White cheek flash, the fox's own marking
+        scope.drawLine(
+            Color(0xFFEFE6D4), Offset(hx + dir * 6f, hy + 10f), Offset(hx + dir * 28f, hy + 11f),
+            strokeWidth = 5f, cap = StrokeCap.Round
+        )
+        // Black nose on the end of the muzzle, and a narrow cunning eye
+        scope.drawCircle(ThreadColor, radius = 4f, center = Offset(hx + dir * 34f, hy + 7f))
+        scope.drawLine(
+            ThreadColor, Offset(hx + dir * 8f, hy - 4f), Offset(hx + dir * 17f, hy - 1f),
+            strokeWidth = 3.5f, cap = StrokeCap.Round
+        )
+    }
+
+    /** The marginal rabbit that executes knights: long ears, buck teeth, and no sense of scale. */
+    private fun drawRabbitHead(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val hx = cx
+        val hy = cy - 25f
+        val furColor = Color(0xFFD8CBB4)
+        val inner = Color(0xFFD4728A)
+        val dir = if (fighter.facingRight) 1f else -1f
+
+        val neck = Path().apply {
+            moveTo(hx - 9f, hy + 40f); lineTo(hx - 7f, hy + 4f)
+            lineTo(hx + 7f, hy + 4f); lineTo(hx + 9f, hy + 40f); close()
+        }
+        drawStitchedFill(scope, neck, furColor)
+        scope.drawStitchedOutline(neck, ThreadColor)
+
+        // The ears. Absurdly long, one up and one folded, so he reads as a rabbit instantly.
+        val earSpecs = listOf(-8f to -46f, 6f to -40f)
+        earSpecs.forEachIndexed { i, (dx, tipY) ->
+            val lean = if (i == 0) -5f else 9f
+            val ear = Path().apply {
+                moveTo(hx + dx - 5f, hy - 12f)
+                quadraticTo(hx + dx + lean - 7f, hy + tipY / 2f, hx + dx + lean, hy + tipY)
+                quadraticTo(hx + dx + lean + 7f, hy + tipY / 2f, hx + dx + 5f, hy - 10f)
+                close()
+            }
+            drawStitchedFill(scope, ear, furColor)
+            scope.drawStitchedOutline(ear, ThreadColor)
+            scope.drawLine(
+                inner, Offset(hx + dx, hy - 14f), Offset(hx + dx + lean, hy + tipY * 0.75f),
+                strokeWidth = 3f, cap = StrokeCap.Round
+            )
+        }
+
+        // Round skull
+        scope.drawCircle(furColor, radius = 16f, center = Offset(hx, hy + 2f))
+        scope.drawCircle(ThreadColor, radius = 16f, center = Offset(hx, hy + 2f), style = StitchedStroke)
+
+        // Eye: a flat black bead, entirely without mercy
+        scope.drawCircle(ThreadColor, radius = 3.5f, center = Offset(hx + dir * 7f, hy - 2f))
+        // Nose and the two buck teeth under it
+        scope.drawCircle(inner, radius = 3f, center = Offset(hx + dir * 15f, hy + 5f))
+        listOf(-2.5f, 2.5f).forEach { off ->
+            scope.drawLine(
+                Color.White,
+                Offset(hx + dir * 14f + off, hy + 8f), Offset(hx + dir * 14f + off, hy + 15f),
+                strokeWidth = 3f
+            )
+        }
+    }
+
     private fun drawDogHead(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val hx = cx
         val hy = cy - 25f
@@ -1415,6 +1548,21 @@ object TapestryRenderer {
 
             if (fighter.bossType == BossType.POLYPHEMUS) {
                 drawCyclopsHead(scope, cx, cy, fighter)
+                return@withTransform
+            }
+
+            // A Blemmya has no head at all. Not a small head, none — the face is down in his
+            // chest, drawn by drawTorso. Returning here is the whole implementation: no neck, no
+            // skull, and nothing for a helm to sit on.
+            if (fighter.archetype == EnemyArchetype.BLEMMYA) return@withTransform
+
+            if (fighter.archetype == EnemyArchetype.CRAFTY_FOX) {
+                drawFoxHead(scope, cx, cy, fighter)
+                return@withTransform
+            }
+
+            if (fighter.archetype == EnemyArchetype.KILLER_RABBIT) {
+                drawRabbitHead(scope, cx, cy, fighter)
                 return@withTransform
             }
 

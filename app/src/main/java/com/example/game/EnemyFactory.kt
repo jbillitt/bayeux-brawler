@@ -145,6 +145,18 @@ object EnemyFactory {
                 listOf("head_slingshot", "handle_fists", "shield_none", "armor_padded", "helm_none")
             EnemyArchetype.GIANT_FROG -> // the tongue is the weapon; nothing is held
                 listOf("head_bare", "handle_fists", "shield_none", "armor_bare", "helm_none")
+            // No head, so no helm — that is the point of him. He carries a big shield instead,
+            // because the face he has to protect is behind it.
+            EnemyArchetype.BLEMMYA ->
+                // A buckler, not a kite shield: a kite covers the entire torso, and the torso is
+                // where his face is. The one joke he has was hidden behind his own shield.
+                listOf("head_broadsword", "handle_medium", "shield_buckler", "armor_leather", "helm_none")
+            // The margins draw foxes with bows more often than with swords.
+            EnemyArchetype.CRAFTY_FOX ->
+                listOf("head_bow", "handle_fists", "shield_none", "armor_bare", "helm_none")
+            // The rabbit of the margins executes knights, and it does it with an axe.
+            EnemyArchetype.KILLER_RABBIT ->
+                listOf("head_axe", "handle_short", "shield_none", "armor_bare", "helm_none")
             else ->
                 listOf("head_sword", "handle_medium", "shield_buckler", "armor_padded", "helm_none")
         }
@@ -160,6 +172,10 @@ object EnemyFactory {
             EnemyArchetype.HAMMER_SERJEANT -> 1.35f
             EnemyArchetype.OUTRIDER -> 0.9f
             EnemyArchetype.GIANT_FROG -> 1.4f
+            EnemyArchetype.BLEMMYA -> 1.2f
+            EnemyArchetype.CRAFTY_FOX -> 0.85f
+            // Small enough to be funny, fast enough not to be.
+            EnemyArchetype.KILLER_RABBIT -> 0.55f
             else -> 1f
         }
         hp *= when (archetype) {
@@ -173,6 +189,10 @@ object EnemyFactory {
             EnemyArchetype.BOMBARDIER -> 0.7f
             // As much of a wall as the snail: you are meant to lose men to it before it dies.
             EnemyArchetype.GIANT_FROG -> 16f
+            // No head means no headshot and no helm to knock off, so he is tougher than he looks.
+            EnemyArchetype.BLEMMYA -> 1.7f
+            EnemyArchetype.CRAFTY_FOX -> 0.6f
+            EnemyArchetype.KILLER_RABBIT -> 0.35f
             // The marginalia knight's true nightmare: it does not die. It turns up late, by which
             // point the player is fully snowballed, so it needs to be a wall rather than a joke.
             EnemyArchetype.REBEL_SNAIL -> 18f
@@ -193,6 +213,9 @@ object EnemyFactory {
                 EnemyArchetype.OUTRIDER -> "Outrider"
                 EnemyArchetype.BOMBARDIER -> "Bombardier of Cathay"
                 EnemyArchetype.GIANT_FROG -> "The Gaping Frog"
+                EnemyArchetype.BLEMMYA -> "Blemmya of the Chest-Face"
+                EnemyArchetype.CRAFTY_FOX -> "Reynard, Sly and Armed"
+                EnemyArchetype.KILLER_RABBIT -> "The Killer Rabbit"
                 else -> archetype.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
             },
             isPlayer = false,
@@ -208,6 +231,9 @@ object EnemyFactory {
                 EnemyArchetype.GIANT_FROG -> -0.55f
                 EnemyArchetype.OUTRIDER -> 0.55f
                 EnemyArchetype.HAMMER_SERJEANT -> -0.15f
+                EnemyArchetype.CRAFTY_FOX -> 0.3f
+                // It moves the way the marginalia draw it: far too quickly for its size.
+                EnemyArchetype.KILLER_RABBIT -> 0.85f
                 else -> 0f
             },
             level = level, shieldHp = shield.defense * 2f, archetype = archetype
@@ -324,6 +350,10 @@ object EnemyFactory {
                 // Rare, and late. He answers a player who has stopped being one man and become a
                 // horde: a maul that puts followers on their backs, and legs that get behind them.
                 level >= 40 && r < 0.03f -> EnemyArchetype.BOMBARDIER
+                // The margins climb down off the page from 35 and start turning up in the host.
+                level >= 35 && r < 0.07f -> EnemyArchetype.KILLER_RABBIT
+                level >= 35 && r < 0.13f -> EnemyArchetype.CRAFTY_FOX
+                level >= 35 && r < 0.18f -> EnemyArchetype.BLEMMYA
                 level >= 25 && r < 0.10f -> EnemyArchetype.HAMMER_SERJEANT
                 level >= 25 && r < 0.17f -> EnemyArchetype.OUTRIDER
                 level >= 30 && r < 0.05f -> EnemyArchetype.NORMAN_LOYALIST
@@ -430,6 +460,15 @@ object EnemyFactory {
             )
             EnemyArchetype.GIANT_FROG -> listOf(
                 safeHead("head_bare"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
+            )
+            EnemyArchetype.BLEMMYA -> listOf(
+                safeHead("head_broadsword"), safeHandle("handle_medium"), safeShield("shield_buckler"), safeArmor("armor_leather"), safeHelm("helm_none")
+            )
+            EnemyArchetype.CRAFTY_FOX -> listOf(
+                safeHead("head_bow"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
+            )
+            EnemyArchetype.KILLER_RABBIT -> listOf(
+                safeHead("head_axe"), safeHandle("handle_short"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
             )
         }
 

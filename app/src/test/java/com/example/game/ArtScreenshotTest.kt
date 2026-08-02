@@ -548,6 +548,35 @@ class ArtScreenshotTest {
     }
 
     /**
+     * The three creatures that climb down out of the margins from level 35: the headless Blemmya
+     * with his face in his chest, Reynard the armed fox, and the killer rabbit.
+     *
+     * Eyeball that the Blemmya has NO head above the shoulders and a legible face on the torso,
+     * that the fox reads as a fox and not a dog, and that the rabbit's ears are unmistakable at
+     * the size he actually fights at.
+     */
+    @Test
+    fun marginaliaCreatures() {
+        fun beast(arch: EnemyArchetype) =
+            EnemyFactory.createArchetype(arch, 0, level = 40)
+                .copy(posX = 120f, targetX = 120f, facingRight = true)
+        composeTestRule.setContent {
+            Row(modifier = Modifier.fillMaxSize().background(linen)) {
+                listOf(
+                    EnemyArchetype.BLEMMYA,
+                    EnemyArchetype.CRAFTY_FOX,
+                    EnemyArchetype.KILLER_RABBIT
+                ).forEach { arch ->
+                    Canvas(modifier = Modifier.width(118.dp).height(520.dp)) {
+                        TapestryRenderer.drawCharacter(this, beast(arch), scale = 1.5f, isBattleActive = true)
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/marginalia.png")
+    }
+
+    /**
      * The three new armour layers, each stacked over chainmail the way they are worn in play, plus
      * all three at once. Asserts nothing — eyeball that greaves sit on the shins, spaulders cap the
      * shoulders without floating, and the surcoat hangs over the mail without hiding it.

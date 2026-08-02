@@ -43,7 +43,13 @@ enum class EnemyArchetype {
     /** Rare, from level 40. Lobs bursting pots at the player's massed archers. */
     BOMBARDIER,
     /** Marginalia made flesh again: a frog the size of the snail. Takes followers with its tongue. */
-    GIANT_FROG
+    GIANT_FROG,
+    /** Headless men of the mappae mundi, with the face in the chest. Nothing to aim a helm at. */
+    BLEMMYA,
+    /** The margins' foxes, upright and armed. Sly rather than strong: they steal and they shoot. */
+    CRAFTY_FOX,
+    /** The marginal rabbit that turns the tables and executes knights. Small, fast, unreasonable. */
+    KILLER_RABBIT
 }
 
 enum class Ancillary(

@@ -170,6 +170,27 @@ class RegressionGuardTest {
     }
 
     @Test
+    fun `a Blemmya wears nothing that would hide the face on his chest`() {
+        val blemmya = EnemyFactory.createArchetype(EnemyArchetype.BLEMMYA, 0, level = 40)
+        // He has no head, so a helm would float. And a kite shield covers the whole torso, which
+        // is where his face is — the one thing that makes him readable was behind his own shield.
+        assertEquals("helm_none", blemmya.headgear.id)
+        assertEquals("shield_buckler", blemmya.shield.id)
+    }
+
+    @Test
+    fun `the marginalia creatures each read at their own scale`() {
+        val rabbit = EnemyFactory.createArchetype(EnemyArchetype.KILLER_RABBIT, 0, level = 40)
+        val fox = EnemyFactory.createArchetype(EnemyArchetype.CRAFTY_FOX, 0, level = 40)
+        val blemmya = EnemyFactory.createArchetype(EnemyArchetype.BLEMMYA, 0, level = 40)
+        assertTrue("the rabbit is the small one", rabbit.size < fox.size)
+        assertTrue("the blemmya is the big one", blemmya.size > fox.size)
+        // Speed is the rabbit's whole defence; it dies instantly if anything catches it.
+        assertTrue("the rabbit must be the fastest", rabbit.moveSpeed > fox.moveSpeed)
+        assertTrue("and the frailest", rabbit.maxHp < fox.maxHp)
+    }
+
+    @Test
     fun `the frog is as hard to shift as the snail`() {
         val frog = fighter("frog", archetype = EnemyArchetype.GIANT_FROG)
         assertTrue(

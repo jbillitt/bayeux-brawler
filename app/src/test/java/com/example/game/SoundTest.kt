@@ -5,6 +5,61 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SoundTest {
+    /**
+     * The complaint this guards: every run's music sounded like every other run's. Two fixed
+     * things caused it — a 32-bar tune was always A A' B B', and the brass always played the same
+     * three-note fanfare at the same place. Both are chosen per seed now, and if either ever
+     * collapses back to a single option the songs go uniform again without anything crashing.
+     */
+    @Test
+    fun songsDifferFromRunToRunInFormAndInWhatTheBrassDoes() {
+        val seeds = (1L..60L).toList()
+
+        // The tune must not always come out the same shape. Compare the second strain against the
+        // first: in the return-home form they match, in the alternating forms they do not.
+        val shapes = seeds.map { seed ->
+            val spec = resolveSongSpec(seed, emptyList())
+            if (spec.totalBars != 32) return@map null
+            val song = generateSong(spec, melodyRng(seed))
+            val strainBeats = 8f * spec.beatsPerBar
+            // Pull the four strains out and reduce them to a canonical repeat signature: each
+            // strain labelled with the index of the first strain it matches. A A' B A' becomes
+            // [0,1,2,1]; anything that never comes home is [0,1,2,3]. Comparing raw pitches
+            // would only prove the strains differ, which they always do.
+            val strains = (0 until 4).map { i ->
+                song.melody
+                    .filter { it.startBeat >= i * strainBeats && it.startBeat < (i + 1) * strainBeats }
+                    .map { it.midi to (it.startBeat - i * strainBeats) }
+            }
+            strains.indices.map { i -> strains.indexOfFirst { it == strains[i] } }
+        }.filterNotNull().distinct()
+        assertTrue(
+            "every 32-bar run produced the same melodic form: $shapes",
+            shapes.size > 1
+        )
+        assertTrue(
+            "no run ever returned to its opening strain, so nothing reads as a verse",
+            shapes.any { sig -> sig.distinct().size < sig.size }
+        )
+
+        // The brass must be doing genuinely different jobs, not the same figure at a different
+        // pitch. Note COUNT per song separates a short cadence call from long laboured tones from
+        // a three-part stack.
+        val brassShapes = seeds.map { seed ->
+            trumpeterEvents(resolveSongSpec(seed, emptyList())).size
+        }.distinct()
+        assertTrue("the brass played the same thing in every run", brassShapes.size > 1)
+
+        // And whatever it picked, it must actually play something — a role that emits nothing is
+        // a silent trumpeter the player paid a reward card for.
+        seeds.forEach { seed ->
+            assertTrue(
+                "seed $seed gave the trumpeter nothing to play",
+                trumpeterEvents(resolveSongSpec(seed, emptyList())).isNotEmpty()
+            )
+        }
+    }
+
     @Test
     fun testGenerateMusic() {
         val buffer = ProceduralMedievalComposer.compose(

@@ -236,10 +236,27 @@ fun generateSong(spec: SongSpec, rng: Random): SongEvents {
 
     val melody: List<NoteEvent>
     val ornamented: List<NoteEvent>
-    if (spec.totalBars == 32) {   // |:A:||:B:| -> A A' B B'
+    if (spec.totalBars == 32) {
         val aOrn = ornament(spec, a, rng); val bOrn = ornament(spec, b, rng)
-        melody = a + shift(a, strainBeats) + shift(b, 2 * strainBeats) + shift(b, 3 * strainBeats)
-        ornamented = a + shift(aOrn, strainBeats) + shift(b, 2 * strainBeats) + shift(bOrn, 3 * strainBeats)
+        // Which of the four strains is which. The old form was fixed at A A' B B', so the tune
+        // walked away from its own opening and never came back — every run had the same shape and
+        // the B section read as "the song changed" rather than as a middle. These are all real
+        // period forms; picking one per run is most of what stops the songs sounding alike.
+        val form = when (rng.nextInt(3)) {
+            // Verse, varied verse, a different middle, and home again — the one that most sounds
+            // like a song with a chorus in it.
+            0 -> listOf(a, aOrn, b, aOrn)
+            // Alternating, the old estampie feel.
+            1 -> listOf(a, b, aOrn, bOrn)
+            // The original: both strains stated and repeated.
+            else -> listOf(a, aOrn, b, bOrn)
+        }
+        melody = form.mapIndexed { i, strain -> shift(strain, i * strainBeats) }.flatten()
+        // The ornamented voice takes the same FORM but decorates the repeats, so the two lines
+        // never disagree about where the song is.
+        ornamented = form.mapIndexed { i, strain ->
+            shift(if (i % 2 == 1) ornament(spec, strain, rng) else strain, i * strainBeats)
+        }.flatten()
     } else {                      // TINTAGEL 16 bars: A B
         val aOrn = ornament(spec, a, rng); val bOrn = ornament(spec, b, rng)
         melody = a + shift(b, strainBeats)

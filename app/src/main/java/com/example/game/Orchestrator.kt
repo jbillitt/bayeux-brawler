@@ -666,17 +666,72 @@ fun harpStrumEvents(spec: SongSpec): List<NoteEvent> {
     return out
 }
 
+/**
+ * What the brass does with itself, chosen once per song off the run seed.
+ *
+ * It used to be one fixed three-note fanfare at the end of every eight bars, in every song, for
+ * every run — which is most of why the pieces sounded like each other. Brass that always doubles
+ * the tune has nothing to say; these are three genuinely different jobs it can be given.
+ */
+private enum class BrassRole { CADENCE_CALL, LABOURING_OVER, THREE_PART }
+
 fun trumpeterEvents(spec: SongSpec): List<NoteEvent> {
     val out = mutableListOf<NoteEvent>()
     val bpb = spec.beatsPerBar.toFloat()
     val strainBars = 8
-    var bar = strainBars - 1
-    while (bar < spec.totalBars) {
-        val base = bar * bpb
-        out += NoteEvent(base, 0.5f, spec.finalMidi + 12, 0.9f)
-        out += NoteEvent(base + 0.5f, 0.5f, spec.finalMidi + 19, 0.9f)
-        out += NoteEvent(base + 1f, 1f, spec.finalMidi + 24, 1f)
-        bar += strainBars
+    val rng = Random(spec.seed xor 0x7B12A5C3L)
+    val role = BrassRole.values()[rng.nextInt(BrassRole.values().size)]
+    // Modal third, so a minor-mode piece does not get a cheerful major triad bolted on top.
+    val third = spec.mode.steps[2]
+
+    when (role) {
+        // The original: a short call announcing the end of each strain.
+        BrassRole.CADENCE_CALL -> {
+            var bar = strainBars - 1
+            while (bar < spec.totalBars) {
+                val base = bar * bpb
+                out += NoteEvent(base, 0.5f, spec.finalMidi + 12, 0.9f)
+                out += NoteEvent(base + 0.5f, 0.5f, spec.finalMidi + 19, 0.9f)
+                out += NoteEvent(base + 1f, 1f, spec.finalMidi + 24, 1f)
+                bar += strainBars
+            }
+        }
+        // Long tones lying ACROSS the tune rather than moving with it — the brass leaning on the
+        // piece from above while the melody carries on underneath.
+        BrassRole.LABOURING_OVER -> {
+            var bar = 2
+            while (bar < spec.totalBars) {
+                val base = bar * bpb
+                // Root, then the fifth two bars later: slow enough that it reads as weight, not
+                // as a counter-melody competing with the tune.
+                val g = spec.ground[bar % 8].bassDegree
+                out += NoteEvent(base, bpb * 2f - 0.2f, degreeToMidi(spec, g) + 12, 0.7f)
+                if (bar + 2 < spec.totalBars) {
+                    out += NoteEvent(base + bpb * 2f, bpb * 2f - 0.2f, degreeToMidi(spec, g + 4) + 12, 0.62f)
+                }
+                bar += 4
+            }
+        }
+        // First, second and third trumpet: a stacked chord, entering one after the other so you
+        // hear it BUILD rather than arriving as a block.
+        BrassRole.THREE_PART -> {
+            var bar = strainBars - 2
+            while (bar < spec.totalBars) {
+                val base = bar * bpb
+                val g = spec.ground[bar % 8].bassDegree
+                val root = degreeToMidi(spec, g) + 12
+                // 1st on top, 2nd on the modal third, 3rd on the fifth below it.
+                listOf(root + 12, root + third, root).forEachIndexed { part, midi ->
+                    out += NoteEvent(
+                        base + part * 0.35f,
+                        bpb * 2f - part * 0.35f - 0.15f,
+                        midi,
+                        0.85f - part * 0.08f
+                    )
+                }
+                bar += strainBars
+            }
+        }
     }
     return out
 }

@@ -22,6 +22,13 @@ internal fun splitThroneBattleActors(
 ): Pair<List<FighterState>, List<FighterState>> =
     fighters.partition { it.pallbearerIndex >= 2 }
 
+/**
+ * Heads that are thrown rather than swung or thrust. One list: the front arm and the back arm
+ * each decide the attack animation for themselves, and keeping two hand-written copies is how
+ * the javelin ended up throwing properly on one of them and swinging on the other.
+ */
+internal val OVERARM_THROW_HEAD_IDS = setOf("head_javelin", "head_bomb")
+
 object TapestryRenderer {
 
     /** Plague palette: the pallor of the sick, and Aldwin's mud-coloured rags. */
@@ -1077,6 +1084,10 @@ object TapestryRenderer {
         fighter.extraArmors.forEachIndexed { i, extraArmor ->
             // Drawn by hand elsewhere: gauntlets on the arms, boots and greaves on the legs, coif on the head.
             if (extraArmor.id in listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_greaves")) return@forEachIndexed
+            // And the capes, which hang behind the body in drawCape. Falling through to the generic
+            // layer-tunic below painted a second full garment over the torso in the cape's colour,
+            // which is why picking up a cloak appeared to repaint the body armour.
+            if (extraArmor.id in GameData.CAPE_IDS) return@forEachIndexed
             if (extraArmor.id == "armor_spaulders") {
                 // Caps over each shoulder. These bypass the generic tunic path below, which would
                 // otherwise drape a whole extra steel garment over the body.
@@ -3859,6 +3870,7 @@ object TapestryRenderer {
         val isChokeSlam = fighter.weaponHandle.id == "handle_fists" && fighter.isDualWielding
         // A pike is not a spear: it is couched, braced, and driven forward off the back foot.
         val isPikeThrust = fighter.weaponHead.id == "head_pike"
+        val isOverarmThrow = fighter.weaponHead.id in OVERARM_THROW_HEAD_IDS
         val armAngle = if (fighter.isDead || fighter.isDying) {
             if (fighter.isDying) {
                 sin(fighter.animFrame * 1.5f) * 85f
@@ -3886,6 +3898,13 @@ object TapestryRenderer {
                     thrustOffset = Offset(-45f + 145f * drive, -6f + 6f * drive)
                     -6f + 8f * drive
                 }
+            } else if (isOverarmThrow) {
+                // The throw belongs on the FRONT arm — this is the hand the javelin is drawn in.
+                // The overarm branch existed only on the back-arm path, so in game the throw was
+                // still whatever the generic swing below happened to do.
+                // Arm cocks back past the ear, hangs, then whips through and follows down.
+                if (swing < 0.45f) -100f * (swing / 0.45f)
+                else -100f + 180f * ((swing - 0.45f) / 0.55f)
             } else if (isSaw) {
                 val sawExt = kotlin.math.sin(swing * Math.PI * 5).toFloat()
                 thrustOffset = Offset(30f * sawExt, 5f * sawExt)
@@ -3936,6 +3955,9 @@ object TapestryRenderer {
             }
         } else if (fighter.isMounted && isLanceCompatible && kotlin.math.abs(fighter.velocityX) > 30f) {
             -25f
+        } else if (isOverarmThrow) {
+            // Carried cocked at the shoulder between throws, not dangling at the hip.
+            -70f - sin(fighter.animFrame * 0.5f) * 6f
         } else {
             val postureOffset = if (isChokeSlam) -30f else if (isBowOrSlingshot) -15f else when (Math.abs(fighter.name.hashCode()) % 6) {
                 0 -> -75f // Raised above head
@@ -4081,7 +4103,7 @@ object TapestryRenderer {
                 val isScythe = fighter.weaponHead.id == "head_scythe"
                 val isSaw = fighter.weaponHead.id in listOf("head_saw_1", "head_saw_2")
                 val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
-                val isOverarmThrow = fighter.weaponHead.id in listOf("head_javelin", "head_bomb")
+                val isOverarmThrow = fighter.weaponHead.id in OVERARM_THROW_HEAD_IDS
 
                 var thrustOffset = Offset.Zero
                 val armAngle = if (fighter.isDead || fighter.isDying) {

@@ -148,8 +148,10 @@ class CombatEngine(private val ctx: BattleContext) {
 
         // The unmuzzled bear, all tunable. The friendly-fire chance is the price of the reward and
         // is deliberately low enough to be a story rather than a tax.
-        const val BEAR_MAUL_CHANCE = 0.3f
-        const val BEAR_MAUL_DAMAGE = 34f
+        // Raised: at 30%/34 the maul was quieter than the friendly-fire it caused, so cutting the
+        // straps read as a pure liability. A bear off the strap should be the reason men die.
+        const val BEAR_MAUL_CHANCE = 0.45f
+        const val BEAR_MAUL_DAMAGE = 62f
         const val BEAR_FRIENDLY_FIRE_CHANCE = 0.18f
         const val BEAR_FRIENDLY_FIRE_PX = 110f
 
@@ -1100,7 +1102,8 @@ class CombatEngine(private val ctx: BattleContext) {
             }
             blockChance = blockChance.coerceAtMost(MAX_BLOCK_CHANCE)
 
-            val isBlocked = currTarget.shield.id != "shield_none" && Random.nextFloat() < blockChance
+            val isBlocked = currTarget.shieldCovers(attacker.posX > currTarget.posX) &&
+                Random.nextFloat() < blockChance
 
             // Shared damage components
             val distToTarget = abs(attacker.posX - currTarget.posX)
@@ -1211,6 +1214,14 @@ class CombatEngine(private val ctx: BattleContext) {
                         else -> SoundType.FLESH
                     })
 
+                    // The goose does most of the work, and it is audible about it. Welded on as an
+                    // attachment counts too — it is still a goose, and it still has hold of him.
+                    if (attacker.weaponHead.id == "head_goose" ||
+                        attacker.extraAttachments.any { it.id == "head_goose" }
+                    ) {
+                        MedievalAudioSynth.playGooseBite()
+                    }
+
                     // Random blood particles (the wooden horse splinters instead of bleeding)
                     if (!currTarget.isInanimate) {
                         val px = currTarget.posX + (Random.nextFloat() * 20f - 10f)
@@ -1252,6 +1263,10 @@ class CombatEngine(private val ctx: BattleContext) {
                     !currTarget.missingArm && canLoseArm
                 ) {
                     currTarget.missingArm = true
+                    // A man mid-suplex who loses the arm he was lifting with does not finish the
+                    // move. triggerAttack already refuses to pick one, but a swing chosen before
+                    // the arm came off carried on regardless — a one-armed man hoisting a housecarl.
+                    currTarget.activeWrestlingMove = null
                     currTarget.applyDot(Dot.BLEED, ARM_BLEED_SECONDS) // the stump bleeds out
                     // Disarm off-hand/shield logically
                     if (currTarget.isDualWielding || currTarget.shield.id != "shield_none") {
@@ -1527,9 +1542,9 @@ class CombatEngine(private val ctx: BattleContext) {
         // Volley: lofted high, so it comes down well past where a flat shot dies. Applied last of
         // the trajectory maths or the bow/sling branches above would overwrite it.
         if (arcing) {
-            velY = -190f
+            velY = -235f
             velX *= VOLLEY_RANGE_MULT
-            gravMult = 0.85f
+            gravMult = 0.8f
         }
 
         var projId = "proj_${System.currentTimeMillis()}_${Random.nextInt(100)}"
@@ -1594,6 +1609,7 @@ class CombatEngine(private val ctx: BattleContext) {
             // every missile in the game fell at the same rate regardless.
             gravityMult = gravMult,
             isPlaguing = plaguing,
+            isArcing = arcing,
             armorPierceFraction = armorPierce,
             clusterCount = cluster,
             sourceFighterId = attacker.id,
@@ -1626,10 +1642,35 @@ class CombatEngine(private val ctx: BattleContext) {
         ctx.sound(SoundType.CRUNCH)
     }
 
+    /**
+     * The pot goes off: a ball of grey powder-smoke and a few embers where it struck. Public
+     * because the gate hit in [GameViewModel] bursts the same pot against the door.
+     */
+    fun bombBurst(atX: Float, atY: Float) {
+        repeat(16) {
+            val ember = it % 4 == 0
+            ctx.particle(
+                BloodParticle(
+                    x = atX + Random.nextInt(-22, 23),
+                    y = atY.coerceIn(90f, 320f) + Random.nextInt(-16, 17),
+                    vx = Random.nextFloat() * 220f - 110f,
+                    vy = -60f - Random.nextFloat() * 130f,
+                    color = if (ember) Color(0xFFD6A420) else Color(0xFF6B6459),
+                    maxAge = if (ember) 0.5f + Random.nextFloat() * 0.3f else 1.1f + Random.nextFloat() * 0.7f
+                )
+            )
+        }
+        ctx.screenshake(10f)
+        ctx.sound(SoundType.CRUNCH)
+        MedievalAudioSynth.playBombBurst()
+    }
+
     fun applyProjectileDamage(proj: Projectile, defender: FighterState) {
         if (defender.climbState != ClimbState.NONE) return
         // A cluster charge bursts wherever it stops, deflected or blocked or buried in a man.
         if (proj.clusterCount > 0) burstCluster(proj, proj.posX, proj.posY)
+        // A little puff of powder-smoke where the pot cracked, so a burst reads as a burst.
+        if (proj.type == ProjectileType.BOMB) bombBurst(proj.posX, proj.posY)
         val eyeCritCandidate = proj.sourceFighterId == ctx.player?.id && proj.type.isArrowLike &&
             defender.bossType == BossType.HAROLD_GODWINSON && defender.arrowEyeCritWindow > 0f
         // Speed Advantage: Ranged deflection based on speed. Tiny Terrence is a very small man
@@ -1643,8 +1684,10 @@ class CombatEngine(private val ctx: BattleContext) {
             return
         }
 
-        // Ranged hit calculation — same weight-based block chance as melee
-        val isBlocked = !eyeCritCandidate && defender.shield.id != "shield_none" &&
+        // Ranged hit calculation — same weight-based block chance as melee, and the same blind
+        // side: a shaft travelling leftwards came from his right. Shot in the back, no shield.
+        val isBlocked = !eyeCritCandidate &&
+            defender.shieldCovers(attackFromRight = proj.velocityX < 0f) &&
             Random.nextFloat() < defender.shield.blockChance
 
         if (isBlocked) {

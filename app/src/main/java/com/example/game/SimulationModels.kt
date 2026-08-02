@@ -85,7 +85,9 @@ enum class Ancillary(
     SAPPER("anc_sapper", "Digger Dunstan", "Sapper", "Goes under the field with a great spade and comes up behind the enemy line, where nobody is looking. Fights as an ordinary man once he surfaces.", hpBoost = 15f, speedBoost = 0f, color = Color(0xFF6B5B4A)),
     MOLEMAN("anc_moleman", "The Moleman", "Burrower", "Something hairy that swims through soil with its hands and erupts behind the enemy. Punches, and the wounds keep bleeding. Very hard to kill.", hpBoost = 40f, speedBoost = 0f, color = Color(0xFF3A2E24)),
     TINY_TERRENCE("anc_tiny_terrence", "Tiny Terrence", "Skirmisher", "A very small man who runs very fast, straight past the melee, to put two daggers into the archers. Almost impossible to shoot.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFF9E6B3A)),
-    STANDARD_BEARER("anc_standard_bearer", "Wulfric the Banneret", "Standard Bearer", "Runs in with your front rank carrying a great painted banner with your own face on it. He can barely fight, but every man who can see the standard swings faster — and the moment he goes down, they stop.", hpBoost = 10f, speedBoost = 0f, color = Color(0xFFB03131)),
+    // Name only — the level-up card renders "<name> the <role>", so a name carrying its own title
+    // read as "Wulfric the Banneret the Standard Bearer".
+    STANDARD_BEARER("anc_standard_bearer", "Wulfric", "Standard Bearer", "Runs in with your front rank carrying a great painted banner with your own face on it. He can barely fight, but every man who can see the standard swings faster — and the moment he goes down, they stop.", hpBoost = 10f, speedBoost = 0f, color = Color(0xFFB03131)),
     // Earned mounts (C2). Each is granted by a Milestone, never offered as a level-up card.
     WAR_OX("anc_mount_ox", "Bregu", "War Ox", "A plough ox in barding. Immensely strong, immensely slow, and entirely unbothered by arrows.", hpBoost = 160f, speedBoost = -0.25f, color = Color(0xFF6B5B4A)),
     PACK_MULE("anc_mount_mule", "Chestnut", "Pack Mule", "A baggage mule, protesting. A ridiculous mount for a conqueror, and the chroniclers will say so.", hpBoost = 20f, speedBoost = -0.35f, color = Color(0xFF8A7156)),
@@ -189,7 +191,7 @@ enum class DivineWeather(val id: String, val label: String, val description: Str
     // Text matches the code on purpose: frost binds, hail fells. Promising a fall here made the
     // miracle read as broken when the host merely crawled.
     FROST("weather_frost", "Killing Frost", "Ice underfoot — the enemy host is bound to a crawl."),
-    FROGS("weather_frogs", "Rain of Frogs", "The sky opens and frogs fall on EVERY man afield — friend, foe, and you. Chaos, as the chronicles promised.")
+    FROGS("weather_frogs", "Rain of Frogs", "The sky opens over the enemy host alone. They break, blunder and go down laughing-mad. Chaos, as the chronicles promised.")
 }
 
 interface GearItem {
@@ -260,17 +262,21 @@ object GameData {
         BASIC_CLUB("head_club", "Basic Club", 1.8f, blunt = 15f, reach = 1.3f, description = "A crude wooden club. Cheap and surprisingly effective.", color = Color(0xFF8A5E38)),
         SAW_1("head_saw_1", "Bone Saw", 1.2f, slash = 18f, pierce = 2f, reach = 1.2f, description = "A crude saw meant for bone, repurposed for Saxon flesh.", color = Color(0xFF8C969E)),
         SAW_2("head_saw_2", "Lumber Saw", 2.0f, slash = 28f, pierce = 5f, reach = 1.8f, description = "A massive two-man saw wielded by a single lunatic.", color = Color(0xFF909BA0)),
+        // The sapper's own tool. A shod digging spade is a heavy edge on a long haft — it hits
+        // like an axe that has been sharpened by a man who resents the work.
+        SPADE("head_spade", "Digging Spade", 2.3f, slash = 18f, blunt = 12f, reach = 1.7f, description = "An iron-shod spade, worn bright by a hundred yards of tunnel. Swung edge-first it splits a helm as readily as a sod of earth.", color = Color(0xFF7E7468)),
         // Strange relics: never in the shop or the normal attachment pool — only the rare
         // "Strange Relic" reward card offers them (GameViewModel). See STRANGE_HEAD_IDS.
         SMOKED_EEL("head_eel", "Smoked Eel", 0.8f, slash = 36f, blunt = 6f, reach = 2.0f, description = "A whole smoked eel, wielded like a flail. Slippery, whippy, and deeply insulting to be slain by.", color = Color(0xFF4E5A50)),
         SAINT_FEMUR("head_femur", "Femur of St. Odo", 1.1f, blunt = 30f, pierce = 12f, reach = 1.4f, description = "A holy relic thighbone. Smiting with it is technically a blessing.", color = Color(0xFFE7DCC4)),
         IRATE_GOOSE("head_goose", "Irate Goose", 1.4f, blunt = 22f, slash = 16f, reach = 1.7f, description = "A live and furious goose gripped by the legs. It does most of the work.", color = Color(0xFFEFE6D4)),
-        CHEESE_WHEEL("head_cheese", "Wheel of Aged Cheese", 3.0f, blunt = 42f, reach = 1.3f, description = "A cathedral-aged cheese wheel, hard as any quernstone and twice as pungent.", color = Color(0xFFE0B94F));
+        CHEESE_WHEEL("head_cheese", "Wheel of Aged Cheese", 3.0f, blunt = 42f, reach = 1.3f, description = "A cathedral-aged cheese wheel, hard as any quernstone and twice as pungent.", color = Color(0xFFE0B94F)),
+        GIANT_TOOTH("head_giant_tooth", "Tooth of Gog", 2.6f, blunt = 34f, pierce = 14f, reach = 1.5f, description = "A single molar prised from a felled giant, bound to a haft with wire. Roughly the size of a loaf, and it still smells of him.", color = Color(0xFFE3DCC6));
         override val type: ItemType get() = ItemType.WEAPON_HEAD
     }
     val WEAPON_HEADS = WeaponHead.values().toList()
     /** Attachment-only oddities, kept out of the normal pools; offered by the rare relic card. */
-    val STRANGE_HEAD_IDS = setOf("head_eel", "head_femur", "head_goose", "head_cheese")
+    val STRANGE_HEAD_IDS = setOf("head_eel", "head_femur", "head_goose", "head_cheese", "head_giant_tooth")
 
     /**
      * Helms earned rather than rolled, on the same footing as [UNLOCKABLE_HANDLE_IDS]. Earning one
@@ -286,6 +292,26 @@ object GameData {
     val CAPE_IDS = setOf(
         "cape_wool", "cape_riding", "cape_feather", "cape_ermine", "cape_tatters"
     )
+
+    /**
+     * Armour worn OVER something else. These belong in `extraArmors`, never in the body slot —
+     * put one there and the player fights in a cloak and nothing under it, and the renderer
+     * paints his torso in the cloak's colour because the body slot is what tints the tunic.
+     */
+    val LAYER_ARMOUR_IDS = CAPE_IDS + setOf(
+        "armor_gauntlets", "armor_boots", "armor_coif", "armor_greaves", "armor_spaulders"
+    )
+
+    /**
+     * Body armour a run may open wearing. One list, because the two places that built this by
+     * hand drifted: the first-launch roll excluded capes and the between-runs roll did not, so
+     * capes came back as a starting option on every run after the first.
+     */
+    fun bodyArmourRollPool(): List<ArmorPiece> = ARMOR_PIECES.filter {
+        it.id !in LAYER_ARMOUR_IDS && it.id !in setOf(
+            "armor_jester", "armor_surcoat", "armor_habit", "armor_apron", "armor_frock", "armor_toga"
+        )
+    }
 
     /**
      * Heads that exist in the ordinary pool but should be uncommon, not one-in-thirty like every
@@ -1119,6 +1145,17 @@ val METAL_ARMOUR_IDS = setOf(
 )
 
 /**
+ * Whether the shield is between this man and a blow coming from the given side.
+ *
+ * A shield covers the arm it is strapped to and the side he is facing — nothing else. It used to
+ * roll its block chance wherever the blow came from, so a man taken from behind by a flanking
+ * follower, or shot in the back from the far side of the field, was as safe as one braced into it.
+ * Getting round a shield wall is now worth doing, both for you and against you.
+ */
+fun FighterState.shieldCovers(attackFromRight: Boolean): Boolean =
+    shield.id != "shield_none" && attackFromRight == facingRight
+
+/**
  * True when a body blow lands on iron rather than flesh/cloth — drives the armour-hit sound.
  * The snail is excluded outright: its shell is horn, not mail, whatever it "wears".
  */
@@ -1374,7 +1411,7 @@ data class BattleSimState(
     val weaponHead: GameData.WeaponHead = GameData.WEAPON_HEADS.first { it.id == "head_broadsword" },
     val weaponHandle: GameData.WeaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
     val shield: GameData.Shield = GameData.SHIELDS.random(),
-    val armor: GameData.ArmorPiece = GameData.ARMOR_PIECES.random(),
+    val armor: GameData.ArmorPiece = GameData.bodyArmourRollPool().random(),
     val headgear: GameData.HeadgearPiece = GameData.HEADGEAR_PIECES.random(),
     val characterSize: Float = 1.0f,
     val hairColor: Color = Color(0xFF5A442E),

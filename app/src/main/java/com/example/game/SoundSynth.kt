@@ -98,7 +98,8 @@ object MedievalAudioSynth {
         // preloading victory alone cost 18MB of the pool that the entourage voices needed.
         for (folder in listOf(
             "trojan", "bee", "herald", "fanatic", "monk", "plague",
-            "dog", "hag", "drums", "pain", "armour", "shield", "flesh"
+            "dog", "hag", "drums", "pain", "armour", "shield", "flesh",
+            "bomb", "goose"
         )) {
             // Per-folder, so one unreadable asset cannot silence every folder after it.
             try {
@@ -232,6 +233,15 @@ object MedievalAudioSynth {
 
     /** Humble Bede's hive bursting among the enemy. */
     fun playBeeSwarm(voice: String = "bee") { if (sfxEnabled) playFolder("bee", voice) }
+
+    /**
+     * A pot of black powder going off. No voice key: every burst on the field is its own source
+     * and they are meant to overlap.
+     */
+    fun playBombBurst() { if (sfxEnabled) playFolder("bomb") }
+
+    /** The goose lashed to a weapon, getting hold of somebody. On-hit only. */
+    fun playGooseBite() { if (sfxEnabled) playFolder("goose") }
 
     /** Sir Boast-a-lot announcing you, at length. */
     fun playHeraldBoast() { if (sfxEnabled) playFolder("herald", "herald") }

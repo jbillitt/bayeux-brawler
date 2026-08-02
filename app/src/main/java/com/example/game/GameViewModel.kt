@@ -46,6 +46,13 @@ data class Projectile(
     /** Plague-tipped: lays rotting sickness on whoever it strikes, stacking with existing rot. */
     val isPlaguing: Boolean = false,
     /**
+     * A lofted volley shaft. It passes OVER everything while it is still climbing and only bites
+     * once it is falling — the whole point of a volley is that it lands on the rear ranks, and a
+     * rising shaft crosses the body band a few feet in front of the archer, so every volley was
+     * being eaten by the man directly ahead of him.
+     */
+    val isArcing: Boolean = false,
+    /**
      * Share of the target's armour this missile simply ignores, 0..1. A bodkin point is a spike
      * meant for mail; the reward cards promised exactly this and nothing implemented it, because
      * a missile's `pierce` stat is never read when damage is worked out.
@@ -68,7 +75,8 @@ data class Projectile(
 const val PLAYER_COVER_PASS_CHANCE = 0.85f
 
 /** The body window a missile has to be inside to strike, measured from where it was loosed. */
-internal fun Projectile.atBodyHeight(): Boolean = (posY - launchLiftY) in 100f..350f
+internal fun Projectile.atBodyHeight(): Boolean =
+    (posY - launchLiftY) in 100f..350f && (!isArcing || velocityY > 0f)
 
 internal fun createLilGuyDart(
     player: FighterState,
@@ -140,6 +148,52 @@ internal fun shieldHpFor(shield: GameData.Shield, upgrades: List<String>): Float
         (if ("oak_reinforcing" in upgrades) 50f else 0f) +
         (if ("iron_plating" in upgrades) 100f else 0f) +
         (if ("shield_helmet" in upgrades) 40f else 0f)
+
+/**
+ * Where a pounce puts the player, or null if the hop is not worth taking. He stops short of the
+ * enemy front rank rather than landing on the bowman behind it — overshooting the shield line is
+ * what left him surrounded on both sides.
+ */
+internal fun leapLanding(
+    playerX: Float,
+    frontRankX: Float,
+    levelWidth: Float,
+    gateCapX: Float? = null
+): Float? {
+    val toward = if (frontRankX > playerX) 1f else -1f
+    var landing = frontRankX - toward * GameViewModel.LEAP_STANDOFF_PX
+    if (gateCapX != null) landing = landing.coerceAtMost(gateCapX)
+    landing = landing.coerceIn(30f, levelWidth - 30f)
+    return landing.takeIf { (it - playerX) * toward >= GameViewModel.LEAP_MIN_TRAVEL_PX }
+}
+
+/**
+ * True when [target] stands behind a gate that is still shut and [attacker] cannot already touch
+ * him from outside it. The player has always honoured this; his retinue did not, so a defender
+ * woken up inside the gate (by a sapper surfacing there, usually) pulled the whole squad walking
+ * through a solid door instead of helping break it.
+ */
+internal fun unreachableBehindGate(
+    attacker: FighterState,
+    target: FighterState,
+    gateStanding: Boolean
+): Boolean =
+    gateStanding && !attacker.elevated &&
+        attacker.posX < GameViewModel.SIEGE_GATE_X &&
+        target.posX >= GameViewModel.SIEGE_GATE_X &&
+        abs(target.posX - attacker.posX) > attacker.reachPixels
+
+/**
+ * Everyone a divine weather falls on: the enemy host, and nobody else.
+ *
+ * Allies (the fanatic, the hag, the plague peasant, the standard bearer) live in the same list
+ * under `isPlayer = true`, so every miracle has to filter them out — and the Rain of Frogs was
+ * the one that deliberately did not, knocking your own men flat while the host fought on.
+ */
+internal fun weatherTargets(fighters: List<FighterState>): List<FighterState> = fighters.filter {
+    !it.isPlayer && !it.isDead && !it.isDying && !it.isCombatInactive &&
+        it.climbState == ClimbState.NONE
+}
 
 internal class TickScheduler(val periodMs: Long = 33L) {
     private var deadlineMs: Long? = null
@@ -316,7 +370,14 @@ class GameViewModel : ViewModel() {
                 // Earning a mount means it can TURN UP, not that you own it in perpetuity. The
                 // general rule for every unlock: it joins the pool a run may draw from, it is not
                 // handed over every time. Most runs should begin on foot.
-                if (anc.id in MOUNT_ANCILLARY_IDS) random.nextFloat() < 0.25f else true
+                //
+                // And only the mule may begin a run at all. Opening on the bear — 110hp and +70%
+                // speed from the first horn — decided the whole run before it started; the war ox
+                // is nearly as blunt. Both are still won mid-run from a level-up card, where they
+                // are a reward for surviving rather than a head start.
+                if (anc.id in MOUNT_ANCILLARY_IDS) {
+                    anc == Ancillary.PACK_MULE && random.nextFloat() < 0.25f
+                } else true
             }
             return current + offered.filter { it !in current }
         }
@@ -399,8 +460,12 @@ class GameViewModel : ViewModel() {
         const val WEATHER_COOLDOWN = 60f
 
         // Tapestry splatter. Seconds the kill window stays open, and how many must fall inside it.
-        const val MULTIKILL_WINDOW_SECS = 1.6f
-        const val MULTIKILL_THRESHOLD = 4
+        // Loosened deliberately: this is the action-cam flourish and it was firing perhaps once a
+        // battle. A wider window and one fewer body means bashing four or five men down together
+        // marks the cloth, which is exactly the moment it is for. The host gate below still keeps
+        // it out of the opening skirmishes.
+        const val MULTIKILL_WINDOW_SECS = 2.6f
+        const val MULTIKILL_THRESHOLD = 3
 
         /**
          * Men on the field at the horn before the linen can be splashed at all.
@@ -410,7 +475,7 @@ class GameViewModel : ViewModel() {
          * the player had seen a real battle. The opening levels field 2-4, so this holds it back
          * until the host is genuinely a host.
          */
-        const val MULTIKILL_MIN_HOST = 7
+        const val MULTIKILL_MIN_HOST = 5
 
         // The diggers. Short trips: they are meant to open a second front early in the fight,
         // not be absent for half of it. The moleman swims through soil with his hands and is the
@@ -419,12 +484,22 @@ class GameViewModel : ViewModel() {
         const val SIEGE_WAKE_RADIUS_PX = 220f
         /** Where the castle gate stands. Matches BattlegroundContent.siegeObjects. */
         const val SIEGE_GATE_X = 1800f
-        /** How far inside the gate a tunnel comes up. Just through the door, not at the back. */
-        const val DIGGER_INSIDE_GATE_PX = 120f
+        /** How far inside the gate the sapper's tunnel comes up — behind the door garrison. */
+        const val DIGGER_INSIDE_GATE_PX = 260f
+        /** And on an open field, how far behind the rearmost man he surfaces. */
+        const val SAPPER_SURFACE_BEHIND_PX = 170f
+        /** The Moleman comes up this far in front of the player: in the fray, and on screen. */
+        const val MOLEMAN_SURFACE_AHEAD_PX = 230f
         /** Close enough to his post to count as standing on it again. */
         const val SIEGE_STATION_SLACK_PX = 25f
         /** Half the gate arch, for the wedge watchdog. Matches the gate object's 120px width. */
         const val SIEGE_ARCH_HALF_WIDTH_PX = 60f
+        /** Black powder against oak: a bomb does far more to a door than it does to a man. */
+        const val GATE_BOMB_MULTIPLIER = 3.5f
+        /** The standard has to arrive with the front rank or its aura reaches nobody. */
+        const val BANNER_BEARER_SPEED_BOOST = 0.4f
+        /** Ceiling on the ranged equivalent of the haft extension: +0.35m each, so ~+1.75m. */
+        const val MAX_RANGE_EXTENSIONS = 5
         /** Sat in the arch this long without taking a hit, and something is stuck. */
         const val SIEGE_WEDGE_SECS = 6f
         /** Nothing reachable for this long, and the garrison is sent out so the battle can end. */
@@ -444,7 +519,9 @@ class GameViewModel : ViewModel() {
         const val CYCLOPS_MEAL_COOLDOWN_SECS = 3f
         const val CYCLOPS_BITES = 3
         const val SAPPER_BURROW_SECONDS = 4.2f
-        const val MOLEMAN_BURROW_SECONDS = 2.8f
+        // Longer than it was: he now surfaces in the middle of the melee, and arriving there
+        // before the lines have met made his entrance land in an empty field.
+        const val MOLEMAN_BURROW_SECONDS = 4.6f
         /** How long the descent itself takes — he sinks at the dig site, throwing up spoil. */
         const val DIG_DOWN_SECS = 0.9f
 
@@ -454,8 +531,14 @@ class GameViewModel : ViewModel() {
         const val LEAP_FLIGHT_SECS = 0.5f
         /** How far off a bowman has to be before pouncing is worth it, and past which it is a fantasy. */
         const val LEAP_MIN_GAP_PX = 260f
-        const val LEAP_MAX_GAP_PX = 620f
+        const val LEAP_MAX_GAP_PX = 520f
         const val LEAP_ARC_PX = 130f
+        /** How far short of the front rank he lands. Inside this and he is in among them. */
+        const val LEAP_STANDOFF_PX = 75f
+        /** Below this the hop is not worth the cooldown — the front rank is already on him. */
+        const val LEAP_MIN_TRAVEL_PX = 90f
+        /** Hardrada stops waiting behind his guard once you are this close to the bridge. */
+        const val HARDRADA_SIGHT_PX = 620f
 
         /** Finish a level with at least this much health left and it counts as unpunished. */
         const val UNPUNISHED_HP_FRACTION = 0.8f
@@ -480,11 +563,7 @@ class GameViewModel : ViewModel() {
         if (!state.isBattleActive || state.battleWon || state.battleLost) return
         if ((state.weatherCooldowns[id] ?: 0f) > 0f) return
 
-        // Allies (fanatic, hag, the peasant) live in the enemies list under isPlayer=true — spare them
-        val foes = _enemiesState.value.filter {
-            !it.isPlayer && !it.isDead && !it.isDying && !it.isCombatInactive &&
-                it.climbState == ClimbState.NONE
-        }
+        val foes = weatherTargets(_enemiesState.value)
         when (weather) {
             DivineWeather.LIGHTNING -> {
                 // Buffed: forks to the two toughest foes and hits harder.
@@ -521,24 +600,17 @@ class GameViewModel : ViewModel() {
                 }
             }
             DivineWeather.FROGS -> {
-                // Chronicle-grade chaos: frogs on EVERYONE. Foes go down hard; you and yours
-                // merely stumble. High risk, high comedy.
-                // Frogs rout the host. They scatter, blunder about, and nobody looses an arrow
-                // with a frog down his collar — no knockdown at all, which is the point.
+                // Frogs rout the host: they scatter, blunder about, and nobody looses an arrow with
+                // a frog down his collar. It used to fall on your own men as well, which meant the
+                // only thing you ever saw was your retinue on its back while the host fought on —
+                // a miracle that read as a self-inflicted wound. It lands on the enemy only now,
+                // and the stumble is on them, so you can see it work.
                 foes.forEach {
                     it.panicDuration = 6f
-                    engine.applyFlatDamage(8f, it, isPlayerSource = true)
+                    it.tryCrumple(1.2f)
+                    engine.applyFlatDamage(14f, it, isPlayerSource = true)
                 }
-                _enemiesState.value.filter { it.isPlayer && !it.isDead && !it.isDying }.forEach {
-                    it.isCrumpled = true
-                    it.crumpleDuration = 1.4f
-                }
-                _playerState.value?.let {
-                    if (!it.isDead && !it.isDying) {
-                        it.isCrumpled = true
-                        it.crumpleDuration = 1.4f
-                    }
-                }
+                addPopup("RANAE!", (_playerState.value?.posX ?: 400f) + 120f, 150f, Color(0xFF6E8B3D))
                 _screenshake.value = 18f
             }
         }
@@ -578,13 +650,7 @@ class GameViewModel : ViewModel() {
         // reach the pool for anyone who has earned them, via poolWithUnlocks below.
         initialGear.addAll(handleRollPool().shuffled().take(MIN_GEAR_CHOICES).map { it.id })
         initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
-        initialGear.addAll(GameData.ARMOR_PIECES.filter {
-                    it.id !in listOf(
-                        "armor_gauntlets", "armor_boots", "armor_coif", "armor_jester",
-                        "armor_greaves", "armor_spaulders", "armor_surcoat",
-                        "armor_habit", "armor_apron", "armor_frock", "armor_toga"
-                    ) && it.id !in GameData.CAPE_IDS
-                }.shuffled().take(2).map { it.id })
+        initialGear.addAll(GameData.bodyArmourRollPool().shuffled().take(2).map { it.id })
         initialGear.addAll(helmRollPool().shuffled().take(2).map { it.id })
 
         _uiState.update { it.copy(
@@ -1321,7 +1387,7 @@ class GameViewModel : ViewModel() {
         repeat(state.unlockedAncillaries.count { it == Ancillary.STANDARD_BEARER }) { i ->
             val bannerHp = 90f + state.level * 5f
             enemies.add(FighterState(
-                id = FighterId("standard_bearer#$i"), name = "Wulfric the Banneret", isPlayer = true,
+                id = FighterId("standard_bearer#$i"), name = "Wulfric the Standard Bearer", isPlayer = true,
                 maxHp = bannerHp, hp = bannerHp,
                 weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_dagger" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_short" },
@@ -1330,7 +1396,10 @@ class GameViewModel : ViewModel() {
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
                 posX = 95f + i * 26f, targetX = 95f + i * 26f, facingRight = true, size = 1.0f,
                 hairColor = androidx.compose.ui.graphics.Color(0xFF6B4A2A), hairStyle = "long",
-                isDualWielding = false
+                isDualWielding = false,
+                // The banner is only worth carrying where it can be seen. He was moving at a plain
+                // man's pace with a dagger's reach, so he arrived last and his aura reached nobody.
+                speedBoost = BANNER_BEARER_SPEED_BOOST
             ))
         }
 
@@ -1343,7 +1412,7 @@ class GameViewModel : ViewModel() {
                 maxHp = 120f + state.level * 4f, hp = 120f + state.level * 4f,
                 // A spade on a long haft, which is a real polearm, plus a pouch of the spoil he
                 // came up through: see CombatEngine, he flings grit in men's eyes.
-                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_axe" },
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_spade" },
                 weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_long" },
                 shield = GameData.SHIELDS.first { it.id == "shield_none" },
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
@@ -1983,18 +2052,30 @@ class GameViewModel : ViewModel() {
             val gap = quarry?.let { abs(it.posX - player.posX) } ?: 0f
             if (quarry != null && gap in LEAP_MIN_GAP_PX..LEAP_MAX_GAP_PX) {
                 val toward = if (quarry.posX > player.posX) 1f else -1f
-                var landing = quarry.posX - toward * 55f
-                // Never through a standing gate.
-                if (siege != null && !siege.gateBroken) landing = landing.coerceAtMost(1800f - 90f)
-                landing = landing.coerceIn(30f, _uiState.value.levelWidth - 30f)
-                player.leapFromX = player.posX
-                player.leapToX = landing
-                player.leapTimer = LEAP_FLIGHT_SECS
-                player.leapCooldown = LEAP_COOLDOWN_SECS
-                player.isAttacking = false
-                player.swingProgress = 0f
-                addPopup("POUNCE!", player.posX, 150f, Color(0xFFD6A420))
-                MedievalAudioSynth.playSound(SoundType.SWOOSH)
+                // Land in front of the host, never inside it. Pouncing straight onto the bowman
+                // carried the player clean over the shield line and left him with men on both
+                // sides, so the nearest foe on that side — the front rank — caps the landing.
+                val frontRank = enemies.filter {
+                    !it.isPlayer && !it.isDead && !it.isDying && !it.isCombatInactive &&
+                        (it.posX - player.posX) * toward > 0f
+                }.minByOrNull { abs(it.posX - player.posX) } ?: quarry
+                val landing = leapLanding(
+                    playerX = player.posX,
+                    frontRankX = frontRank.posX,
+                    levelWidth = _uiState.value.levelWidth,
+                    // Never through a standing gate.
+                    gateCapX = if (siege != null && !siege.gateBroken) 1800f - 90f else null
+                )
+                if (landing != null) {
+                    player.leapFromX = player.posX
+                    player.leapToX = landing
+                    player.leapTimer = LEAP_FLIGHT_SECS
+                    player.leapCooldown = LEAP_COOLDOWN_SECS
+                    player.isAttacking = false
+                    player.swingProgress = 0f
+                    addPopup("POUNCE!", player.posX, 150f, Color(0xFFD6A420))
+                    MedievalAudioSynth.playSound(SoundType.SWOOSH)
+                }
             }
         }
 
@@ -2038,14 +2119,16 @@ class GameViewModel : ViewModel() {
                         .filter { !it.isPlayer && !it.isDead && !it.isDying }
                         .maxByOrNull { it.posX }?.posX ?: (player.posX + 400f)
                     val siegeNow = _uiState.value.siegeState
-                    digger.posX = if (siegeNow != null && !siegeNow.gateBroken) {
-                        // In a siege he comes up JUST inside the gate, not at the back of the
-                        // relief column. Surfacing behind the rearmost man put him the whole depth
-                        // of the map away, alone, where the column ate him one at a time and the
-                        // player never saw the tunnel pay off.
-                        SIEGE_GATE_X + DIGGER_INSIDE_GATE_PX
-                    } else {
-                        rear + 90f
+                    digger.posX = when {
+                        // The Moleman erupts in the middle of the fight, where he can be watched
+                        // doing it. Coming up behind the rearmost man put him off the side of the
+                        // screen, so the one thing worth seeing about him happened out of view.
+                        digger.isKind("moleman") ->
+                            (player.posX + MOLEMAN_SURFACE_AHEAD_PX).coerceAtMost(rear + 40f)
+                        // The sapper is the opposite: he wants the back of the line, behind
+                        // everyone, where nobody is facing. In a siege that is well inside the gate.
+                        siegeNow != null && !siegeNow.gateBroken -> SIEGE_GATE_X + DIGGER_INSIDE_GATE_PX
+                        else -> rear + SAPPER_SURFACE_BEHIND_PX
                     }
                     digger.targetX = digger.posX
                     digger.facingRight = false
@@ -2084,9 +2167,12 @@ class GameViewModel : ViewModel() {
             val activeRetinue = livingRetinue.count { !it.isCombatInactive }
             livingRetinue.filter { it.isCombatInactive }.take((2 - activeRetinue).coerceAtLeast(0))
                 .forEach { it.isCombatInactive = false }
-            if (livingRetinue.isEmpty()) {
-                enemies.firstOrNull { it.bossType == BossType.HARALD_HARDRADA }
-                    ?.isCombatInactive = false
+            // He does not stand at the far end of the bridge waiting his turn: come within sight
+            // of him and he comes for you, guard or no guard.
+            enemies.firstOrNull { it.bossType == BossType.HARALD_HARDRADA }?.let { hardrada ->
+                if (livingRetinue.isEmpty() || abs(player.posX - hardrada.posX) <= HARDRADA_SIGHT_PX) {
+                    hardrada.isCombatInactive = false
+                }
             }
         }
 
@@ -2115,9 +2201,7 @@ class GameViewModel : ViewModel() {
         // men he can never close with. A ranged player still shoots the wall while it is in range;
         // only targets that are BOTH out of range and behind the gate line are ignored.
         if (siege != null && !siege.gateBroken && !player.elevated) {
-            closestEnemy = closestEnemy?.takeUnless {
-                it.posX >= SIEGE_GATE_X && abs(it.posX - player.posX) > player.reachPixels
-            }
+            closestEnemy = closestEnemy?.takeUnless { unreachableBehindGate(player, it, true) }
         }
         // Firebrand: his torches keep the gate smouldering — it burns down on its own, slowly.
         if (siege != null && !siege.gateBroken &&
@@ -2185,11 +2269,13 @@ class GameViewModel : ViewModel() {
         // 4. Update Enemy Fighter States (and allied NPCs like Fanatic!)
         enemies.forEach { enemy ->
             val wasDead = enemy.isDead
+            val gateStanding = siege != null && !siege.gateBroken
             var pTarget = if (enemy.isPlayer) {
                 val reachable = enemies.filter {
                     !it.isDead && !it.isDying && !it.isPlayer && !it.isCombatInactive &&
                         it.climbState == ClimbState.NONE &&
-                        (enemy.isRanged || it.elevated == enemy.elevated)
+                        (enemy.isRanged || it.elevated == enemy.elevated) &&
+                        !unreachableBehindGate(enemy, it, gateStanding)
                 }
                 // Tiny Terrence has one job and it is not the shield wall: he runs past the melee
                 // entirely and goes for whoever is shooting. Only falls back to the nearest body
@@ -2234,10 +2320,14 @@ class GameViewModel : ViewModel() {
                     SiegeRules.beginClimbUp(siege, enemy, enemies)
                 ) return@forEach
                 engine.updateFighter(enemy, null, dt)
-                val gateX = 1800f
+                val gateX = SIEGE_GATE_X
                 if (abs(gateX - enemy.posX) > 75f) {
-                    enemy.posX += enemy.moveSpeed * dt
-                    enemy.facingRight = true
+                    // Walk TOWARD the gate, the same fix the player's branch needed: this was an
+                    // unconditional +=, so anyone who had drifted past the door kept going right
+                    // and never lifted a finger against it.
+                    val toGate = if (gateX > enemy.posX) 1f else -1f
+                    enemy.posX += enemy.moveSpeed * dt * toGate
+                    enemy.facingRight = toGate > 0f
                     enemy.animFrame += dt * 9f
                 } else if (enemy.attackCooldown <= 0f) {
                     SiegeRules.damageGate(siege, enemy.baseDamage.coerceAtLeast(5f), enemies)
@@ -2416,6 +2506,20 @@ class GameViewModel : ViewModel() {
                 if (bgHit.hp <= 0) bgHit.isDestroyed = true
             }
             
+            // A bomb lobbed at a standing gate bursts on the gate. The gate is deliberately not
+            // cover above — it must not eat shots aimed at the men on the wall — which also meant
+            // a pot of black powder sailed straight through the door and did nothing to it, so the
+            // only way to break a gate while carrying bombs was to walk up and punch it.
+            // Bombs only: an arrow that clipped the arch would otherwise be swallowed too.
+            if (!hit && proj.type == ProjectileType.BOMB && siege != null && !siege.gateBroken &&
+                abs(proj.posX - SIEGE_GATE_X) < SIEGE_ARCH_HALF_WIDTH_PX && proj.atBodyHeight()
+            ) {
+                hit = true
+                SiegeRules.damageGate(siege, proj.damage * GATE_BOMB_MULTIPLIER, enemies)
+                engine.bombBurst(proj.posX, proj.posY)
+                addPopup("PORTA!", SIEGE_GATE_X, 130f, Color(0xFF6E5536))
+            }
+
             // Check entity collisions if not hit building
             if (!hit) {
                 if (proj.isPlayerOwned) {
@@ -3178,7 +3282,19 @@ class GameViewModel : ViewModel() {
                     state.weaponHandle.id, state.weaponHead.reach,
                     state.characterSize, state.handleExtensionCount
                 ) >= GameData.MAX_MELEE_REACH_M
-                if (rndVal < 0.33f && !isUnarmed && !state.weaponHead.isRanged && !reachCapped) {
+                // A ranged build had no equivalent and simply never saw this slot. The counter
+                // already lengthens a missile weapon's reach (FighterState.reach) — it was only
+                // ever the card that was withheld, so this is the same upgrade under its own name.
+                val rangedReachCapped = state.handleExtensionCount >= MAX_RANGE_EXTENSIONS
+                if (rndVal < 0.33f && !isUnarmed && state.weaponHead.isRanged && !rangedReachCapped) {
+                    pendingChoices.add(LevelUpChoice(
+                        id = "extension",
+                        title = "Greater Range",
+                        description = "A heavier stave, a longer sling cord, a better throwing grip — whatever your missile weapon wants. You loose further, and further out than they can answer.",
+                        type = "extension",
+                        itemId = ""
+                    ))
+                } else if (rndVal < 0.33f && !isUnarmed && !state.weaponHead.isRanged && !reachCapped) {
                     pendingChoices.add(LevelUpChoice(
                         id = "extension",
                         title = "Handle Extension",
@@ -3542,13 +3658,7 @@ class GameViewModel : ViewModel() {
                 initialGear.addAll(headRollPool().shuffled().take(MIN_GEAR_CHOICES).map { it.id })
                 initialGear.addAll(handleRollPool().shuffled().take(maxOf(3, MIN_GEAR_CHOICES)).map { it.id })
                 initialGear.addAll(GameData.SHIELDS.shuffled().take(2).map { it.id })
-                initialGear.addAll(GameData.ARMOR_PIECES.filter {
-                    it.id !in listOf(
-                        "armor_gauntlets", "armor_boots", "armor_coif", "armor_jester",
-                        "armor_greaves", "armor_spaulders", "armor_surcoat",
-                        "armor_habit", "armor_apron", "armor_frock", "armor_toga"
-                    )
-                }.shuffled().take(2).map { it.id })
+                initialGear.addAll(GameData.bodyArmourRollPool().shuffled().take(2).map { it.id })
                 initialGear.addAll(GameData.HEADGEAR_PIECES.filter {
                     it.id !in listOf("helm_jester", "helm_antlered", "helm_winged", "helm_wolf", "helm_pot")
                 }.shuffled().take(2).map { it.id })

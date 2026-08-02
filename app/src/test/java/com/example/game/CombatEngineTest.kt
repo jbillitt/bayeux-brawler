@@ -596,6 +596,10 @@ class CombatEngineTest {
             walled.hp = unbreakable
             walled.maxHp = unbreakable
             walled.crumpleDuration = 10_000f // hold still and take it
+            // A shield only covers the side its owner faces, so he has to be turned toward the
+            // attacker for this test to exercise the block path at all. The fixture defaults to
+            // facing right, and the attacker stands to his left.
+            walled.facingRight = false
             ctx.player = player
             ctx.enemies = listOf(walled)
             repeat(600) { engine.updateFighter(player, walled, 0.1f) } // blocks are a dice roll: sample a lot

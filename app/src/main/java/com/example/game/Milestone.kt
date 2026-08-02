@@ -32,7 +32,9 @@ enum class Milestone(
     // C2 — mounts
     FIVE_SIEGES("five_sieges", "Master of Siegecraft", "Clear five sieges in one run", "anc_mount_ox"),
     REACH_15("reach_level_15", "Baggage Train", "Reach level 15", "anc_mount_mule"),
-    BOTH_GIANTS("both_giants", "Albion Broken", "Defeat both Gog and Magog", "anc_mount_bear"),
+    // Was the war bear. A mount won here opened the next run at +110hp and +70% speed, which
+    // settled the run before the first horn — so the giants pay out a relic instead.
+    BOTH_GIANTS("both_giants", "Albion Broken", "Defeat both Gog and Magog", "head_giant_tooth"),
 
     // C2 — hats
     REACH_25("reach_level_25", "Antlered Lord", "Reach level 25", "helm_antlered"),

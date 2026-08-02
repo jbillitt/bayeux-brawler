@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -251,6 +252,148 @@ class RegressionGuardTest {
             "a thing the size of a cart should not be knocked about",
             frog.ccResist < 0.2f
         )
+    }
+
+    @Test
+    fun `the pounce lands short of the front rank instead of in among them`() {
+        // It aimed at the bowman and carried the player clean over the shield line, so he landed
+        // with enemies on both sides of him.
+        val landing = leapLanding(playerX = 200f, frontRankX = 600f, levelWidth = 2400f)
+        assertNotNull("a 400px gap is worth a pounce", landing)
+        assertTrue("must stop short of the front rank, not past it", landing!! < 600f)
+        assertTrue("and not fall short of being a pounce at all", landing > 400f)
+
+        // Leaping leftwards mirrors exactly.
+        val back = leapLanding(playerX = 900f, frontRankX = 400f, levelWidth = 2400f)
+        assertTrue("the standoff is on the near side whichever way he jumps", back!! > 400f)
+
+        // Already in contact: no leap at all rather than a hop into the man's face.
+        assertNull(
+            "the front rank is already on him — the cooldown is worth more than the hop",
+            leapLanding(playerX = 560f, frontRankX = 600f, levelWidth = 2400f)
+        )
+    }
+
+    @Test
+    fun `a follower does not walk through a gate that is still standing`() {
+        // The player has always honoured this; his retinue did not, so a defender woken up inside
+        // the gate pulled the whole squad walking through a solid door instead of breaking it.
+        val follower = fighter("follower", player = true).apply { posX = GameViewModel.SIEGE_GATE_X - 300f }
+        val defender = fighter("garrison").apply { posX = GameViewModel.SIEGE_GATE_X + 260f }
+        assertTrue(
+            "a man behind a shut gate is not something to walk toward",
+            unreachableBehindGate(follower, defender, gateStanding = true)
+        )
+        assertFalse(
+            "once the gate is down he is fair game",
+            unreachableBehindGate(follower, defender, gateStanding = false)
+        )
+        // And a digger who came up on the far side is already past the door — he fights normally.
+        val sapper = fighter("sapper", player = true).apply { posX = GameViewModel.SIEGE_GATE_X + 200f }
+        assertFalse(
+            "the tunnel put him inside; the gate is not between them",
+            unreachableBehindGate(sapper, defender, gateStanding = true)
+        )
+    }
+
+    @Test
+    fun `a miracle never falls on your own men`() {
+        val host = fighter("housecarl")
+        val ally = fighter("mad_boris", player = true)
+        val targets = weatherTargets(listOf(host, ally))
+        assertTrue("the host is what a miracle is for", host in targets)
+        assertFalse("Rain of Frogs was flattening the player's own retinue", ally in targets)
+    }
+
+    @Test
+    fun `a volley shaft passes over the man in front and only bites coming down`() {
+        fun shaft(velocityY: Float, arcing: Boolean) = Projectile(
+            id = "p", isPlayerOwned = true, posX = 0f, posY = 200f,
+            velocityX = 300f, velocityY = velocityY, damage = 1f, pierce = 0f, blunt = 0f,
+            type = ProjectileType.ARROW, isArcing = arcing
+        )
+        assertFalse(
+            "a rising volley shaft was being eaten by the man directly ahead of the archer",
+            shaft(velocityY = -180f, arcing = true).atBodyHeight()
+        )
+        assertTrue("but it kills what it lands on", shaft(velocityY = 120f, arcing = true).atBodyHeight())
+        assertTrue("a flat shot is unchanged", shaft(velocityY = -180f, arcing = false).atBodyHeight())
+    }
+
+    @Test
+    fun `no run ever opens wearing a cloak as its body armour`() {
+        // The first-launch roll excluded capes and the between-runs roll did not, so they came
+        // back as a starting option on every run after the first — and equipped into the body
+        // slot, which also repainted the tunic in the cloak's colour.
+        val pool = GameData.bodyArmourRollPool().map { it.id }
+        assertTrue("the pool must not be empty", pool.isNotEmpty())
+        GameData.CAPE_IDS.forEach {
+            assertFalse("$it is a layer, not body armour", it in pool)
+        }
+        GameData.LAYER_ARMOUR_IDS.forEach {
+            assertFalse("$it is worn over something else", it in pool)
+        }
+        assertTrue("plain armour still rolls", "armor_chainmail" in pool)
+        // And the default a fresh sim state is built with comes from the same pool.
+        assertFalse(BattleSimState().armor.id in GameData.CAPE_IDS)
+    }
+
+    @Test
+    fun `a shield does not cover a man's back`() {
+        val man = fighter("housecarl").apply {
+            shield = GameData.SHIELDS.first { it.id == "shield_kite" }
+            facingRight = true
+        }
+        assertTrue("braced into the blow", man.shieldCovers(attackFromRight = true))
+        assertFalse("stabbed from behind", man.shieldCovers(attackFromRight = false))
+        man.shield = GameData.SHIELDS.first { it.id == "shield_none" }
+        assertFalse("no shield, no block, from any side", man.shieldCovers(attackFromRight = true))
+    }
+
+    @Test
+    fun `the standard bearer is not announced twice`() {
+        // The level-up card renders "<name> the <role>", and his name carried its own title, so
+        // he read as "Wulfric the Banneret the Standard Bearer".
+        val anc = Ancillary.STANDARD_BEARER
+        assertEquals("Wulfric the Standard Bearer", "${anc.ancillaryName} the ${anc.role}")
+        GameData.ANCILLARIES.forEach {
+            assertFalse(
+                "${it.ancillaryName} carries its own title and will double up with '${it.role}'",
+                it.ancillaryName.contains(" the ", ignoreCase = true)
+            )
+        }
+    }
+
+    @Test
+    fun `the bear is never the mount a run opens on`() {
+        // 110hp and +70% speed from the first horn settled the run before it started. Only the
+        // mule may begin one; the rest are still won mid-run.
+        val random = kotlin.random.Random(3)
+        val everOffered = (0 until 400).flatMap {
+            GameViewModel.ancillariesWithUnlocks(emptyList(), random)
+        }.toSet()
+        assertFalse(Ancillary.WAR_BEAR in everOffered)
+        assertFalse(Ancillary.WAR_OX in everOffered)
+    }
+
+    @Test
+    fun `a thrown weapon is thrown rather than swung`() {
+        // The overarm branch existed on the back-arm path only, so in game the javelin kept
+        // playing whatever the generic swing did.
+        assertTrue("head_javelin" in OVERARM_THROW_HEAD_IDS)
+        assertTrue("head_bomb" in OVERARM_THROW_HEAD_IDS)
+        // Both are thrown weapons, so both must actually be ranged or the throw never plays.
+        OVERARM_THROW_HEAD_IDS.forEach {
+            assertTrue("$it must be a missile", GameData.WEAPON_HEADS.first { h -> h.id == it }.isRanged)
+        }
+    }
+
+    @Test
+    fun `the sapper digs with a spade and it is still worth swinging`() {
+        val spade = GameData.WEAPON_HEADS.first { it.id == "head_spade" }
+        val axe = GameData.WEAPON_HEADS.first { it.id == "head_axe" }
+        assertTrue("he traded an axe for it; it cannot be a joke", spade.slash + spade.blunt > axe.slash * 0.8f)
+        assertFalse("a spade is not a missile", spade.isRanged)
     }
 
     @Test

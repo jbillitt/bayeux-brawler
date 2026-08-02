@@ -241,8 +241,24 @@ class GameViewModel : ViewModel() {
          */
         fun poolWithUnlocks(roll: Set<String>): Set<String> =
             roll + GameProfile.cached.unlockedItemIds.filterNot {
-                it in GameData.UNLOCKABLE_HANDLE_IDS || it in GameData.STRANGE_HEAD_IDS
+                it in GameData.UNLOCKABLE_HANDLE_IDS || it in GameData.STRANGE_HEAD_IDS ||
+                    // Earned helms join the ROLL (see helmRollPool) rather than being handed over
+                    // outright. Granted outright they appeared in every subsequent run's picker
+                    // forever, so a hat won once stopped being something you could win.
+                    it in GameData.UNLOCKABLE_HELM_IDS
             }
+
+        /**
+         * Helms a run may roll from: the plain ones, plus any unlockable hat the profile has
+         * earned. Mirrors [handleRollPool] exactly — earned means "can turn up", not "always
+         * there".
+         */
+        fun helmRollPool(): List<GameData.HeadgearPiece> {
+            val earned = GameProfile.cached.unlockedItemIds
+            return GameData.HEADGEAR_PIECES.filter {
+                it.id !in GameData.UNLOCKABLE_HELM_IDS || it.id in earned
+            }
+        }
 
         /**
          * Heads a run may roll from. The Strange Relics — the eel, the cheese, the goose, the
@@ -567,11 +583,9 @@ class GameViewModel : ViewModel() {
                         "armor_gauntlets", "armor_boots", "armor_coif", "armor_jester",
                         "armor_greaves", "armor_spaulders", "armor_surcoat",
                         "armor_habit", "armor_apron", "armor_frock", "armor_toga"
-                    )
+                    ) && it.id !in GameData.CAPE_IDS
                 }.shuffled().take(2).map { it.id })
-        initialGear.addAll(GameData.HEADGEAR_PIECES.filter {
-                    it.id !in listOf("helm_jester", "helm_antlered", "helm_winged", "helm_wolf", "helm_pot")
-                }.shuffled().take(2).map { it.id })
+        initialGear.addAll(helmRollPool().shuffled().take(2).map { it.id })
 
         _uiState.update { it.copy(
             highscore = 0,

@@ -273,6 +273,21 @@ object GameData {
     val STRANGE_HEAD_IDS = setOf("head_eel", "head_femur", "head_goose", "head_cheese")
 
     /**
+     * Helms earned rather than rolled, on the same footing as [UNLOCKABLE_HANDLE_IDS]. Earning one
+     * puts it into a run's ROLL pool, so it turns up sometimes — it is not handed over on the spot
+     * and pinned to the picker forever, which made every later run open with the same fixed set of
+     * hats and drained the reward of any surprise.
+     */
+    val UNLOCKABLE_HELM_IDS = setOf(
+        "helm_jester", "helm_antlered", "helm_winged", "helm_wolf", "helm_pot"
+    )
+
+    /** Capes are an extra LAYER won as a reward, never body armour a run opens holding. */
+    val CAPE_IDS = setOf(
+        "cape_wool", "cape_riding", "cape_feather", "cape_ermine", "cape_tatters"
+    )
+
+    /**
      * Heads that exist in the ordinary pool but should be uncommon, not one-in-thirty like every
      * other head. Unlike the Strange Relics these need no milestone — they simply turn up rarely.
      */

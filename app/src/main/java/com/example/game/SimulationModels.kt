@@ -103,7 +103,10 @@ val NON_PARADE_ANCILLARIES = setOf(
     Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG,
     Ancillary.TROJAN_HORSE, Ancillary.PLAGUE_PEASANT, Ancillary.GREASER,
     Ancillary.FIREBRAND, Ancillary.BEEKEEPER,
-    Ancillary.ARCHER, Ancillary.CROSSBOWMAN
+    Ancillary.ARCHER, Ancillary.CROSSBOWMAN,
+    // The burrowers and the skirmisher spawn their own bodies (GameViewModel :1231-1265) — they
+    // were fighting on the field AND marching in the parade at the same time.
+    Ancillary.SAPPER, Ancillary.MOLEMAN, Ancillary.TINY_TERRENCE
 )
 
 /**
@@ -654,6 +657,15 @@ data class FighterState(
     var stolenWeaponOwnerId: FighterId? = null, // a brawler holding a foe's stolen weapon; dropped when that foe dies
     var activeWrestlingMove: WrestlingMove? = null,
     var crumpleDuration: Float = 0f,
+    // Slipped while backpedalling, as opposed to being knocked down. A retreating man travels the
+    // opposite way to his facing, so the ordinary crumple pose lands his head in the direction of
+    // travel and reads as a faceplant. This flips it: feet shoot out the way he was going, head
+    // toward the foe he was shooting at.
+    var slipped: Boolean = false,
+    /** Knockback in flight. Carries a man backwards over ~half a second instead of teleporting him. */
+    var skidVelocityX: Float = 0f,
+    /** Counts down after a boss knockdown; while it runs he cannot be floored again. */
+    var crumpleCooldown: Float = 0f,
     var visualOffsetY: Float = 0f,
     // Hill terrain: how far this fighter is lifted by the slope under his feet (negative = higher
     // up the hill). 0 in every non-hill battle, so the high-ground damage bonus and the render
@@ -1165,12 +1177,22 @@ fun FighterState.clearDot(kind: Dot) {
  */
 fun FighterState.tryCrumple(seconds: Float, chance: Float = 1f): Boolean {
     if (crumpleDuration > 0f) return false
+    // Stunlock guard. Every knockdown in the game routes through here, so one check covers the
+    // suplex, the ballista, the mace and the rest. A boss with attackers on both sides was being
+    // re-floored by whichever one won the next roll, and never swung again — 0.1 ccResist only
+    // made each individual roll unlikely, and there are a lot of rolls per second in a scrum.
+    if (crumpleCooldown > 0f) return false
     if (Random.nextFloat() >= chance * ccResist) return false
     // Floor the scaling: a boss still stumbles, it just gets straight back up.
     crumpleDuration = seconds * ccResist.coerceAtLeast(0.35f)
+    // Only the big men get the breathing room; an ordinary housecarl can still be chain-floored.
+    if (bossType != null || isBossRetinue) crumpleCooldown = crumpleDuration + BOSS_CC_IMMUNITY_SECS
     isCrumpled = true
     return true
 }
+
+/** How long after standing up a boss cannot be knocked down again. */
+const val BOSS_CC_IMMUNITY_SECS = 4f
 
 // Grapples a bare-fisted brawler can roll on attack
 enum class WrestlingMove { CHOKE_SLAM, BODY_THROW, SUPLEX }

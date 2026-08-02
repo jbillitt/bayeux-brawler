@@ -532,11 +532,12 @@ class GameViewModelTest {
     }
 
     @Test
-    fun `rally produces twins about six percent of the time`() {
-        // Was 15%, which put twins on most reward screens and made the surprise routine.
+    fun `rally produces twins about five percent of the time`() {
+        // 15% put twins on most reward screens. 5% keeps them a surprise; the rarity that really
+        // gates the snowball is the Thrice-Blessed roll, which is half this.
         val random = kotlin.random.Random(99)
         val twinRate = (0 until 1000).count { rollFollowerCopies(random) == 2 } / 1000f
-        assertTrue("twins rate was $twinRate", twinRate in 0.03f..0.09f)
+        assertTrue("twins rate was $twinRate", twinRate in 0.03f..0.075f)
     }
 
     @Test

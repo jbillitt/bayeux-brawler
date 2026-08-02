@@ -58,7 +58,7 @@ class CombatEngine(private val ctx: BattleContext) {
         /** Retreating (kiting) is slower than advancing, so a melee chaser can eventually close. */
         const val KITE_RETREAT_MULT = 0.6f
         /** Per-second chance an unmounted kiter stumbles on rough ground: brief slow + lost shot. */
-        const val KITE_STUMBLE_CHANCE_PER_SEC = 0.6f
+        const val KITE_STUMBLE_CHANCE_PER_SEC = 0.12f
         /** Early-game enemy ranged fire is slower (level <= EARLY_RANGED_LEVEL). */
         const val EARLY_RANGED_SLOW = 1.4f
         const val EARLY_RANGED_LEVEL = 3
@@ -137,6 +137,8 @@ class CombatEngine(private val ctx: BattleContext) {
         const val VOLLEY_DELAY_SECS = 0.12f
         /** Ground a ballista spear shoves a man back. Its card promised a knockback; nothing did it. */
         const val BALLISTA_KNOCKBACK_PX = 45f
+        /** Skid drag. Distance travelled works out as launch speed / this, so 6 gives ~0.5s of slide. */
+        const val SKID_DRAG_PER_SEC = 6f
 
         // The unmuzzled bear, all tunable. The friendly-fire chance is the price of the reward and
         // is deliberately low enough to be a story rather than a tax.
@@ -169,7 +171,7 @@ class CombatEngine(private val ctx: BattleContext) {
         const val PANIC_RUN_MULT = 1.35f
 
         /** Bosses swing quicker than their bulk earns them. Tunable; the boss-fight pacing knob. */
-        const val BOSS_SWING_SPEEDUP = 0.8f
+        const val BOSS_SWING_SPEEDUP = 0.6f  // 0.8 → 0.6: bosses were out-traded by a stacked player
         /** A boss keeps both arms until this fraction of his hp is left. */
         const val BOSS_ARM_LOSS_HP_FRACTION = 0.15f
     }
@@ -418,6 +420,15 @@ class CombatEngine(private val ctx: BattleContext) {
             fighter.slowDuration -= dt
         }
 
+        // Knockback skid. Runs ahead of every AI branch and outside the crumple guard, so a man
+        // shoved while floored still slides instead of stopping dead where the spear hit him.
+        if (fighter.skidVelocityX != 0f) {
+            fighter.posX = (fighter.posX + fighter.skidVelocityX * dt)
+                .coerceIn(30f, ctx.levelWidth - 30f)
+            fighter.skidVelocityX *= (1f - SKID_DRAG_PER_SEC * dt).coerceAtLeast(0f)
+            if (abs(fighter.skidVelocityX) < 4f) fighter.skidVelocityX = 0f
+        }
+
         // Panic tick. A routed man keeps his feet but not his head: he blunders off in whatever
         // direction the last frog sent him, so his target keeps being rewritten from under him.
         if (fighter.panicDuration > 0f) {
@@ -430,11 +441,13 @@ class CombatEngine(private val ctx: BattleContext) {
 
         // Crumple tick over time. isCrumpled was never cleared, so anyone knocked down stayed
         // flagged down forever — they stood back up and never swung again.
+        if (fighter.crumpleCooldown > 0f) fighter.crumpleCooldown -= dt
         if (fighter.crumpleDuration > 0f) {
             fighter.crumpleDuration -= dt
             if (fighter.crumpleDuration <= 0f) {
                 fighter.crumpleDuration = 0f
                 fighter.isCrumpled = false
+                fighter.slipped = false
                 // Get up ready to fight, not stuck mid-swing from before they were floored
                 fighter.isAttacking = false
                 fighter.hasLandedStrike = false
@@ -630,14 +643,27 @@ class CombatEngine(private val ctx: BattleContext) {
                 // Ranged only: step back to keep the target at missile range. Retreat is slower than
                 // advancing (KITE_RETREAT_MULT) so a chaser can close, and an unmounted kiter can
                 // trip on rough ground — a brief slow that costs this frame's shot. Riders never slip.
-                if (!fighter.isMounted && fighter.slowDuration <= 0f &&
+                if (!fighter.isPlayer && !fighter.isMounted && fighter.slowDuration <= 0f &&
                     Random.nextFloat() < KITE_STUMBLE_CHANCE_PER_SEC * dt) {
                     // A stumble you can SEE. This only set slowDuration, which reads as "he walked
                     // a bit slower for a moment" and was invisible — the kiter never appeared to
                     // trip at all. He goes down on the spot now, briefly, and loses the shot.
+                    // He goes over backwards: tryCrumple's render angle is FALL_BACK's angle.
                     fighter.slowDuration = 0.8f
-                    fighter.tryCrumple(KITE_STUMBLE_FALL_SECS)
-                    ctx.popup("STUMBLE!", fighter.posX, 145f, Color(0xFF8A7156))
+                    if (fighter.tryCrumple(KITE_STUMBLE_FALL_SECS)) fighter.slipped = true
+                    // Divots kicked up by the skidding heel, thrown the way his feet went — the
+                    // whole tell, no word popup. A shout on every trip was noise at this cadence.
+                    val skid = if (target.posX > fighter.posX) -1f else 1f
+                    repeat(5) {
+                        ctx.particle(BloodParticle(
+                            x = fighter.posX + Random.nextInt(-8, 8),
+                            y = 190f,
+                            vx = skid * (40f + Random.nextFloat() * 90f),
+                            vy = -90f - Random.nextFloat() * 70f,
+                            color = if (it % 2 == 0) Color(0xFF6B5638) else Color(0xFF4F6B3A),
+                            isSmoke = false
+                        ))
+                    }
                 } else {
                     val direction = if (target.posX > fighter.posX) -1f else 1f
                     fighter.posX += direction * fighter.moveSpeed * KITE_RETREAT_MULT *
@@ -1539,7 +1565,9 @@ class CombatEngine(private val ctx: BattleContext) {
             // Never against the player: being shoved around by archery is not a fight.
             if (proj.isBallista && !defender.isPlayer && !defender.isInanimate) {
                 val shove = if (proj.velocityX >= 0f) BALLISTA_KNOCKBACK_PX else -BALLISTA_KNOCKBACK_PX
-                defender.posX += shove * defender.ccResist
+                // Launch speed, not a teleport. The old `posX +=` moved him the whole 45px between
+                // one frame and the next, which read as the man blinking backwards.
+                defender.skidVelocityX = shove * defender.ccResist * SKID_DRAG_PER_SEC
                 defender.tryCrumple(1.2f, chance = 0.35f)
             }
             // Apply Poison Upgrade. Stacks with the hag's venom and with the plague peasant's rot

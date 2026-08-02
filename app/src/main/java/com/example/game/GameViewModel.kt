@@ -100,7 +100,7 @@ internal fun createLilGuyDart(
 internal const val LIL_GUY_THROW_SECONDS = 1.4f
 
 internal fun rollFollowerCopies(random: Random = Random.Default): Int =
-    if (random.nextFloat() < 0.06f) 2 else 1   // was 0.15 — twins turned up most rounds
+    if (random.nextFloat() < 0.05f) 2 else 1   // 0.15 → 0.06 → 0.05; tripling carries the rarity now
 
 internal fun pickTripleCandidate(
     followers: List<Ancillary>,
@@ -385,6 +385,10 @@ class GameViewModel : ViewModel() {
         // The diggers. Short trips: they are meant to open a second front early in the fight,
         // not be absent for half of it. The moleman swims through soil with his hands and is the
         // quicker of the two; the sapper is shifting earth with a spade.
+        /** How close a hostile has to get before a parked siege defender joins in regardless. */
+        const val SIEGE_WAKE_RADIUS_PX = 220f
+        /** Where the castle gate stands. Matches BattlegroundContent.siegeObjects. */
+        const val SIEGE_GATE_X = 1800f
         const val SAPPER_BURROW_SECONDS = 4.2f
         const val MOLEMAN_BURROW_SECONDS = 2.8f
         /** How long the descent itself takes — he sinks at the dig site, throwing up spoil. */
@@ -966,8 +970,12 @@ class GameViewModel : ViewModel() {
                 // after it adds men to the wall and the relief column, so they keep escalating.
                 val siegeOrdinal = SiegeSchedule.levels(MedievalHarpPlayer.gameSeed, state.level)
                     .indexOf(state.level).coerceAtLeast(0)
+                // Capped at 9: the parapet is 780px from 1800 and these stand at 1850 + i*90, so a
+                // 10th archer hangs off the end of the wall. It is also the range-spam ceiling —
+                // late sieges get their extra men in the relief column below, which is melee.
                 val parapetCount = (max(3, (enemiesCount * 2) / 3) +
-                    (if (siegeOrdinal == 0) -2 else siegeOrdinal.coerceAtMost(4))).coerceAtLeast(1)
+                    (if (siegeOrdinal == 0) -2 else siegeOrdinal.coerceAtMost(4)))
+                    .coerceIn(1, 9)
                 val queueCount = max(3, enemiesCount + 2) + siegeOrdinal.coerceAtMost(5)
                 // A late siege is defended, not merely garrisoned: from level 30 the wall and the
                 // relief column layer on coif, gauntlets and boots the way the field host already
@@ -1424,7 +1432,16 @@ class GameViewModel : ViewModel() {
         multiKillWindow = 0f
 
         // Generate Environment
-        val levelWidth = if (state.level == 1) 1500f else if (state.level >= 5) 2500f else 1000f + (contentRandom.nextFloat() * 500f)
+        // A siege stretches to fit its own relief column instead of clamping it. The queue spawns at
+        // 2050 + i*65 and CombatEngine pins everyone inside levelWidth - 30, so a late column of 15
+        // used to concertina into one stack behind the gate. Derived from the spawn, not guessed, so
+        // it only ever grows as far right as there are men to put there.
+        val levelWidth = when {
+            isSiegeBattle -> max(2500f, (enemies.maxOfOrNull { it.posX } ?: 2500f) + 150f)
+            state.level == 1 -> 1500f
+            state.level >= 5 -> 2500f
+            else -> 1000f + (contentRandom.nextFloat() * 500f)
+        }
         val bgObjects = mutableListOf<BackgroundObject>()
         
         if (chariotCollapses) {
@@ -1797,6 +1814,21 @@ class GameViewModel : ViewModel() {
                     if (it.id in siege.queuedFighterIds && it.isCombatInactive) it.isCombatInactive = false
                 }
             }
+            // Backstop for both scripted triggers above. A man standing in the gateway wakes when
+            // something hostile walks into his reach, whatever route it took to get there — the
+            // scripted wakes are keyed to gate/ladder events, so a player who came down off the
+            // wall or shot the gate open from range could stroll the whole length of the garrison
+            // and reach the back before anybody swung at him.
+            if (enemies.any { it.id in siege.queuedFighterIds && it.isCombatInactive }) {
+                val hostiles = enemies.filter { it.isPlayer && !it.isDead && !it.isDying } + player
+                enemies.forEach { def ->
+                    if (def.id in siege.queuedFighterIds && def.isCombatInactive &&
+                        hostiles.any { abs(it.posX - def.posX) <= SIEGE_WAKE_RADIUS_PX }
+                    ) {
+                        def.isCombatInactive = false
+                    }
+                }
+            }
         }
 
         // Nobody leaves the field for good. Knockbacks — the barrow-king's hurl, a ballista spear,
@@ -1903,7 +1935,8 @@ class GameViewModel : ViewModel() {
                             maxAge = 1.0f + Random.nextFloat() * 0.6f
                         ))
                     }
-                    MedievalAudioSynth.playTrojanBurst()
+                    // One man breaks the surface, so one cry. The default of 3 is the horse's belly.
+                    MedievalAudioSynth.playTrojanBurst(voices = 1)
                     addPopup("FROM BELOW!", digger.posX, 150f, Color(0xFF8A7156))
                 }
             }
@@ -1949,6 +1982,16 @@ class GameViewModel : ViewModel() {
 
         // 3. Update Player Fighter State
         var closestEnemy = targetableEnemies.minByOrNull { kotlin.math.abs(it.posX - player.posX) }
+        // Siege, gate shut, player on the ground. A defender behind the wall that he cannot reach
+        // from where he stands is not a reason to keep walking — dropping him here falls through to
+        // the gate branch below, so the player breaks the door instead of strolling past it after
+        // men he can never close with. A ranged player still shoots the wall while it is in range;
+        // only targets that are BOTH out of range and behind the gate line are ignored.
+        if (siege != null && !siege.gateBroken && !player.elevated) {
+            closestEnemy = closestEnemy?.takeUnless {
+                it.posX >= SIEGE_GATE_X && abs(it.posX - player.posX) > player.reachPixels
+            }
+        }
         // Firebrand: his torches keep the gate smouldering — it burns down on its own, slowly.
         if (siege != null && !siege.gateBroken &&
             enemies.any { it.isKind("firebrand") && !it.isDead && !it.isDying }
@@ -1978,11 +2021,15 @@ class GameViewModel : ViewModel() {
             player.climbState == ClimbState.NONE
         ) {
             engine.updateFighter(player, null, dt)
-            val gateX = 1800f
+            val gateX = SIEGE_GATE_X
             val distance = abs(gateX - player.posX)
             if (distance > 75f) {
-                player.posX += player.moveSpeed * dt
-                player.facingRight = true
+                // Walk TOWARD the gate. This was an unconditional += , so a player who had already
+                // slipped past the door kept marching right, away from the only thing he could
+                // attack, and the siege could not progress.
+                val toGate = if (gateX > player.posX) 1f else -1f
+                player.posX += player.moveSpeed * dt * toGate
+                player.facingRight = toGate > 0f
                 // updateFighter only cycles the legs when it has a target; drive the walk bob
                 // ourselves or the player moon-walks up to the gate with frozen legs.
                 player.animFrame += dt * 9f
@@ -2550,7 +2597,9 @@ class GameViewModel : ViewModel() {
                     state.unlockedAncillaries,
                     state.tripledFollowerIds
                 )
-                if (state.level >= 8 && tripleCandidate != null && Random.nextFloat() < 0.03f) {
+                // 0.03 → 0.025, and the floor moves 8 → 12: tripling is the run-defining rarity,
+                // twins are the common surprise.
+                if (state.level >= 12 && tripleCandidate != null && Random.nextFloat() < 0.025f) {
                     val lucky = tripleCandidate
                     pendingChoices.add(LevelUpChoice(
                         id = "triple_${lucky.id}",

@@ -108,10 +108,12 @@ object TapestryRenderer {
             var offsetY = fighter.visualOffsetY + bounceY
             var scaleY = 1f
             if (fighter.crumpleDuration > 0f && !fighter.isDead && !fighter.isDying) {
-                // Ragdolled onto the floor
-                rotationAngle = if (fighter.facingRight) -90f else 90f
+                // Ragdolled onto the floor. A slip while backpedalling lands the other way up —
+                // see FighterState.slipped.
+                val backwards = if (fighter.slipped) -1f else 1f
+                rotationAngle = backwards * (if (fighter.facingRight) -90f else 90f)
                 offsetY += 60f
-                offsetX += if (fighter.facingRight) -30f else 30f
+                offsetX += backwards * (if (fighter.facingRight) -30f else 30f)
             }
             if (fighter.isDead || fighter.isDying) {
                 val progress = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f) else 1f
@@ -2697,6 +2699,13 @@ object TapestryRenderer {
         // Handle shaft (wooden)
         val shaftEnd = androidx.compose.ui.geometry.Offset(hx + handleLen * 0.8f, hy - handleLen * 0.4f)
         var headPos = shaftEnd
+        if (isBowOrSlingshot) {
+            // The bow's art starts at the 18px standoff above, which left it floating clear of the
+            // fist with nothing joining the two. A plain wooden grip spans the gap; the bow art
+            // itself is untouched, it just now has a handle reaching back into the hand.
+            scope.drawLine(Color(0xFF8C6F47), Offset(hx, hy), shaftEnd, strokeWidth = 6f, cap = StrokeCap.Round)
+            scope.drawLine(ThreadColor, Offset(hx, hy), shaftEnd, strokeWidth = 2f, cap = StrokeCap.Round)
+        }
         val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
         if (isChainHandle && !isBowOrSlingshot) {
             val swing = fighter.swingProgress

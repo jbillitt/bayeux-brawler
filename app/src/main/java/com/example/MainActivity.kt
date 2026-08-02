@@ -2866,6 +2866,38 @@ fun BattlefieldScene(
                     val sy = 200f + (proj.posY - 200f) * scaleFactor
                     val arrowDir = if (proj.velocityX > 0) 1f else -1f
 
+                    // The flying shaft — shared, because a weapon-tipped shot is still an arrow.
+                    // It used to be drawn only in the ARROW/BOLT branch, and the launchedWeaponId
+                    // branch above it replaced the whole missile with a floating weapon head.
+                    // withTip is false when a weapon head is about to be drawn over the point.
+                    val drawArrowShaft = { withTip: Boolean ->
+                        val shaftColor = if (proj.isBallista) Color(0xFF8A7156) else TapestryDark
+                        val isBolt = proj.type == com.example.game.ProjectileType.BOLT
+                        val strokeW = (if (proj.isBallista) 10f else if (isBolt) 4f else 5f * proj.sizeMultiplier) * scaleFactor
+                        val length = (if (isBolt) 35f else 55f) * proj.sizeMultiplier * scaleFactor
+
+                        drawLine(
+                            color = shaftColor,
+                            start = Offset(sx, sy),
+                            end = Offset(sx - (length * arrowDir), sy + (if (proj.isBallista) 0f else 3f)),
+                            strokeWidth = strokeW,
+                            cap = StrokeCap.Round
+                        )
+                        if (withTip) {
+                            val tipRadius = if (proj.isBallista) 11f else 6f
+                            drawCircle(Color(0xFF868C91), radius = tipRadius, center = Offset(sx, sy))
+                        }
+                        if (proj.hasSpikes) {
+                            drawLine(TapestryDark, Offset(sx, sy), Offset(sx - (10f * arrowDir), sy + 8f), strokeWidth = 3f)
+                            drawLine(TapestryDark, Offset(sx, sy), Offset(sx - (10f * arrowDir), sy - 8f), strokeWidth = 3f)
+                        }
+                        // Arrow feather fletching (Embroidered texture)
+                        drawLine(TapestryRed, Offset(sx - (length * 0.7f * arrowDir), sy + 2f), Offset(sx - (length * arrowDir), sy + 14f), strokeWidth = 5f, cap = StrokeCap.Round)
+                        drawLine(TapestryRed, Offset(sx - (length * 0.7f * arrowDir), sy - 2f), Offset(sx - (length * arrowDir), sy - 14f), strokeWidth = 5f, cap = StrokeCap.Round)
+                        drawLine(TapestryRed, Offset(sx - (length * 0.8f * arrowDir), sy + 2f), Offset(sx - (length * 1.1f * arrowDir), sy + 9f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+                        drawLine(TapestryRed, Offset(sx - (length * 0.8f * arrowDir), sy + 2f), Offset(sx - (length * 1.1f * arrowDir), sy - 5f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+                    }
+
                     if (proj.id.startsWith("bee_hive_")) {
                         // A flying bee skep: banded straw dome with the swarm trailing behind it
                         val dome = Path().apply {
@@ -2890,6 +2922,12 @@ fun BattlefieldScene(
                         }
                     } else if (proj.launchedWeaponId != null) {
                         // Drawing miniature launched weapon head as the projectile!
+                        // On an arrow or bolt the head is only the TIP: shaft and fletching first,
+                        // head over the point. A thrown weapon has no shaft and skips this.
+                        if (proj.type == com.example.game.ProjectileType.ARROW ||
+                            proj.type == com.example.game.ProjectileType.BOLT) {
+                            drawArrowShaft(false)
+                        }
                         val weaponHeadId = proj.launchedWeaponId
                         if (weaponHeadId == "head_axe") {
                             val hPath = Path().apply {
@@ -2979,37 +3017,7 @@ fun BattlefieldScene(
                         drawCircle(Color(0xFFE07020), radius = 9f, center = Offset(sx, sy))
                         drawCircle(Color(0xFFFFC34D), radius = 4f, center = Offset(sx + 2f, sy - 2f))
                     } else if (proj.type == com.example.game.ProjectileType.ARROW || proj.type == com.example.game.ProjectileType.BOLT) {
-                        // Draw flying arrow line with feathers
-                        val shaftColor = if (proj.isBallista) Color(0xFF8A7156) else TapestryDark
-                        // Match embedded arrows, which inherit the fighter transform's scaleFactor
-                        val isBolt = proj.type == com.example.game.ProjectileType.BOLT
-                        val strokeW = (if (proj.isBallista) 10f else if (isBolt) 4f else 5f * proj.sizeMultiplier) * scaleFactor
-                        val length = (if (isBolt) 35f else 55f) * proj.sizeMultiplier * scaleFactor
-                        
-                        // Arrow Shaft
-                        drawLine(
-                            color = shaftColor,
-                            start = Offset(sx, sy),
-                            end = Offset(sx - (length * arrowDir), sy + (if(proj.isBallista) 0f else 3f)),
-                            strokeWidth = strokeW,
-                            cap = StrokeCap.Round
-                        )
-                        // Arrow Iron Tip
-                        val tipRadius = if (proj.isBallista) 11f else 6f
-                        drawCircle(Color(0xFF868C91), radius = tipRadius, center = Offset(sx, sy))
-                        
-                        // Spiked Broadhead extra barbs
-                        if (proj.hasSpikes) {
-                            drawLine(TapestryDark, Offset(sx, sy), Offset(sx - (10f * arrowDir), sy + 8f), strokeWidth = 3f)
-                            drawLine(TapestryDark, Offset(sx, sy), Offset(sx - (10f * arrowDir), sy - 8f), strokeWidth = 3f)
-                        }
-
-                        // Arrow feather fletching (Embroidered texture)
-                        drawLine(TapestryRed, Offset(sx - (length * 0.7f * arrowDir), sy + 2f), Offset(sx - (length * arrowDir), sy + 14f), strokeWidth = 5f, cap = StrokeCap.Round)
-                        drawLine(TapestryRed, Offset(sx - (length * 0.7f * arrowDir), sy - 2f), Offset(sx - (length * arrowDir), sy - 14f), strokeWidth = 5f, cap = StrokeCap.Round)
-                        drawLine(TapestryRed, Offset(sx - (length * 0.8f * arrowDir), sy + 2f), Offset(sx - (length * 1.1f * arrowDir), sy + 9f), strokeWidth = 3.5f, cap = StrokeCap.Round)
-                        drawLine(TapestryRed, Offset(sx - (length * 0.8f * arrowDir), sy + 2f), Offset(sx - (length * 1.1f * arrowDir), sy - 5f), strokeWidth = 3.5f, cap = StrokeCap.Round)
-                        
+                        drawArrowShaft(true)
                     } else {
                         // Sling stone circle (woven rock)
                         val r = 4.5f * proj.sizeMultiplier

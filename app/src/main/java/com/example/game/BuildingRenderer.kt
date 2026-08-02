@@ -242,14 +242,24 @@ internal fun drawDamageDecals(scope: DrawScope, cx: Float, cy: Float, bg: Backgr
             // Embed at the size it flew at. Every shaft was drawn full arrow size, so a Lil Guy
             // dart (0.5) that read as a needle in the air stuck out of the wall as a full arrow.
             val s = arrow.sizeMultiplier.coerceIn(0.35f, 2.5f)
+            // Same length and stroke table the missile flew at (MainActivity :2986-2987) — a bolt
+            // embedded at full arrow length, so a crossbow bolt that read as a stubby dart in the
+            // air became a spar sticking out of the wall.
+            val flightLength = when (arrow.projType) {
+                ProjectileType.BOLT -> 35f
+                ProjectileType.DART -> 20f
+                else -> 55f
+            } * s
+            val stroke = (if (arrow.projType == ProjectileType.BOLT) 4f else 5f) * s
+            // 0.76/0.24 of the shaft behind and in front of the impact point, the proportion the
+            // old fixed 32/10 pair had.
+            val tailX = dx - nx * flightLength * 0.76f
+            val tailY = dy - ny * flightLength * 0.76f
+            val headX = dx + nx * flightLength * 0.24f
+            val headY = dy + ny * flightLength * 0.24f
 
-            val tailX = dx - nx * 32f * s
-            val tailY = dy - ny * 32f * s
-            val headX = dx + nx * 10f * s
-            val headY = dy + ny * 10f * s
-
-            scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 4.5f * s)
-            scope.drawLine(ThreadColor, Offset(tailX, tailY), Offset(headX, headY), strokeWidth = 1.5f * s)
+            scope.drawLine(Color(0xFF8A5E38), Offset(tailX, tailY), Offset(headX, headY), strokeWidth = stroke)
+            scope.drawLine(ThreadColor, Offset(tailX, tailY), Offset(headX, headY), strokeWidth = stroke / 3f)
 
             // Fletching at the tail
             val perpX = -ny; val perpY = nx

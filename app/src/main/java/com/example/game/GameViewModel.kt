@@ -1997,7 +1997,10 @@ class GameViewModel : ViewModel() {
         if (siege != null) {
             SiegeRules.tickClimb(player, dt)
             SiegeRules.tickClimbs(enemies, dt)
-            SiegeRules.reconcileParapet(siege, player, enemies)
+            if (SiegeRules.reconcileParapet(siege, player, enemies)) {
+                addPopup("PORTA APERTA!", SIEGE_GATE_X, 130f, Color(0xFF6E5536))
+                MedievalAudioSynth.playSound(SoundType.CRUNCH)
+            }
             // The player going over the wall commits the garrison exactly like a broken gate:
             // the queue behind it wakes up. Without this, mounting by ladder left them inert
             // and the battle could never end.
@@ -2329,9 +2332,12 @@ class GameViewModel : ViewModel() {
                 !enemy.isDead && !enemy.isDying && !enemy.elevated &&
                 enemy.climbState == ClimbState.NONE && enemy.pallbearerIndex < 0
             ) {
-                // Siege ladders: the squad scales the wall with you instead of battering the gate —
-                // but only once they have actually marched up to it.
-                if (siege.siegeLadders && abs(1800f - enemy.posX) < 140f &&
+                // The squad scales the wall with you instead of battering the gate — but only once
+                // they have actually marched up to it. Gated on the ladder STANDING rather than on
+                // the Siege Ladders reward: a ladder that went up because the gate came down is
+                // just as climbable, and everyone who cannot tunnel or ride a horse through the
+                // door should be taking whichever way in exists.
+                if (SiegeRules.ladderStanding(siege) && abs(SIEGE_GATE_X - enemy.posX) < 140f &&
                     SiegeRules.beginClimbUp(siege, enemy, enemies)
                 ) return@forEach
                 engine.updateFighter(enemy, null, dt)
@@ -3443,9 +3449,48 @@ class GameViewModel : ViewModel() {
                     ).filter { it.second }.map { it.first }
                         .filter { it.itemId !in state.rangedUpgrades }
 
+                    // The late tier: work on the missile itself rather than on the weapon, so it
+                    // applies whatever is being loosed. These exist because a deep ranged build ran
+                    // out of upgrades entirely while a melee one kept finding reach, mass and
+                    // brawler cards — it had stopped progressing halfway through a long run.
+                    //
+                    // Each is on its own roll rather than always present, so which of them a run
+                    // sees is part of what makes the run its own. Plague is deliberately the
+                    // rarest thing a bow can win.
+                    val lateRanged = listOf(
+                        LevelUpChoice(
+                            "ranged_sharpen", "Ranged: Ground to a Needle",
+                            "Take every $missile back to the whetstone until the point will not hold a shadow. Half again the pierce, and it starts finding the gaps in mail${if (state.weaponHead.id == "head_crossbow") " — and on a bolt, it goes through mail altogether" else ""}.",
+                            "ranged_upgrade", "ranged_sharpen"
+                        ) to (state.level >= 14 && Random.nextFloat() < 0.35f),
+                        LevelUpChoice(
+                            "ranged_extra_tip", "Ranged: A Second Point Behind the First",
+                            "Bind a second head on each $missile, a hand's breadth back. It does not fly as sweetly and it drops sooner — but what it hits, it keeps, and the wound will not close.",
+                            "ranged_upgrade", "ranged_extra_tip"
+                        ) to (state.level >= 16 && Random.nextFloat() < 0.3f),
+                        LevelUpChoice(
+                            "ranged_fire", "Ranged: Pitch and Tow",
+                            "Bind oiled tow behind each head and light it on the string. Every $missile that lands sets the man alight — and burning men do not hold a line.",
+                            "ranged_upgrade", "ranged_fire"
+                        ) to (state.level >= 18 && Random.nextFloat() < 0.22f),
+                        LevelUpChoice(
+                            "ranged_plague", "Ranged: The Corpse-Cart's Leavings",
+                            "Foul every point in what the plague cart leaves behind. Whoever is struck rots, and the rot piles onto any pestilence already working in him. The chroniclers will not forgive you for this one.",
+                            "ranged_upgrade", "ranged_plague"
+                        ) to (state.level >= 22 && Random.nextFloat() < 0.07f),
+                        LevelUpChoice(
+                            "ranged_bomb_shrapnel_more", "Bombs: Nothing But Scrap",
+                            "Stop pretending the clay matters. Pack ${CombatEngine.BOMB_SHRAPNEL_FRAGMENTS} more fragments of cut iron around the charge and let the pot be a delivery method.",
+                            "ranged_upgrade", "bomb_shrapnel_more"
+                        ) to (isBombThrower && state.level >= 15 &&
+                            "bomb_shrapnel" in state.rangedUpgrades && Random.nextFloat() < 0.4f)
+                    ).filter { it.second }.map { it.first }
+                        .filter { it.itemId !in state.rangedUpgrades }
+
                     // A rare prize that actually rolled takes the slot — rolling it and then
                     // shuffling it back into the pool would be the same as never rolling it.
                     val pick = rareRanged.firstOrNull()
+                        ?: lateRanged.randomOrNull()
                         ?: possibleUpgrades.filter { it.itemId !in state.rangedUpgrades }.randomOrNull()
                     if (pick != null) pendingChoices.add(pick)
                 }

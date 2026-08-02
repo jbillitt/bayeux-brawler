@@ -144,6 +144,10 @@ class CombatEngine(private val ctx: BattleContext) {
         // Rare ranged rewards. All tunable; these are the fun knobs, not the balance-critical ones.
         /** Fragments a cluster charge sprays on impact. */
         const val CLUSTER_FRAGMENTS = 4
+        /** And what a bomb packed with nails throws instead — it is a bigger pot to fill. */
+        const val BOMB_SHRAPNEL_FRAGMENTS = 7
+        /** A bolt is a spike driven by a steel prod. It goes through mail a shaft would rattle off. */
+        const val CROSSBOW_ARMOUR_PIERCE = 0.45f
         /** Each fragment's share of the parent shot's damage. */
         const val CLUSTER_FRAGMENT_DAMAGE = 0.35f
         /** How much further a lofted volley shot travels than the flat shot beside it. */
@@ -1496,6 +1500,13 @@ class CombatEngine(private val ctx: BattleContext) {
                 igniting = true
                 finalDmg += 6f
             }
+            // The late pot: nothing but scrap around the charge. Taken on top of the nails, not
+            // instead of them, so a fully-worked bomb throws an absurd wall of iron.
+            if (attacker.rangedUpgrades.contains("bomb_shrapnel_more")) {
+                cluster += BOMB_SHRAPNEL_FRAGMENTS
+                finalPierce += 8f
+                sizeMult += 0.25f
+            }
         }
 
         // The bombardier's pot. Reuses the splash machinery the player's own burst shot uses, so
@@ -1580,6 +1591,33 @@ class CombatEngine(private val ctx: BattleContext) {
         // rides on top of whatever else the shot is carrying.
         if (attacker.rangedUpgrades.contains("cluster")) {
             cluster = CLUSTER_FRAGMENTS
+        }
+
+        // Late-game work on the missile itself, applied to every kind of shot rather than to one
+        // weapon's branch — a bomb-thrower and a crossbowman both benefit from a better point, and
+        // a build that has run out of upgrades to take is a build that has stopped progressing.
+        if (attacker.rangedUpgrades.contains("ranged_sharpen")) {
+            finalPierce *= 1.35f
+            armorPierce = maxOf(armorPierce, 0.2f)
+        }
+        if (attacker.rangedUpgrades.contains("ranged_extra_tip")) {
+            // A second head behind the first: it does not fly as sweetly, but what it hits, it keeps.
+            finalDmg += 12f
+            spikes = true
+            gravMult *= 1.15f
+        }
+        if (attacker.rangedUpgrades.contains("ranged_fire")) {
+            igniting = true
+            finalDmg += 5f
+        }
+        if (attacker.rangedUpgrades.contains("ranged_plague")) {
+            plaguing = true
+        }
+        // A bolt is a short heavy spike driven by a steel prod, and it always should have gone
+        // through mail better than a shaft loosed off a stave.
+        if (isCrossbow) {
+            armorPierce = maxOf(armorPierce, CROSSBOW_ARMOUR_PIERCE)
+            if (attacker.rangedUpgrades.contains("ranged_sharpen")) armorPierce = maxOf(armorPierce, 0.7f)
         }
 
         // Volley: lofted high, so it comes down well past where a flat shot dies. Applied last of

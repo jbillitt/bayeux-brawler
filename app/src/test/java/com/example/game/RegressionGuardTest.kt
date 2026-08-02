@@ -445,6 +445,47 @@ class RegressionGuardTest {
     }
 
     @Test
+    fun `clearing the wall opens the gate instead of sending you back to punch it`() {
+        val player = fighter("player", player = true).apply {
+            elevated = true
+            posX = GameViewModel.SIEGE_GATE_X
+        }
+        val state = SiegeState(
+            gateHp = 500f, gateMaxHp = 500f,
+            parapetFighterIds = setOf(FighterId("wall_archer")),
+            queuedFighterIds = setOf(FighterId("reserve"))
+        )
+        val reserve = fighter("reserve")
+        // Wall still manned: he stays up there.
+        val archer = fighter("wall_archer").apply { elevated = true }
+        assertFalse(SiegeRules.reconcileParapet(state, player, listOf(archer, reserve)))
+        assertTrue("he has no business coming down yet", player.elevated)
+
+        // Wall cleared: down the INSIDE, and the bar comes off the gate.
+        archer.isDead = true
+        assertTrue(SiegeRules.reconcileParapet(state, player, listOf(archer, reserve)))
+        assertTrue("the way in is open once the wall is his", state.gateBroken)
+        assertTrue(
+            "he came down where he went up, outside a door he had just made pointless",
+            player.posX > GameViewModel.SIEGE_GATE_X
+        )
+        assertFalse("and the men behind the gate are committed", reserve.isCombatInactive)
+        // A ladder is standing now, so the retinue has a second way in besides the arch.
+        assertTrue(SiegeRules.ladderStanding(state))
+    }
+
+    @Test
+    fun `a bolt goes through mail better than a shaft, and a deep ranged build still has upgrades`() {
+        // A ranged run used to exhaust its upgrade list halfway through while a melee one kept
+        // finding reach, mass and brawler cards — it stopped progressing.
+        assertTrue("a crossbow must out-pierce a bow", CombatEngine.CROSSBOW_ARMOUR_PIERCE > 0.3f)
+        assertTrue(
+            "the late bomb pot must throw more than the ordinary cluster charge",
+            CombatEngine.BOMB_SHRAPNEL_FRAGMENTS > CombatEngine.CLUSTER_FRAGMENTS
+        )
+    }
+
+    @Test
     fun `twins are rarer than a plain follower and rarer still is the triple`() {
         val random = kotlin.random.Random(7)
         val twinRate = (0 until 4000).count { rollFollowerCopies(random) == 2 } / 4000f

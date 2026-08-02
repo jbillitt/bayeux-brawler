@@ -113,12 +113,32 @@ object SiegeRules {
     fun tickClimbs(fighters: List<FighterState>, dt: Float) =
         fighters.forEach { tickClimb(it, dt) }
 
-    fun reconcileParapet(state: SiegeState, player: FighterState, fighters: List<FighterState>) {
-        if (player.elevated && player.climbState == ClimbState.NONE &&
-            livingParapetEnemies(state, fighters).isEmpty()
-        ) {
-            beginClimbDown(player)
-        }
+    /**
+     * How far inside the gate a man who has just taken the wall comes down.
+     *
+     * He climbs down the INSIDE of it. Coming down where he went up left him outside a door he had
+     * just rendered pointless, whereupon the gate branch sent him back to punching it — having
+     * cleared the wall above his own head.
+     */
+    const val INSIDE_WALL_PX = 110f
+
+    /**
+     * Nobody left on the parapet: the player comes down the far side and throws the bar off the
+     * gate from within, which is how this has always actually been done. The door still stands as
+     * a door — [breakGate] simply means "the way in is open", and now there are two of them: over
+     * the wall, and through the arch for everyone behind him.
+     *
+     * Returns true the first time it opens a gate, so the caller can shout about it.
+     */
+    fun reconcileParapet(state: SiegeState, player: FighterState, fighters: List<FighterState>): Boolean {
+        if (!player.elevated || player.climbState != ClimbState.NONE) return false
+        if (livingParapetEnemies(state, fighters).isNotEmpty()) return false
+        beginClimbDown(player)
+        if (state.gateBroken) return false
+        player.posX = GameViewModel.SIEGE_GATE_X + INSIDE_WALL_PX
+        player.targetX = player.posX
+        breakGate(state, fighters)
+        return true
     }
 
     fun isBattleWon(fighters: List<FighterState>): Boolean =

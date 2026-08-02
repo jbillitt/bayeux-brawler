@@ -314,7 +314,12 @@ object TapestryRenderer {
                         drawTorso(this, cx, cy, fighter)
                         drawHead(this, cx, cy, fighter)
                         drawBackArmAndShield(this, cx, cy, fighter)
-                        if (fighter.isChariot) {
+                        // Nothing but the man falls. The rail lives inside the RIDER's transform
+                        // (it has to, to be drawn over him), which means it inherited his ragdoll
+                        // rotation — so a dying charioteer took a brown box spinning round with him
+                        // while his actual cart, rotated separately with the mount, stayed put. He
+                        // has fallen out of it; the cart from drawChariot is still there.
+                        if (fighter.isChariot && !fighter.isDead && !fighter.isDying) {
                             // The cart's front rail, drawn over the rider so he stands *in* the cart.
                             // It must sit in the same space as the cart body from drawChariot — this
                             // used to be drawn in the rider's own scale, so a small man got a second,
@@ -2694,6 +2699,65 @@ object TapestryRenderer {
                     scope.drawCircle(Color(0xFFB98F2E), radius = 1.5f, center = Offset(c.x + 2f, c.y + 9f))
                     scope.drawCircle(Color(0xFFB98F2E), radius = 1.5f, center = Offset(c.x - 9f, c.y - 5f))
                 }
+            }
+            "head_spade" -> {
+                // The sapper's tool. Drawn on the haft basis like the saw and the pitchfork, so
+                // the blade sits in line with the pole rather than at its own angle: a squared
+                // iron-shod blade with a shoulder where the socket takes the shaft, and a bright
+                // worn edge across the end.
+                val dx = 0.894f; val dy = -0.447f
+                val px = -dy; val py = dx
+                fun at(along: Float, across: Float) = Offset(
+                    headPos.x + dx * along + px * across,
+                    headPos.y + dy * along + py * across
+                )
+                val socket = Path().apply {
+                    moveTo(at(-4f, -5f).x, at(-4f, -5f).y)
+                    lineTo(at(8f, -7f).x, at(8f, -7f).y)
+                    lineTo(at(8f, 7f).x, at(8f, 7f).y)
+                    lineTo(at(-4f, 5f).x, at(-4f, 5f).y)
+                    close()
+                }
+                drawStitchedFill(scope, socket, Color(0xFF5E5750))
+                scope.drawStitchedOutline(socket, ThreadColor)
+                val blade = Path().apply {
+                    moveTo(at(8f, -12f).x, at(8f, -12f).y)
+                    lineTo(at(30f, -13f).x, at(30f, -13f).y)
+                    // The cutting end, very slightly bellied — a spade is not a rectangle
+                    quadraticTo(at(34f, 0f).x, at(34f, 0f).y, at(30f, 13f).x, at(30f, 13f).y)
+                    lineTo(at(8f, 12f).x, at(8f, 12f).y)
+                    close()
+                }
+                drawStitchedFill(scope, blade, headColor)
+                scope.drawStitchedOutline(blade, ThreadColor)
+                // Worn bright along the edge that does the digging
+                scope.drawLine(Color(0xFFD8D2C6), at(30f, -12f), at(30f, 12f), strokeWidth = 3f)
+            }
+            "head_giant_tooth" -> {
+                // A molar the size of a loaf, wired to the haft. Two blunt roots gripping the
+                // shaft, a bulging crown, and the brown of something that was never brushed.
+                val dx = 0.894f; val dy = -0.447f
+                val px = -dy; val py = dx
+                fun at(along: Float, across: Float) = Offset(
+                    headPos.x + dx * along + px * across,
+                    headPos.y + dy * along + py * across
+                )
+                listOf(-7f, 7f).forEach { side ->
+                    scope.drawLine(Color(0xFFCFC5A8), at(0f, side * 0.6f), at(11f, side), strokeWidth = 6f, cap = StrokeCap.Round)
+                }
+                val crown = Path().apply {
+                    moveTo(at(10f, -13f).x, at(10f, -13f).y)
+                    quadraticTo(at(24f, -19f).x, at(24f, -19f).y, at(33f, -8f).x, at(33f, -8f).y)
+                    quadraticTo(at(37f, 0f).x, at(37f, 0f).y, at(33f, 8f).x, at(33f, 8f).y)
+                    quadraticTo(at(24f, 19f).x, at(24f, 19f).y, at(10f, 13f).x, at(10f, 13f).y)
+                    close()
+                }
+                drawStitchedFill(scope, crown, headColor)
+                scope.drawStitchedOutline(crown, ThreadColor)
+                // Stain in the fissures, and the wire that holds it on
+                scope.drawLine(Color(0xFF9B8A63), at(16f, -6f), at(29f, -2f), strokeWidth = 2f)
+                scope.drawLine(Color(0xFF9B8A63), at(16f, 6f), at(29f, 2f), strokeWidth = 2f)
+                scope.drawLine(ThreadColor, at(4f, -8f), at(4f, 8f), strokeWidth = 2f)
             }
             "head_javelin" -> {
                 // Light throwing spear held in hand (was missing — javelineers looked empty-handed)

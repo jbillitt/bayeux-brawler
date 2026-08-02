@@ -596,8 +596,13 @@ class GameViewModel : ViewModel() {
                 // Frost binds rather than fells: they keep their feet and their weapons, but the
                 // ground is glass and they crawl. No knockdown — hail already owns that.
                 foes.forEach {
-                    it.slowDuration = 11f
+                    it.slowDuration = 14f
+                    // A frozen man is not just a slow one: he loses his footing outright now and
+                    // then, which is the only part of this miracle you could previously see.
+                    it.tryCrumple(1.6f, chance = 0.35f)
                 }
+                addPopup("GELU!", (_playerState.value?.posX ?: 400f) + 140f, 140f, Color(0xFF9EC4D6))
+                _screenshake.value = 10f
             }
             DivineWeather.FROGS -> {
                 // Frogs rout the host: they scatter, blunder about, and nobody looses an arrow with
@@ -1047,6 +1052,10 @@ class GameViewModel : ViewModel() {
             bandagesCount = state.bandagesCount
         )
         
+        // The mount's bar needs a denominator and a trailing ghost, exactly as the man's does.
+        player.mountMaxHp = player.mountHp
+        player.mountGhostHp = player.mountHp
+
         if (state.isThroneMode) {
             player.weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" }
             player.weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" }
@@ -2263,6 +2272,11 @@ class GameViewModel : ViewModel() {
         if (player.ghostHp > player.hp) {
             player.ghostHp -= 20f * dt
             if (player.ghostHp < player.hp) player.ghostHp = player.hp
+        }
+        // The mount's ghost drains at the same rate, so both bars read the same way.
+        if (player.mountGhostHp > player.mountHp) {
+            player.mountGhostHp -= 20f * dt
+            if (player.mountGhostHp < player.mountHp) player.mountGhostHp = player.mountHp
         }
 
         val newEnemiesToSpawn = mutableListOf<FighterState>()

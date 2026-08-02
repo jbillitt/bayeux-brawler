@@ -190,7 +190,7 @@ enum class DivineWeather(val id: String, val label: String, val description: Str
     HAIL("weather_hail", "Hailstorm", "Fist-sized hail batters every foe to the ground."),
     // Text matches the code on purpose: frost binds, hail fells. Promising a fall here made the
     // miracle read as broken when the host merely crawled.
-    FROST("weather_frost", "Killing Frost", "Ice underfoot — the enemy host is bound to a crawl."),
+    FROST("weather_frost", "Killing Frost", "Ice underfoot. The host crawls, swings late, and now and then goes down hard on it."),
     FROGS("weather_frogs", "Rain of Frogs", "The sky opens over the enemy host alone. They break, blunder and go down laughing-mad. Chaos, as the chronicles promised.")
 }
 
@@ -264,7 +264,7 @@ object GameData {
         SAW_2("head_saw_2", "Lumber Saw", 2.0f, slash = 28f, pierce = 5f, reach = 1.8f, description = "A massive two-man saw wielded by a single lunatic.", color = Color(0xFF909BA0)),
         // The sapper's own tool. A shod digging spade is a heavy edge on a long haft — it hits
         // like an axe that has been sharpened by a man who resents the work.
-        SPADE("head_spade", "Digging Spade", 2.3f, slash = 18f, blunt = 12f, reach = 1.7f, description = "An iron-shod spade, worn bright by a hundred yards of tunnel. Swung edge-first it splits a helm as readily as a sod of earth.", color = Color(0xFF7E7468)),
+        SPADE("head_spade", "Digging Spade", 2.3f, slash = 18f, blunt = 12f, reach = 1.7f, description = "An iron-shod spade, worn bright by a hundred yards of tunnel. Swung edge-first it splits a helm as readily as a sod of earth.", color = Color(0xFF9AA0A3)),
         // Strange relics: never in the shop or the normal attachment pool — only the rare
         // "Strange Relic" reward card offers them (GameViewModel). See STRANGE_HEAD_IDS.
         SMOKED_EEL("head_eel", "Smoked Eel", 0.8f, slash = 36f, blunt = 6f, reach = 2.0f, description = "A whole smoked eel, wielded like a flail. Slippery, whippy, and deeply insulting to be slain by.", color = Color(0xFF4E5A50)),
@@ -699,6 +699,10 @@ data class FighterState(
     var dotDebt: Float = 0f, // sub-1 damage-over-time carried between ticks; see CombatEngine.applyDotDamage
     var isMounted: Boolean = false,
     var mountHp: Float = 0f,
+    /** What the mount started with, so its bar has a denominator. Player only — see drawMountBar. */
+    var mountMaxHp: Float = 0f,
+    /** Trailing yellow behind the mount's bar, the same read as the man's own ghostHp. */
+    var mountGhostHp: Float = 0f,
     var isChariot: Boolean = false,
     var isStilts: Boolean = false,
     // Earned mounts (C2), following the same one-flag-per-mount pattern as isChariot/isStilts.

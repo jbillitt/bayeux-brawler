@@ -90,6 +90,15 @@ class CombatEngine(private val ctx: BattleContext) {
         const val ARMOR_SHRED_PER_HIT = 15f
         const val MONK_AURA_RADIUS_PX = 240f
         const val MONK_AURA_ATTACK_DELAY_MULT = 0.8f
+        /**
+         * How much longer a slowed man takes between swings.
+         *
+         * Slow only ever touched move speed, and in a melee where both lines are already in
+         * contact nobody is walking anywhere — so the Killing Frost, the greaser's fat, the hag's
+         * mud and the sapper's grit all read as doing nothing at all. A man on glass ice cannot
+         * set his feet to swing either.
+         */
+        const val SLOWED_ATTACK_DELAY_MULT = 1.6f
         /** How far the standard can be seen, and what seeing it is worth. Wider than the monk's. */
         const val BANNER_AURA_RADIUS_PX = 320f
         const val BANNER_AURA_ATTACK_DELAY_MULT = 0.78f
@@ -781,6 +790,8 @@ class CombatEngine(private val ctx: BattleContext) {
         }
 
         var cooldown = fighter.attackSpeedDelay
+        // Underfoot conditions reach the swing, not just the walk — see SLOWED_ATTACK_DELAY_MULT.
+        if (fighter.slowDuration > 0f) cooldown *= SLOWED_ATTACK_DELAY_MULT
         // A boss is big, and big means slow: at his size the mass and shield factors had him
         // swinging so rarely that a stacked player could simply stand there and out-trade him.
         if (fighter.bossType != null) cooldown *= BOSS_SWING_SPEEDUP

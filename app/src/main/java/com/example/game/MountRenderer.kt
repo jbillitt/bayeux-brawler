@@ -16,6 +16,18 @@ import kotlin.random.Random
 
 /** How high the stilts hold the rider above the ground. Shared by the mount art and the body offset. */
 internal const val STILTS_LIFT_PX = 90f
+
+/**
+ * How far a beast's jaw is open this frame, in local pixels. Idle chewing, wide and fast while it
+ * is actually biting something. Shared by the unmuzzled bear and Buster so the two animals gnash
+ * to the same rhythm rather than each inventing one.
+ */
+internal fun gnashOpening(fighter: FighterState): Float {
+    if (fighter.isDead || fighter.isDying) return 0f
+    val rate = if (fighter.isAttacking) 16f else 5f
+    val depth = if (fighter.isAttacking) 9f else 3.5f
+    return depth * (0.5f + 0.5f * sin(fighter.animFrame * rate))
+}
 internal fun drawHorse(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState, withStirrups: Boolean = true) {
         val anim = fighter.animFrame
         val walking = !fighter.isDead && !fighter.isDying
@@ -370,10 +382,37 @@ internal fun drawWarBear(scope: DrawScope, cx: Float, cy: Float, fighter: Fighte
     scope.drawCircle(fur, radius = 7f, center = Offset(cx + 46f, cy + 32f))
     scope.drawCircle(ThreadColor, radius = 7f, center = Offset(cx + 46f, cy + 32f), style = Stroke(width = 2f))
 
-    // The muzzle straps: the only reason anyone would sit on this animal.
-    val iron = Color(0xFF5D666B)
-    scope.drawLine(iron, Offset(cx + 66f, cy + 40f), Offset(cx + 74f, cy + 66f), strokeWidth = 3f)
-    scope.drawLine(iron, Offset(cx + 58f, cy + 44f), Offset(cx + 80f, cy + 50f), strokeWidth = 3f)
+    if (fighter.isBearUnmuzzled) {
+        // The straps are cut, so they are gone from the picture — the reward was invisible, and
+        // a bear still wearing its muzzle while mauling men read as a bug. What is left is a
+        // mouth that will not shut: the jaw works constantly, harder mid-swing.
+        val gnash = gnashOpening(fighter)
+        val jaw = Path().apply {
+            moveTo(cx + 64f, cy + 56f)
+            lineTo(cx + 86f, cy + 52f)
+            lineTo(cx + 84f, cy + 60f + gnash)
+            lineTo(cx + 63f, cy + 62f + gnash * 0.5f)
+            close()
+        }
+        drawStitchedFill(scope, jaw, Color(0xFF2C2219))
+        scope.drawStitchedOutline(jaw, ThreadColor)
+        // Teeth top and bottom, so the gap between them reads as a bite rather than a shadow.
+        for (i in 0..3) {
+            val tx = cx + 68f + i * 5f
+            scope.drawPath(Path().apply {
+                moveTo(tx, cy + 55f); lineTo(tx + 2.5f, cy + 55f); lineTo(tx + 1.2f, cy + 61f); close()
+            }, Color(0xFFEFE6D4))
+            scope.drawPath(Path().apply {
+                moveTo(tx, cy + 61f + gnash); lineTo(tx + 2.5f, cy + 61f + gnash)
+                lineTo(tx + 1.2f, cy + 55f + gnash); close()
+            }, Color(0xFFEFE6D4))
+        }
+    } else {
+        // The muzzle straps: the only reason anyone would sit on this animal.
+        val iron = Color(0xFF5D666B)
+        scope.drawLine(iron, Offset(cx + 66f, cy + 40f), Offset(cx + 74f, cy + 66f), strokeWidth = 3f)
+        scope.drawLine(iron, Offset(cx + 58f, cy + 44f), Offset(cx + 80f, cy + 50f), strokeWidth = 3f)
+    }
 
     drawBeastLegs(scope, cx, cy, legSwing, legColor, Color(0xFF1F1913),
         topY = cy + 118f, length = 40f, width = 13f, spread = 40f)
@@ -662,8 +701,16 @@ internal fun drawWardog(scope: DrawScope, cx: Float, cy: Float, fighter: Fighter
             scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx - 25f, cy - 5f), androidx.compose.ui.geometry.Offset(cx + 25f, cy - 5f), strokeWidth = 24f, cap = StrokeCap.Round)
             // Head
             scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx + 20f, cy - 10f), androidx.compose.ui.geometry.Offset(cx + 35f, cy - 15f), strokeWidth = 18f, cap = StrokeCap.Round)
-            // Snout
-            scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx + 30f, cy - 15f), androidx.compose.ui.geometry.Offset(cx + 45f, cy - 10f), strokeWidth = 10f, cap = StrokeCap.Round)
+            // Snout, hinged. Buster works his jaw the whole time and snaps hard when he bites —
+            // a dog drawn with its mouth shut reads as trotting rather than fighting.
+            val gnash = gnashOpening(fighter)
+            scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx + 30f, cy - 17f), androidx.compose.ui.geometry.Offset(cx + 45f, cy - 13f), strokeWidth = 7f, cap = StrokeCap.Round)
+            scope.drawLine(dogColor, androidx.compose.ui.geometry.Offset(cx + 30f, cy - 12f + gnash * 0.3f), androidx.compose.ui.geometry.Offset(cx + 44f, cy - 7f + gnash), strokeWidth = 6f, cap = StrokeCap.Round)
+            for (i in 0..2) {
+                val tx = cx + 34f + i * 4f
+                scope.drawLine(Color(0xFFEFE6D4), Offset(tx, cy - 14f), Offset(tx + 1f, cy - 10f), strokeWidth = 2f)
+                scope.drawLine(Color(0xFFEFE6D4), Offset(tx, cy - 9f + gnash), Offset(tx + 1f, cy - 13f + gnash), strokeWidth = 2f)
+            }
             // Ear
             scope.drawLine(androidx.compose.ui.graphics.Color.Black, androidx.compose.ui.geometry.Offset(cx + 25f, cy - 15f), androidx.compose.ui.geometry.Offset(cx + 20f, cy - 25f), strokeWidth = 6f, cap = StrokeCap.Round)
             // Tail

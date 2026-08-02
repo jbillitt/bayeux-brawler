@@ -2821,7 +2821,11 @@ fun BattlefieldScene(
                     com.example.game.elevationVisualOffset(playerFighter) * scaleFactor)
                     .coerceAtLeast(55f - groundOffsetY)
                 drawHealthBar(this, px, py, playerFighter.hp, playerFighter.ghostHp, playerFighter.maxHp)
-                drawStatusEffects(this, px, py - 10f, playerFighter)
+                // The beast under you has its own health and losing it is a real event, but the
+                // only sign of it was MOUNT SHATTERED! after the fact. Player only — a second bar
+                // over every rider in the host would be noise.
+                val mountBarY = drawMountHealthBar(this, px, py, playerFighter)
+                drawStatusEffects(this, px, mountBarY - 10f, playerFighter)
 
                 // Draw Enemies (the trojan horse already went in behind the player)
                 // Cull anything the camera can't see BEFORE the copy: drawCharacter allocates ~80
@@ -3430,6 +3434,37 @@ private fun drawHealthBar(scope: androidx.compose.ui.graphics.drawscope.DrawScop
         size = Size(barWidth, barHeight),
         style = Stroke(width = 1.5f)
     )
+}
+
+/**
+ * The player's mount bar, sitting just above his own. Orange for the beast, with the same trailing
+ * yellow ghost so you can see how hard it was just hit.
+ *
+ * Returns the y the caller should treat as the top of the stack — unchanged when there is no
+ * mount, so the status icons stay put for a man on foot.
+ */
+private fun drawMountHealthBar(
+    scope: androidx.compose.ui.graphics.drawscope.DrawScope,
+    x: Float,
+    y: Float,
+    fighter: com.example.game.FighterState
+): Float {
+    if (!fighter.isMounted || fighter.mountMaxHp <= 0f) return y
+    val barWidth = 100f
+    val barHeight = 8f          // slimmer than the man's, so the two never read as one bar
+    val gap = 4f
+    val barY = y - barHeight - gap
+    val startX = x - barWidth / 2f
+
+    scope.drawRect(TapestryDark.copy(alpha = 0.45f), Offset(startX, barY), Size(barWidth, barHeight))
+    val ghostFrac = (fighter.mountGhostHp / fighter.mountMaxHp).coerceIn(0f, 1f)
+    scope.drawRect(Color(0xFFD4B144), Offset(startX, barY), Size(barWidth * ghostFrac, barHeight))
+    val frac = (fighter.mountHp / fighter.mountMaxHp).coerceIn(0f, 1f)
+    scope.drawRect(Color(0xFFD97A1E), Offset(startX, barY), Size(barWidth * frac, barHeight))
+    scope.drawRect(
+        TapestryDark, Offset(startX, barY), Size(barWidth, barHeight), style = Stroke(width = 1.5f)
+    )
+    return barY
 }
 
 private fun drawComicTextBubble(
@@ -4168,7 +4203,12 @@ fun generateShareImage(context: android.content.Context, player: com.example.gam
     paint.textSize = 35f
     paint.typeface = android.graphics.Typeface.SERIF
     val statusText = if (isWin) "Vanquished" else if (uiState.isRetired) "Retired" else "Perished"
-    androidCanvas.drawText("Status: " + statusText + " | Score: " + uiState.score + " | Kills: " + uiState.totalKills, width / 2f, 150f, paint)
+    // How far he got is the number people actually compare, and it was the one stat missing.
+    androidCanvas.drawText(
+        "Status: " + statusText + " | Level: " + uiState.level +
+            " | Score: " + uiState.score + " | Kills: " + uiState.totalKills,
+        width / 2f, 150f, paint
+    )
     
     val wpnBase = uiState.weaponHead.itemName + " on a " + uiState.weaponHandle.itemName
     val wpnName = if (player.extraAttachments.isNotEmpty()) {

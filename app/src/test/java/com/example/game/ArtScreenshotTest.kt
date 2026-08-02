@@ -332,6 +332,108 @@ class ArtScreenshotTest {
     }
 
     /**
+     * The four bits of art from Joshua's list that a still frame can settle.
+     *
+     * Column by column: the bear with its straps on and with them cut (the muzzle must be GONE and
+     * a working jaw in its place); Buster mid-bite; the javelin throw sampled across the swing (the
+     * arm must cock back past the ear and come over, never thrust underarm); and a dying charioteer
+     * (no brown box must rotate with him — his cart stays where it stopped).
+     */
+    @Test
+    @Config(qualifiers = "+w1150dp-h1900dp")
+    fun listedArtFixes() {
+        fun rider(id: String, unmuzzled: Boolean) = FighterState(
+            id = FighterId(id), name = id, isPlayer = true, maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_chainmail" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 90f, targetX = 90f, facingRight = true, size = 1.0f,
+            hairColor = Color(0xFF5A442E), hairStyle = "short",
+            isMounted = true, isBear = true, isBearUnmuzzled = unmuzzled,
+            isAttacking = unmuzzled, swingProgress = 0.5f, animFrame = 1.1f
+        )
+
+        fun dog(biting: Boolean) = FighterState(
+            id = FighterId("wardog#0"), name = "Buster", isPlayer = true, maxHp = 60f, hp = 60f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 110f, targetX = 110f, facingRight = true, size = 1.0f,
+            hairColor = Color.Black, hairStyle = "none",
+            isAttacking = biting, swingProgress = 0.5f, animFrame = if (biting) 0.6f else 1.4f
+        )
+
+        fun thrower(progress: Float) = FighterState(
+            id = FighterId("javelin_$progress"), name = "javelin", isPlayer = false,
+            maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_javelin" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 90f, targetX = 90f, facingRight = true, size = 1.0f,
+            hairColor = Color(0xFF5A442E), hairStyle = "short",
+            isAttacking = progress >= 0f, swingProgress = progress.coerceAtLeast(0f)
+        )
+
+        fun charioteer(dying: Boolean) = FighterState(
+            id = FighterId("chariot_$dying"), name = "chariot", isPlayer = false,
+            maxHp = 100f, hp = if (dying) 0f else 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_spear" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 100f, targetX = 100f, facingRight = true, size = 1.0f,
+            hairColor = Color(0xFF5A442E), hairStyle = "short",
+            isMounted = true, isChariot = true,
+            isDying = dying, animFrame = if (dying) 4f else 0.5f
+        )
+
+        // Big. These are all small details — a muzzle strap, three teeth, an arm angle — and at
+        // parade scale the last pass of this test was unreadable and proved nothing.
+        fun holding(head: String) = FighterState(
+            id = FighterId(head), name = head, isPlayer = false, maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == head },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 90f, targetX = 90f, facingRight = true, size = 1.0f,
+            hairColor = Color(0xFF5A442E), hairStyle = "short"
+        )
+
+        val rows = listOf(
+            listOf(rider("bear_muzzled", false), rider("bear_unmuzzled", true)),
+            listOf(dog(false), dog(true)),
+            listOf(thrower(-1f), thrower(0.2f)),
+            listOf(thrower(0.45f), thrower(0.9f)),
+            listOf(charioteer(false), charioteer(true)),
+            // The two new heads, big enough to see whether they meet the haft in line.
+            listOf(holding("head_spade"), holding("head_giant_tooth"))
+        )
+
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                rows.forEach { row ->
+                    Row {
+                        row.forEach { f ->
+                            Canvas(modifier = Modifier.width(540.dp).height(270.dp)) {
+                                TapestryRenderer.drawCharacter(this, f, scale = 2.2f, isBattleActive = true)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/listed_art_fixes.png")
+    }
+
+    /**
      * The beasts of the retinue, bare-headed and in the "Arm the Retinue" spangenhelm. Eyeball that
      * each helm sits ON the skull — the dog's above the snout and behind the ear, the raven's over
      * the crown and clear of the beak — rather than floating beside it.

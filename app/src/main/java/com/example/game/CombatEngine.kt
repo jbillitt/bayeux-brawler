@@ -84,6 +84,9 @@ class CombatEngine(private val ctx: BattleContext) {
         /** The player burns briefly and coolly: ~3.5s at PLAYER_IGNITE_DPS is a scare, not a death. */
         const val PLAYER_IGNITE_DURATION = 3.5f
         const val PLAYER_IGNITE_DPS = 5f
+        /** Rot bites the player at half rate, and never runs on him for long. */
+        const val PLAYER_DOT_DAMAGE_MULT = 0.5f
+        const val PLAYER_DOT_MAX_SECS = 2.5f
         const val ARMOR_SHRED_PER_HIT = 15f
         const val MONK_AURA_RADIUS_PX = 240f
         const val MONK_AURA_ATTACK_DELAY_MULT = 0.8f
@@ -265,11 +268,28 @@ class CombatEngine(private val ctx: BattleContext) {
      * makes a whole point.
      */
     private fun applyDotDamage(dps: Float, dt: Float, fighter: FighterState) {
-        fighter.dotDebt += dps * dt
+        // The player himself takes rot at half rate. He is exposed to it — poison and bleeding
+        // should be things that happen to him, not things only his men suffer — but a full-rate
+        // stacking DoT on the one body you cannot replace is a death sentence rather than a
+        // setback. His FOLLOWERS take it in full; they are a resource, he is the run.
+        val scale = if (fighter === ctx.player) PLAYER_DOT_DAMAGE_MULT else 1f
+        fighter.dotDebt += dps * scale * dt
         if (fighter.dotDebt < 1f) return
         val whole = floor(fighter.dotDebt)
         fighter.dotDebt -= whole
         applyFlatDamage(whole, fighter, isPlayerSource = !fighter.isPlayer, quiet = true)
+    }
+
+    /**
+     * And it wears off quickly on him. Capped every tick rather than at each application site,
+     * because a dozen different things lay poison and every one of them would otherwise need to
+     * remember the player is a special case.
+     */
+    private fun capPlayerDotDurations(fighter: FighterState) {
+        if (fighter !== ctx.player) return
+        if (fighter.poisonDuration > PLAYER_DOT_MAX_SECS) fighter.poisonDuration = PLAYER_DOT_MAX_SECS
+        if (fighter.bleedDuration > PLAYER_DOT_MAX_SECS) fighter.bleedDuration = PLAYER_DOT_MAX_SECS
+        if (fighter.diseaseDuration > PLAYER_DOT_MAX_SECS) fighter.diseaseDuration = PLAYER_DOT_MAX_SECS
     }
 
     /** True if a plague carrier — living, or a corpse not yet cold — is close enough to breathe on [f]. */
@@ -341,6 +361,8 @@ class CombatEngine(private val ctx: BattleContext) {
                 fighter.damageIndicator = null
             }
         }
+
+        capPlayerDotDurations(fighter)
 
         // Poison tick over time
         if (fighter.poisonDuration > 0f) {
@@ -692,7 +714,7 @@ class CombatEngine(private val ctx: BattleContext) {
                         followerCatchUpMultiplier(fighter, direction) * dt
                     fighter.animFrame = fighter.animFrame - dt * (6f + (fighter.maxHp % 3f))
 
-                    if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) { // enthroned lords let the retinue fight until the throne falls
+                    if (fighter.attackCooldown <= 0 && !fighter.isAttacking && lordMayFight(fighter)) {
                         triggerAttack(fighter)
                     }
                 }
@@ -714,9 +736,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 val piF = Math.PI.toFloat()
                 val nearestRest = kotlin.math.round(fighter.animFrame / piF) * piF
                 fighter.animFrame += (nearestRest - fighter.animFrame).coerceIn(-8f * dt, 8f * dt)
-                // A lord normally lets his retinue fight — but a bare-fisted lord leans off the
-                // throne and swings himself (throne mode strips the player to fists).
-                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && !fighter.isLord) { // enthroned lords let the retinue fight until the throne falls
+                // A lord normally lets his retinue fight — but once the two men at the front of his
+                // litter are down he defends himself; see lordMayFight.
+                if (fighter.attackCooldown <= 0 && !fighter.isAttacking && lordMayFight(fighter)) {
                     triggerAttack(fighter)
                 }
             }
@@ -791,6 +813,23 @@ class CombatEngine(private val ctx: BattleContext) {
 
         // Play melee/ranged swing swoosh sound at start of attack animation
         ctx.sound(SoundType.SWOOSH)
+    }
+
+    /**
+     * Whether this fighter is allowed to swing. Everyone is, except an enthroned lord — he lets
+     * his retinue do the fighting while he is carried.
+     *
+     * The exception: once the two men at the FRONT of the litter are down, nothing stands between
+     * him and whatever is hitting the throne, so he fights from where he sits. Enemies chewing
+     * through a throne while its occupant watched with his hands in his lap was not a fight.
+     */
+    private fun lordMayFight(fighter: FighterState): Boolean {
+        if (!fighter.isLord) return true
+        val frontBearers = ctx.enemies.filter { it.pallbearerIndex in 0..1 }
+        // Requires that the front of the litter EXISTED and has since gone down, not merely that
+        // nobody is standing there. A lord carried by nobody at all — which is what a bare test
+        // fixture looks like — is still an enthroned lord and still holds his hand.
+        return frontBearers.isNotEmpty() && frontBearers.all { it.isDead || it.isDying }
     }
 
     private fun performStrike(attacker: FighterState, defender: FighterState) {

@@ -173,9 +173,11 @@ object EnemyFactory {
             EnemyArchetype.OUTRIDER -> 0.9f
             EnemyArchetype.GIANT_FROG -> 1.4f
             EnemyArchetype.BLEMMYA -> 1.2f
-            EnemyArchetype.CRAFTY_FOX -> 0.85f
-            // Small enough to be funny, fast enough not to be.
-            EnemyArchetype.KILLER_RABBIT -> 0.55f
+            EnemyArchetype.CRAFTY_FOX -> 0.95f
+            // Small enough to be funny, fast enough not to be. Damage runs as size squared, so
+            // 0.55 made its axe a nuisance rather than the knight-executing joke it is meant to
+            // be; 0.72 still reads as a rabbit and hits like something you have to answer.
+            EnemyArchetype.KILLER_RABBIT -> 0.72f
             else -> 1f
         }
         hp *= when (archetype) {
@@ -191,8 +193,14 @@ object EnemyFactory {
             EnemyArchetype.GIANT_FROG -> 16f
             // No head means no headshot and no helm to knock off, so he is tougher than he looks.
             EnemyArchetype.BLEMMYA -> 1.7f
-            EnemyArchetype.CRAFTY_FOX -> 0.6f
-            EnemyArchetype.KILLER_RABBIT -> 0.35f
+            // Both of these arrive at level 35, by which point the player one-shots anything
+            // frail — 0.6 and 0.35 meant they died before they did anything and the encounter was
+            // pointless. They are separated by ROLE now rather than by how fast they die: the fox
+            // is a durable skirmisher that has to be chased down...
+            EnemyArchetype.CRAFTY_FOX -> 1.25f
+            // ...and the rabbit is still the flimsier of the two, but it now survives a hit and
+            // gets its axe in. Speed remains its real defence.
+            EnemyArchetype.KILLER_RABBIT -> 0.85f
             // The marginalia knight's true nightmare: it does not die. It turns up late, by which
             // point the player is fully snowballed, so it needs to be a wall rather than a joke.
             EnemyArchetype.REBEL_SNAIL -> 18f

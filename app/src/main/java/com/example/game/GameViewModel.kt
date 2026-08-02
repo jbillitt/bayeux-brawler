@@ -1536,11 +1536,18 @@ class GameViewModel : ViewModel() {
         val bgObjects = mutableListOf<BackgroundObject>()
         
         if (chariotCollapses) {
+            // The wreck goes where the PLAYER is, not at a fixed 150f. He still turns up on the
+            // field riding it; it gives way underneath him, so the broken cart has to be under his
+            // feet. Parked at 150 it read as somebody else's abandoned chariot across the map.
+            val wreckX = player.posX
             bgObjects.add(BackgroundObject(
                 "broken_chariot", BackgroundObjectType.BROKEN_CHARIOT,
-                150f, 0f, 150f, 100f, 100f, seed = contentRandom.nextInt()
+                wreckX, 0f, 150f, 100f, 100f, seed = contentRandom.nextInt()
             ))
-            addPopup("THE CHARIOT COLLAPSES!", 150f, 110f, androidx.compose.ui.graphics.Color.Red)
+            // Say WHY. "The chariot collapses" left the player guessing at the cause; the fix is
+            // to take armour off, and the popup has to point at that.
+            addPopup("TOO HEAVY!", wreckX, 140f, androidx.compose.ui.graphics.Color.Red)
+            addPopup("THE RATTLER GIVES WAY", wreckX, 110f, androidx.compose.ui.graphics.Color(0xFF8B4513))
         }
 
         if (isSiegeBattle) {

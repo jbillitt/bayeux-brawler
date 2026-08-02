@@ -228,9 +228,20 @@ class RegressionGuardTest {
         val blemmya = EnemyFactory.createArchetype(EnemyArchetype.BLEMMYA, 0, level = 40)
         assertTrue("the rabbit is the small one", rabbit.size < fox.size)
         assertTrue("the blemmya is the big one", blemmya.size > fox.size)
-        // Speed is the rabbit's whole defence; it dies instantly if anything catches it.
+        // Speed is the rabbit's real defence, and it stays the frailer of the two...
         assertTrue("the rabbit must be the fastest", rabbit.moveSpeed > fox.moveSpeed)
-        assertTrue("and the frailest", rabbit.maxHp < fox.maxHp)
+        assertTrue("and the frailer of the two", rabbit.maxHp < fox.maxHp)
+        // ...but neither may go back to dying on contact. They arrive at level 35 against a player
+        // who one-shots anything flimsy, and at their first tuning both simply evaporated.
+        val plainHousecarl = EnemyFactory.createArchetype(EnemyArchetype.HOUSECARL, 0, level = 40)
+        assertTrue(
+            "the rabbit was ${rabbit.maxHp} against a housecarl's ${plainHousecarl.maxHp} — too frail to matter",
+            rabbit.maxHp >= plainHousecarl.maxHp * 0.6f
+        )
+        assertTrue(
+            "the fox should outlast a plain housecarl; it is the durable one of the pair",
+            fox.maxHp > plainHousecarl.maxHp
+        )
     }
 
     @Test

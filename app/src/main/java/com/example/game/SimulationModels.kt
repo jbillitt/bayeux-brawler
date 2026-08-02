@@ -1068,15 +1068,19 @@ data class FighterState(
 data class HairTrait(val hpBonus: Float, val speedBonus: Float, val effect: String)
 
 val HAIR_TRAITS: Map<String, HairTrait> = mapOf(
+    // Roughly tripled from the original numbers. They were deliberately tiny, which made choosing
+    // a haircut a purely cosmetic decision dressed up as a stat one — a +2 HP / -2% trade is below
+    // the threshold anybody can feel. These are still small next to armour, but they now actually
+    // pull a build in a direction.
     "short" to HairTrait(0f, 0f, "A plain bowl crop. No advantage, no penalty."),
-    "long" to HairTrait(2f, -0.02f, "Long hair pads a blow to the head, and catches on everything."),
-    "bald" to HairTrait(0f, 0.03f, "Nothing for a hand to grab, and nothing to slow you."),
-    "hair_tonsure_norman" to HairTrait(0f, 0.02f, "Shaved at the neck in the Norman fashion. Lighter on the move."),
-    "hair_braids" to HairTrait(3f, -0.02f, "Heavy braids in the northern manner. They soak up a glancing cut."),
-    "hair_tonsure_monk" to HairTrait(4f, -0.03f, "A brother's tonsure. Providence favours you; haste does not."),
-    "hair_topknot" to HairTrait(1f, 0.01f, "An old campaigner's knot. Tidy, and out of your eyes."),
-    "hair_mystic" to HairTrait(-2f, 0.05f, "Uncut since a vow was made. Frail of body, but quick as a rumour."),
-    "hair_germanic" to HairTrait(5f, -0.04f, "Bound pigtails over a thick neck. You take a hit; you do not dodge it."),
+    "long" to HairTrait(7f, -0.06f, "Long hair pads a blow to the head, and catches on everything."),
+    "bald" to HairTrait(0f, 0.09f, "Nothing for a hand to grab, and nothing to slow you."),
+    "hair_tonsure_norman" to HairTrait(0f, 0.06f, "Shaved at the neck in the Norman fashion. Lighter on the move."),
+    "hair_braids" to HairTrait(10f, -0.06f, "Heavy braids in the northern manner. They soak up a glancing cut."),
+    "hair_tonsure_monk" to HairTrait(13f, -0.09f, "A brother's tonsure. Providence favours you; haste does not."),
+    "hair_topknot" to HairTrait(4f, 0.03f, "An old campaigner's knot. Tidy, and out of your eyes."),
+    "hair_mystic" to HairTrait(-7f, 0.15f, "Uncut since a vow was made. Frail of body, but quick as a rumour."),
+    "hair_germanic" to HairTrait(16f, -0.12f, "Bound pigtails over a thick neck. You take a hit; you do not dodge it."),
     // The one loud row in the table. Samson's whole story is that the strength is IN the hair, so
     // a subtle nudge would read as a bug — this is meant to be worth wearing.
     "hair_samson" to HairTrait(25f, -0.08f, "Locks no razor has touched. The strength is in the hair — and so is the weight.")

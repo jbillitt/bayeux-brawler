@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
@@ -431,6 +432,99 @@ class ArtScreenshotTest {
             }
         }
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/listed_art_fixes.png")
+    }
+
+    /**
+     * Does the smoke come out of the end of the torch?
+     *
+     * A red ring is drawn at the position the SIMULATION would spawn flame and smoke at
+     * (FighterState.torchHeadsWorld). It has to sit on the drawn flame. Every haft here that has
+     * bespoke art — wheelbarrow, anchor, trumpet, antler — used to be miles out, because the
+     * position was re-derived from the generic haft formula that those hafts do not follow.
+     * Mid-swing frames are included because the arm's rotation is the other half of the answer.
+     */
+    @Test
+    @Config(qualifiers = "+w1150dp-h1600dp")
+    fun torchSmokeTracksTheBrand() {
+        fun brand(handle: String, swing: Float) = FighterState(
+            id = FighterId("torch_${handle}_$swing"), name = handle, isPlayer = false,
+            maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_torch" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handle },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 130f, targetX = 130f, facingRight = true, size = 1.0f,
+            hairColor = Color(0xFF5A442E), hairStyle = "short",
+            isAttacking = swing >= 0f, swingProgress = swing.coerceAtLeast(0f)
+        )
+
+        val cast = listOf("handle_medium", "handle_wheelbarrow", "handle_anchor", "handle_trumpet", "handle_antler", "handle_long")
+            .flatMap { listOf(brand(it, -1f), brand(it, 0.55f)) }
+
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                cast.chunked(2).forEach { row ->
+                    Row {
+                        row.forEach { f ->
+                            Canvas(modifier = Modifier.width(560.dp).height(250.dp)) {
+                                // The marker has to go through the SAME outer scale the body does,
+                                // or comparing the two proves nothing.
+                                withTransform({
+                                    scale(2.4f, 2.4f, pivot = androidx.compose.ui.geometry.Offset(f.posX, 200f))
+                                }) {
+                                    TapestryRenderer.drawCharacter(this, f, scale = 1.0f, isBattleActive = true)
+                                    // Drawn AFTER, so it reads on top of the flame it should be on.
+                                    f.torchHeadsWorld.forEach { (tx, ty) ->
+                                        drawCircle(
+                                            Color(0xFFCC2222), radius = 6f,
+                                            center = androidx.compose.ui.geometry.Offset(tx, ty),
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/torch_smoke_tracking.png")
+    }
+
+    /**
+     * Every parade haircut the seed can roll, laid out in a wall.
+     *
+     * The parade is the one place the same head is drawn a dozen times side by side, so a bad roll
+     * is on screen next to three good ones and reads as a bug rather than as variety. Look for: a
+     * second detached chunk of hair (the "Princess Leia" buns), and any colour that reads as a
+     * steel helm rather than as hair.
+     */
+    @Test
+    @Config(qualifiers = "+w1150dp-h1400dp")
+    fun paradeHaircuts() {
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                (0 until 4).forEach { row ->
+                    Row {
+                        (0 until 3).forEach { col ->
+                            val seed = row * 3 + col
+                            Canvas(modifier = Modifier.width(380.dp).height(340.dp)) {
+                                withTransform({
+                                    scale(7f, 7f, pivot = androidx.compose.ui.geometry.Offset(size.width / 2f, 60f))
+                                }) {
+                                    TapestryRenderer.drawFollowerHead(
+                                        this, Ancillary.SQUIRE, seed, wrecked = false,
+                                        cx = size.width / 2f, cy = 20f
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/parade_haircuts.png")
     }
 
     /**

@@ -65,8 +65,15 @@ object TapestryRenderer {
         drawScope: DrawScope,
         fighter: FighterState,
         scale: Float = 1.0f,
-        isBattleActive: Boolean = true
+        isBattleActive: Boolean = true,
+        /**
+         * Where to write back what was drawn — the weapon head's real position, for the flame and
+         * smoke. The battle screen hands the renderer a `copy()` with a stretched posX, so writing
+         * to [fighter] would put the answer on a throwaway object; pass the live one here.
+         */
+        recordInto: FighterState? = null
     ) {
+        val record = recordInto ?: fighter
         val effectiveSize = if (fighter.isMounted && fighter.size > 1.3f) 1.3f + (fighter.size - 1.3f) * 0.5f else fighter.size
 
         // A barrow-king burns with corpse-light. Drawn BEFORE the transform and before the body so
@@ -339,7 +346,7 @@ object TapestryRenderer {
                                 drawLine(Color(0xFF5C4033), Offset(cx - cartW / 2, cartTopY + 60f), Offset(cx + cartW / 2, cartTopY + 60f), strokeWidth = 3f)
                             }
                         }
-                        drawFrontArmAndWeapon(this, cx, cy, fighter)
+                        drawFrontArmAndWeapon(this, cx, cy, fighter, record)
                     }
                 }
             }
@@ -3323,8 +3330,16 @@ object TapestryRenderer {
         }
     }
 
-    private fun drawWeapon(scope: DrawScope, hx: Float, hy: Float, fighter: FighterState, armAngle: Float = 0f) {
-        if (fighter.weaponHead.id == "head_bare" && fighter.weaponHandle.id == "handle_fists") return
+    /**
+     * Draws the weapon and returns where its head was actually put, in this scope's coordinates.
+     *
+     * The caller needs that answer: the flame and smoke on a burning brand are spawned by the
+     * simulation, which had no way to know where the picture ended up and re-derived it from the
+     * generic haft formula. Every bespoke haft — wheelbarrow, anchor, trumpet, antler — draws its
+     * own shape, so the fire came out somewhere near the weapon rather than on the end of it.
+     */
+    private fun drawWeapon(scope: DrawScope, hx: Float, hy: Float, fighter: FighterState, armAngle: Float = 0f): Offset? {
+        if (fighter.weaponHead.id == "head_bare" && fighter.weaponHandle.id == "handle_fists") return null
         
         val isBowOrSlingshot = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
 
@@ -3918,9 +3933,16 @@ object TapestryRenderer {
                 attachmentPoints.add(Offset(attachPos.x + tipDx, attachPos.y + tipDy))
             }
         }
+        return headPos
     }
 
-    private fun drawFrontArmAndWeapon(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+    private fun drawFrontArmAndWeapon(
+        scope: DrawScope,
+        cx: Float,
+        cy: Float,
+        fighter: FighterState,
+        record: FighterState = fighter
+    ) {
         // Swing progress: rotate the arm from high to low
         val swing = fighter.swingProgress
         val isThrusting = fighter.weaponHead.id in listOf("head_spear", "head_pike", "head_halberd", "head_dagger", "head_pitchfork")
@@ -4081,9 +4103,57 @@ object TapestryRenderer {
             if (!fighter.isDead && !fighter.isDying) {
                 val hx = cx + 25f
                 val hy = cy + 30f
-                drawWeapon(this, hx, hy, fighter, armAngle)
+                val drawnHead = drawWeapon(this, hx, hy, fighter, armAngle)
+                // Hand the simulation the head it just drew, so the flame and smoke sit on the
+                // actual brand instead of on the generic haft formula's guess at where it is.
+                // The arm's transform is rotate(armAngle, pivot) then translate(thrustOffset), so
+                // a point p in this scope maps back to the body's space as R(p + thrust).
+                // ponytail: ignores the ragdoll rotation of the outer transform, which is zero for
+                // anyone still on his feet — and nothing dead is still carrying a lit torch.
+                if (drawnHead != null) {
+                    val pivot = Offset(cx - 23f, cy + 25f)
+                    record.drawnHeadWorld =
+                        bodySpaceToWorldOffset(fighter, rotateAbout(drawnHead + thrustOffset, pivot, armAngle))
+                    record.drawnGripWorld =
+                        bodySpaceToWorldOffset(fighter, rotateAbout(Offset(hx, hy) + thrustOffset, pivot, armAngle))
+                }
             }
         }
+    }
+
+    /** Rotate [p] about [pivot] by [degrees], the way DrawScope's own rotate transform does. */
+    private fun rotateAbout(p: Offset, pivot: Offset, degrees: Float): Offset {
+        if (degrees == 0f) return p
+        val r = Math.toRadians(degrees.toDouble())
+        val c = kotlin.math.cos(r).toFloat()
+        val s = kotlin.math.sin(r).toFloat()
+        val dx = p.x - pivot.x
+        val dy = p.y - pivot.y
+        return Offset(pivot.x + dx * c - dy * s, pivot.y + dx * s + dy * c)
+    }
+
+    /**
+     * A point in the body's drawing space to the space the simulation's particles live in.
+     *
+     * Mirrors [drawCharacter]'s own transform: the figure is scaled by its size about the feet at
+     * y=358 and mirrored about posX when facing left. Deliberately the same arithmetic as
+     * FighterState.weaponHeadWorldAt so the two agree — this one just starts from a real drawn
+     * point rather than a modelled one.
+     *
+     * X comes back as an OFFSET from posX, never an absolute. The battle screen draws through a
+     * copy whose posX has been stretched by the level's horizontal scale, and every point inside
+     * drawCharacter is built as `cx + something`, so the offset survives that and the absolute
+     * would not.
+     */
+    private fun bodySpaceToWorldOffset(fighter: FighterState, p: Offset): Pair<Float, Float> {
+        val effectiveSize = if (fighter.isMounted && fighter.size > 1.3f) {
+            1.3f + (fighter.size - 1.3f) * 0.5f
+        } else fighter.size
+        val dir = if (fighter.facingRight) 1f else -1f
+        return Pair(
+            (p.x - fighter.posX) * effectiveSize * dir,
+            358f + (p.y - 358f) * effectiveSize + fighter.terrainLiftY
+        )
     }
 
 
@@ -4825,8 +4895,12 @@ object TapestryRenderer {
         }
     }
 
-    /** Parade-follower head, hair and face — seed-varied so duplicate followers look distinct. */
-    private fun drawFollowerHead(scope: DrawScope, anc: com.example.game.Ancillary, appearanceSeed: Int, wrecked: Boolean, cx: Float, cy: Float) {
+    /**
+     * Parade-follower head, hair and face — seed-varied so duplicate followers look distinct.
+     * Internal rather than private so the screenshot harness can render a wall of seeds: the
+     * parade is the one place in the game where the same code has to survive 24 rolls at once.
+     */
+    internal fun drawFollowerHead(scope: DrawScope, anc: com.example.game.Ancillary, appearanceSeed: Int, wrecked: Boolean, cx: Float, cy: Float) {
         with(scope) {
             val headRadius = when ((appearanceSeed / 11) % 3) {
                 0 -> 12.5f
@@ -4845,8 +4919,10 @@ object TapestryRenderer {
             val hairCol = if (anc == com.example.game.Ancillary.LIL_GUY) {
                 Color(0xFF8B5A2B)
             } else {
+                // Warm greying brown, not 0xFF888888 — a neutral mid-grey on a head reads as a
+                // steel cap rather than as an old man's hair, and it was doing exactly that.
                 listOf(
-                    Color(0xFF8B5A2B), Color(0xFF2C2219), Color(0xFFC08030), Color(0xFF888888)
+                    Color(0xFF8B5A2B), Color(0xFF2C2219), Color(0xFFC08030), Color(0xFFA89882)
                 )[faceSeed % 4]
             }
             // Four proper haircuts, every one a closed filled shape — the balding style used to
@@ -4876,25 +4952,23 @@ object TapestryRenderer {
                     close()
                 }
                 if (hairStyle == 2) {
-                    // A brother's tonsure: bare crown, a ring of hair round the back and a fringe.
-                    val ring = Path().apply {
-                        moveTo(hx - 13f, hy + 2f)
-                        quadraticTo(hx - 15f, hy - 8f, hx - 7f, hy - 8f)
-                        lineTo(hx - 5f, hy - 1f)
-                        quadraticTo(hx - 10f, hy - 1f, hx - 9f, hy + 3f)
-                        close()
-                    }
-                    drawStitchedFill(this, ring, hairCol)
-                    drawStitchedOutline(ring, ThreadColor)
-                    val fringe = Path().apply {
-                        moveTo(hx + 1f, hy - 8f)
-                        quadraticTo(hx + 9f, hy - 8f, hx + 11f, hy - 1f)
+                    // A brother's tonsure: ONE continuous horseshoe of hair with a bare crown
+                    // inside it. It used to be two separate shapes — a blob at the back and a blob
+                    // over the brow — which at parade size read as a man with two buns rather than
+                    // as a shaved head, and in the grey hair colour read as a helmet in two pieces.
+                    val tonsure = Path().apply {
+                        // Outer edge: up round the back of the skull and over the brow.
+                        moveTo(hx - 13f, hy + 3f)
+                        quadraticTo(hx - 16f, hy - 11f, hx - 2f, hy - 12f)
+                        quadraticTo(hx + 9f, hy - 12f, hx + 12f, hy - 1f)
                         lineTo(hx + 6f, hy + 2f)
-                        quadraticTo(hx + 5f, hy - 2f, hx + 1f, hy - 2f)
+                        // Inner edge back along the shaved crown, leaving the bare patch on top.
+                        quadraticTo(hx + 4f, hy - 4f, hx - 2f, hy - 5f)
+                        quadraticTo(hx - 8f, hy - 4f, hx - 9f, hy + 3f)
                         close()
                     }
-                    drawStitchedFill(this, fringe, hairCol)
-                    drawStitchedOutline(fringe, ThreadColor)
+                    drawStitchedFill(this, tonsure, hairCol)
+                    drawStitchedOutline(tonsure, ThreadColor)
                 } else if (hairStyle == 3) {
                     // Balding: a receding fringe, and nothing on the crown at all.
                     val fringe = Path().apply {

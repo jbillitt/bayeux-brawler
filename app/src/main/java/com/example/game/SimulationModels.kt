@@ -699,6 +699,14 @@ data class FighterState(
     var dotDebt: Float = 0f, // sub-1 damage-over-time carried between ticks; see CombatEngine.applyDotDamage
     var isMounted: Boolean = false,
     var mountHp: Float = 0f,
+    /**
+     * Where the renderer last actually drew this fighter's weapon head and his grip, in world
+     * space. Written by TapestryRenderer once per drawn frame; null until then, and null for
+     * anyone off-screen. See [weaponHeadWorldAt] — this is what makes a torch's smoke sit on the
+     * brand rather than on a formula's idea of where the brand ought to be.
+     */
+    var drawnHeadWorld: Pair<Float, Float>? = null,
+    var drawnGripWorld: Pair<Float, Float>? = null,
     /** What the mount started with, so its bar has a denominator. Player only — see drawMountBar. */
     var mountMaxHp: Float = 0f,
     /** Trailing yellow behind the mount's bar, the same read as the man's own ghostHp. */
@@ -889,6 +897,24 @@ data class FighterState(
      * swung through an arc — the fire visibly detached from the brand on every attack.
      */
     fun weaponHeadWorldAt(along: Float): Pair<Float, Float> {
+        // The renderer's own answer, when it has drawn this fighter at least once. It knows where
+        // the head ACTUALLY went — including for the bespoke hafts (wheelbarrow, anchor, trumpet,
+        // antler) whose art ignores the haft formula below entirely, which is why a torch lashed
+        // to one of them smoked from a spot near the weapon rather than off the end of it.
+        val head = drawnHeadWorld
+        val grip = drawnGripWorld
+        if (head != null && grip != null) {
+            // Stored as an offset from posX, so it survives the battle screen's horizontal stretch.
+            if (along == 0f) return Pair(posX + head.first, head.second)
+            // `along` is measured down the haft in the drawing's own pixels, negative toward the
+            // grip. The drawn grip-to-head vector IS that axis, at whatever length it came out.
+            val haftPx = GameData.haftPixels(weaponHandle.id).coerceAtLeast(1f)
+            val t = -along / haftPx
+            return Pair(
+                posX + head.first + (grip.first - head.first) * t,
+                head.second + (grip.second - head.second) * t
+            )
+        }
         val haft = GameData.haftPixels(weaponHandle.id) +
             handleExtensionCount * (GameData.EXTENSION_REACH_PX / GameData.HAFT_BASIS_X / size)
         val reachOut = GameData.GRIP_OFFSET_PX + (haft + along) * GameData.HAFT_BASIS_X

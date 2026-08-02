@@ -2811,7 +2811,9 @@ fun BattlefieldScene(
                 // Ancillaries draw behind the player (matches customization/throne previews) so
                 // Lil Guy's backpack reads as attached to the knight's back, not floating in front of him
                 TapestryRenderer.drawAncillaries(this, uiState.unlockedAncillaries, scaledPlayer, scale = scaleFactor)
-                TapestryRenderer.drawCharacter(this, scaledPlayer, scale = scaleFactor)
+                // recordInto: the copy above is a throwaway, and the flame/smoke positions the
+                // renderer works out have to land on the fighter the simulation actually ticks.
+                TapestryRenderer.drawCharacter(this, scaledPlayer, scale = scaleFactor, recordInto = playerFighter)
 
                 // Draw health bar for Player
                 val px = scaledPlayer.posX
@@ -2838,7 +2840,7 @@ fun BattlefieldScene(
                     val scaledEnemy = enemy.copy(
                         posX = enemy.posX * playerScaleX
                     )
-                    TapestryRenderer.drawCharacter(this, scaledEnemy, scale = scaleFactor)
+                    TapestryRenderer.drawCharacter(this, scaledEnemy, scale = scaleFactor, recordInto = enemy)
                     
                     // Draw health bar for enemy
                     if (!enemy.isDead) {

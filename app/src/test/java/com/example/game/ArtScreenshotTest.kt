@@ -410,6 +410,48 @@ class ArtScreenshotTest {
     }
 
     /**
+     * Every stage of the Gaping Frog's attack, left to right: mouth shut and hunting, tongue half
+     * out, tongue fully stuck to its victim, reeling back in, and dead on its back.
+     *
+     * Asserts nothing — this is the eyeball check that the tongue leaves the mouth and not the
+     * belly, that the gape reads as a gape, and that a dead frog is obviously dead.
+     */
+    @Test
+    fun giantFrogTongueStages() {
+        fun frog(id: String, extend: Float, dying: Boolean = false) = FighterState(
+            id = FighterId(id), name = "The Gaping Frog", isPlayer = false, maxHp = 900f, hp = 900f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 170f, targetX = 170f, facingRight = true, size = 1.4f,
+            hairColor = Color.Transparent, hairStyle = "none",
+            archetype = EnemyArchetype.GIANT_FROG,
+            tongueExtend = extend,
+            isDying = dying, animFrame = if (dying) 6f else 1.2f
+        )
+        // Stacked, not side by side: the harness surface is only ~360.dp wide, so five panels in a
+        // Row put three of them off the edge of the image entirely.
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                listOf(
+                    frog("frog_shut", 0f),
+                    frog("frog_half", 0.5f),
+                    frog("frog_full", 1f),
+                    frog("frog_reel", 0.75f),
+                    frog("frog_dead", 0f, dying = true)
+                ).forEach { f ->
+                    Canvas(modifier = Modifier.width(360.dp).height(150.dp)) {
+                        TapestryRenderer.drawCharacter(this, f, scale = 0.8f, isBattleActive = true)
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/giant_frog.png")
+    }
+
+    /**
      * The three new armour layers, each stacked over chainmail the way they are worn in play, plus
      * all three at once. Asserts nothing — eyeball that greaves sit on the shins, spaulders cap the
      * shoulders without floating, and the surcoat hangs over the mail without hiding it.

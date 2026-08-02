@@ -143,6 +143,8 @@ object EnemyFactory {
                 listOf("head_dagger", "handle_short", "shield_none", "armor_leather", "helm_none")
             EnemyArchetype.BOMBARDIER ->
                 listOf("head_slingshot", "handle_fists", "shield_none", "armor_padded", "helm_none")
+            EnemyArchetype.GIANT_FROG -> // the tongue is the weapon; nothing is held
+                listOf("head_bare", "handle_fists", "shield_none", "armor_bare", "helm_none")
             else ->
                 listOf("head_sword", "handle_medium", "shield_buckler", "armor_padded", "helm_none")
         }
@@ -157,6 +159,7 @@ object EnemyFactory {
             EnemyArchetype.REBEL_SNAIL -> 1.35f
             EnemyArchetype.HAMMER_SERJEANT -> 1.35f
             EnemyArchetype.OUTRIDER -> 0.9f
+            EnemyArchetype.GIANT_FROG -> 1.4f
             else -> 1f
         }
         hp *= when (archetype) {
@@ -168,6 +171,8 @@ object EnemyFactory {
             // Fast and fragile, or he is simply better than everything else on the field.
             EnemyArchetype.OUTRIDER -> 0.55f
             EnemyArchetype.BOMBARDIER -> 0.7f
+            // As much of a wall as the snail: you are meant to lose men to it before it dies.
+            EnemyArchetype.GIANT_FROG -> 16f
             // The marginalia knight's true nightmare: it does not die. It turns up late, by which
             // point the player is fully snowballed, so it needs to be a wall rather than a joke.
             EnemyArchetype.REBEL_SNAIL -> 18f
@@ -187,6 +192,7 @@ object EnemyFactory {
                 EnemyArchetype.HAMMER_SERJEANT -> "Serjeant of the Maul"
                 EnemyArchetype.OUTRIDER -> "Outrider"
                 EnemyArchetype.BOMBARDIER -> "Bombardier of Cathay"
+                EnemyArchetype.GIANT_FROG -> "The Gaping Frog"
                 else -> archetype.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
             },
             isPlayer = false,
@@ -196,7 +202,14 @@ object EnemyFactory {
             posX = spawnX(index), targetX = spawnX(index), facingRight = false,
             size = size, hairColor = Color(0xFF5A442E),
             hairStyle = if (archetype == EnemyArchetype.MONK_MILITIA) "bald" else "short",
-            speedBoost = if (archetype == EnemyArchetype.REBEL_SNAIL) -0.75f else 0f,
+            speedBoost = when (archetype) {
+                EnemyArchetype.REBEL_SNAIL -> -0.75f
+                // It hops. Slow to close, but it does not need to close — the tongue comes to you.
+                EnemyArchetype.GIANT_FROG -> -0.55f
+                EnemyArchetype.OUTRIDER -> 0.55f
+                EnemyArchetype.HAMMER_SERJEANT -> -0.15f
+                else -> 0f
+            },
             level = level, shieldHp = shield.defense * 2f, archetype = archetype
         )
     }
@@ -400,6 +413,9 @@ object EnemyFactory {
             )
             EnemyArchetype.BOMBARDIER -> listOf(
                 safeHead("head_slingshot"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_padded"), safeHelm("helm_none")
+            )
+            EnemyArchetype.GIANT_FROG -> listOf(
+                safeHead("head_bare"), safeHandle("handle_fists"), safeShield("shield_none"), safeArmor("armor_bare"), safeHelm("helm_none")
             )
         }
 

@@ -29,6 +29,13 @@ object TapestryRenderer {
     // indistinguishable on the field. Disease is yellow everywhere — flesh, rags and status icon.
     private val PlagueFlesh = Color(0xFFC9B03C)
     private val PlagueRags = Color(0xFFA8912F)
+
+    /**
+     * How far the frog's tongue reaches on screen at full extension. This is the DRAWN length, in
+     * the frog's own body space; the rules use FROG_TONGUE_REACH_PX in world space. They are
+     * deliberately separate numbers — the tongue must look like it arrives just past its victim.
+     */
+    private const val FROG_TONGUE_DRAW_PX = 210f
     private val PlagueBubo = Color(0xFF6B4A1F) // dark swollen lumps against the yellow
 
     /** The war-priest's habit — monk's undyed wool, so he reads as a churchman among soldiers. */
@@ -275,6 +282,8 @@ object TapestryRenderer {
                         drawRaven(this, cx, cy, fighter)
                     } else if (fighter.archetype == EnemyArchetype.REBEL_SNAIL) {
                         drawRebelSnail(this, cx, cy, fighter)
+                    } else if (fighter.archetype == EnemyArchetype.GIANT_FROG) {
+                        drawGiantFrog(this, cx, cy, fighter)
                     } else {
                         drawBossSignature(this, cx, cy, fighter)
                         if (fighter.isStilts) {
@@ -319,6 +328,119 @@ object TapestryRenderer {
      * Attack anim: it rears back through the windup, then the whole head-end lunges forward and the
      * eyestalks whip. Death: it slumps flat and the shell rolls off-true.
      */
+    /**
+     * The Gaping Frog. Squat, wide and low, in the plague peasant's sick ochre-green, with the
+     * mouth open the whole time it is hunting — the tell is that you can see the inside of it.
+     *
+     * The tongue is drawn straight off [FighterState.tongueExtend], the same 0..1 the rules run on,
+     * so what you see is exactly the state the frog is in: shut, reaching, stuck, or reeling in.
+     */
+    private fun drawGiantFrog(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val dir = if (fighter.facingRight) 1f else -1f
+        val skin = Color(0xFF6E7A3A)        // marginalia bog-green
+        val belly = Color(0xFFBFAF6A)
+        val mouthDark = Color(0xFF3A2622)
+        val tonguePink = Color(0xFFD4728A)
+        val deathP = if (fighter.isDying) (fighter.animFrame / 6f).coerceIn(0f, 1f)
+            else if (fighter.isDead) 1f else 0f
+        // Breathing throat, and a squat down onto the haunches as the tongue goes out
+        val throat = sin(fighter.animFrame * 1.6f) * 3f
+        val crouch = fighter.tongueExtend * 10f
+
+        scope.withTransform({
+            if (deathP > 0f) {
+                // Frogs die on their backs.
+                rotate(170f * deathP * dir, pivot = Offset(cx, cy + 140f))
+            }
+        }) {
+            // Haunches: one big rear leg folded up behind, the shape that says frog at any size
+            val haunch = Path().apply {
+                moveTo(cx - dir * 88f, cy + 142f)
+                quadraticTo(cx - dir * 96f, cy + 62f + crouch, cx - dir * 44f, cy + 66f + crouch)
+                quadraticTo(cx - dir * 20f, cy + 104f, cx - dir * 30f, cy + 142f)
+                close()
+            }
+            drawStitchedFill(scope, haunch, skin)
+            scope.drawStitchedOutline(haunch, ThreadColor)
+
+            // Body: wide, low, belly slung on the ground
+            val body = Path().apply {
+                moveTo(cx - dir * 74f, cy + 142f)
+                quadraticTo(cx - dir * 78f, cy + 74f + crouch, cx, cy + 70f + crouch)
+                quadraticTo(cx + dir * 62f, cy + 66f + crouch, cx + dir * 86f, cy + 104f)
+                quadraticTo(cx + dir * 92f, cy + 142f, cx + dir * 40f, cy + 142f)
+                close()
+            }
+            drawStitchedFill(scope, body, skin)
+            scope.drawStitchedOutline(body, ThreadColor)
+
+            // Pale throat sac, pulsing
+            val sac = Path().apply {
+                moveTo(cx + dir * 16f, cy + 128f)
+                quadraticTo(cx + dir * 52f, cy + 138f + throat, cx + dir * 82f, cy + 122f)
+                quadraticTo(cx + dir * 50f, cy + 146f, cx + dir * 16f, cy + 140f)
+                close()
+            }
+            drawStitchedFill(scope, sac, belly)
+
+            // Front foot, splayed and toed. Kept low and short on purpose: drawn any longer or any
+            // higher the toes come out level with the gape and read as the tongue.
+            for (t in 0..2) {
+                scope.drawLine(
+                    skin, Offset(cx + dir * 66f, cy + 140f),
+                    Offset(cx + dir * (82f + t * 5f), cy + 146f + t * 2f),
+                    strokeWidth = 6f, cap = StrokeCap.Round
+                )
+            }
+
+            // The gape. Open whenever it is hunting, which is the warning.
+            val gape = 1f
+            val mouth = Path().apply {
+                moveTo(cx + dir * 44f, cy + 96f)
+                quadraticTo(cx + dir * 78f, cy + 92f, cx + dir * 90f, cy + 104f)
+                quadraticTo(cx + dir * 76f, cy + (104f + 26f * gape), cx + dir * 44f, cy + 112f)
+                close()
+            }
+            drawStitchedFill(scope, mouth, mouthDark)
+            scope.drawStitchedOutline(mouth, ThreadColor)
+
+            // Eye: high, domed, on top of the skull the way a frog's is
+            val eyeX = cx + dir * 30f
+            val eyeY = cy + 62f + crouch
+            scope.drawCircle(skin, radius = 17f, center = Offset(eyeX, eyeY))
+            scope.drawCircle(ThreadColor, radius = 17f, center = Offset(eyeX, eyeY), style = StitchedStroke)
+            scope.drawCircle(Color(0xFFE8C34D), radius = 10f, center = Offset(eyeX, eyeY))
+            // A horizontal slit pupil, and a dead frog's eye rolls over
+            scope.drawLine(
+                mouthDark,
+                Offset(eyeX - 9f, eyeY + deathP * 5f), Offset(eyeX + 9f, eyeY + deathP * 5f),
+                strokeWidth = 5f, cap = StrokeCap.Round
+            )
+
+            // The tongue. Anchored in the mouth, thrown out along the ground toward the victim,
+            // fattest at the root and tipped with the sticky pad that does the catching.
+            if (fighter.tongueExtend > 0.01f) {
+                val rootX = cx + dir * 62f
+                val rootY = cy + 106f
+                val tipX = rootX + dir * (FROG_TONGUE_DRAW_PX * fighter.tongueExtend)
+                // A little slack in the middle so it reads as flesh, not a stick
+                val sagY = rootY + 16f * fighter.tongueExtend
+                val tongue = Path().apply {
+                    moveTo(rootX, rootY - 7f)
+                    quadraticTo((rootX + tipX) / 2f, sagY - 9f, tipX, rootY + 2f)
+                    lineTo(tipX, rootY + 10f)
+                    quadraticTo((rootX + tipX) / 2f, sagY + 9f, rootX, rootY + 9f)
+                    close()
+                }
+                drawStitchedFill(scope, tongue, tonguePink)
+                scope.drawStitchedOutline(tongue, ThreadColor)
+                // Sticky pad on the end
+                scope.drawCircle(tonguePink, radius = 11f, center = Offset(tipX, rootY + 5f))
+                scope.drawCircle(ThreadColor, radius = 11f, center = Offset(tipX, rootY + 5f), style = StitchedStroke)
+            }
+        }
+    }
+
     private fun drawRebelSnail(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         val dir = if (fighter.facingRight) 1f else -1f
         val bodyColor = Color(0xFF9C8A5A)   // marginalia ochre

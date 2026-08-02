@@ -116,6 +116,35 @@ class RegressionGuardTest {
     }
 
     @Test
+    fun `the frog never swallows the player or the trojan horse`() {
+        val frog = fighter("frog", archetype = EnemyArchetype.GIANT_FROG)
+        // A follower small enough to go down whole.
+        val small = fighter("follower", player = true).apply { hp = 20f }
+        assertTrue("a light follower is a mouthful", small.isSwallowableBy(frog))
+
+        // The horse is carpentry.
+        val horse = fighter("trojan_horse#0", player = true).apply { hp = 20f }
+        assertFalse("the trojan horse cannot be eaten", horse.isSwallowableBy(frog))
+
+        // Too big a mouthful: gets crunched instead, which the tick handles separately.
+        val heavy = fighter("housecarl", player = true).apply { hp = FROG_GULP_HP + 1f }
+        assertFalse("above the gulp threshold he is chewed, not swallowed", heavy.isSwallowableBy(frog))
+
+        // The host's own men are not food.
+        val saxon = fighter("saxon").apply { hp = 10f }
+        assertFalse("a frog does not eat the army it fights for", saxon.isSwallowableBy(frog))
+    }
+
+    @Test
+    fun `the frog is as hard to shift as the snail`() {
+        val frog = fighter("frog", archetype = EnemyArchetype.GIANT_FROG)
+        assertTrue(
+            "a thing the size of a cart should not be knocked about",
+            frog.ccResist < 0.2f
+        )
+    }
+
+    @Test
     fun `twins are rarer than a plain follower and rarer still is the triple`() {
         val random = kotlin.random.Random(7)
         val twinRate = (0 until 4000).count { rollFollowerCopies(random) == 2 } / 4000f

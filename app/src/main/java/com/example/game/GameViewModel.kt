@@ -389,6 +389,13 @@ class GameViewModel : ViewModel() {
         const val SIEGE_WAKE_RADIUS_PX = 220f
         /** Where the castle gate stands. Matches BattlegroundContent.siegeObjects. */
         const val SIEGE_GATE_X = 1800f
+
+        // The Gaping Frog. Reach is long on purpose — the whole threat is that it does not have
+        // to close with your line to start eating it.
+        const val FROG_TONGUE_REACH_PX = 260f
+        const val FROG_TONGUE_OUT_SECS = 0.35f
+        const val FROG_TONGUE_IN_SECS = 0.55f
+        const val FROG_TONGUE_COOLDOWN_SECS = 2.6f
         const val SAPPER_BURROW_SECONDS = 4.2f
         const val MOLEMAN_BURROW_SECONDS = 2.8f
         /** How long the descent itself takes — he sinks at the dig site, throwing up spoil. */
@@ -1098,6 +1105,13 @@ class GameViewModel : ViewModel() {
                     enemies.add(EnemyFactory.createArchetype(EnemyArchetype.REBEL_SNAIL, enemiesCount + 10, state.level))
                 // else: a plain fight — the threat of the curveball is part of the curve
             }
+        }
+
+        // One map in ten from level 40 has a Gaping Frog squatting in it. Rolled separately from
+        // the curveball above so it can land alongside one — a frog and a snail in the same field
+        // is a perfectly good thing to walk into.
+        if (bossType == null && !isSiegeBattle && state.level >= 40 && contentRandom.nextInt(10) == 0) {
+            enemies.add(EnemyFactory.createArchetype(EnemyArchetype.GIANT_FROG, enemiesCount + 20, state.level))
         }
 
         repeat(state.unlockedAncillaries.count { it == Ancillary.PLAGUE_PEASANT }) { i ->
@@ -1884,6 +1898,8 @@ class GameViewModel : ViewModel() {
             }
         }
 
+        tickGiantFrogs(dt)
+
         // The diggers, under the field. While burrowTimer runs they are parked far off the left
         // edge and flagged inactive, which is what keeps them untargetable, unhittable and out of
         // the draw — no new "is he underground" check needed anywhere else.
@@ -2450,6 +2466,110 @@ class GameViewModel : ViewModel() {
      * fast; the smoke drifts and lingers, which is what makes it read as fire rather than as
      * coloured confetti.
      */
+    /**
+     * The Gaping Frog. Four stages, all driven off [FighterState.tongueExtend] so the renderer and
+     * the rules never disagree about where the tongue is:
+     *
+     *  0        mouth shut, looking for someone
+     *  0 -> 1   tongue going out toward a chosen victim
+     *  1        contact — the victim is either swallowed whole or seized and crunched
+     *  1 -> 0   tongue reeling back in, dragging whoever it caught
+     *
+     * The player is never reeled in ([isSwallowableBy] refuses him): he takes a flat hit and the
+     * tongue comes straight back, because being removed from your own battle is not a fight.
+     */
+    private fun tickGiantFrogs(dt: Float) {
+        val enemies = _enemiesState.value
+        val player = _playerState.value
+        if (enemies.none { it.archetype == EnemyArchetype.GIANT_FROG && !it.isDead && !it.isDying }) return
+
+        // Anyone in a mouth is held: he cannot act, and he is being eaten.
+        enemies.forEach { victim ->
+            if (victim.beingChewedSecs > 0f) {
+                victim.beingChewedSecs -= dt
+                victim.crumpleDuration = maxOf(victim.crumpleDuration, 0.2f)
+                engine.applyFlatDamage(FROG_CHEW_DPS * dt, victim, isPlayerSource = false, quiet = true)
+                if (victim.beingChewedSecs <= 0f) victim.beingChewedSecs = 0f
+            }
+        }
+
+        enemies.forEach { frog ->
+            if (frog.archetype != EnemyArchetype.GIANT_FROG || frog.isDead || frog.isDying) return@forEach
+
+            if (frog.tongueTargetId == null) {
+                if (frog.attackCooldown > 0f) return@forEach
+                // Nearest edible thing in tongue reach. Prefers a swallowable follower; falls back
+                // to the player, who just gets hit.
+                val reach = FROG_TONGUE_REACH_PX * frog.size
+                val inReach = enemies.filter {
+                    it.isPlayer && !it.isDead && !it.isDying && it.beingChewedSecs <= 0f &&
+                        abs(it.posX - frog.posX) <= reach
+                }
+                val prey = inReach.minByOrNull { abs(it.posX - frog.posX) }
+                    ?: player?.takeIf { !it.isDead && abs(it.posX - frog.posX) <= reach }
+                    ?: return@forEach
+                frog.tongueTargetId = prey.id
+                frog.facingRight = prey.posX > frog.posX
+                MedievalAudioSynth.playSound(SoundType.SWOOSH)
+                return@forEach
+            }
+
+            val victim = (enemies + listOfNotNull(player)).firstOrNull { it.id == frog.tongueTargetId }
+            if (victim == null || victim.isDead || victim.isDying) {
+                frog.tongueTargetId = null
+                frog.tongueExtend = 0f
+                return@forEach
+            }
+
+            if (frog.tongueExtend < 1f) {
+                frog.tongueExtend = (frog.tongueExtend + dt / FROG_TONGUE_OUT_SECS).coerceAtMost(1f)
+                if (frog.tongueExtend >= 1f) onTongueContact(frog, victim)
+            } else {
+                // Reeling in. A seized follower is dragged toward the mouth as it retracts.
+                frog.tongueExtend = (frog.tongueExtend - dt / FROG_TONGUE_IN_SECS).coerceAtLeast(0f)
+                if (victim.beingChewedSecs > 0f) {
+                    val mouthX = frog.posX + (if (frog.facingRight) 1f else -1f) * 40f * frog.size
+                    victim.posX += (mouthX - victim.posX) * (1f - frog.tongueExtend) * 0.35f
+                }
+                if (frog.tongueExtend <= 0f) {
+                    frog.tongueTargetId = null
+                    frog.attackCooldown = FROG_TONGUE_COOLDOWN_SECS
+                }
+            }
+        }
+    }
+
+    /** The instant the tongue lands. Decides swallow, crunch, or a flat smack for the player. */
+    private fun onTongueContact(frog: FighterState, victim: FighterState) {
+        MedievalAudioSynth.playSound(SoundType.CRUNCH)
+        when {
+            victim.isSwallowableBy(frog) -> {
+                // Gone. Whole.
+                victim.hp = 0f
+                victim.isDying = true
+                victim.deathType = DeathType.CRUMPLED_IN_PLACE
+                addPopup("SWALLOWED!", victim.posX, 150f, Color(0xFF4C7A3A))
+                frog.hp = (frog.hp + 25f).coerceAtMost(frog.maxHp)
+            }
+            victim === _playerState.value || victim.isLord -> {
+                // Too big and too important to reel in: a smack and the tongue lets go.
+                engine.applyFlatDamage(FROG_TONGUE_PLAYER_DAMAGE, victim, isPlayerSource = false)
+                addPopup("TONGUE-LASHED!", victim.posX, 150f, Color(0xFF4C7A3A))
+            }
+            victim.isInanimate -> {
+                // Carpentry. It cannot be eaten and the frog will not try again in a hurry.
+                addPopup("TOO BIG!", victim.posX, 150f, Color(0xFF6E5536))
+                frog.attackCooldown = FROG_TONGUE_COOLDOWN_SECS * 2f
+            }
+            else -> {
+                // Above the gulp threshold: held in the mouth and crunched. Survivable if his
+                // friends kill the frog before the timer runs out.
+                victim.beingChewedSecs = FROG_CHEW_SECS
+                addPopup("CRUNCHED!", victim.posX, 150f, Color(0xFF9E3624))
+            }
+        }
+    }
+
     private fun addFlameAndSmokeParticles(x: Float, y: Float) {
         // The lean of the flame is a slow shared sine, not a fresh coin flip per particle. Two
         // independent random velocities every tick made the fire strobe rather than gutter; the

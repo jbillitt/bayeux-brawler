@@ -41,7 +41,9 @@ enum class EnemyArchetype {
     /** Fast, lightly armed, and past your shield wall before it has turned around. */
     OUTRIDER,
     /** Rare, from level 40. Lobs bursting pots at the player's massed archers. */
-    BOMBARDIER
+    BOMBARDIER,
+    /** Marginalia made flesh again: a frog the size of the snail. Takes followers with its tongue. */
+    GIANT_FROG
 }
 
 enum class Ancillary(
@@ -672,6 +674,12 @@ data class FighterState(
     var skidVelocityX: Float = 0f,
     /** Counts down after a boss knockdown; while it runs he cannot be floored again. */
     var crumpleCooldown: Float = 0f,
+    /** Who the frog's tongue is out for. Null means the mouth is shut. */
+    var tongueTargetId: FighterId? = null,
+    /** 0 = mouth shut, 1 = tongue fully extended and stuck to the victim. Drives the whole animation. */
+    var tongueExtend: Float = 0f,
+    /** Seconds left of being crunched in a frog's mouth: too big to swallow, too held to fight. */
+    var beingChewedSecs: Float = 0f,
     var visualOffsetY: Float = 0f,
     // Hill terrain: how far this fighter is lifted by the slope under his feet (negative = higher
     // up the hill). 0 in every non-hill battle, so the high-ground damage bonus and the render
@@ -1086,8 +1094,32 @@ val FighterState.ccResist: Float
         // raven's buffet and every heavy blunt hit were flooring it faster than it could bite.
         // A thing that size is not knocked over by a bird.
         archetype == EnemyArchetype.REBEL_SNAIL -> 0.08f
+        // Same reasoning as the snail: it is the size of a cart.
+        archetype == EnemyArchetype.GIANT_FROG -> 0.08f
         else -> 1f
     }
+
+/**
+ * Can a frog get this one down its throat?
+ *
+ * The player is never swallowed — the tongue hits him for flat damage and lets go, because being
+ * removed from your own battle is not a fight. The trojan horse and anything else [isInanimate]
+ * is carpentry, and a follower still above [FROG_GULP_HP] is simply too big a mouthful: he gets
+ * held and crunched instead, which he can survive if his friends kill the frog in time.
+ */
+fun FighterState.isSwallowableBy(frog: FighterState): Boolean =
+    this !== frog && isPlayer && !isInanimate && !isDead && !isDying &&
+        !isLord && hp <= FROG_GULP_HP
+
+/** A follower at or below this many hit points goes down whole. Above it, he is chewed. */
+const val FROG_GULP_HP = 45f
+
+/** How long a too-big victim spends held in the mouth, and the damage each second of it does. */
+const val FROG_CHEW_SECS = 3.5f
+const val FROG_CHEW_DPS = 14f
+
+/** What the tongue does to the player himself, who cannot be reeled in. */
+const val FROG_TONGUE_PLAYER_DAMAGE = 18f
 
 /** The trojan horse is carpentry. It does not bleed, and it has no arm to sever. */
 val FighterState.isInanimate: Boolean get() = isKind("trojan_horse")

@@ -1082,6 +1082,10 @@ val FighterState.ccResist: Float
         // a boss already has rather than adding a second, separate rule.
         bossType != null -> 0.1f * bossTier.ccResistScale
         isBossRetinue -> 0.45f
+        // Eighteen times a man's hit points and it still spent the whole fight on its back: the
+        // raven's buffet and every heavy blunt hit were flooring it faster than it could bite.
+        // A thing that size is not knocked over by a bird.
+        archetype == EnemyArchetype.REBEL_SNAIL -> 0.08f
         else -> 1f
     }
 

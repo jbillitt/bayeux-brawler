@@ -522,7 +522,11 @@ class CombatEngine(private val ctx: BattleContext) {
                 val distToTarget = abs(fighter.posX - target.posX)
                 if (distToTarget < fighter.reachPixels + 20f) {
                     val p = effectiveSwingProgress.coerceIn(0f, 1f)
-                    val liftMax = if (isChokeSlam) -140f else if (isSuplex) -90f else if (fighter.activeWrestlingMove == WrestlingMove.BODY_THROW) -70f else 0f
+                    // Scaled by the target's own resistance: you do not suplex a giant snail, and
+                    // hoisting one clean off the ground was the last way it kept being crowd-
+                    // controlled after its knockdown resistance went up.
+                    val liftMax = (if (isChokeSlam) -140f else if (isSuplex) -90f else if (fighter.activeWrestlingMove == WrestlingMove.BODY_THROW) -70f else 0f) *
+                        target.ccResist.coerceAtMost(1f)
                     if (liftMax != 0f) {
                         target.visualOffsetY = if (p < strikeThreshold) {
                             liftMax * (p / strikeThreshold)
@@ -1255,7 +1259,9 @@ class CombatEngine(private val ctx: BattleContext) {
                 Random.nextFloat() < BARROW_KING_HURL_CHANCE
             ) {
                 val away = if (attacker.posX < currTarget.posX) 1f else -1f
-                currTarget.posX += away * BARROW_KING_HURL_PX
+                // Skid, not a jump, same as the ballista shove — and scaled by ccResist so the
+                // things that are simply too big to throw barely shift.
+                currTarget.skidVelocityX = away * BARROW_KING_HURL_PX * currTarget.ccResist * SKID_DRAG_PER_SEC
                 currTarget.tryCrumple(1.5f, chance = 0.5f)
                 ctx.sound(SoundType.CRUNCH)
                 ctx.popup("HURLED!", currTarget.posX, 150f, Color(0xFF9AA88C))

@@ -170,6 +170,33 @@ class RegressionGuardTest {
     }
 
     @Test
+    fun `capes trade protection against speed and the feathered one is the fastest`() {
+        fun cape(id: String) = GameData.ARMOR_PIECES.first { it.id == id }
+        val wool = cape("cape_wool")
+        val riding = cape("cape_riding")
+        val feather = cape("cape_feather")
+        // A negative speedPenalty is a speed BONUS. The feather cloak is the one you take when you
+        // want to move; if it ever stops being the fastest it has no reason to exist.
+        listOf("cape_wool", "cape_riding", "cape_ermine", "cape_tatters").forEach {
+            assertTrue(
+                "${cape(it).itemName} must not out-run the feather cloak",
+                feather.speedPenalty < cape(it).speedPenalty
+            )
+        }
+        // And it must cost you something, or it is strictly better than every other cape.
+        assertTrue("the feather cloak stops the least", feather.defense < wool.defense)
+        assertTrue("the rider's cloak stops the most", riding.defense > wool.defense)
+    }
+
+    @Test
+    fun `the standard bearer fights on the field rather than in the parade`() {
+        // He runs in with the front rank, so he has a body — which means he must be excluded from
+        // the parade line, the same bug the burrowers had.
+        assertTrue(Ancillary.STANDARD_BEARER in FIGHTING_FOLLOWERS)
+        assertTrue(Ancillary.STANDARD_BEARER in NON_PARADE_ANCILLARIES)
+    }
+
+    @Test
     fun `a late siege garrison is armed better than an early one`() {
         // The garrison has to keep up with a player who is stacking armour, or a deep siege turns
         // into a walk. Crossbows go through what bows stopped scratching.

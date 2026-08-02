@@ -85,6 +85,7 @@ enum class Ancillary(
     SAPPER("anc_sapper", "Digger Dunstan", "Sapper", "Goes under the field with a great spade and comes up behind the enemy line, where nobody is looking. Fights as an ordinary man once he surfaces.", hpBoost = 15f, speedBoost = 0f, color = Color(0xFF6B5B4A)),
     MOLEMAN("anc_moleman", "The Moleman", "Burrower", "Something hairy that swims through soil with its hands and erupts behind the enemy. Punches, and the wounds keep bleeding. Very hard to kill.", hpBoost = 40f, speedBoost = 0f, color = Color(0xFF3A2E24)),
     TINY_TERRENCE("anc_tiny_terrence", "Tiny Terrence", "Skirmisher", "A very small man who runs very fast, straight past the melee, to put two daggers into the archers. Almost impossible to shoot.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFF9E6B3A)),
+    STANDARD_BEARER("anc_standard_bearer", "Wulfric the Banneret", "Standard Bearer", "Runs in with your front rank carrying a great painted banner with your own face on it. He can barely fight, but every man who can see the standard swings faster — and the moment he goes down, they stop.", hpBoost = 10f, speedBoost = 0f, color = Color(0xFFB03131)),
     // Earned mounts (C2). Each is granted by a Milestone, never offered as a level-up card.
     WAR_OX("anc_mount_ox", "Bregu", "War Ox", "A plough ox in barding. Immensely strong, immensely slow, and entirely unbothered by arrows.", hpBoost = 160f, speedBoost = -0.25f, color = Color(0xFF6B5B4A)),
     PACK_MULE("anc_mount_mule", "Chestnut", "Pack Mule", "A baggage mule, protesting. A ridiculous mount for a conqueror, and the chroniclers will say so.", hpBoost = 20f, speedBoost = -0.35f, color = Color(0xFF8A7156)),
@@ -120,7 +121,9 @@ val NON_PARADE_ANCILLARIES = setOf(
     Ancillary.ARCHER, Ancillary.CROSSBOWMAN,
     // The burrowers and the skirmisher spawn their own bodies (GameViewModel :1231-1265) — they
     // were fighting on the field AND marching in the parade at the same time.
-    Ancillary.SAPPER, Ancillary.MOLEMAN, Ancillary.TINY_TERRENCE
+    Ancillary.SAPPER, Ancillary.MOLEMAN, Ancillary.TINY_TERRENCE,
+    // He runs in with the front rank and carries a banner, so he has a body like the rest of them.
+    Ancillary.STANDARD_BEARER
 )
 
 /**
@@ -132,7 +135,9 @@ val FIGHTING_FOLLOWERS = setOf(
     Ancillary.WARDOG, Ancillary.RAVEN, Ancillary.FANATIC, Ancillary.HAG,
     Ancillary.PLAGUE_PEASANT, Ancillary.GREASER, Ancillary.FIREBRAND, Ancillary.BEEKEEPER,
     Ancillary.ARCHER, Ancillary.CROSSBOWMAN,
-    Ancillary.SAPPER, Ancillary.MOLEMAN, Ancillary.TINY_TERRENCE
+    Ancillary.SAPPER, Ancillary.MOLEMAN, Ancillary.TINY_TERRENCE,
+    // He runs in with the front rank and carries a banner, so he has a body like the rest of them.
+    Ancillary.STANDARD_BEARER
 )
 
 /** The follower kind ("moleman") behind an ancillary id ("anc_moleman"), which is what ids use. */
@@ -442,7 +447,18 @@ object GameData {
         TOGA("armor_toga", "Emperor's Toga", 0.7f, defense = 0f, speedPenalty = 0.0f, description = "Draped Roman cloth, a thousand years out of fashion. Fatal, but classical.", color = Color(0xFFF0E6D2)),
         GREAVES("armor_greaves", "Iron Greaves", 2.2f, defense = 15f, speedPenalty = 0.03f, description = "Shaped iron plates strapped over the shins. Saxon spears aim low.", color = Color(0xFF5D666B)),
         SPAULDERS("armor_spaulders", "Spaulders", 2.4f, defense = 15f, speedPenalty = 0.03f, description = "Overlapping plates capping the shoulders. Turns an overhead axe aside.", color = Color(0xFF6B747A)),
-        SURCOAT("armor_surcoat", "Surcoat", 0.6f, defense = 3f, speedPenalty = 0.0f, description = "A cloth surcoat worn over the mail, in your own colours. Barely armour. Entirely the point.", color = Color(0xFFB03131));
+        SURCOAT("armor_surcoat", "Surcoat", 0.6f, defense = 3f, speedPenalty = 0.0f, description = "A cloth surcoat worn over the mail, in your own colours. Barely armour. Entirely the point.", color = Color(0xFFB03131)),
+
+        // Capes. All worn as an extra layer, and all of them trade the same two things against
+        // each other: what they stop, and what they cost you in speed. A NEGATIVE speedPenalty is
+        // a speed BONUS — the field is applied as a multiplier in FighterState.moveSpeed.
+        CAPE_WOOL("cape_wool", "Woollen Cape", 1.0f, defense = 10f, speedPenalty = 0.0f, description = "Undyed wool, clasped at the shoulder. It turns a glancing blow and keeps the rain off, which is most of soldiering.", color = Color(0xFF7A6A4F)),
+        CAPE_RIDING("cape_riding", "Rider's Cloak", 1.4f, defense = 16f, speedPenalty = 0.02f, description = "Heavy travelling wool cut long. Slower than it looks, and it swallows an arrow now and then.", color = Color(0xFF3E5A45)),
+        CAPE_FEATHER("cape_feather", "Cloak of Feathers", 0.3f, defense = 4f, speedPenalty = -0.14f, description = "Swan and goose feathers sewn in rows. Almost weightless, and you run like something being chased.", color = Color(0xFFE7DCC4)),
+        // The two odd ones. The ermine buys a following; the ragged one is worn by a man nobody
+        // considers worth robbing, which turns out to be its own kind of armour.
+        CAPE_ERMINE("cape_ermine", "Ermine Mantle", 1.2f, defense = 12f, speedPenalty = -0.04f, description = "White winter stoat, tails and all — the cloak of a man with land. Wearing it in a brawl is a statement, and men follow statements.", color = Color(0xFFF2EDE0)),
+        CAPE_TATTERS("cape_tatters", "Cloak of Tatters", 0.4f, defense = 7f, speedPenalty = -0.09f, description = "More holes than cloth, and it streams behind you like smoke. Hard to grab, harder to aim at, and nobody bothers to loot it.", color = Color(0xFF5A4C42));
         override val type: ItemType get() = ItemType.ARMOR
     }
     val ARMOR_PIECES = ArmorPiece.values().toList()

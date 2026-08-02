@@ -154,18 +154,20 @@ class AdRewardTest {
 
     @Test
     fun theRewardNeverOffersAnArmourLayerAlreadyWorn() {
+        // Asserts the actual rule — nothing already worn comes back — rather than "no armour card
+        // at all", which was only equivalent while those five were the entire layer pool. Adding
+        // the capes made the old proxy fail without anything being wrong.
+        val worn = listOf(
+            "armor_gauntlets", "armor_boots", "armor_coif",
+            "armor_greaves", "armor_spaulders"
+        )
         val extra = GameViewModel.rewardChoices(
-            state().copy(
-                extraArmors = listOf(
-                    "armor_gauntlets", "armor_boots", "armor_coif",
-                    "armor_greaves", "armor_spaulders"
-                )
-            ),
+            state().copy(extraArmors = worn),
             kotlin.random.Random(7)
         )
         assertTrue(
-            "offered a layer already worn: ${extra.map { it.id }}",
-            extra.none { it.type == "armor" }
+            "offered a layer already worn: ${extra.map { it.itemId }}",
+            extra.none { it.type == "armor" && it.itemId in worn }
         )
     }
 }

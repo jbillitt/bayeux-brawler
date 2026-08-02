@@ -87,6 +87,9 @@ class CombatEngine(private val ctx: BattleContext) {
         const val ARMOR_SHRED_PER_HIT = 15f
         const val MONK_AURA_RADIUS_PX = 240f
         const val MONK_AURA_ATTACK_DELAY_MULT = 0.8f
+        /** How far the standard can be seen, and what seeing it is worth. Wider than the monk's. */
+        const val BANNER_AURA_RADIUS_PX = 320f
+        const val BANNER_AURA_ATTACK_DELAY_MULT = 0.78f
 
         // Curve counters and their outs.
         const val SHIELDBREAKER_MULT = 3f
@@ -772,6 +775,17 @@ class CombatEngine(private val ctx: BattleContext) {
             }
         ) {
             cooldown *= MONK_AURA_ATTACK_DELAY_MULT
+        }
+        // The banner. The mirror of the monk's aura, on the player's side: every one of his men in
+        // sight of a LIVING standard bearer swings faster, and the instant the bearer goes down it
+        // is simply gone — no timer, no lingering buff. Fighting to keep him upright is the point.
+        if (fighter.isPlayer && ctx.enemies.any {
+                it !== fighter && it.isKind("standard_bearer") &&
+                    !it.isDead && !it.isDying && !it.isCombatInactive &&
+                    abs(it.posX - fighter.posX) <= BANNER_AURA_RADIUS_PX
+            }
+        ) {
+            cooldown *= BANNER_AURA_ATTACK_DELAY_MULT
         }
         fighter.attackCooldown = cooldown
 

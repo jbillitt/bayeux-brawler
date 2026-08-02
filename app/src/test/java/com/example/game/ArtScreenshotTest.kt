@@ -577,6 +577,52 @@ class ArtScreenshotTest {
     }
 
     /**
+     * The five capes, and the standard bearer with the player's face on his banner.
+     *
+     * Eyeball that each cape hangs BEHIND the man rather than in front of him, that the feather,
+     * ermine and tattered ones are told apart at a glance, and that the banner carries a face.
+     */
+    @Test
+    fun capesAndTheStandard() {
+        fun wearing(capeId: String?, kind: String = "brawler") = FighterState(
+            id = FighterId("$kind#0"), name = kind, isPlayer = true, maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_sword" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_medium" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 105f, targetX = 105f, facingRight = true, size = 1f,
+            hairColor = Color(0xFF6B4A2A), hairStyle = "long", animFrame = 1.4f,
+            extraArmors = listOfNotNull(capeId?.let { id -> GameData.ARMOR_PIECES.first { it.id == id } })
+        )
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                Row {
+                    listOf("cape_wool", "cape_riding", "cape_feather").forEach { id ->
+                        Canvas(modifier = Modifier.width(118.dp).height(360.dp)) {
+                            TapestryRenderer.drawCharacter(this, wearing(id), scale = 1.1f, isBattleActive = true)
+                        }
+                    }
+                }
+                Row {
+                    listOf("cape_ermine", "cape_tatters").forEach { id ->
+                        Canvas(modifier = Modifier.width(118.dp).height(360.dp)) {
+                            TapestryRenderer.drawCharacter(this, wearing(id), scale = 1.1f, isBattleActive = true)
+                        }
+                    }
+                    Canvas(modifier = Modifier.width(118.dp).height(360.dp)) {
+                        TapestryRenderer.drawCharacter(
+                            this, wearing(null, kind = "standard_bearer"),
+                            scale = 1.1f, isBattleActive = true
+                        )
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/capes_and_standard.png")
+    }
+
+    /**
      * The three new armour layers, each stacked over chainmail the way they are worn in play, plus
      * all three at once. Asserts nothing — eyeball that greaves sit on the shins, spaulders cap the
      * shoulders without floating, and the surcoat hangs over the mail without hiding it.

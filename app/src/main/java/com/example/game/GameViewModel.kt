@@ -331,7 +331,10 @@ class GameViewModel : ViewModel() {
             }
 
             // A wider armour selection: one layer the player is not already wearing.
-            val layer = listOf("armor_gauntlets", "armor_boots", "armor_coif", "armor_greaves", "armor_spaulders")
+            val layer = listOf(
+                "armor_gauntlets", "armor_boots", "armor_coif", "armor_greaves", "armor_spaulders",
+                "cape_wool", "cape_riding", "cape_feather", "cape_ermine", "cape_tatters"
+            )
                 .filter { it !in state.extraArmors }
                 .mapNotNull { id -> GameData.ARMOR_PIECES.find { it.id == id } }
                 .randomOrNull(random)
@@ -1295,6 +1298,25 @@ class GameViewModel : ViewModel() {
                 armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
                 headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
                 posX = 180f - i * 40f, targetX = 180f - i * 40f, facingRight = true, size = 1.8f, hairColor = androidx.compose.ui.graphics.Color.Transparent, hairStyle = "none", isDualWielding = false
+            ))
+        }
+
+        // The standard bearer. He runs in with the front rank and holds the banner up; every
+        // player-side man who can see it swings faster (CombatEngine, BANNER_AURA_*). He is armed
+        // barely enough to defend himself — the banner is the weapon.
+        repeat(state.unlockedAncillaries.count { it == Ancillary.STANDARD_BEARER }) { i ->
+            val bannerHp = 90f + state.level * 5f
+            enemies.add(FighterState(
+                id = FighterId("standard_bearer#$i"), name = "Wulfric the Banneret", isPlayer = true,
+                maxHp = bannerHp, hp = bannerHp,
+                weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_dagger" },
+                weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_short" },
+                shield = GameData.SHIELDS.first { it.id == "shield_none" },
+                armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+                headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+                posX = 95f + i * 26f, targetX = 95f + i * 26f, facingRight = true, size = 1.0f,
+                hairColor = androidx.compose.ui.graphics.Color(0xFF6B4A2A), hairStyle = "long",
+                isDualWielding = false
             ))
         }
 

@@ -292,6 +292,10 @@ object TapestryRenderer {
                     } else if (fighter.archetype == EnemyArchetype.GIANT_FROG) {
                         drawGiantFrog(this, cx, cy, fighter)
                     } else {
+                        // Behind the body, like the boss cloaks, so the figure stands in front of
+                        // his own cape rather than wearing it as a bib.
+                        drawCape(this, cx, cy, fighter)
+                        drawStandard(this, cx, cy, fighter)
                         drawBossSignature(this, cx, cy, fighter)
                         if (fighter.isStilts) {
                             // Poles live in the body's space so they scale and swing with the man who is on them.
@@ -534,6 +538,138 @@ object TapestryRenderer {
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * A cape, if he is wearing one. Drawn behind the body so he stands in front of it, and trailing
+     * away from the direction he is facing so it reads as cloth rather than a board strapped on.
+     *
+     * The sway is off animFrame plus his own movement, so a man standing still has a cloak that
+     * merely breathes and a man running has one that streams.
+     */
+    private fun drawCape(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        val cape = fighter.extraArmors.firstOrNull { it.id.startsWith("cape_") } ?: return
+        val dir = if (fighter.facingRight) 1f else -1f
+        // Trails BEHIND him: opposite his facing, and further out the faster he is going.
+        val drift = (14f + kotlin.math.abs(fighter.velocityX) * 0.06f).coerceAtMost(38f)
+        val flap = sin(fighter.animFrame * 1.4f) * 4f
+        val tail = -dir * (drift + flap)
+
+        // Shifted BACK off the spine and flared wider than the tunic. Drawn centred and tunic-width
+        // it simply read as a recoloured tunic — the cloak has to show past his back and past his
+        // hem or there is no cloak, only a differently coloured man.
+        val back = -dir * 14f
+        val cloth = Path().apply {
+            moveTo(cx + back - 20f, cy + 4f)
+            lineTo(cx + back + 20f, cy + 4f)
+            quadraticTo(cx + back + 34f + tail * 0.4f, cy + 70f, cx + back + 42f + tail, cy + 130f)
+            lineTo(cx + back - 42f + tail, cy + 130f)
+            quadraticTo(cx + back - 34f + tail * 0.4f, cy + 70f, cx + back - 20f, cy + 4f)
+            close()
+        }
+        drawStitchedFill(scope, cloth, cape.color)
+        scope.drawStitchedOutline(cloth, ThreadColor)
+
+        when (cape.id) {
+            // Rows of feathers, drawn as short overlapping strokes down the cloak
+            "cape_feather" -> for (row in 0..3) {
+                val y = cy + 26f + row * 24f
+                for (col in -2..2) {
+                    val x = cx + col * 13f + tail * (row / 4f)
+                    scope.drawLine(
+                        ThreadColor.copy(alpha = 0.5f),
+                        Offset(x, y), Offset(x + 5f, y + 9f),
+                        strokeWidth = 2f, cap = StrokeCap.Round
+                    )
+                }
+            }
+            // Ermine: the black tail-tips, in the heraldic pattern
+            "cape_ermine" -> for (row in 0..2) {
+                for (col in -1..1) {
+                    val x = cx + col * 18f + (row % 2) * 9f + tail * (row / 3f)
+                    val y = cy + 34f + row * 28f
+                    scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(x, y))
+                    scope.drawLine(ThreadColor, Offset(x, y + 3f), Offset(x, y + 8f), strokeWidth = 2f)
+                }
+            }
+            // Tatters: the hem is cut away into streaming rags
+            "cape_tatters" -> for (i in 0..5) {
+                val x = cx - 30f + i * 12f + tail
+                scope.drawLine(
+                    cape.color, Offset(x, cy + 100f), Offset(x + tail * 0.35f, cy + 138f),
+                    strokeWidth = 6f, cap = StrokeCap.Round
+                )
+            }
+        }
+    }
+
+    /**
+     * The banneret's standard: a tall pole behind him carrying a painted cloth with the player's
+     * own face on it, drawn with the same head routine every other face uses so it is recognisably
+     * HIS face rather than a generic device.
+     *
+     * Behind the body, so the man stands in front of his own banner.
+     */
+    private fun drawStandard(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
+        if (!fighter.isKind("standard_bearer")) return
+        val dir = if (fighter.facingRight) 1f else -1f
+        val poleX = cx - dir * 26f
+        val topY = cy - 118f
+
+        // Pole, with a small cross finial
+        scope.drawLine(
+            Color(0xFF6B4B2D), Offset(poleX, cy + 120f), Offset(poleX, topY),
+            strokeWidth = 5f, cap = StrokeCap.Round
+        )
+        scope.drawLine(
+            Color(0xFFD6A420), Offset(poleX - 7f, topY + 8f), Offset(poleX + 7f, topY + 8f),
+            strokeWidth = 3f, cap = StrokeCap.Round
+        )
+
+        // The cloth, hanging off the pole away from the man, with a slow ripple in it
+        val wave = sin(fighter.animFrame * 1.1f) * 5f
+        val far = poleX + dir * 62f
+        val cloth = Path().apply {
+            moveTo(poleX, topY + 14f)
+            lineTo(far, topY + 20f + wave)
+            lineTo(far, topY + 84f + wave)
+            lineTo(poleX, topY + 78f)
+            close()
+        }
+        drawStitchedFill(scope, cloth, Color(0xFFB03131))
+        scope.drawStitchedOutline(cloth, ThreadColor)
+        // Gold border along the flying edge
+        scope.drawLine(
+            Color(0xFFD6A420), Offset(far, topY + 20f + wave), Offset(far, topY + 84f + wave),
+            strokeWidth = 3f
+        )
+
+        // The player's face, painted on it. Drawn through the shared head routine at banner scale
+        // so it inherits his actual features rather than being a second, drifting design.
+        val faceX = poleX + dir * 31f
+        val faceY = topY + 52f + wave
+        scope.withTransform({
+            scale(0.72f, 0.72f, pivot = Offset(faceX, faceY))
+        }) {
+            scope.drawCircle(Color(0xFFE8C9A0), radius = 22f, center = Offset(faceX, faceY))
+            scope.drawCircle(ThreadColor, radius = 22f, center = Offset(faceX, faceY), style = StitchedStroke)
+            // Eyes, brows, nose and moustache — the Bayeux face reduced to its four marks
+            listOf(-8f, 8f).forEach { dx ->
+                scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(faceX + dx, faceY - 5f))
+                scope.drawLine(
+                    ThreadColor, Offset(faceX + dx - 6f, faceY - 12f), Offset(faceX + dx + 5f, faceY - 11f),
+                    strokeWidth = 2.5f, cap = StrokeCap.Round
+                )
+            }
+            scope.drawLine(
+                ThreadColor, Offset(faceX, faceY - 3f), Offset(faceX, faceY + 5f),
+                strokeWidth = 2.5f, cap = StrokeCap.Round
+            )
+            scope.drawLine(
+                ThreadColor, Offset(faceX - 9f, faceY + 9f), Offset(faceX + 9f, faceY + 9f),
+                strokeWidth = 3f, cap = StrokeCap.Round
+            )
         }
     }
 

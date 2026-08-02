@@ -136,6 +136,21 @@ class RegressionGuardTest {
     }
 
     @Test
+    fun `the bomb is a thrown ranged weapon at throwing range`() {
+        val bomb = GameData.WEAPON_HEADS.first { it.id == "head_bomb" }
+        val javelin = GameData.WEAPON_HEADS.first { it.id == "head_javelin" }
+        val longbow = GameData.WEAPON_HEADS.first { it.id == "head_longbow" }
+        assertTrue("a bomb is thrown, so it must count as ranged", bomb.isRanged)
+        // Thrown, so it belongs near the javelin and nowhere near a longbow. If someone tunes the
+        // reach up to bow range the weapon stops being "get close enough to lob it" and the whole
+        // risk of carrying it disappears.
+        assertTrue(
+            "bomb reach ${bomb.reach} should sit near the javelin's ${javelin.reach}, not the bow's ${longbow.reach}",
+            bomb.reach < longbow.reach && bomb.reach <= javelin.reach
+        )
+    }
+
+    @Test
     fun `the frog is as hard to shift as the snail`() {
         val frog = fighter("frog", archetype = EnemyArchetype.GIANT_FROG)
         assertTrue(

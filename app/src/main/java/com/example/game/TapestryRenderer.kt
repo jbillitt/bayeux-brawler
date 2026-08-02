@@ -2695,6 +2695,32 @@ object TapestryRenderer {
                 scope.drawCircle(Color(0xFF3E2723), radius = 2.5f, center = Offset(headPos.x + 15f, headPos.y))
                 scope.drawCircle(Color(0xFF3E2723), radius = 3.5f, center = Offset(headPos.x + 45f, headPos.y - 20f))
             }
+            "head_bomb" -> {
+                // A round clay pot held ready, with a cord smouldering out of the neck. Deliberately
+                // small: it is the burst that is big, not the thing in your hand.
+                val pot = Offset(headPos.x, headPos.y)
+                scope.drawCircle(Color(0xFF4A4238), radius = 13f, center = pot)
+                scope.drawCircle(ThreadColor, radius = 13f, center = pot, style = StitchedStroke)
+                // A band around the belly, so it reads as fired clay rather than a cannonball
+                scope.drawLine(
+                    Color(0xFF6E5536), Offset(pot.x - 11f, pot.y + 2f), Offset(pot.x + 11f, pot.y + 2f),
+                    strokeWidth = 2.5f
+                )
+                // Neck and fuse, curling up and back
+                scope.drawRect(
+                    Color(0xFF6E5536),
+                    topLeft = Offset(pot.x - 4f, pot.y - 18f),
+                    size = androidx.compose.ui.geometry.Size(8f, 7f)
+                )
+                val fuse = Path().apply {
+                    moveTo(pot.x, pot.y - 17f)
+                    quadraticTo(pot.x + 12f, pot.y - 26f, pot.x + 4f, pot.y - 34f)
+                }
+                scope.drawPath(fuse, Color(0xFF8C6F47), style = Stroke(width = 2.5f, cap = StrokeCap.Round))
+                // The spark on the end. This is the whole tell that it is lit.
+                scope.drawCircle(Color(0xFFE8A33A), radius = 4f, center = Offset(pot.x + 4f, pot.y - 35f))
+                scope.drawCircle(Color(0xFFFFC34D), radius = 2f, center = Offset(pot.x + 3f, pot.y - 36f))
+            }
             "head_torch" -> {
                 // The Burning Brand had no case at all here, so the player's torch drew as a bare
                 // haft while the enemy torch bearer (who carries a club plus flame particles) read
@@ -3621,6 +3647,7 @@ object TapestryRenderer {
                 val isScythe = fighter.weaponHead.id == "head_scythe"
                 val isSaw = fighter.weaponHead.id in listOf("head_saw_1", "head_saw_2")
                 val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
+                val isOverarmThrow = fighter.weaponHead.id in listOf("head_javelin", "head_bomb")
 
                 var thrustOffset = Offset.Zero
                 val armAngle = if (fighter.isDead || fighter.isDying) {
@@ -3643,6 +3670,12 @@ object TapestryRenderer {
                         }
                     } else if (isScythe) {
                         if (swing < 0.3f) 15f * (swing / 0.3f) else 15f - 80f * ((swing - 0.3f) / 0.7f)
+                    } else if (isOverarmThrow) {
+                        // You do not SWING a javelin, you throw it. The arm cocks right back past
+                        // the ear, hangs there a moment, then whips through and follows down across
+                        // the body. Bombs use the same motion — it is the same throw.
+                        if (swing < 0.45f) -100f * (swing / 0.45f)
+                        else -100f + 180f * ((swing - 0.45f) / 0.55f)
                     } else {
                         val isBowOrSling = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
                         val posture = if (isBowOrSling) 0f else when (Math.abs(fighter.name.hashCode()) % 3) {
@@ -3652,6 +3685,9 @@ object TapestryRenderer {
                         }
                         posture - sin(fighter.animFrame * 0.5f) * 10f
                     }
+                } else if (isOverarmThrow) {
+                    // Carried cocked at the shoulder between throws, not dangling at the hip.
+                    -70f - sin(fighter.animFrame * 0.5f) * 6f
                 } else {
                     val isBowOrSling = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
                     val posture = if (isBowOrSling) 0f else when (Math.abs(fighter.name.hashCode()) % 3) {

@@ -230,6 +230,9 @@ object GameData {
         CROSSBOW("head_crossbow", "Heavy Crossbow", 1.5f, pierce = 65f, reach = 12.0f, isRanged = true, description = "A mechanical bow. High armor piercing and fast to crank.", color = Color(0xFF4A3B2C)),
         MACE("head_mace", "Iron Mace", 2.0f, blunt = 20f, pierce = 3f, reach = 1.4f, description = "A simple but devastating flanged mace. Crushes helmets.", color = Color(0xFF636A6E)),
         JAVELIN("head_javelin", "Throwing Javelin", 0.6f, pierce = 12f, reach = 7.0f, isRanged = true, description = "A light throwing spear. Short range for a missile, but fast.", color = Color(0xFF8C969E)),
+        // Thrown, so it lives on the javelin's short-range end. Its damage is deliberately low for a
+        // ranged head: the bursting radius is what you are paying for, and the upgrades grow it.
+        BOMB("head_bomb", "Far-Eastern Bomb", 0.7f, blunt = 11f, pierce = 4f, reach = 6.5f, isRanged = true, description = "A little clay pot of black powder from beyond the Silk Road, with a smouldering cord. Bursts among them rather than striking one man.", color = Color(0xFF4A4238)),
         WAR_FLAIL("head_war_flail", "Twin War Flail", 3.5f, blunt = 22f, pierce = 8f, reach = 1.8f, description = "Two spiked balls on branching chains. Absolute chaos.", color = Color(0xFF535C61)),
         BROADSWORD("head_broadsword", "Broadsword Blade", 1.4f, slash = 18f, pierce = 8f, reach = 1.5f, description = "A wide, brutal iron blade. Chips bones through mail.", color = Color(0xFF949B9E)),
         // A burning brand. Rare rather than earned: it turns up in the opening roll now and then
@@ -1247,7 +1250,7 @@ enum class WrestlingMove { CHOKE_SLAM, BODY_THROW, SUPLEX }
 
 // What a flying missile is — drives art, stuck-shaft rendering and hit sounds
 enum class ProjectileType {
-    ARROW, BOLT, STONE, JAVELIN, ROCK, DART, TORCH;
+    ARROW, BOLT, STONE, JAVELIN, ROCK, DART, TORCH, BOMB;
     val isArrowLike: Boolean get() = this == ARROW || this == BOLT || this == JAVELIN || this == DART
 }
 

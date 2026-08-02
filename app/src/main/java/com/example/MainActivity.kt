@@ -3006,6 +3006,26 @@ fun BattlefieldScene(
                         }
                         drawLine(TapestryDark, shaftStart, shaftEnd, strokeWidth = 2f, cap = StrokeCap.Round)
                         drawCircle(Color(0xFF868C91), radius = 2.5f, center = shaftStart)
+                    } else if (proj.type == com.example.game.ProjectileType.BOMB) {
+                        // A clay pot with a lit cord, tumbling as it goes. The spin is off the id
+                        // and the position so each one tumbles differently without any state.
+                        val r = 9f * proj.sizeMultiplier
+                        val spin = (sx + sy) * 1.4f
+                        drawCircle(Color(0xFF4A4238), radius = r, center = Offset(sx, sy))
+                        drawCircle(TapestryDark, radius = r, center = Offset(sx, sy), style = Stroke(width = 2f))
+                        // Banding on the pot, rotating with the tumble
+                        drawLine(
+                            TapestryDark.copy(alpha = 0.7f),
+                            Offset(sx - cos(spin.toDouble()).toFloat() * r * 0.8f, sy - sin(spin.toDouble()).toFloat() * r * 0.8f),
+                            Offset(sx + cos(spin.toDouble()).toFloat() * r * 0.8f, sy + sin(spin.toDouble()).toFloat() * r * 0.8f),
+                            strokeWidth = 2f
+                        )
+                        // The fuse: a short cord with a spark on the end, trailing behind the throw
+                        val fx = sx - arrowDir * r * 0.9f
+                        val fy = sy - r * 0.9f
+                        drawLine(Color(0xFF8C6F47), Offset(sx, sy - r * 0.6f), Offset(fx, fy - 5f), strokeWidth = 2.5f, cap = StrokeCap.Round)
+                        drawCircle(Color(0xFFFFC34D), radius = 3f, center = Offset(fx, fy - 6f))
+                        drawCircle(Color(0xFFE07020), radius = 1.6f, center = Offset(fx, fy - 6f))
                     } else if (proj.type == com.example.game.ProjectileType.TORCH) {
                         drawLine(
                             Color(0xFF6E5536),

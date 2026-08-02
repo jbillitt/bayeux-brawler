@@ -2956,15 +2956,24 @@ class GameViewModel : ViewModel() {
                     val missile = when (state.weaponHead.id) {
                         "head_crossbow" -> "bolt"
                         "head_javelin" -> "javelin"
+                        "head_bomb" -> "bomb"
                         else -> "arrow"
                     }
                     val missilePlural = missile + "s"
                     val looses = when (state.weaponHead.id) {
                         "head_crossbow" -> "looses"
-                        "head_javelin" -> "throws"
+                        "head_javelin", "head_bomb" -> "throws"
                         else -> "looses"
                     }
-                    val possibleUpgrades = if (isSlingshot) {
+                    val isBombThrower = state.weaponHead.id == "head_bomb"
+                    val possibleUpgrades = if (isBombThrower) {
+                        // The bomb already bursts on its own — these make the burst worse.
+                        listOf(
+                            LevelUpChoice("ranged_bomb_powder", "Bombs: A Heavier Charge", "Pack the pots with twice the black powder. Bigger bombs, a bigger bang, and they carry further down the field.", "ranged_upgrade", "bomb_powder"),
+                            LevelUpChoice("ranged_bomb_shrapnel", "Bombs: Packed with Nails", "Fill the clay around the charge with cut nails and flint. The burst sprays ${CombatEngine.CLUSTER_FRAGMENTS} fragments and finds the gaps in mail.", "ranged_upgrade", "bomb_shrapnel"),
+                            LevelUpChoice("ranged_bomb_fire", "Bombs: Naphtha Wrapping", "Wrap each pot in oil-soaked wadding. Whoever the burst catches goes up, and keeps burning.", "ranged_upgrade", "bomb_fire")
+                        )
+                    } else if (isSlingshot) {
                         listOf(
                             LevelUpChoice("ranged_slingshot_bigger", "Sling: Giant Cobble-Stones", "Hurl massive river boulders instead of pebbles! Deals +10 blunt damage and increases projectile size.", "ranged_upgrade", "slingshot_bigger"),
                             LevelUpChoice("ranged_slingshot_spikes", "Sling: Barb-Wrapped Stones", "Wrap your lead shots in rusty iron barbs for +8 piercing damage and bleeding.", "ranged_upgrade", "slingshot_spikes"),

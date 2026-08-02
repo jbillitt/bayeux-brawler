@@ -452,6 +452,46 @@ class ArtScreenshotTest {
     }
 
     /**
+     * The overarm throw, through the swing, for both things that use it: a javelin and a bomb.
+     * Top row is the javelin, bottom the bomb, each at rest / cocked / mid-whip / follow-through.
+     *
+     * Eyeball that the arm goes BACK before it goes forward, that the bomb reads as a lit clay pot
+     * and not a mace head, and that neither of them looks like a sword swing.
+     */
+    @Test
+    fun overarmThrowStages() {
+        fun thrower(head: String, swing: Float, attacking: Boolean) = FighterState(
+            id = FighterId("$head-$swing"), name = "Thrower", isPlayer = true, maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == head },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_short" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 150f, targetX = 150f, facingRight = true, size = 1f,
+            hairColor = Color(0xFF3A2E24), hairStyle = "short",
+            isAttacking = attacking, swingProgress = swing
+        )
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                listOf("head_javelin", "head_bomb").forEach { head ->
+                    Row {
+                        listOf(0f to false, 0.4f to true, 0.6f to true, 0.95f to true)
+                            .forEach { (swing, attacking) ->
+                                Canvas(modifier = Modifier.width(88.dp).height(380.dp)) {
+                                    TapestryRenderer.drawCharacter(
+                                        this, thrower(head, swing, attacking),
+                                        scale = 1.1f, isBattleActive = true
+                                    )
+                                }
+                            }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/overarm_throw.png")
+    }
+
+    /**
      * The three new armour layers, each stacked over chainmail the way they are worn in play, plus
      * all three at once. Asserts nothing — eyeball that greaves sit on the shins, spaulders cap the
      * shoulders without floating, and the surcoat hangs over the mail without hiding it.

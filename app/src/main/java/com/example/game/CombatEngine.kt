@@ -236,6 +236,7 @@ class CombatEngine(private val ctx: BattleContext) {
         ProjectileType.ROCK -> "a hurled rock"
         ProjectileType.DART -> "a dart"
         ProjectileType.TORCH -> "a firebrand"
+        ProjectileType.BOMB -> "a bursting pot of black powder"
     }
 
     private fun followerCatchUpMultiplier(fighter: FighterState, direction: Float): Float {
@@ -1322,7 +1323,15 @@ class CombatEngine(private val ctx: BattleContext) {
         val isSlingshot = attacker.weaponHead.id == "head_slingshot"
         val isJavelin = attacker.weaponHead.id == "head_javelin"
         val isCrossbow = attacker.weaponHead.id == "head_crossbow"
-        var projType = if (isSlingshot) ProjectileType.STONE else if (isJavelin) ProjectileType.JAVELIN else if (isCrossbow) ProjectileType.BOLT else ProjectileType.ARROW
+        val isBomb = attacker.weaponHead.id == "head_bomb"
+        var projType = when {
+            isSlingshot -> ProjectileType.STONE
+            isJavelin -> ProjectileType.JAVELIN
+            isCrossbow -> ProjectileType.BOLT
+            // Draws as its own thing: a round pot with a lit cord, not an arrow.
+            isBomb -> ProjectileType.BOMB
+            else -> ProjectileType.ARROW
+        }
 
         var sizeMult = 1f
         var spikes = false
@@ -1333,6 +1342,8 @@ class CombatEngine(private val ctx: BattleContext) {
         var plaguing = false
         var armorPierce = 0f
         var cluster = 0
+        // Declared up here rather than beside the torch branch: the bomb's fire upgrade sets it too.
+        var igniting = false
         var finalDmg = attacker.baseDamage *
             if (attacker.elevated && !attacker.isPlayer) SiegeRules.DOWNHILL_DAMAGE_MULTIPLIER else 1f
         var finalPierce = attacker.damagePierce
@@ -1344,6 +1355,36 @@ class CombatEngine(private val ctx: BattleContext) {
         if (!attacker.isPlayer && attacker.level > 25) {
             velX *= 1.5f // Ranged Escalation: Projectile speed
             velY *= 1.2f
+        }
+
+        // The Far-Eastern bomb. Bursting is the WEAPON, not an upgrade — a bomb that hit one man
+        // would just be a bad sling — so splash is on from the moment you pick it up, and it lobs
+        // rather than flying flat.
+        if (isBomb) {
+            splash = true
+            sizeMult = 1.3f
+            gravMult = 1.5f
+            velY -= 40f
+            // More black powder: a bigger charge, a bigger pot, and it throws further.
+            if (attacker.rangedUpgrades.contains("bomb_powder")) {
+                finalDmg += 14f
+                finalBlunt += 10f
+                sizeMult += 0.5f
+                velX *= 1.25f
+            }
+            // Shrapnel: the pot is packed with nails, so it sprays fragments the way the cluster
+            // charge does. Same machinery, so the two stack into a genuinely silly amount of iron.
+            if (attacker.rangedUpgrades.contains("bomb_shrapnel")) {
+                spikes = true
+                finalPierce += 10f
+                armorPierce = 0.3f
+                cluster += CLUSTER_FRAGMENTS
+            }
+            // Fire: the burst lights whoever it catches.
+            if (attacker.rangedUpgrades.contains("bomb_fire")) {
+                igniting = true
+                finalDmg += 6f
+            }
         }
 
         // The bombardier's pot. Reuses the splash machinery the player's own burst shot uses, so
@@ -1460,7 +1501,6 @@ class CombatEngine(private val ctx: BattleContext) {
             splash = true
             projType = ProjectileType.ROCK
         }
-        var igniting = false
         if (attacker.isKind("firebrand")) {
             // Cinder Cedric: a lit torch on a lazy arc. Modest damage, but they burn.
             projId = "torch_${System.currentTimeMillis()}_${Random.nextInt(100)}"

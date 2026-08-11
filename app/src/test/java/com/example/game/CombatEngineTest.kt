@@ -55,6 +55,32 @@ class CombatEngineTest {
         }
     }
 
+    /**
+     * The complaint this guards: by level 340 a giant was a big man with an outdated stat line and
+     * his blows had stopped mattering. The ramp must leave the early giants exactly as they were,
+     * or the first boss becomes a wall.
+     */
+    @Test
+    fun bossDamageRampsOnlyInTheDeepLevels() {
+        fun boss(atLevel: Int) = fighter(head = "head_club", handle = "handle_medium")
+            .copy(bossType = BossType.GOG, level = atLevel)
+
+        assertEquals("an early giant is untouched", 1f, CombatEngine.bossBrutality(boss(10)), 0.001f)
+        assertEquals(
+            "the ramp starts exactly at the threshold",
+            1f, CombatEngine.bossBrutality(boss(CombatEngine.BOSS_RAMP_START_LEVEL)), 0.001f
+        )
+        assertTrue("a mid-game giant hits harder", CombatEngine.bossBrutality(boss(120)) > 1.5f)
+        assertEquals(
+            "and it is capped, so level 340 is terrifying rather than instant death",
+            CombatEngine.BOSS_RAMP_MAX, CombatEngine.bossBrutality(boss(340)), 0.001f
+        )
+
+        // An ordinary man is never touched by any of it, whatever level he is.
+        val man = fighter(head = "head_club", handle = "handle_medium").copy(level = 340)
+        assertEquals(1f, CombatEngine.bossBrutality(man), 0.001f)
+    }
+
     @Test
     fun brawlersDoRollWrestlingMoves() {
         val ctx = FakeContext()

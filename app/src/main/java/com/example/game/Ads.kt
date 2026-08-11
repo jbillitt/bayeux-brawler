@@ -8,6 +8,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.RequestConfiguration
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.rewarded.RewardedAd
@@ -28,6 +29,16 @@ import com.google.android.ump.UserMessagingPlatform
 object Ads {
 
     private const val TAG = "Ads"
+
+    /**
+     * Devices that should be served Google's test ads even from a release build carrying real ad
+     * unit ids. This is the supported way to try the placements on your own phone: clicking a real
+     * ad on your own app is the standard route to an AdMob account suspension.
+     *
+     * Get the id from logcat under the `Ads` tag on first run — the SDK prints
+     * "Use RequestConfiguration.Builder().setTestDeviceIds(Arrays.asList("XXXX"))".
+     */
+    val TEST_DEVICE_IDS: List<String> = emptyList()
 
     private var initialised = false
     private var interstitial: InterstitialAd? = null
@@ -65,14 +76,40 @@ object Ads {
                 }
             },
             { requestError ->
+                // A failed consent lookup must not disable advertising for the whole session. It
+                // fails for ordinary reasons — no network on launch, or an app id UMP does not
+                // recognise, which is exactly what Google's sample test app id gives you. Outside
+                // the EEA canRequestAds() is true regardless, so honour it and carry on; inside it,
+                // this stays false and nothing is requested, which is the behaviour policy wants.
                 Log.w(TAG, "consent info update failed: ${requestError.message}")
+                if (consent.canRequestAds()) initialiseSdk(activity)
             }
         )
+    }
+
+    /**
+     * Whether this user is entitled to reopen their consent choices — required in the EEA/UK, and
+     * the reason the burger menu carries a "Privacy options" row that hides itself elsewhere.
+     */
+    fun privacyOptionsRequired(activity: Activity): Boolean =
+        UserMessagingPlatform.getConsentInformation(activity).privacyOptionsRequirementStatus ==
+            ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
+
+    /** Reopen the consent form so a user can change their mind, as GDPR requires them to be able to. */
+    fun showPrivacyOptions(activity: Activity) {
+        UserMessagingPlatform.showPrivacyOptionsForm(activity) { error ->
+            if (error != null) Log.w(TAG, "privacy options form error: ${error.message}")
+        }
     }
 
     private fun initialiseSdk(activity: Activity) {
         if (initialised) return
         initialised = true
+        if (TEST_DEVICE_IDS.isNotEmpty()) {
+            MobileAds.setRequestConfiguration(
+                RequestConfiguration.Builder().setTestDeviceIds(TEST_DEVICE_IDS).build()
+            )
+        }
         MobileAds.initialize(activity) {
             loadInterstitial(activity)
             loadRewarded(activity)

@@ -6,6 +6,36 @@ import org.junit.Test
 
 class SoundTest {
     /**
+     * The complaint this guards: by the later levels the entourage talked continuously over the
+     * fighting. A big field is a lot of DISTINCT emitters, and the old per-throat gate never looked
+     * at anyone but itself, so the crowd's total rate grew with the crowd.
+     */
+    @Test
+    fun aCrowdOfDistinctVoicesIsThinnedButOneThroatStillSpeaks() {
+        // Twelve different emitters all trying to speak in the same 100ms, none of them busy.
+        var lastAny = 0L
+        var spoke = 0
+        for (i in 0 until 12) {
+            val now = 1000L + i * 8L
+            if (voiceLineAllowed(now, throatFreeAtMs = 0L, lastAnyVoiceMs = lastAny)) {
+                spoke++
+                lastAny = now
+            }
+        }
+        assertEquals("a burst from twelve throats should yield one line, not twelve", 1, spoke)
+
+        // ...but once the floor has passed, the next one is allowed. The gate thins, never mutes.
+        assertTrue(voiceLineAllowed(1000L + MIN_VOICE_GAP_MS, 0L, 1000L))
+
+        // A throat still may not talk over itself even when the crowd floor is clear.
+        assertTrue(!voiceLineAllowed(5000L, throatFreeAtMs = 5500L, lastAnyVoiceMs = 0L))
+
+        // Scripted pile-ups (the Trojan horse) bypass the crowd floor but not their own throat.
+        assertTrue(voiceLineAllowed(1000L, 0L, 999L, ensemble = true))
+        assertTrue(!voiceLineAllowed(1000L, throatFreeAtMs = 2000L, lastAnyVoiceMs = 0L, ensemble = true))
+    }
+
+    /**
      * The complaint this guards: every run's music sounded like every other run's. Two fixed
      * things caused it — a 32-bar tune was always A A' B B', and the brass always played the same
      * three-note fanfare at the same place. Both are chosen per seed now, and if either ever
@@ -58,6 +88,125 @@ class SoundTest {
                 trumpeterEvents(resolveSongSpec(seed, emptyList())).isNotEmpty()
             )
         }
+    }
+
+    /**
+     * The last of the songwriting rules to go in: a strain must be one idea worked over, not eight
+     * bars of unrelated shapes sharing a rhythm. Both halves of it are checked here because they
+     * come from the same chain — the motif is drawn from the interval table, so if the table stops
+     * favouring steps the motif stops being singable and the strain stops rhyming at once.
+     */
+    @Test
+    fun strainsPermuteOneMotifAndLeapsResolveByStep() {
+        val seeds = (1L..60L).toList()
+        var strainsWithARepeat = 0
+        var leaps = 0
+        var leapsResolved = 0
+        var steps = 0
+        var moves = 0
+
+        for (seed in seeds) {
+            val spec = resolveSongSpec(seed, emptyList())
+            val song = generateSong(spec, melodyRng(seed))
+            val bpb = spec.beatsPerBar.toFloat()
+            // Bar-by-bar interval sequences of the opening (unornamented) strain, in scale degrees.
+            // Bars 3 and 7 end in a fixed cadence formula that overwrites the motif's last notes,
+            // so they can't rhyme and aren't asked to.
+            val bars = (0 until 8).map { bar ->
+                song.melody
+                    .filter { it.startBeat >= bar * bpb && it.startBeat < (bar + 1) * bpb }
+                    .map { nearestDegreeFor(spec, it.midi) }
+                    .zipWithNext { a, b -> b - a }
+            }
+            val body = listOf(0, 1, 2, 4, 5, 6).map { bars[it] }.filter { it.isNotEmpty() }
+            if (body.size != body.distinct().size) strainsWithARepeat++
+
+            for (bar in body) {
+                moves += bar.size
+                steps += bar.count { Math.abs(it) <= 1 }
+                bar.zipWithNext { a, b ->
+                    if (Math.abs(a) >= 3) {
+                        leaps++
+                        if (Math.abs(b) <= 2 && Integer.signum(b) != Integer.signum(a)) leapsResolved++
+                    }
+                }
+            }
+        }
+
+        // A bar restated verbatim somewhere else in the strain. Not every strain: a tritone dodge
+        // or a turn at the top of the register can perturb one copy, and both are worth the cost.
+        assertTrue(
+            "strains are not built from a repeated motif ($strainsWithARepeat/${seeds.size})",
+            strainsWithARepeat >= seeds.size * 8 / 10
+        )
+        // Stepwise motion is the default, leaps are the exception.
+        assertTrue("melody leaps about instead of stepping ($steps/$moves)", steps * 2 > moves)
+        assertTrue("no leaps at all — the interval table has gone flat", leaps > 20)
+        assertTrue(
+            "leaps are not answered by a step back ($leapsResolved/$leaps)",
+            leapsResolved * 10 >= leaps * 6
+        )
+    }
+
+    /**
+     * No voice may end its buffer on a step.
+     *
+     * A note is cut at whatever length the composer asked for, which is routinely shorter than the
+     * synth's own decay — a timpani with a 1.1s tail asked for 0.4s simply stops mid-boom. That
+     * leaves a jump from a large sample straight to nothing, which is broadband energy, and on a
+     * phone speaker it arrives as a crackle on the end of the drum. Reported from a real listen
+     * (seed 3 ESTAMPIE), so it is a real audible defect and not a theoretical one.
+     */
+    @Test
+    fun noVoiceEndsItsBufferOnAStep() {
+        val offenders = mutableListOf<String>()
+        for (voice in Voice.values()) {
+            for (durSec in listOf(0.12f, 0.3f, 0.6f)) {
+                val buf = renderNote(voice, 48, durSec, 1f, 22050, kotlin.random.Random(7))
+                if (buf.size < 8) continue
+                val peak = buf.maxOf { Math.abs(it) }.coerceAtLeast(1e-6f)
+                // The last sample is what the speaker is holding when the buffer ends. Relative to
+                // the note's own peak it has to be near enough to zero that the jump is inaudible.
+                val ending = Math.abs(buf.last()) / peak
+                if (ending > 0.02f) offenders += "$voice@${durSec}s ends at ${"%.3f".format(ending)} of peak"
+            }
+        }
+        assertTrue("these voices cut off mid-swing and will click: $offenders", offenders.isEmpty())
+    }
+
+    /**
+     * The named repertory actually reaches the player, keeps its own identity, and sings when it
+     * is supposed to. Guards the three ways this can silently rot: a piece that never gets drawn,
+     * a piece whose mode or metre is overwritten by the generic family shape it borrows its
+     * orchestration from, and a sung piece that comes out as a lute solo.
+     */
+    @Test
+    fun namedPiecesReachThePlayerKeepTheirShapeAndSing() {
+        val drawn = mutableSetOf<Piece>()
+        var generic = 0
+        for (seed in 1L..1200L) {
+            val spec = resolveSongSpec(seed, emptyList())
+            val piece = spec.piece
+            if (piece == null) { generic++; continue }
+            drawn += piece
+            // The piece's own identity must survive being dressed by a family.
+            assertEquals("${piece.title} lost its mode", piece.pieceMode, spec.mode)
+            assertEquals("${piece.title} lost its metre", piece.bar, spec.beatsPerBar)
+            assertTrue("${piece.title} tempo ${spec.bpm} outside ${piece.bpmLo}..${piece.bpmHi}",
+                spec.bpm in piece.bpmLo..piece.bpmHi)
+            assertEquals("${piece.title} lost its ground", piece.groundDegrees, spec.ground.map { it.bassDegree })
+
+            if (piece.vocal) {
+                val plan = planOrchestration(spec, hasTrumpeter = false, rng = orchRng(seed))
+                assertTrue(
+                    "${piece.title} is a sung piece but nobody sings it from the first level",
+                    activeAssignments(plan, 1).any { it.voice == Voice.CHOIR }
+                )
+            }
+        }
+        assertEquals("some pieces never turn up at all", Piece.values().toSet(), drawn)
+        // ...and the invented tunes must not have been squeezed out entirely.
+        assertTrue("the generic families stopped appearing ($generic/1200)", generic > 200)
     }
 
     @Test
@@ -483,7 +632,9 @@ class SoundTest {
         var sawEstampie = false
         for (seed in 1L..200L) {
             val spec = resolveSongSpec(seed, emptyList())
-            if (spec.family == Family.ESTAMPIE) {
+            // A named piece only BORROWS the estampie's orchestration; its own metre and tempo are
+            // the piece's, not the family's, so it is not what this test is about.
+            if (spec.family == Family.ESTAMPIE && spec.piece == null) {
                 sawEstampie = true
                 assertEquals(4, spec.beatsPerBar)
                 assertTrue(spec.bpm in 112..136)

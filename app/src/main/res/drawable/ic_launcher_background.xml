@@ -4,9 +4,9 @@
     android:height="108dp"
     android:viewportWidth="100"
     android:viewportHeight="100">
-    <!-- Unbleached Linen Background -->
+    <!-- Unbleached Linen Background.
+         The tapestry borders that used to sit at y 0-12 and 88-100 are gone: adaptive
+         masking only shows the central 72dp of the 108dp canvas, so they never rendered
+         on a device and appeared solely in the Play listing icon. -->
     <path android:fillColor="#E1D4BB" android:pathData="M0,0 h100 v100 h-100 z"/>
-    <!-- Authentic top/bottom tapestry border -->
-    <path android:fillColor="#5D6B4E" android:pathData="M0,0 h100 v12 h-100 z"/>
-    <path android:fillColor="#5D6B4E" android:pathData="M0,88 h100 v12 h-100 z"/>
 </vector>

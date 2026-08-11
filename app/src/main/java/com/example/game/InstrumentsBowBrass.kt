@@ -30,6 +30,11 @@ internal fun renderBowBrass(
     // all, and they are the only part a handset reproduces.
     Voice.SACKBUT -> brass(midi, durSec, sr, rng, brightness = 1.7f, attack = 0.045f, cutoffHz = 4600f, lipNoise = 0.025f)
     Voice.HORN    -> brass(midi, durSec, sr, rng, brightness = 1.2f, attack = 0.11f, cutoffHz = 2900f, lipNoise = 0.01f)
+    // Tuba. Same instrument family, different bore: a slow lip, a dark cutoff, and a broad
+    // attack. Brightness stays up despite the dark cutoff for the CELLO reason — the fundamental
+    // of a tuba is below anything a handset can move, so what the ear actually receives is the
+    // harmonic series, and stripping that leaves silence with a thud on the front of it.
+    Voice.TUBA    -> brass(midi, durSec, sr, rng, brightness = 1.45f, attack = 0.085f, cutoffHz = 2100f, lipNoise = 0.03f)
     Voice.GURDY   -> if (durSec < 0.15f) trompette(midi, durSec, sr, rng) else wheelDrone(midi, durSec, sr, rng)
     Voice.ORGAN   -> organ(midi, durSec, sr, rng)
     Voice.CHOIR   -> choir(midi, durSec, sr, rng, phraseIndex)
@@ -300,4 +305,21 @@ private fun choir(midi: Int, durSec: Float, sr: Int, rng: Random, phraseIndex: I
 internal fun normalise(buf: FloatArray, target: Float) {
     var peak = 1e-6f; for (v in buf) peak = maxOf(peak, Math.abs(v))
     if (peak > target) for (i in buf.indices) buf[i] = buf[i] / peak * target
+}
+
+/**
+ * Take the last few milliseconds of a note down to silence.
+ *
+ * Called once, from [renderNote], so it covers every voice — see the note there for why. Roughly
+ * 4ms at 22kHz: long enough to remove the discontinuity, far too short to hear as a fade. It does
+ * not shorten a drum, it just stops the buffer slamming the cone into the end of itself.
+ *
+ * Normalising cannot fix this and in fact worsens it: scaling the peak up to 0.9 scales a stranded
+ * non-zero endpoint up with it.
+ */
+internal fun fadeOutTail(buf: FloatArray, samples: Int = 96) {
+    val n = minOf(samples, buf.size)
+    if (n <= 1) return
+    val start = buf.size - n
+    for (i in 0 until n) buf[start + i] *= 1f - i.toFloat() / (n - 1)
 }

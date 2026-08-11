@@ -338,6 +338,39 @@ class RegressionGuardTest {
         assertFalse(BattleSimState().armor.id in GameData.CAPE_IDS)
     }
 
+    /**
+     * A man flanked by two enemies must not spin on the spot.
+     *
+     * Facing was assigned straight from "whoever is nearest" every tick, so an enemy either side
+     * flipped the answer on sub-pixel jostling and the figure strobed. It was not only ugly —
+     * `shieldCovers` reads `facingRight`, so his shield was effectively on both sides at once.
+     */
+    @Test
+    fun `a flanked man commits to a side instead of spinning`() {
+        val man = fighter("housecarl").apply { posX = 500f; facingRight = true }
+
+        // Two enemies, one either side, jostling by a pixel — the exact flicker case.
+        var flips = 0
+        var last = man.facingRight
+        for (tick in 0 until 60) {
+            val nearest = if (tick % 2 == 0) 496f else 504f   // "nearest" swaps every frame
+            man.faceToward(nearest)
+            if (man.facingRight != last) { flips++; last = man.facingRight }
+        }
+        assertTrue("a man inside the deadzone should not turn at all, got $flips flips", flips == 0)
+
+        // And a target genuinely on the other side does turn him — once — then he commits.
+        man.faceToward(300f)
+        assertFalse("he should have turned to a target well to his left", man.facingRight)
+        man.faceToward(700f)
+        assertFalse("but not straight back again within the hold", man.facingRight)
+
+        // Once the hold lapses he is free to turn again.
+        man.faceHoldTimer = 0f
+        man.faceToward(700f)
+        assertTrue("after the hold he turns to a real target", man.facingRight)
+    }
+
     @Test
     fun `a shield does not cover a man's back`() {
         val man = fighter("housecarl").apply {

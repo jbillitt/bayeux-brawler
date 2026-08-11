@@ -525,6 +525,32 @@ class GameViewModel : ViewModel() {
         /** How long the descent itself takes — he sinks at the dig site, throwing up spoil. */
         const val DIG_DOWN_SECS = 0.9f
 
+        /** How close a living foe must be for the Moleman to consider his work here unfinished. */
+        const val MOLEMAN_REDIG_RADIUS_PX = 230f
+        /**
+         * He must stay up at least this long before going back down. Without it, surfacing into a
+         * pocket that is already clear makes him erupt and immediately sink again in the same
+         * second, which reads as a glitch rather than as a second tunnel.
+         */
+        const val MOLEMAN_MIN_SURFACE_SECS = 1.5f
+
+        /**
+         * Has the Moleman run out of work where he came up?
+         *
+         * [nearestFoeDistPx] is null when no living enemy is on the field at all. He stays up for
+         * that case: the battle is over and a man sinking into the ground on the victory beat looks
+         * like a bug, not a flourish.
+         */
+        fun molemanShouldRedig(
+            surfacedFor: Float,
+            nearestFoeDistPx: Float?,
+            anyFoeLeft: Boolean
+        ): Boolean {
+            if (!anyFoeLeft) return false
+            if (surfacedFor < MOLEMAN_MIN_SURFACE_SECS) return false
+            return nearestFoeDistPx == null || nearestFoeDistPx > MOLEMAN_REDIG_RADIUS_PX
+        }
+
         // The Pounce. A melee build has no answer to a line of archers that walks backwards faster
         // than the fight closes; this is that answer, on a long leash.
         const val LEAP_COOLDOWN_SECS = 9f
@@ -1407,6 +1433,8 @@ class GameViewModel : ViewModel() {
                 posX = 95f + i * 26f, targetX = 95f + i * 26f, facingRight = true, size = 1.0f,
                 hairColor = androidx.compose.ui.graphics.Color(0xFF6B4A2A), hairStyle = "long",
                 isDualWielding = false,
+                // Wulfric's own face stays Wulfric's; what he carries overhead is the player's.
+                bannerFace = player,
                 // The banner is only worth carrying where it can be seen. He was moving at a plain
                 // man's pace with a dagger's reach, so he arrived last and his aura reached nobody.
                 speedBoost = BANNER_BEARER_SPEED_BOOST
@@ -2161,6 +2189,30 @@ class GameViewModel : ViewModel() {
                     // One man breaks the surface, so one cry. The default of 3 is the horse's belly.
                     MedievalAudioSynth.playTrojanBurst(voices = 1)
                     addPopup("FROM BELOW!", digger.posX, 150f, Color(0xFF8A7156))
+                    digger.surfacedFor = 0f
+                }
+            } else if (digger.isKind("moleman") && digger.hasSurfaced &&
+                !digger.isDead && !digger.isDying
+            ) {
+                // The Moleman digs again. The sapper is deliberately left out: one tunnel is his
+                // whole act, and he surfaces at the back of the line where there is always more to
+                // do. The Moleman comes up in the middle of it and can genuinely run out of men.
+                digger.surfacedFor += dt
+                var nearest: Float? = null
+                var anyLeft = false
+                enemies.forEach { foe ->
+                    if (!foe.isPlayer && !foe.isDead && !foe.isDying && !foe.isInanimate) {
+                        anyLeft = true
+                        val d = abs(foe.posX - digger.posX)
+                        if (nearest == null || d < nearest!!) nearest = d
+                    }
+                }
+                if (molemanShouldRedig(digger.surfacedFor, nearest, anyLeft)) {
+                    // Clearing these two flags is all it takes — the branch above owns the descent,
+                    // the parking off-screen and the resurfacing, and it re-reads the rearmost man
+                    // when he comes back up, so the second hole lands wherever the fight has moved.
+                    digger.hasSurfaced = false
+                    digger.burrowTimer = MOLEMAN_BURROW_SECONDS
                 }
             }
         }
@@ -2223,14 +2275,8 @@ class GameViewModel : ViewModel() {
             SiegeRules.damageGate(siege, 10f * dt, enemies)
         }
         // Ladders raise only at the wall itself — you march there first, no climbing from the
-        // beach. (A broken gate keeps the old behaviour: the way is open wherever you stand.)
-        if (siege != null && !player.elevated &&
-            (siege.gateBroken || (siege.siegeLadders && abs(1800f - player.posX) < 140f)) &&
-            enemies.none {
-                !it.isPlayer && !it.isDead && !it.isDying && !it.isCombatInactive &&
-                    !it.elevated && it.climbState == ClimbState.NONE
-            }
-        ) {
+        // beach. Same predicate his retinue uses, for the reasons on SiegeRules.mayScaleWall.
+        if (siege != null && SiegeRules.mayScaleWall(siege, player, closestEnemy != null)) {
             if (player.isLord) {
                 // A carried throne does not go up a ladder. The wall's defenders climb down
                 // to face the lord instead — no more glitched throne-on-parapet.
@@ -2337,7 +2383,7 @@ class GameViewModel : ViewModel() {
                 // the Siege Ladders reward: a ladder that went up because the gate came down is
                 // just as climbable, and everyone who cannot tunnel or ride a horse through the
                 // door should be taking whichever way in exists.
-                if (SiegeRules.ladderStanding(siege) && abs(SIEGE_GATE_X - enemy.posX) < 140f &&
+                if (SiegeRules.mayScaleWall(siege, enemy, hasReachableTarget = false) &&
                     SiegeRules.beginClimbUp(siege, enemy, enemies)
                 ) return@forEach
                 engine.updateFighter(enemy, null, dt)
@@ -3258,7 +3304,7 @@ class GameViewModel : ViewModel() {
                     pendingChoices.add(LevelUpChoice(
                         id = "boost_hp",
                         title = "Follower Vitality Boost",
-                        description = "Train your squires to carry extra medical wine flagons (+25 Max HP).",
+                        description = "Train your squires to carry extra medicinal flagons (+25 Max HP).",
                         type = "follower",
                         itemId = "anc_squire"
                     ))

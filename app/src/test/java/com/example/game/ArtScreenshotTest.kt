@@ -111,6 +111,40 @@ class ArtScreenshotTest {
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/buildings.png")
     }
 
+    /**
+     * Every data-driven building in assets/art/, drawn exactly as the level generator draws it.
+     *
+     * Enumerated rather than listed, so a new .json with a spawn block turns up here on the next
+     * run without anyone remembering to add it — which is the same promise the asset pipeline makes
+     * to the game itself.
+     */
+    @Test
+    @Config(qualifiers = "+w440dp-h900dp")
+    fun vectorAssetBuildings() {
+        val assets = VectorAsset.spawnable().sortedBy { it.id }
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                assets.chunked(2).forEach { row ->
+                    Row {
+                        row.forEach { asset ->
+                            Canvas(modifier = Modifier.width(215.dp).height(300.dp)) {
+                                // Buildings draw at 1.7x on top of this (drawBackgroundObject's
+                                // bgScale), so 0.6 here is roughly how big they land in play.
+                                drawBackgroundObject(
+                                    this,
+                                    bgObject(BackgroundObjectType.VECTOR).copy(artId = asset.id),
+                                    size.width / 2f,
+                                    0.6f
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/vector_buildings.png")
+    }
+
     @Test
     fun newContentBackdropsAndGateDamageStates() {
         val backdrops = listOf(
@@ -688,6 +722,142 @@ class ArtScreenshotTest {
     }
 
     /**
+     * Reach extensions against the handles that draw fixed-length art.
+     *
+     * Left column is 0 extensions, right is 5 — the late-game case. The head must stay joined to
+     * the grip in BOTH: at 0 the weapon should look exactly as it always did, and at 5 any gap the
+     * fixed art leaves must be bridged by the lashed spar rather than left as floating linen.
+     */
+    @Test
+    fun reachExtensionsNeverFloatTheHeadOffTheHandle() {
+        // Two columns only: this class runs at Pixel8 density, so a 268dp cell is ~616px and four
+        // across silently ran off the canvas. The at-risk handles first, then two controls that
+        // already elongated correctly — the spar must stay invisible on those.
+        val handles = listOf(
+            "handle_anchor", "handle_wheel", "handle_plough", "handle_antler", "handle_ram",
+            "handle_long"
+        )
+        fun armed(handle: String, exts: Int) = FighterState(
+            id = FighterId("$handle-$exts"), name = handle, isPlayer = true, maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_axe" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handle },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_conical" },
+            posX = 150f, targetX = 150f, facingRight = true, size = 1f,
+            hairColor = Color(0xFF3A2E24), hairStyle = "short",
+            handleExtensionCount = exts
+        )
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                handles.forEach { h ->
+                    Row {
+                        listOf(0, 5).forEach { exts ->
+                            Canvas(modifier = Modifier.width(200.dp).height(150.dp)) {
+                                TapestryRenderer.drawCharacter(
+                                    this, armed(h, exts), scale = 0.42f, isBattleActive = true
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/reach_extension_handles.png")
+    }
+
+    /**
+     * The three 1.0 art fixes, in one frame.
+     *
+     * Row 1 — a bomb at 0 / 2 / 5 ranged upgrades. The pot must look IDENTICAL across all three.
+     * The evolution art is bow furniture laid out at ±span from a limb, so on a bomb it drew gilt
+     * bands and pale spare strings floating around a pot that has neither limb nor string.
+     * Rows 2 and 3 — a crossbow and a javelin at 0 / 3 / 5 range extensions. The weapon must stay
+     * in the fist: an extension on a missile weapon buys distance for the shot, not a longer haft.
+     * Row 4 — Buster with his jaws open. Real teeth only; the pale placeholder triangle is gone.
+     */
+    @Test
+    fun rangedUpgradesAndExtensionsLeaveTheWeaponAlone() {
+        fun shooter(head: String, handle: String, exts: Int, ups: List<String>) = FighterState(
+            id = FighterId("$head-$exts-${ups.size}"), name = "Shooter", isPlayer = true,
+            maxHp = 100f, hp = 100f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == head },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == handle },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_padded" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 150f, targetX = 150f, facingRight = true, size = 1f,
+            hairColor = Color(0xFF3A2E24), hairStyle = "short",
+            handleExtensionCount = exts, rangedUpgrades = ups
+        )
+        // The noisiest upgrade set available: bands, chevrons, cord wrap, pennon and two extra
+        // strings all at once. If any of it still lands on the pot, this frame shows it.
+        val loud = listOf("bomb_powder", "bomb_fire", "bomb_shrapnel", "volley", "multishot_triple")
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                Row {
+                    listOf(emptyList(), listOf("bomb_powder", "bomb_fire"), loud).forEach { ups ->
+                        Canvas(modifier = Modifier.width(110.dp).height(300.dp)) {
+                            TapestryRenderer.drawCharacter(
+                                this, shooter("head_bomb", "handle_fists", 0, ups),
+                                scale = 1.1f, isBattleActive = true
+                            )
+                        }
+                    }
+                }
+                listOf("head_crossbow" to "handle_fists", "head_javelin" to "handle_medium")
+                    .forEach { (head, handle) ->
+                        Row {
+                            listOf(0, 3, 5).forEach { exts ->
+                                Canvas(modifier = Modifier.width(110.dp).height(300.dp)) {
+                                    TapestryRenderer.drawCharacter(
+                                        this, shooter(head, handle, exts, emptyList()),
+                                        scale = 1.1f, isBattleActive = true
+                                    )
+                                }
+                            }
+                        }
+                    }
+            }
+        }
+        composeTestRule.onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/ranged_fixes.png")
+    }
+
+    /**
+     * Buster's jaws, zoomed hard — a tooth is about 2px at play scale, which is far too small to
+     * judge from. Jaws shut, then mid-bite. Real teeth only: the pale placeholder triangle that
+     * sat at the snout while he had none is gone, and nothing should float clear of the muzzle.
+     */
+    @Test
+    fun bustersTeeth() {
+        fun buster(biting: Boolean) = FighterState(
+            id = FighterId("wardog#0"), name = "Buster", isPlayer = true, maxHp = 60f, hp = 60f,
+            weaponHead = GameData.WEAPON_HEADS.first { it.id == "head_bare" },
+            weaponHandle = GameData.WEAPON_HANDLES.first { it.id == "handle_fists" },
+            shield = GameData.SHIELDS.first { it.id == "shield_none" },
+            armor = GameData.ARMOR_PIECES.first { it.id == "armor_bare" },
+            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_none" },
+            posX = 100f, targetX = 100f, facingRight = true, size = 0.6f,
+            hairColor = Color.Transparent, hairStyle = "none",
+            isAttacking = biting, swingProgress = 0.5f, animFrame = if (biting) 0.6f else 1.4f
+        )
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                listOf(false, true).forEach { biting ->
+                    Canvas(modifier = Modifier.width(520.dp).height(330.dp)) {
+                        TapestryRenderer.drawCharacter(
+                            this, buster(biting), scale = 3.0f, isBattleActive = true
+                        )
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/busters_teeth.png")
+    }
+
+    /**
      * Polyphemus beside Gog, and the meal in progress: a follower lifted off the ground the way
      * tickCyclops holds him.
      *
@@ -773,6 +943,42 @@ class ArtScreenshotTest {
     }
 
     /**
+     * The four beasts that carry their own head routine, each drawn facing RIGHT then facing LEFT.
+     *
+     * Every other creature screenshot renders facingRight = true only, which is exactly why nobody
+     * caught this: drawCharacter already mirrors the whole figure for a left-facing fighter, so a
+     * head that applies its own facing term on top is flipped twice and looks backwards — and in
+     * play the enemy line always faces left. Each pair must be a clean mirror of the other.
+     */
+    @Test
+    fun beastsFacingBothWays() {
+        fun beast(arch: EnemyArchetype, right: Boolean) =
+            EnemyFactory.createArchetype(arch, 0, level = 40)
+                .copy(posX = 170f, targetX = 170f, facingRight = right, animFrame = 1.2f)
+        composeTestRule.setContent {
+            Column(modifier = Modifier.fillMaxSize().background(linen)) {
+                listOf(
+                    EnemyArchetype.CRAFTY_FOX,
+                    EnemyArchetype.KILLER_RABBIT,
+                    EnemyArchetype.GIANT_FROG,
+                    EnemyArchetype.REBEL_SNAIL
+                ).forEach { arch ->
+                    Row {
+                        listOf(true, false).forEach { right ->
+                            Canvas(modifier = Modifier.width(180.dp).height(150.dp)) {
+                                TapestryRenderer.drawCharacter(
+                                    this, beast(arch, right), scale = 0.7f, isBattleActive = true
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/beasts_facing.png")
+    }
+
+    /**
      * The five capes, and the standard bearer with the player's face on his banner.
      *
      * Eyeball that each cape hangs BEHIND the man rather than in front of him, that the feather,
@@ -807,8 +1013,16 @@ class ArtScreenshotTest {
                         }
                     }
                     Canvas(modifier = Modifier.width(118.dp).height(360.dp)) {
+                        // The player on the banner is deliberately nothing like Wulfric carrying
+                        // it — a helm, a different jaw, a different crop. If the two faces match,
+                        // the banner is drawing the bearer and the joke has broken again.
+                        val player = wearing(null).copy(
+                            headgear = GameData.HEADGEAR_PIECES.first { it.id == "helm_conical" },
+                            hairColor = Color(0xFFB8B0A0), hairStyle = "short",
+                            faceNoseShape = 1, faceBiteShape = 3, faceForehead = 2, faceMustache = 2
+                        )
                         TapestryRenderer.drawCharacter(
-                            this, wearing(null, kind = "standard_bearer"),
+                            this, wearing(null, kind = "standard_bearer").copy(bannerFace = player),
                             scale = 1.1f, isBattleActive = true
                         )
                     }

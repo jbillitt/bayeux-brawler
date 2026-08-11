@@ -15,6 +15,15 @@ object AdGate {
     const val ADS_PER_DEATHS = 3
 
     /**
+     * No interstitial at all before this many deaths, whatever the cadence says.
+     *
+     * The first session decides whether there is a second one, and an ad inside it is the single
+     * most expensive impression you can serve: it costs a fraction of a cent and can cost the
+     * install. Six deaths is far enough in that a player has chosen to keep going.
+     */
+    const val FIRST_INTERSTITIAL_AFTER_DEATHS = 6
+
+    /**
      * Shortest gap between two interstitials, whatever the death count says.
      *
      * The death counter alone has no sense of time. Someone stuck on a boss dies in short bursts,
@@ -42,9 +51,15 @@ object AdGate {
     }
 
     /**
-     * Runtime master switch, OFF by default so testers see no ads at all. Turned on from the
-     * burger menu ("Enable test ads") when the ad placements themselves need exercising.
-     * Deliberately not persisted: a tester who enables it should get a clean slate next launch.
+     * Debug-build switch for exercising the placements, OFF by default. Turned on from the burger
+     * menu ("Enable test ads"). Not persisted: a tester who enables it gets a clean slate on
+     * relaunch.
+     *
+     * It is NOT a master switch any more. It used to gate release builds too, which meant the
+     * shipped app served no ads to anybody — a real player would have had to find the developer
+     * menu and turn them on. Testers and players run the same release binary, so no flag in the
+     * build can tell them apart; the supported way to keep a tester's own impressions harmless is
+     * to register their device with [Ads.TEST_DEVICE_IDS], which serves them Google's test ads.
      */
     @Volatile
     var testAdsEnabled: Boolean = false
@@ -62,13 +77,14 @@ object AdGate {
         purchased: Boolean,
         enabled: Boolean = testAdsEnabled,
         testAdIds: Boolean = BuildConfig.USING_TEST_AD_IDS
-    ): Boolean = enabled && !purchased && (!isDebug || testAdIds)
+    ): Boolean = !purchased && (!isDebug || (enabled && testAdIds))
 
     fun shouldShowInterstitial(
         totalDeaths: Int,
         nowMs: Long = System.currentTimeMillis()
     ): Boolean {
-        if (totalDeaths <= 0 || totalDeaths % ADS_PER_DEATHS != 0) return false
+        if (totalDeaths < FIRST_INTERSTITIAL_AFTER_DEATHS) return false
+        if (totalDeaths % ADS_PER_DEATHS != 0) return false
         // The very first interstitial of the process has nothing to be too close to.
         if (lastInterstitialAtMs == 0L) return true
         return nowMs - lastInterstitialAtMs >= MIN_INTERSTITIAL_GAP_MS

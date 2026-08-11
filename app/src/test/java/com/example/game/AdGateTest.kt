@@ -46,28 +46,55 @@ class AdGateTest {
     }
 
     /**
-     * Testers get a build with no ads in it at all until someone deliberately turns them on from
-     * the burger menu. This is the guarantee that the default is silence, not the placement logic.
+     * The switch is a DEBUG affordance, not a master switch.
+     *
+     * It used to gate release builds too, and since a tester and a player run the same release
+     * binary that meant the shipped app served no ads to anyone unless they found the developer
+     * menu. A release build now serves ads to a non-purchasing player with the switch untouched;
+     * a debug build still stays silent until it is turned on, which is the half worth keeping.
      */
     @Test
-    fun adsAreOffUntilExplicitlyEnabled() {
-        assertFalse(
-            "a tester build must show no ads by default",
+    fun theSwitchGatesDebugBuildsOnlyAndDefaultsOff() {
+        assertTrue(
+            "a shipped build must serve ads without anyone opening the developer menu",
             AdGate.adsAllowed(isDebug = false, purchased = false, enabled = false)
         )
+        assertFalse(
+            "a debug build stays silent until the switch is thrown",
+            AdGate.adsAllowed(isDebug = true, purchased = false, enabled = false, testAdIds = true)
+        )
         assertFalse("the runtime switch must default to off", AdGate.testAdsEnabled)
+    }
+
+    /**
+     * The first session decides whether there is a second one, so no interstitial lands in it.
+     */
+    @Test
+    fun noInterstitialBeforeTheGracePeriodIsOver() {
+        AdGate.resetInterstitialClock()
+        assertFalse(
+            "death 3 is inside the grace period, cadence or not",
+            AdGate.shouldShowInterstitial(3)
+        )
+        assertTrue(
+            "death 6 is the first one eligible",
+            AdGate.shouldShowInterstitial(AdGate.FIRST_INTERSTITIAL_AFTER_DEATHS)
+        )
     }
 
     @org.junit.Before
     fun clearAdClock() = AdGate.resetInterstitialClock()
 
+    /** Every third death, but not until the grace period is served — so 6 and 9, never 3. */
     @Test
-    fun theInterstitialFiresOnEveryThirdDeath() {
+    fun theInterstitialFiresOnEveryThirdDeathOnceTheGraceIsServed() {
         assertFalse(AdGate.shouldShowInterstitial(1))
         assertFalse(AdGate.shouldShowInterstitial(2))
-        assertTrue(AdGate.shouldShowInterstitial(3))
+        assertFalse("death 3 is on-cadence but inside the grace period", AdGate.shouldShowInterstitial(3))
         assertFalse(AdGate.shouldShowInterstitial(4))
         assertTrue(AdGate.shouldShowInterstitial(6))
+        assertFalse(AdGate.shouldShowInterstitial(7))
+        assertTrue(AdGate.shouldShowInterstitial(9))
     }
 
     @Test
@@ -83,20 +110,20 @@ class AdGateTest {
     @Test
     fun aSecondInterstitialIsHeldBackWhileTheLastOneIsStillRecent() {
         val start = 1_000_000L
-        assertTrue("the first is always allowed", AdGate.shouldShowInterstitial(3, start))
+        assertTrue("the first is always allowed", AdGate.shouldShowInterstitial(6, start))
         AdGate.markInterstitialShown(start)
 
         assertFalse(
             "an ad 30s after the last one is the churn trigger",
-            AdGate.shouldShowInterstitial(6, start + 30_000L)
+            AdGate.shouldShowInterstitial(9, start + 30_000L)
         )
         assertFalse(
             "still too soon just under the gap",
-            AdGate.shouldShowInterstitial(6, start + AdGate.MIN_INTERSTITIAL_GAP_MS - 1)
+            AdGate.shouldShowInterstitial(9, start + AdGate.MIN_INTERSTITIAL_GAP_MS - 1)
         )
         assertTrue(
             "once the quiet period is served, the count rules again",
-            AdGate.shouldShowInterstitial(6, start + AdGate.MIN_INTERSTITIAL_GAP_MS)
+            AdGate.shouldShowInterstitial(9, start + AdGate.MIN_INTERSTITIAL_GAP_MS)
         )
     }
 

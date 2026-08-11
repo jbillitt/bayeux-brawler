@@ -4,7 +4,7 @@ import kotlin.random.Random
 
 enum class Voice {
     HARP, LUTE, PSALTERY, VIELLE, VIOLA, CELLO, FIDDLE2, RECORDER, PANPIPES, SHAWM, OBOE,
-    SACKBUT, HORN, GURDY, ORGAN, CHOIR, BELLS, NAKERS, TIMPANI, BODHRAN, TABOR, TAMBOURINE,
+    SACKBUT, HORN, TUBA, GURDY, ORGAN, CHOIR, BELLS, NAKERS, TIMPANI, BODHRAN, TABOR, TAMBOURINE,
     EGG_SHAKER, KICK
 }
 
@@ -58,13 +58,20 @@ fun renderNote(
                                      // The two resonances that make a double reed nasal rather than
                                      // flute-like, and what separates it from RECORDER above.
                                      formantHz = floatArrayOf(1150f, 2900f), formantGain = 2.2f)
-        Voice.VIELLE, Voice.VIOLA, Voice.CELLO, Voice.FIDDLE2, Voice.SHAWM, Voice.SACKBUT, Voice.HORN, Voice.GURDY, Voice.ORGAN, Voice.CHOIR ->
+        Voice.VIELLE, Voice.VIOLA, Voice.CELLO, Voice.FIDDLE2, Voice.SHAWM, Voice.SACKBUT, Voice.HORN, Voice.TUBA, Voice.GURDY, Voice.ORGAN, Voice.CHOIR ->
             renderBowBrass(voice, midi, durSec, velocity, sr, rng, phraseIndex)
         Voice.BELLS, Voice.NAKERS, Voice.TIMPANI, Voice.BODHRAN, Voice.TABOR, Voice.TAMBOURINE,
         Voice.EGG_SHAKER, Voice.KICK ->
             renderPerc(voice, midi, durSec, velocity, sr, rng)
     }
     if (velocity != 1f) for (i in buf.indices) buf[i] *= velocity
+    // Every voice, one place. A note buffer is cut at whatever length the composer asked for, and
+    // that is routinely shorter than the synth's own decay — a timpani with a 1.1s tail asked for
+    // 0.4s, a plucked harp cut while the string is still swinging at two thirds of full amplitude.
+    // The buffer then ends on a step, which is broadband energy, and on a phone speaker it arrives
+    // as a crackle on the end of the note. Doing it here rather than in each synth is the point:
+    // the plucked voices never called normalise(), so a guard living there missed them entirely.
+    fadeOutTail(buf)
     return buf
 }
 

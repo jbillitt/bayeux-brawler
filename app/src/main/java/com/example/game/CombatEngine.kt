@@ -141,6 +141,26 @@ class CombatEngine(private val ctx: BattleContext) {
         /** Consecutive staggers before a fighter powers through and finishes his swing anyway. */
         const val MAX_INTERRUPT_STREAK = 3
 
+        /** Below this level a boss's blows are whatever his stats say, so early giants stay beatable. */
+        const val BOSS_RAMP_START_LEVEL = 40
+        /** Added share of damage per level past the ramp start. */
+        const val BOSS_RAMP_PER_LEVEL = 0.012f
+        /** Ceiling. A deep-level giant should be terrifying, not a one-frame loss. */
+        const val BOSS_RAMP_MAX = 3.0f
+
+        /**
+         * How much harder a boss hits than his raw stat line, by level.
+         *
+         * The ordinary stat curve treats a boss as a big man, so by the deep levels the player's
+         * own growth has outrun him and his blows stopped mattering. Flat 1.0 through the early
+         * fights — the first giants must stay winnable — then a ramp with a hard ceiling.
+         */
+        fun bossBrutality(attacker: FighterState): Float {
+            if (attacker.bossType == null) return 1f
+            val over = (attacker.level - BOSS_RAMP_START_LEVEL).coerceAtLeast(0)
+            return (1f + over * BOSS_RAMP_PER_LEVEL).coerceAtMost(BOSS_RAMP_MAX)
+        }
+
         // Rare ranged rewards. All tunable; these are the fun knobs, not the balance-critical ones.
         /** Fragments a cluster charge sprays on impact. */
         const val CLUSTER_FRAGMENTS = 4
@@ -217,6 +237,12 @@ class CombatEngine(private val ctx: BattleContext) {
      */
     private fun tryInterrupt(target: FighterState, requireSwing: Boolean = true): Boolean {
         if (requireSwing && !target.isAttacking) return false
+        // Most staggers simply do not land on something huge. ccResist is already this game's
+        // "how much crowd control does this thing feel" (1.0 for a man, 0.1 for a living boss) and
+        // the crumple and skid paths both honour it — but this one never did, so a ring of
+        // followers could keep a giant permanently mid-flinch. The streak cap below was a floor on
+        // that, not a fix: it still cost him three swings out of every four.
+        if (Random.nextFloat() >= target.ccResist.coerceAtMost(1f)) return false
         if (target.interruptStreak >= MAX_INTERRUPT_STREAK) {
             ctx.popup("IMPERTURBATUS!", target.posX, 150f, Color(0xFFD6A420))
             return false
@@ -509,6 +535,8 @@ class CombatEngine(private val ctx: BattleContext) {
             }
         }
 
+        if (fighter.faceHoldTimer > 0f) fighter.faceHoldTimer -= dt
+
         // Cooldown tick
         if (fighter.attackCooldown > 0) {
             val cooldownRate = if (!fighter.isPlayer && fighter.armor.id == "armor_bare") 1.3f else 1f
@@ -659,7 +687,7 @@ class CombatEngine(private val ctx: BattleContext) {
         if (fighter.elevated && !fighter.isPlayer && target != null && !target.isDead &&
             fighter.crumpleDuration <= 0f
         ) {
-            fighter.facingRight = target.posX > fighter.posX
+            fighter.faceToward(target.posX)
             if (fighter.attackCooldown <= 0 && !fighter.isAttacking) triggerAttack(fighter)
             val piF = Math.PI.toFloat()
             val nearestRest = kotlin.math.round(fighter.animFrame / piF) * piF
@@ -693,7 +721,7 @@ class CombatEngine(private val ctx: BattleContext) {
             }
             val isShieldWall = !fighter.isPlayer && fighter.shield.id == "shield_tower"
 
-            fighter.facingRight = target.posX > fighter.posX
+            fighter.faceToward(target.posX)
 
             if (dist > optimalDistance) {
                 // Walk closer
@@ -1206,8 +1234,11 @@ class CombatEngine(private val ctx: BattleContext) {
 
                 // Cupbearer strength bonus!
                 if (attacker.isPlayer && ctx.unlockedAncillaries.contains(Ancillary.CUPBEARER)) {
-                    totalDamage *= 1.25f // 25% strength boost from wine!
+                    totalDamage *= 1.25f // 25% strength boost from the cupbearer's refill
                 }
+
+                // A deep-level boss hits like one. No effect at all below BOSS_RAMP_START_LEVEL.
+                totalDamage *= bossBrutality(attacker)
 
                 applyFlatDamage(totalDamage, currTarget, attacker.isPlayer, attacker = attacker)
 

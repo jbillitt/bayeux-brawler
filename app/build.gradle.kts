@@ -33,8 +33,8 @@ android {
     applicationId = "com.headspace.bayeuxbrawlers"
     minSdk = 24
     targetSdk = 36
-    versionCode = 38
-    versionName = "v0.9.3 Pevensey"
+    versionCode = 40
+    versionName = "v0.9.5 Pevensey"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -59,7 +59,11 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      // R8: shrink, optimise and obfuscate, which is what Play recommends for an uploaded bundle.
+      // The mapping file is generated alongside the AAB and Play ingests it automatically, so
+      // crash reports stay readable — see proguard-rules.pro, which keeps line numbers for that.
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }

@@ -22,6 +22,31 @@ class GameViewModelTest {
         viewModel = GameViewModel()
     }
 
+    /**
+     * The Moleman used to surface once and then stand in an empty patch for the rest of the fight,
+     * because hasSurfaced was a one-shot latch. He goes back down now — but only when there is
+     * genuinely nothing left within reach, and never on the tick he arrives or after the last foe
+     * is down, both of which would read as a glitch rather than as a second tunnel.
+     */
+    @Test
+    fun `moleman digs again only when his pocket is clear and the battle is not`() {
+        val far = GameViewModel.MOLEMAN_REDIG_RADIUS_PX + 50f
+        val near = GameViewModel.MOLEMAN_REDIG_RADIUS_PX - 50f
+        val settled = GameViewModel.MOLEMAN_MIN_SURFACE_SECS + 0.5f
+
+        // Cleared his pocket, others still alive further off — down he goes.
+        assertTrue(GameViewModel.molemanShouldRedig(settled, far, anyFoeLeft = true))
+
+        // Someone still in reach: keep punching.
+        assertFalse(GameViewModel.molemanShouldRedig(settled, near, anyFoeLeft = true))
+
+        // Just arrived. Even into an empty pocket he stays up, or he erupts and sinks in one second.
+        assertFalse(GameViewModel.molemanShouldRedig(0.2f, far, anyFoeLeft = true))
+
+        // Battle won. Nobody sinks into the ground on the victory beat.
+        assertFalse(GameViewModel.molemanShouldRedig(settled, null, anyFoeLeft = false))
+    }
+
     @Test
     fun `initial state is correct`() {
         val state = viewModel.uiState.value

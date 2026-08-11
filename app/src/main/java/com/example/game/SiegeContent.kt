@@ -1,5 +1,6 @@
 package com.example.game
 
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.random.Random
 
@@ -79,6 +80,28 @@ object SiegeRules {
 
     fun ladderActive(state: SiegeState, fighters: List<FighterState>): Boolean =
         ladderStanding(state) && livingParapetEnemies(state, fighters).isNotEmpty()
+
+    /** How near the wall a man must have marched before he will set foot on a rung. */
+    const val WALL_REACH_PX = 140f
+
+    /**
+     * Should this man stop fighting on the ground and start climbing?
+     *
+     * ONE predicate for the player and for his retinue, deliberately. They had a condition each and
+     * the two drifted: the retinue asked only "nothing left for me to hit, and I am at the wall",
+     * while the player additionally demanded that every ground-level enemy in the whole battle be
+     * dead first. So the squad went up the ladder and the player stayed at the bottom battering the
+     * door — the reward he had bought doing nothing for the one man it was sold to. Anything that
+     * changes about who may climb belongs here, where both of them read it.
+     *
+     * [hasReachableTarget] is the caller's own answer to "is there a foe I can close with from
+     * where I stand" — already false for enemies only reachable past a shut gate.
+     */
+    fun mayScaleWall(state: SiegeState, fighter: FighterState, hasReachableTarget: Boolean): Boolean =
+        !fighter.elevated && !hasReachableTarget &&
+            fighter.climbState == ClimbState.NONE && !fighter.isDead && !fighter.isDying &&
+            (state.gateBroken ||
+                (ladderStanding(state) && abs(GameViewModel.SIEGE_GATE_X - fighter.posX) < WALL_REACH_PX))
 
     fun beginClimbUp(state: SiegeState, fighter: FighterState, fighters: List<FighterState>): Boolean {
         if (fighter.elevated || fighter.climbState != ClimbState.NONE || !ladderActive(state, fighters)) return false

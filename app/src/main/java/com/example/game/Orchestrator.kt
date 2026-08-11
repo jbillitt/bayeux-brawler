@@ -4,12 +4,30 @@ import kotlin.random.Random
 
 enum class LineRef {
     MELODY, MELODY_ORN, COUNTER, BASS, PADS_FULL, PADS_ROOT, PADS_FIFTH,
-    DRONE, PERC, SPARKLE, ACCOMP, RIFF, FLOURISH, TRUMPETER, DESTINY_FANFARE, STRUM
+    DRONE, PERC, SPARKLE, ACCOMP, RIFF, FLOURISH, TRUMPETER, DESTINY_FANFARE, STRUM,
+
+    /**
+     * Whoever is keeping the subdivision this song — a job, not an instrument.
+     *
+     * The shaker and the tambourine both used to be assigned unconditionally, so every run had
+     * both and the shaker became the sound of the game rather than one colour in it. This line is
+     * handed to exactly one voice per song, and four of them can hold it: shaker, tambourine, a
+     * hand drum playing the same interlocking figure, or tuned kettledrums doing it as DUM-dum.
+     */
+    PERC_LIGHT
 }
 
 data class VoiceAssignment(
     val voice: Voice, val line: LineRef, val enterLevel: Int, val exitLevel: Int = 99,
-    val gain: Float, val pan: Float, val octave: Int = 0, val transposeDegrees: Int = 0
+    val gain: Float, val pan: Float, val octave: Int = 0, val transposeDegrees: Int = 0,
+    /**
+     * Which strains this voice plays: -1 every strain, 0 the even ones, 1 the odd ones.
+     *
+     * Two voices given the same line and opposite parities hand the tune back and forth — the
+     * recorder takes the verse, the vielle answers it. Levels alone could not express this: they
+     * say WHEN in the run a voice joins, not WHERE in the song it plays.
+     */
+    val strainParity: Int = -1
 )
 
 data class OrchestrationPlan(val assignments: List<VoiceAssignment>, val destinyFanfare: Boolean)
@@ -25,6 +43,15 @@ private fun <T> weightedPick(rng: Random, options: List<Pair<T, Float>>): T {
     for ((v, w) in options) { roll -= w; if (roll <= 0f) return v }
     return options.last().first
 }
+
+/**
+ * Gain allowance for voices that are quiet by construction rather than by choice.
+ *
+ * A panpipe is a stopped tube with almost no fundamental — it reads as breath. Given the same
+ * gain as a shawm it is simply not there, which is exactly what happened: panpipes sat in three
+ * separate instrument pools and were never once heard in play.
+ */
+private fun pipeBoost(v: Voice): Float = if (v == Voice.PANPIPES) 1.45f else 1f
 
 fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): OrchestrationPlan {
     when (spec.family) {
@@ -68,8 +95,19 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
         else -> listOf(Voice.HARP to 0.6f, Voice.LUTE to 0.4f)   // BRAWL/THRONE take bespoke plans (Tasks 3/5)
     })
     used += soloist
+    // A sung piece is sung. Organum, conductus and chant were voices first and instruments second
+    // (often not at all), so the choir takes the tune from the very first level rather than
+    // arriving at 14 as a late colour — which is where the only other route to CHOIR put it, and
+    // is why a plainchant setting could come out as a lute solo.
+    if (spec.piece?.vocal == true) {
+        used += Voice.CHOIR
+        a += VoiceAssignment(Voice.CHOIR, LineRef.MELODY, 1, 3, gMel * 1.05f, 0f)
+        a += VoiceAssignment(Voice.CHOIR, LineRef.MELODY_ORN, 3, 99, gMel * 1.05f, 0f)
+        // The held tenor underneath — one voice on the ground, which is what an organum IS.
+        a += VoiceAssignment(Voice.CHOIR, LineRef.DRONE, 2, 99, gMel * 0.55f, -0.3f)
+    }
     a += VoiceAssignment(soloist, LineRef.MELODY, 1, 3, gMel, 0f)
-    a += VoiceAssignment(soloist, LineRef.MELODY_ORN, 3, 99, gMel, 0f)      // decorates once the bass frees its hands
+    // MELODY_ORN from L3 is assigned below, once we know whether the tune changes hands.
     a += VoiceAssignment(soloist, LineRef.ACCOMP, 1, 3, gAcc, 0f)
 
     // L2 second voice
@@ -82,6 +120,25 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     })
     used += second
     a += VoiceAssignment(second, LineRef.COUNTER, 2, 99, gSecond, 0.35f)
+
+    // The tune changes hands. Most songs give the melody to one instrument for their whole length,
+    // which is what makes a four-minute loop wear out: the ear stops being told anything new. Here
+    // a wind or a fiddle takes the odd strains off the soloist and hands them back, so the same
+    // tune arrives in a different colour halfway through. Not every song — a piece that never
+    // changes hands is a legitimate piece, and the contrast needs somewhere to be measured from.
+    if (rng.nextFloat() < 0.55f) {
+        val relief = weightedPick(rng, listOf(
+            Voice.RECORDER to 0.28f, Voice.VIELLE to 0.24f, Voice.OBOE to 0.2f,
+            Voice.PANPIPES to 0.16f, Voice.PSALTERY to 0.12f
+        ).filter { it.first != second && it.first != soloist }.ifEmpty { listOf(Voice.RECORDER to 1f) })
+        used += relief
+        // The soloist keeps the even strains, the newcomer answers on the odd ones. Both enter at
+        // L3 together — a hand-off where one side is missing is just a tune that stops.
+        a += VoiceAssignment(soloist, LineRef.MELODY_ORN, 3, 99, gMel, 0f, strainParity = 0)
+        a += VoiceAssignment(relief, LineRef.MELODY_ORN, 3, 99, gMel * 0.92f * pipeBoost(relief), 0.2f, strainParity = 1)
+    } else {
+        a += VoiceAssignment(soloist, LineRef.MELODY_ORN, 3, 99, gMel, 0f)
+    }
 
     // L3 bass takes the ground
     val bassPool = listOf(
@@ -113,7 +170,10 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
         .ifEmpty { listOf(Voice.GURDY to 1f) })
     val droneLevel = 5
     a += VoiceAssignment(drone, LineRef.DRONE, droneLevel, 99, gDrone, -0.7f)
-    if (drone == Voice.GURDY) a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, droneLevel, 99, gDrone * 1.6f, -0.7f)
+    // The buzzing-bridge accent, at 0.6 of the drone rather than 1.6x it. At the old level the
+    // coup de glotte was the loudest event in the bar and pulled the ear off the tune every time
+    // it fired — a hurdy-gurdy's buzz is a rhythmic seasoning, not a lead instrument.
+    if (drone == Voice.GURDY) a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, droneLevel, 99, gDrone * 0.6f, -0.7f)
     // NOTE: gurdy buzz accents ride the SPARKLE slot pan; the facade maps GURDY+SPARKLE to gurdyBuzzEvents.
 
     // L6 third voice: divisions on the repeats
@@ -121,7 +181,10 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     val third = thirdPool[rng.nextInt(thirdPool.size)]
     used += third
     val thirdOct = if (third == Voice.RECORDER || third == Voice.PANPIPES) 1 else 0
-    a += VoiceAssignment(third, LineRef.MELODY_ORN, 6, 99, gThird, 0.6f, octave = thirdOct)
+    // Panpipes are nearly all breath and no fundamental, so at a shared gain they vanish under
+    // anything with a reed or a string on it — which is why they have never been heard in play
+    // despite being in three separate pools. They get their own allowance wherever they land.
+    a += VoiceAssignment(third, LineRef.MELODY_ORN, 6, 99, gThird * pipeBoost(third), 0.6f, octave = thirdOct)
 
     // L7 pads: organ organum OR brass pair
     if (rng.nextBoolean()) {
@@ -131,12 +194,22 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
         a += VoiceAssignment(Voice.HORN, LineRef.PADS_FIFTH, 7, 99, gPads * 0.8f, 0.15f)
     }
 
-    // L8 percussion II
-    val tambLevel = (if (merrier) 6 else 8)
-    a += VoiceAssignment(Voice.TAMBOURINE, LineRef.PERC, tambLevel, 99, gPerc2, 0.65f)
-    // The shaker rides opposite the tambourine. It is pure treble, so it holds the subdivision
-    // audible on a handset even when the membranes are fighting for room.
-    a += VoiceAssignment(Voice.EGG_SHAKER, LineRef.PERC, if (merrier) 5 else 7, 99, gPerc2 * 0.85f, -0.6f)
+    // L8 percussion II — ONE voice keeps the subdivision, drawn per song.
+    //
+    // Both the shaker and the tambourine used to be assigned here unconditionally, so every single
+    // run had both of them and the shaker in particular stopped being a colour and became the
+    // texture. The job is now filled once, by whichever of four instruments this song drew.
+    val lightPerc = weightedPick(rng, listOf(
+        Voice.EGG_SHAKER to 0.28f,
+        Voice.TAMBOURINE to 0.28f,
+        Voice.BODHRAN to 0.24f,     // a hand drum working the same interlocking figure
+        Voice.TIMPANI to 0.20f      // tuned kettledrums, DUM-dum on two different notes
+    ))
+    a += VoiceAssignment(
+        lightPerc, LineRef.PERC_LIGHT, if (merrier) 5 else 7, 99,
+        gPerc2 * (if (lightPerc == Voice.TIMPANI) 0.9f else 0.85f),
+        if (lightPerc == Voice.TAMBOURINE) 0.65f else -0.6f
+    )
     // Even outside the brawl a bass drum under the downbeats gives the consort a floor.
     a += VoiceAssignment(Voice.KICK, LineRef.PERC, 6, 99, gPerc1 * 0.8f, 0f)
 
@@ -144,6 +217,23 @@ fun planOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: Random): Orche
     val shawmLevel = if (wilder) 7 else 9
     a += VoiceAssignment(Voice.SHAWM, LineRef.MELODY, shawmLevel, 99, gWaits, -0.35f)
     if (bass != Voice.SACKBUT) a += VoiceAssignment(Voice.SACKBUT, LineRef.BASS, 9, 99, gBass * 0.6f, -0.3f, octave = 0)
+
+    // A brass SECTION — first, second and third parts, not one trumpet played louder.
+    //
+    // All three take the same call and sit a diatonic third apart, which is what transposeDegrees
+    // does: -2 and -4 steps are a third and a fifth below IN THE MODE, so the harmony can never
+    // leave the key however the call moves. Spread across the stereo field so they read as three
+    // players standing apart rather than one thickened line, and the tuba takes the ground under
+    // them. Occasional: a section that turned out for every run would stop being an event.
+    if (rng.nextFloat() < 0.35f) {
+        a += VoiceAssignment(Voice.HORN, LineRef.TRUMPETER, 9, 99, gWaits * 0.55f, -0.3f)
+        a += VoiceAssignment(Voice.HORN, LineRef.TRUMPETER, 9, 99, gWaits * 0.44f, 0f, transposeDegrees = -2)
+        a += VoiceAssignment(Voice.SACKBUT, LineRef.TRUMPETER, 10, 99, gWaits * 0.38f, 0.3f, transposeDegrees = -4)
+        a += VoiceAssignment(Voice.TUBA, LineRef.BASS, 9, 99, gBass * 0.55f, -0.1f)
+    } else {
+        // Even without the section, the tuba turns up late — it is the bottom of the band.
+        a += VoiceAssignment(Voice.TUBA, LineRef.BASS, 12, 99, gBass * 0.42f, -0.1f)
+    }
 
     // L10 bells + psaltery sparkle
     a += VoiceAssignment(Voice.BELLS, LineRef.SPARKLE, 10, 99, gBells, 0.8f)
@@ -217,14 +307,25 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
     a += VoiceAssignment(thirdDrum, LineRef.PERC, 1 + rng.nextInt(2), 99, 0.24f, -0.55f)
 
     // The drone bed. Never the same voice as the riff, or the low end turns to porridge.
+    // The drone bed. The organ was here on 40% of brawls AND again on PADS_FULL later, so it was
+    // the commonest thing in the mode — and as a bare drone it only ever sounded two notes, which
+    // is why it read as an organ playing "a couple of chord notes" rather than as an organ. It is
+    // rarer now, and when it does turn up it gets the full chord on top of the bed.
     val drone = weightedPick(
         rng,
-        listOf(Voice.GURDY to 0.6f, Voice.ORGAN to 0.4f).filter { it.first != riff }
-            .ifEmpty { listOf(Voice.ORGAN to 1f) }
+        listOf(Voice.GURDY to 0.78f, Voice.ORGAN to 0.22f).filter { it.first != riff }
+            .ifEmpty { listOf(Voice.GURDY to 1f) }
     )
     a += VoiceAssignment(drone, LineRef.DRONE, 1, 99, 0.36f, -0.6f)
-    // GURDY+SPARKLE is the buzz-accent mapping in the composer facade, not an arpeggio.
-    if (drone == Voice.GURDY) a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, 1, 99, 0.36f, -0.6f)
+    if (drone == Voice.ORGAN) {
+        // The drone bed alone is two notes, which is precisely what it sounded like. Give the
+        // organ the whole chord as well and it reads as a plenum — the only reason to put one in
+        // a brawl in the first place.
+        a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 1, 99, 0.26f, -0.5f)
+    } else {
+        // GURDY+SPARKLE is the buzz-accent mapping in the composer facade, not an arpeggio.
+        a += VoiceAssignment(Voice.GURDY, LineRef.SPARKLE, 1, 99, 0.22f, -0.6f)
+    }
 
     a += VoiceAssignment(Voice.VIOLA, LineRef.BASS, 2, 99, 0.32f, -0.2f)
     a += VoiceAssignment(Voice.RECORDER, LineRef.FLOURISH, 2, 99, 0.12f, 0.55f)
@@ -244,8 +345,11 @@ private fun planBrawlOrchestration(spec: SongSpec, hasTrumpeter: Boolean, rng: R
     }
     // The harp doubles the tune's divisions an octave up — a plucked shimmer over the lead.
     a += VoiceAssignment(Voice.HARP, LineRef.MELODY_ORN, 7, 99, 0.18f, 0.25f, octave = 1)
-    a += VoiceAssignment(Voice.PANPIPES, LineRef.FLOURISH, 8, 99, 0.11f, 0.6f)
-    a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 10, 99, 0.08f, 0f)
+    a += VoiceAssignment(Voice.PANPIPES, LineRef.FLOURISH, 8, 99, 0.11f * pipeBoost(Voice.PANPIPES), 0.6f)
+    // A tuba doubling the chord roots is exactly the joke a brass band makes of a metal riff.
+    a += VoiceAssignment(Voice.TUBA, LineRef.PADS_ROOT, 9, 99, 0.17f, -0.35f)
+    // Only if it is not already the drone-bed organ above — it was possible to field two.
+    if (drone != Voice.ORGAN) a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 10, 99, 0.08f, 0f)
     a += VoiceAssignment(Voice.CHOIR, LineRef.FLOURISH, 11, 99, 0.10f, 0.2f)
 
     // Late consort: whatever the rolls above left out joins for the closing stretch, quietly.
@@ -301,6 +405,8 @@ private fun planThroneOrchestration(spec: SongSpec, hasTrumpeter: Boolean): Orch
     a += VoiceAssignment(Voice.PSALTERY, LineRef.SPARKLE, 6, 99, 0.14f, 0.45f)
     // A cello under the processional and an oboe answering over it — the court consort proper.
     a += VoiceAssignment(Voice.CELLO, LineRef.BASS, 5, 99, 0.26f, -0.4f)
+    // The bottom of a processional band. A coronation walks on the tuba's note.
+    a += VoiceAssignment(Voice.TUBA, LineRef.BASS, 6, 99, 0.30f, -0.15f)
     a += VoiceAssignment(Voice.OBOE, LineRef.COUNTER, 6, 99, 0.20f, 0.4f)
     a += VoiceAssignment(Voice.CHOIR, LineRef.COUNTER, 7, 99, 0.16f, 0.35f)
     a += VoiceAssignment(Voice.ORGAN, LineRef.PADS_FULL, 9, 99, 0.12f, 0f)
@@ -326,6 +432,138 @@ private fun brawlKickFigure(spec: SongSpec): List<Float> =
         2 -> listOf(0f, 0.5f, 0.75f, 1f, 2f, 2.5f, 2.75f, 3f)        // the metal gallop
         else -> listOf(0f, 1f, 2f, 2.75f, 3.5f)                      // leans over the barline
     }
+
+/**
+ * What the bass drum plays this bar, as (beat, velocity) pairs.
+ *
+ * One figure per song off the seed, plus a variation on the fourth bar — the same trick the brawl
+ * kick uses, dialled right down. A drummer keeping time for a consort still doubles a beat, still
+ * pushes into the next bar; what he does not do is play sixteenths. The point is that two runs
+ * should not share a pulse, and that the fourth bar should tell you where you are in the phrase.
+ */
+private fun plainKickFigure(spec: SongSpec, bar: Int): List<Pair<Float, Float>> {
+    val bpb = spec.beatsPerBar
+    val figure = Random(spec.seed xor 0x8A55D2058L).nextInt(4)
+    val half = bpb / 2f
+    val base = when {
+        bpb == 3 -> when (figure) {                       // 3/4: the downbeat is the whole story
+            0 -> listOf(0f to 0.9f)
+            1 -> listOf(0f to 0.9f, 2f to 0.6f)
+            2 -> listOf(0f to 0.9f, 1.5f to 0.55f)
+            else -> listOf(0f to 0.9f, 0.5f to 0.5f)      // the quick double off the beat
+        }
+        bpb == 6 -> when (figure) {                       // 6/8: the two compound beats
+            0 -> listOf(0f to 0.9f, 3f to 0.7f)
+            1 -> listOf(0f to 0.9f, 2.5f to 0.55f, 3f to 0.7f)
+            2 -> listOf(0f to 0.9f, 3f to 0.7f, 5f to 0.5f)
+            else -> listOf(0f to 0.9f, 1.5f to 0.5f, 3f to 0.7f)
+        }
+        else -> when (figure) {                           // duple
+            0 -> listOf(0f to 0.9f, half to 0.7f)
+            1 -> listOf(0f to 0.9f, half to 0.7f, half + 0.5f to 0.5f)  // the double
+            2 -> listOf(0f to 0.9f, 1.5f to 0.55f, half to 0.7f)        // dotted, a slight limp
+            else -> listOf(0f to 0.9f, half to 0.7f, bpb - 0.5f to 0.5f) // pickup into the next bar
+        }
+    }
+    // Fourth bar of the phrase: an extra push, so the four-bar shape is audible in the floor of
+    // the mix rather than only in the tune. Skipped if the figure already hits there — a drum
+    // retriggered on top of itself is a click, not an accent.
+    if (bar % 4 != 3) return base
+    val push = bpb - 0.5f
+    return if (base.any { Math.abs(it.first - push) < 1e-3f }) base else base + listOf(push to 0.62f)
+}
+
+/**
+ * The subdivision line, played by whichever instrument this song gave the job to.
+ *
+ * All four play the SAME musical role — the offbeat pulse the melody is felt against — but each
+ * plays it the way its own instrument would, which is the point: a hand drum cannot rattle
+ * continuous quavers the way a shaker can, and a pair of kettledrums answers in pitch rather than
+ * in noise. Handing one figure to four voices is what makes two runs of the same family sound
+ * like different bands rather than the same band with a knob turned.
+ */
+fun lightPercussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEvent> {
+    val out = mutableListOf<NoteEvent>()
+    val bpb = spec.beatsPerBar.toFloat()
+    // Kettledrums are tuned to the tonic and the dominant, which is the whole reason a timpani
+    // figure reads as DUM-dum and not as one drum hit twice.
+    val low = spec.finalMidi - 12
+    val high = degreeToMidi(spec, 4) - 12
+    // Which DUM-dum this song plays, off the seed: the pairs a timpanist actually alternates.
+    val figure = Random(spec.seed xor 0x71DEC0DEL).nextInt(3)
+
+    for (bar in 0 until spec.totalBars) {
+        val base = bar * bpb
+        when (voice) {
+            Voice.TAMBOURINE -> {
+                // Jingles on the offbeats, thumb on the beat — the way it is actually held.
+                var beat = 0f
+                while (beat < bpb - 1e-3f) {
+                    val onBeat = beat % 1f == 0f
+                    out += NoteEvent(base + beat, if (onBeat) 0.16f else 0.28f, 57, if (onBeat) 0.5f else 0.85f)
+                    beat += 0.5f
+                }
+            }
+            Voice.BODHRAN, Voice.TABOR -> {
+                // The same interlocking figure, but a hand drum's version of it: the offbeats it
+                // can actually articulate, not a continuous rattle it would only smear.
+                val offs = if (spec.beatsPerBar == 6) listOf(0f, 1.5f, 3f, 4.5f) else listOf(0f, 1.5f, 2.5f)
+                for ((i, o) in offs.withIndex()) {
+                    if (o >= bpb - 1e-3f) continue
+                    out += NoteEvent(base + o, 0.22f, if (i == 0) 50 else 57, if (i == 0) 0.85f else 0.6f)
+                }
+                if (wilder && bpb >= 4f) out += NoteEvent(base + bpb - 0.5f, 0.18f, 57, 0.5f)
+            }
+            Voice.TIMPANI -> {
+                // DUM dum. Two drums, two pitches, and a different pattern per song.
+                //
+                // Durations are long on purpose. A kettledrum is not a hit, it is a hit followed
+                // by a boom, and the boom is the instrument — write these short and what comes out
+                // is a tuned tap. They overlap the next note deliberately; that ringing-into-each
+                // -other is what a pair of timpani actually sounds like.
+                when (figure) {
+                    0 -> {  // heavy-light on the tonic then the fifth
+                        out += NoteEvent(base, 1.8f, low, 1f)
+                        out += NoteEvent(base + 1f, 1.4f, high, 0.62f)
+                    }
+                    1 -> {  // the answer falls in the second half of the bar
+                        out += NoteEvent(base, 2.0f, low, 1f)
+                        out += NoteEvent(base + (if (bpb >= 4f) 2f else bpb - 1f), 1.6f, high, 0.7f)
+                    }
+                    else -> { // dotted: DUM . dum-dum, alternating drums
+                        out += NoteEvent(base, 1.6f, low, 1f)
+                        out += NoteEvent(base + 1.5f, 1.2f, high, 0.66f)
+                        if (bpb >= 4f) out += NoteEvent(base + 2.5f, 1.2f, low, 0.58f)
+                    }
+                }
+                // The roll. Every fourth bar the pair go into a tremolo and crescendo into the
+                // downbeat of the next — the big rolling drum a kettledrum is FOR, and the thing
+                // a bar-by-bar figure on its own can never produce.
+                if (bar % 4 == 3) {
+                    val strokes = 12
+                    val from = bpb - 2f
+                    for (r in 0 until strokes) {
+                        val t = r.toFloat() / (strokes - 1)
+                        out += NoteEvent(
+                            base + from + t * 2f, 0.5f,
+                            if (r % 2 == 0) low else high,
+                            0.32f + 0.55f * t          // swelling into the barline
+                        )
+                    }
+                }
+            }
+            else -> {   // EGG_SHAKER, and the fallback for anything else handed this line
+                var beat = 0f
+                while (beat < bpb - 1e-3f) {
+                    val onBeat = beat % 1f == 0f
+                    out += NoteEvent(base + beat, 0.18f, 57, if (onBeat) 0.5f else 0.8f)
+                    beat += 0.5f
+                }
+            }
+        }
+    }
+    return out
+}
 
 fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEvent> {
     val out = mutableListOf<NoteEvent>()
@@ -413,9 +651,15 @@ fun percussionEvents(spec: SongSpec, voice: Voice, wilder: Boolean): List<NoteEv
                     }
                 }
             } else {
-                // Everywhere else it is a plain heartbeat under the downbeats.
-                out += NoteEvent(base, 0.2f, 36, 0.9f)
-                if (spec.beatsPerBar >= 4) out += NoteEvent(base + spec.beatsPerBar / 2f, 0.2f, 36, 0.7f)
+                // Outside the brawl the bass drum used to be a metronome: one hit on the downbeat,
+                // one at the half bar, every bar of every song. Correct and completely inert. It
+                // now draws a figure per song — a double, a pickup into the next bar, a dotted
+                // limp — and varies it on the fourth bar so the pattern is felt as a pattern.
+                // Nothing like as busy as the brawl's double pedal; a consort's drummer is keeping
+                // time, not driving. He is just allowed to be a person about it.
+                for ((b, v) in plainKickFigure(spec, bar)) {
+                    if (b < bpb - 1e-3f) out += NoteEvent(base + b, 0.2f, 36, v)
+                }
             }
             Voice.NAKERS -> if (spec.family == Family.BRAWL) {
                 // Freed from double-kick duty: now a tom accent answering the snare on the turn.
@@ -659,7 +903,19 @@ fun harpStrumEvents(spec: SongSpec): List<NoteEvent> {
             StrumPlacement.ANSWER -> if (bar % 8 == 7) bar * bpb + bpb - 1.5f else bar * bpb
             else -> bar * bpb
         }
-        val ring = if (big) 2.6f else 1.4f
+        // Ring to the end of its own bar, unless the next bar is the same chord anyway.
+        //
+        // Measured, not guessed: the roll SPEED was never the problem — 26-44ms between strings is
+        // exactly what a harp does. What was wrong is how long the strings were left ringing. A big
+        // strum ran 1.2-1.6 beats past its own barline, and in half the songs the bar it ran into
+        // was a different chord, so the old harmony sat under the new one. That is the "slightly
+        // discordant", and the melody rubbing against the stale stack is the audible half of it.
+        // Where the ground does not change under it, the long ring is harmless and stays — a
+        // cadential strum into the tonic should be allowed to bloom. The harp's own release tail
+        // (renderEvents) still carries every roll over the barline naturally.
+        val nextIsSameChord = g == spec.ground[(bar + 1) % 8].bassDegree
+        val barRemaining = bpb - (start - bar * bpb)
+        val ring = (if (big) 2.6f else 1.4f).let { if (nextIsSameChord) it else it.coerceAtMost(barRemaining) }
         val lead = if (big) 0.92f else 0.68f
         degrees.forEachIndexed { i, d ->
             // Velocity eases off up the roll: the thumb hits hardest, as on a real harp.

@@ -11,7 +11,7 @@ object FlavourText {
         "Merry", "Dreadful", "Unseemly", "Valiant", "Wretched", "Bloody-Minded", "Ill-Advised",
         "Damp", "Peevish", "Boisterous", "Calamitous", "Reckless", "Undignified", "Hasty",
         "Stubborn", "Woeful", "Rowdy", "Bruising", "Graceless", "Frantic", "Sullen", "Gallant",
-        "Ruinous", "Unholy", "Ferocious", "Squalid", "Pitiless", "Ragged", "Drunken", "Solemn"
+        "Ruinous", "Unholy", "Ferocious", "Squalid", "Pitiless", "Ragged", "Fractious", "Solemn"
     )
     internal val NOUN = listOf(
         "Kerfuffle", "Scuffle", "Fracas", "Melee", "Tussle", "Affray", "Reckoning", "Set-To",
@@ -115,7 +115,7 @@ private val DEFEAT = listOf(
         "\"This parchment is hairy.\"\n- Anonymous Monk (Marginalia)",
         "\"I wrote this sitting like a vulture.\"\n- Anonymous Scribe (Marginalia)",
         "\"Cursed be the pesty cat that urinated over this book during the night.\"\n- Anonymous Monk (Marginalia, 15th Century)",
-        "\"When I drink beer, my knee stands askew.\"\n- Anonymous Scribe (Marginalia)",
+        "\"New parchment, bad ink; I say nothing more.\"\n- Anonymous Scribe (Marginalia)",
         "\"Let me now be blamed for the script, for the ink is bad, and the vellum defective, and the day is dark.\"\n- Anonymous Irish Monk (Marginalia)",
         "\"The whole ends. Pour, and give me drink. Hallelujah.\"\n- Anonymous Scribe (Marginalia)",
         "\"A marsh of stinking and stagnant mud.\" [on the fens]\n- William of Malmesbury",

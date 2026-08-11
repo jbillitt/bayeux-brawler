@@ -66,7 +66,7 @@ enum class Ancillary(
     TRUMPETER("anc_trumpeter", "Tooty", "Trumpeter", "Plays off-key trumpet blasts during battle.", hpBoost = 10f, speedBoost = 0.1f, color = Color(0xFFD6A420)),
     CROSSBOWMAN("anc_crossbowman", "Gaston", "Crossbowman", "Slow but devastating ranged cover fire. Pierces mail.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFF3B2F2F)),
     WARHORSE("anc_mount_horse", "Blanche", "Destrier", "A towering Norman warhorse. Grants massive speed and HP.", hpBoost = 80f, speedBoost = 0.5f, color = Color(0xFF452E1B)),
-    CUPBEARER("anc_cupbearer", "Geoffrey", "Cupbearer", "Refills your goblet with fine wine mid-swing.", hpBoost = 40f, speedBoost = -0.1f, color = Color(0xFF632873)),
+    CUPBEARER("anc_cupbearer", "Geoffrey", "Cupbearer", "Refills your goblet mid-swing, and never spills a drop.", hpBoost = 40f, speedBoost = -0.1f, color = Color(0xFF632873)),
     ARCHER("anc_archer", "Robin", "Longbowman", "Fires covering arrows into the fray. Just mind your back.", hpBoost = 5f, speedBoost = 0f, color = Color(0xFF4C613D)),
     MONK("anc_monk", "Brother Tuck", "Monk", "Blesses you with holy incense. Smells heavenly.", hpBoost = 30f, speedBoost = 0f, color = Color(0xFF5E4B3C)),
     FANATIC("anc_fanatic", "Mad Boris", "Berserker", "Gone berserk. Charges the enemy naked with a huge axe, howling, and does not stop.", hpBoost = 0f, speedBoost = 0f, color = Color(0xFFC02020)),
@@ -651,6 +651,8 @@ data class FighterState(
     // Animation/facing
     var facingRight: Boolean = true,
     var animFrame: Float = 0f,
+    /** Counts down after a turn; see [faceToward]. Stops a flanked man spinning at frame rate. */
+    var faceHoldTimer: Float = 0f,
     
     // Customization
     val size: Float = 1.0f,
@@ -661,6 +663,13 @@ data class FighterState(
     val faceForehead: Int = (0..2).random(), // 0: normal, 1: big, 2: sloped
     val faceMustache: Int = (0..3).random(),
     val warPaint: Int = 0, // 0 none, 1 blue woad
+    /**
+     * Whose face is painted on this man's banner. Set to the player for the standard bearer, and
+     * null for everyone else — the renderer draws it through the ordinary head routine, so the
+     * banner carries the player's real features, hair and helm rather than a device of its own.
+     * That IS the joke, and a hand-drawn smiley here was not it.
+     */
+    val bannerFace: FighterState? = null,
     val level: Int = 1,
 
     // Death tracking. deathType is only the ragdoll animation; these two are the chronicle's
@@ -737,8 +746,13 @@ data class FighterState(
     var leapToX: Float = 0f,
     var leapCooldown: Float = 0f,
     var burrowTimer: Float = 0f,
-    /** True once he has surfaced, so he only makes the journey once per battle. */
+    /**
+     * True while he is above ground. The sapper latches this for the battle — one trip is his
+     * whole act. The moleman clears it again when he has nothing left to punch and goes back down.
+     */
     var hasSurfaced: Boolean = false,
+    /** Seconds since this digger last broke the surface; stops him re-digging the tick he arrives. */
+    var surfacedFor: Float = 0f,
     var isLord: Boolean = false,
     var hasSilkenGarments: Boolean = false, // lightens armour weight without losing protection
     val isWarPriest: Boolean = false, // never attacks; heals the worst-hurt foe near him
@@ -1187,6 +1201,40 @@ val METAL_ARMOUR_IDS = setOf(
  */
 fun FighterState.shieldCovers(attackFromRight: Boolean): Boolean =
     shield.id != "shield_none" && attackFromRight == facingRight
+
+/** How far past him a target must be before a man turns to it at all. */
+const val FACE_DEADZONE_PX = 6f
+
+/** Having turned, he commits to it for this long before he will turn back. */
+const val FACE_HOLD_SECONDS = 0.35f
+
+/**
+ * Turn to face [x] — but only as fast as a man actually turns.
+ *
+ * Facing used to be assigned straight from the current target every tick, and the target is
+ * recomputed every tick as "whoever is nearest". A man with an enemy on each side therefore had
+ * the nearest one change on sub-pixel movements, and he spun on the spot at frame rate. Two
+ * separate causes, both fixed here: a deadzone, so a target standing essentially on top of him
+ * does not flip the answer as they jostle; and a hold, so having committed to a side he stays
+ * there long enough to be seen doing it.
+ *
+ * This is not only cosmetic. [shieldCovers] keys off `facingRight`, so a flickering man was also
+ * flickering his shield — blocking or not blocking depending on which frame the blow landed on.
+ * Holding the turn means being flanked now costs what it should: your shield is genuinely on the
+ * wrong side until you have turned, rather than being on both sides at once.
+ */
+fun FighterState.faceToward(x: Float) {
+    if (faceHoldTimer > 0f) return
+    val wantRight = when {
+        x > posX + FACE_DEADZONE_PX -> true
+        x < posX - FACE_DEADZONE_PX -> false
+        else -> return          // inside the deadzone — hold whatever he already had
+    }
+    if (wantRight != facingRight) {
+        facingRight = wantRight
+        faceHoldTimer = FACE_HOLD_SECONDS
+    }
+}
 
 /**
  * True when a body blow lands on iron rather than flesh/cloth — drives the armour-hit sound.

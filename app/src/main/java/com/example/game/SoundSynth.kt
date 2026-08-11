@@ -25,6 +25,38 @@ import java.util.concurrent.ConcurrentHashMap
 // SoundPool; playSound() is a single native mixer call.
 // ---------------------------------------------------------------------------
 
+/**
+ * Floor between ANY two character voice lines, whatever throat they come from.
+ *
+ * Long enough that a clip has mostly finished before the next one starts, so voices alternate with
+ * combat rather than layering over it.
+ */
+internal const val MIN_VOICE_GAP_MS = 850L
+
+/**
+ * Whether a voice line may sound right now.
+ *
+ * Two gates, and the second is the one that matters late. The per-throat gate stops one emitter
+ * talking over itself. But every follower and every enemy is its OWN emitter, so nothing bounded
+ * the crowd: total chatter scaled with the number of bodies on the field, and by the later levels
+ * the entourage talks continuously over the fighting. This adds a crowd-wide floor, which costs
+ * nothing early (two emitters rarely collide) and thins the late game automatically — no level
+ * needs to be plumbed down here for it to know when to back off.
+ *
+ * [ensemble] exempts scripted pile-ups (the men tumbling out of the Trojan horse), where several
+ * voices at once IS the effect.
+ */
+internal fun voiceLineAllowed(
+    now: Long,
+    throatFreeAtMs: Long,
+    lastAnyVoiceMs: Long,
+    ensemble: Boolean = false
+): Boolean {
+    if (now < throatFreeAtMs) return false
+    if (ensemble) return true
+    return now - lastAnyVoiceMs >= MIN_VOICE_GAP_MS
+}
+
 object MedievalAudioSynth {
     private const val SAMPLE_RATE = 22050
     /** Pre-rendered takes per effect, so repeated hits don't sound machine-identical. */
@@ -52,6 +84,10 @@ object MedievalAudioSynth {
     private val voiceBusyUntilMs = ConcurrentHashMap<String, Long>()
     /** Fallback when a clip's real length could not be read. */
     private const val ASSUMED_CLIP_MS = 1500L
+
+    /** When ANY throat last spoke, for the crowd-wide floor in [voiceLineAllowed]. */
+    @Volatile
+    private var lastVoiceMs = 0L
 
     @Volatile
     var sfxEnabled = true
@@ -189,13 +225,16 @@ object MedievalAudioSynth {
      * @return true if this folder handled the request — including when the voice gate suppressed
      *   it, so a suppressed voice never falls through to a synthesised substitute.
      */
-    private fun playFolder(folder: String, voice: String? = null): Boolean {
+    private fun playFolder(folder: String, voice: String? = null, ensemble: Boolean = false): Boolean {
         folderPoolIds[folder]?.let { ids ->
             if (voice != null) {
                 val now = SystemClock.uptimeMillis()
-                if (now < (voiceBusyUntilMs[voice] ?: 0L)) return true
+                if (!voiceLineAllowed(now, voiceBusyUntilMs[voice] ?: 0L, lastVoiceMs, ensemble)) {
+                    return true
+                }
                 val i = ids.indices.random()
                 voiceBusyUntilMs[voice] = now + (folderClipMs[folder]?.getOrNull(i) ?: ASSUMED_CLIP_MS)
+                lastVoiceMs = now
                 soundPool?.play(ids[i], 1f, 1f, 2, 0, 1f)
             } else {
                 soundPool?.play(ids.random(), 1f, 1f, 2, 0, 1f)
@@ -224,8 +263,10 @@ object MedievalAudioSynth {
         if (!sfxEnabled) return
         scope.launch {
             repeat(voices) { i ->
-                // A voice key per man: these are meant to pile up on each other.
-                playFolder("trojan", "trojan#$i")
+                // A voice key per man, and ensemble = true: this pile-up is the scripted joke, not
+                // ambient chatter, so it is exempt from the crowd-wide floor that would eat two of
+                // the three cries.
+                playFolder("trojan", "trojan#$i", ensemble = true)
                 kotlinx.coroutines.delay(200L)
             }
         }

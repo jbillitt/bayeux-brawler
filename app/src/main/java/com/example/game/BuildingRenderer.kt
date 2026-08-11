@@ -241,7 +241,12 @@ internal fun drawDamageDecals(scope: DrawScope, cx: Float, cy: Float, bg: Backgr
 
             // Embed at the size it flew at. Every shaft was drawn full arrow size, so a Lil Guy
             // dart (0.5) that read as a needle in the air stuck out of the wall as a full arrow.
-            val s = arrow.sizeMultiplier.coerceIn(0.35f, 2.5f)
+            //
+            // The ceiling is well below the 2.5 a ballista shot flies at, though. In the air that
+            // size reads as a siege spear crossing the field in a moment; motionless in a wall it
+            // is a 137px timber with a 12px stroke, and a few of them own the whole backdrop. A
+            // ballista still leaves the biggest hole here, just not a telegraph pole.
+            val s = arrow.sizeMultiplier.coerceIn(0.35f, 1.2f)
             // Same length and stroke table the missile flew at (MainActivity :2986-2987) — a bolt
             // embedded at full arrow length, so a crossbow bolt that read as a stubby dart in the
             // air became a spar sticking out of the wall.

@@ -59,6 +59,15 @@ object TapestryRenderer {
     private val Woad = Color(0xFF3A5A8C)
 
     /**
+     * The direction a fighter faces, inside [drawCharacter]'s transform: always +x.
+     *
+     * drawCharacter mirrors the entire figure for a left-facing fighter, so within it "forward" is
+     * simply positive x whichever way the man is pointing. Reading `fighter.facingRight` again in
+     * here flips a second time and undoes the first.
+     */
+    private const val FORWARD = 1f
+
+    /**
      * Draw a character (Player Norman Knight or Saxon Enemy)
      */
     fun drawCharacter(
@@ -372,7 +381,13 @@ object TapestryRenderer {
      * so what you see is exactly the state the frog is in: shut, reaching, stuck, or reeling in.
      */
     private fun drawGiantFrog(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
-        val dir = if (fighter.facingRight) 1f else -1f
+        // Forward is +x, always. drawCharacter has already mirrored the whole figure for a
+        // left-facing fighter (the hFlip in its outer scale), so anything that reads facingRight
+        // again in here is flipped twice. The frog and the snail carried it through their entire
+        // body and so never turned round at all; the fox and the rabbit carried it in the head
+        // alone and wore their faces backwards. Kept as a named constant rather than deleted
+        // because it is load-bearing documentation: this is the trap, and it is not obvious.
+        val dir = FORWARD
         val skin = Color(0xFF6E7A3A)        // marginalia bog-green
         val belly = Color(0xFFBFAF6A)
         val mouthDark = Color(0xFF3A2622)
@@ -496,7 +511,7 @@ object TapestryRenderer {
     }
 
     private fun drawRebelSnail(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
-        val dir = if (fighter.facingRight) 1f else -1f
+        val dir = FORWARD   // see drawGiantFrog: drawCharacter has already mirrored us
         val bodyColor = Color(0xFF9C8A5A)   // marginalia ochre
         val shellColor = Color(0xFF8A5E38)
         val shellDark = Color(0xFF5C4033)
@@ -688,30 +703,26 @@ object TapestryRenderer {
             strokeWidth = 3f
         )
 
-        // The player's face, painted on it. Drawn through the shared head routine at banner scale
-        // so it inherits his actual features rather than being a second, drifting design.
+        // The player's face, painted on it — the whole point of the man. Drawn through the SAME
+        // head routine his body uses, so it carries his real nose, jaw, moustache, hair and helm
+        // and changes the moment he does. The four hand-drawn marks that used to sit here were a
+        // generic smiley: recognisably nobody, which is the one thing this banner must not be.
+        // Falls back to the bearer's own face rather than drawing nothing: a blank banner reads as
+        // a rendering fault, and every path that builds a bearer should be setting this.
+        val face = fighter.bannerFace ?: fighter
         val faceX = poleX + dir * 31f
         val faceY = topY + 52f + wave
         scope.withTransform({
-            scale(0.72f, 0.72f, pivot = Offset(faceX, faceY))
+            scale(0.78f, 0.78f, pivot = Offset(faceX, faceY))
         }) {
-            scope.drawCircle(Color(0xFFE8C9A0), radius = 22f, center = Offset(faceX, faceY))
-            scope.drawCircle(ThreadColor, radius = 22f, center = Offset(faceX, faceY), style = StitchedStroke)
-            // Eyes, brows, nose and moustache — the Bayeux face reduced to its four marks
-            listOf(-8f, 8f).forEach { dx ->
-                scope.drawCircle(ThreadColor, radius = 2.5f, center = Offset(faceX + dx, faceY - 5f))
-                scope.drawLine(
-                    ThreadColor, Offset(faceX + dx - 6f, faceY - 12f), Offset(faceX + dx + 5f, faceY - 11f),
-                    strokeWidth = 2.5f, cap = StrokeCap.Round
+            // A banner does not bleed and its face does not come off, whatever is happening to the
+            // man it was painted from — strip the states that would fling the head across the cloth.
+            drawHead(
+                scope, faceX, faceY + 25f,
+                face.copy(
+                    isDead = false, isDying = false, headSquashed = false,
+                    deathType = DeathType.FALL_BACK, animFrame = 0f, facingRight = true
                 )
-            }
-            scope.drawLine(
-                ThreadColor, Offset(faceX, faceY - 3f), Offset(faceX, faceY + 5f),
-                strokeWidth = 2.5f, cap = StrokeCap.Round
-            )
-            scope.drawLine(
-                ThreadColor, Offset(faceX - 9f, faceY + 9f), Offset(faceX + 9f, faceY + 9f),
-                strokeWidth = 3f, cap = StrokeCap.Round
             )
         }
     }
@@ -805,16 +816,22 @@ object TapestryRenderer {
     private fun drawLegs(scope: DrawScope, cx: Float, cy: Float, fighter: FighterState) {
         if (fighter.isChariot) return
         val anim = fighter.animFrame
+        // He stands on the sledge deck with both feet; the dogs do the running. Legs that stride
+        // while the ground goes past under them is the mount equivalent of moon-walking, and it is
+        // the giveaway that he is being carried rather than travelling under his own power.
+        val ridingStanding = fighter.isSleigh
         // Simple leg swing: left/right legs swing in opposition
-        val angleL = if (fighter.isDead || fighter.isDying) 0f else sin(anim) * 0.45f
-        val angleR = if (fighter.isDead || fighter.isDying) 0f else -sin(anim) * 0.45f
+        val angleL = if (fighter.isDead || fighter.isDying || ridingStanding) 0f else sin(anim) * 0.45f
+        val angleR = if (fighter.isDead || fighter.isDying || ridingStanding) 0f else -sin(anim) * 0.45f
 
         // Leg colors typical of Bayeux: terracotta, mustard, green
         val legColorL = if (fighter.isPlayer) Color(0xFF9E3624) else Color(0xFF4C613D)
         val legColorR = if (fighter.isPlayer) Color(0xFFB08221) else Color(0xFF265063)
 
-        // Left Leg (Back leg) - don't draw if mounted (hidden behind horse) unless on stilts
-        if (!fighter.isMounted || fighter.isStilts) {
+        // Left Leg (Back leg) - don't draw if mounted (hidden behind horse) unless on stilts, or
+        // standing on the sledge, where there is no barrel of a horse to hide it and a one-legged
+        // man on a deck reads as a mistake.
+        if (!fighter.isMounted || fighter.isStilts || ridingStanding) {
             scope.withTransform({
                 rotate(radToDeg(angleL), pivot = Offset(cx - 10f, cy + 90f))
             }) {
@@ -1421,7 +1438,7 @@ object TapestryRenderer {
         val hy = cy - 25f
         val fur = Color(0xFFB4622A)
         val furDark = androidx.compose.ui.graphics.lerp(fur, Color.Black, 0.3f)
-        val dir = if (fighter.facingRight) 1f else -1f
+        val dir = FORWARD   // see drawGiantFrog: drawCharacter has already mirrored us
 
         val neck = Path().apply {
             moveTo(hx - 10f, hy + 40f); lineTo(hx - 8f, hy + 4f)
@@ -1474,7 +1491,7 @@ object TapestryRenderer {
         val hy = cy - 25f
         val furColor = Color(0xFFD8CBB4)
         val inner = Color(0xFFD4728A)
-        val dir = if (fighter.facingRight) 1f else -1f
+        val dir = FORWARD   // see drawGiantFrog: drawCharacter has already mirrored us
 
         val neck = Path().apply {
             moveTo(hx - 9f, hy + 40f); lineTo(hx - 7f, hy + 4f)
@@ -2561,6 +2578,10 @@ object TapestryRenderer {
     private fun drawRangedEvolution(scope: DrawScope, fighter: FighterState, headPos: Offset) {
         val ups = fighter.rangedUpgrades
         if (ups.isEmpty() || !fighter.weaponHead.isRanged) return
+        // Everything below is bow furniture — gilt bands on the limb tips, chevrons down the belly,
+        // a cord wrap at the grip, spare strings — all laid out at ±span from the head. A thrown
+        // pot has no limb to decorate, so on a bomb it drew as pale bars floating around the pot.
+        if (fighter.weaponHead.id in OVERARM_THROW_HEAD_IDS) return
         val isSling = fighter.weaponHead.id == "head_slingshot"
         val long = fighter.weaponHead.id == "head_longbow"
         val span = if (isSling) 12f else if (long) 36f else 30f
@@ -3371,6 +3392,10 @@ object TapestryRenderer {
         if (fighter.weaponHead.id == "head_bare" && fighter.weaponHandle.id == "handle_fists") return null
         
         val isBowOrSlingshot = fighter.weaponHead.id in listOf("head_bow", "head_longbow", "head_slingshot")
+        // An extension bought for a MISSILE weapon buys distance for the shot, not a longer stick to
+        // hold. Crossbow, javelin and bomb are ranged but not in isBowOrSlingshot, so they used to
+        // take the melee haft growth and drift out of the fist one card at a time.
+        val visualExtensions = if (fighter.weaponHead.isRanged) 0 else fighter.handleExtensionCount
 
         // Determine direction vector of the handle/pole (visually lengthen based on haft extensions)
         val handleLen = if (isBowOrSlingshot) {
@@ -3389,13 +3414,13 @@ object TapestryRenderer {
             // the haft basis (the shaft rises as it goes out, so only 0.894 of it is ground).
             // It used to add 48px AND a 12% stretch, both multiplied by size, while the stat added
             // a flat 0.35m — the picture and the hitbox grew at completely different rates.
-            baseLen + fighter.handleExtensionCount *
+            baseLen + visualExtensions *
                 (GameData.EXTENSION_REACH_PX / GameData.HAFT_BASIS_X / fighter.size)
         }
         // The bespoke hafts below (antler, trumpet, wheelbarrow, anchor) draw fixed paths rather
         // than a shaft of handleLen, so they take the growth as a scale or they alone would show
         // no sign of an extension the player paid a reward card for.
-        val extScale = 1f + fighter.handleExtensionCount * 0.16f
+        val extScale = 1f + visualExtensions * 0.16f
 
         // Handle shaft (wooden)
         val shaftEnd = androidx.compose.ui.geometry.Offset(hx + handleLen * 0.8f, hy - handleLen * 0.4f)
@@ -3408,6 +3433,28 @@ object TapestryRenderer {
             scope.drawLine(ThreadColor, Offset(hx, hy), shaftEnd, strokeWidth = 2f, cap = StrokeCap.Round)
         }
         val isChainHandle = fighter.weaponHandle.id in listOf("handle_chain", "handle_flail_chain")
+
+        // Reach extensions push the head out along the haft axis, but several handles draw art of a
+        // fixed length — a log, a wheel, a ploughshare — so at high reach the head ended up floating
+        // in clear linen with nothing joining it to the grip.
+        //
+        // This is a lashed-on spar drawn UNDERNEATH the handle art: wherever the art already spans
+        // the distance it is completely hidden, and it only becomes visible in the gap it exists to
+        // fill. That is why it is drawn here rather than after the art, and why it costs nothing
+        // visually on the handles that were never broken.
+        //
+        // Only when extensions are actually in play, so an unextended weapon is pixel-identical to
+        // what it drew before. Chains are exempt: their head hangs off a pendulum rather than
+        // sitting at the end of a shaft, and a straight spar to it would be wrong.
+        if (visualExtensions > 0 && !isBowOrSlingshot && !isChainHandle) {
+            scope.drawLine(Color(0xFF8C6F47), Offset(hx, hy), shaftEnd, strokeWidth = 7f, cap = StrokeCap.Round)
+            scope.drawLine(ThreadColor, Offset(hx, hy), shaftEnd, strokeWidth = 2.5f, cap = StrokeCap.Round)
+            // The lashings, so the join reads as repaired rather than as a rendering seam.
+            val lx = shaftEnd.x - (shaftEnd.x - hx) * 0.18f
+            val ly = shaftEnd.y - (shaftEnd.y - hy) * 0.18f
+            scope.drawLine(ThreadColor, Offset(lx - 4f, ly - 7f), Offset(lx + 4f, ly + 7f), strokeWidth = 2f)
+        }
+
         if (isChainHandle && !isBowOrSlingshot) {
             val swing = fighter.swingProgress
             val gripEnd = Offset(hx - 10f, hy + 5f)

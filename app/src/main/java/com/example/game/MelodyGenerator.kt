@@ -93,9 +93,63 @@ private fun strongBeats(beatsPerBar: Int): Set<Float> = when (beatsPerBar) {
 private fun isStrong(beatsPerBar: Int, beat: Float): Boolean =
     strongBeats(beatsPerBar).any { kotlin.math.abs(it - beat) < 0.02f }
 
-// Melody register: keep degrees within [7, 16] approximately D4-A5 for finals 45-52.
-private const val DEG_LO = 7
-private const val DEG_HI = 16
+// Melody register. The floor used to be degree 7 — the octave above the final — which is also
+// where every phrase is anchored, so the tune sat on its own floor and could never dip below the
+// tonic. That costs the lower neighbour, the commonest ornament there is, and it means a motif
+// whose shape goes down has nowhere to go. A fifth of headroom underneath fixes both.
+private const val DEG_LO = 5
+private const val DEG_HI = 17
+
+/**
+ * The intervals a line may move by, in scale degrees.
+ *
+ * Drawn from a first-order chain — each interval's odds depend on the one before it — which puts
+ * two rules of counterpoint older than the tapestry into one table: a melody moves by step far
+ * more often than it leaps, and a leap is answered by a step back into the gap it opened. The
+ * motif is built out of the same chain, so voice-leading and melodic shape come from one place
+ * rather than two disagreeing ones.
+ */
+private val INTERVALS = intArrayOf(-4, -3, -2, -1, 0, 1, 2, 3, 4)
+
+private fun nextInterval(rng: Random, prev: Int, tight: Boolean = false): Int {
+    val recovering = Math.abs(prev) >= 3
+    val w = FloatArray(INTERVALS.size) { i ->
+        val iv = INTERVALS[i]
+        val size = Math.abs(iv)
+        // [tight] drops fourths and fifths from 12.5% of the chain to 2.5%. A motif is restated in
+        // every bar of its strain, so at eight notes to the bar one wide leap is heard eight times.
+        val base = if (tight) when (size) { 0 -> 3f; 1 -> 26f; 2 -> 4f; else -> 0.4f }
+            else when (size) { 0 -> 4f; 1 -> 14f; 2 -> 5f; else -> 1.5f }
+        if (!recovering) base else base * when {
+            iv == 0 -> 0.5f
+            size <= 2 && Integer.signum(iv) != Integer.signum(prev) -> 5f  // the step back in
+            else -> 0.15f
+        }
+    }
+    var roll = rng.nextFloat() * w.sum()
+    for (i in INTERVALS.indices) { roll -= w[i]; if (roll <= 0f) return INTERVALS[i] }
+    return 0
+}
+
+/** The germ every bar of a strain is made of: [len] intervals off the chain. */
+private fun makeMotif(rng: Random, len: Int, tight: Boolean = false): List<Int> {
+    var prev = 0
+    return List(len) { nextInterval(rng, prev, tight).also { prev = it } }
+}
+
+/** State it, invert it, run it backwards, or both — the four permutations a strain works with. */
+private fun varyMotif(motif: List<Int>, op: Int): List<Int> = when (op) {
+    1 -> motif.map { -it }
+    2 -> motif.reversed()
+    3 -> motif.reversed().map { -it }
+    else -> motif
+}
+
+/** A tritone against the bar's ground — the one interval the grounds and strums already dodge. */
+private fun isTritoneOver(spec: SongSpec, bar: Int, degree: Int): Boolean {
+    val root = degreeToMidi(spec, spec.ground[bar % 8].bassDegree)
+    return Math.floorMod(degreeToMidi(spec, degree) - root, 12) == 6
+}
 
 private fun chordDegreesAt(spec: SongSpec, bar: Int): List<Int> {
     val g = spec.ground[bar % 8].bassDegree
@@ -130,9 +184,31 @@ private fun generateStrain(
     val peak = (base + if (isB) 4 else 3).coerceAtMost(DEG_HI)
     val targets = listOf(base, base + 1, peak, base + 1, base, base + 1, peak - 1, base)
 
+    // One motif, permuted, rather than a fresh contour every bar. Bars used to draw their pitches
+    // from a random walk toward the target, so the tune rhymed rhythmically and never melodically —
+    // eight bars of unrelated shapes over the same rhythm. Now every bar states the same intervals,
+    // re-anchored to that bar's chord, and two bars per strain get the shape inverted or reversed.
+    // That is the whole difference between a tune with an idea in it and a plausible note sequence.
+    // A named piece states its own opening phrase; everything else invents one. Because every bar
+    // of the strain is a permutation of this motif, handing it a real incipit makes the whole
+    // strain a working-out of that phrase — the song is recognisably OF the piece rather than
+    // merely labelled with its name. The A strain gets the incipit; B invents, so the middle of
+    // the song still goes somewhere of its own.
+    val motifLen = maxOf(motifRhythm.size, altRhythm.size, 2) - 1
+    // BRAWL is the only family running eight notes to the bar at ~200bpm; at that rate a leapy germ
+    // reads as scattered rather than as a tune, so its chain stays stepwise.
+    val tight = spec.family == Family.BRAWL
+    val motif = spec.piece?.incipit?.takeIf { !isB }?.let { incipit ->
+        if (incipit.size >= motifLen) incipit.take(motifLen)
+        else incipit + makeMotif(rng, motifLen - incipit.size, tight)
+    } ?: makeMotif(rng, motifLen, tight)
+    val ops = List(8) { bar -> if (bar == 2 || bar == 6) 1 + rng.nextInt(3) else 0 }
+
     var prev = base
+    var barAnchor = base
     for (bar in 0 until 8) {
         val rhythm = if (bar % 2 == 0) motifRhythm else altRhythm  // rhythmic rhyme
+        val barMotif = varyMotif(motif, ops[bar])
         val barStart = bar * bpb
         val isCadBar = bar == 3 || bar == 7
         var beat = 0f
@@ -158,12 +234,25 @@ private fun generateStrain(
                 }
             } else if (bar == 0 && i <= 1 && spec.family == Family.TINTAGEL) {
                 degree = if (i == 0) base else base + 3   // final, then the rising 4th/5th gesture
-            } else if (isStrong(spec.beatsPerBar, beat)) {
-                degree = nearestChordDegree(spec, bar, targets[bar] + rng.nextInt(-1, 2))
+            } else if (i == 0) {
+                // The motif is transposed, not regenerated: each bar restates it from a chord tone
+                // near that bar's point on the arch, which is what makes bar 5 hear as bar 1 again.
+                degree = nearestChordDegree(spec, bar, targets[bar])
+                barAnchor = degree
             } else {
-                val toward = targets[bar]
-                degree = (prev + Integer.signum(toward - prev).let { if (it == 0) rng.nextInt(-1, 2) else it })
-                    .coerceIn(DEG_LO, DEG_HI)
+                val delta = barMotif[(i - 1) % barMotif.size]
+                // Off the top or bottom of the singer's range, the motif turns round rather than
+                // being clamped flat against the wall — a clamp would erase the shape it is here
+                // to preserve, and a run of repeated ceiling notes is exactly the old sameness.
+                var d = prev + delta
+                if (d !in DEG_LO..DEG_HI) d = prev - delta
+                // Eight notes to the bar gives the walk room to drift a long way from the arch, and
+                // the next downbeat then hauls it back in one leap — 70% of BRAWL's wide jumps were
+                // that seam, not the motif. Turn the walk round near the edge of its own bar's
+                // ambit, by the same reflection the register floor uses rather than a flat clamp.
+                if (tight && Math.abs(d - barAnchor) > 3) d = prev - delta
+                d = d.coerceIn(DEG_LO, DEG_HI)
+                degree = if (isTritoneOver(spec, bar, d)) nearestChordDegree(spec, bar, d) else d
             }
             out.add(barStart + beat to (dur to degree))
             if (degree != FICTA) prev = degree

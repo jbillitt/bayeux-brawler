@@ -57,6 +57,39 @@ class SiegeContentTest {
         assertFalse(SiegeRules.beginClimbUp(state, player, listOf(wall)))
     }
 
+    /**
+     * The bug: the player stopped using his own siege ladders. His retinue climbed and he stayed at
+     * the bottom, because his branch demanded a clear field and theirs did not. Both now ask one
+     * predicate, so if they ever diverge again this fails rather than shipping.
+     */
+    @Test
+    fun `3a player and retinue answer the ladder identically`() {
+        val wall = fighter("wall", EnemyArchetype.WALL_ARCHER, elevated = true)
+        val state = SiegeState(50f, 100f, setOf(wall.id), emptySet(), siegeLadders = true)
+        val atWall = { id: String, isPlayer: Boolean ->
+            fighter(id, player = isPlayer).apply { posX = GameViewModel.SIEGE_GATE_X - 20f }
+        }
+        val player = atWall("player", true)
+        val squire = atWall("squire", true)
+
+        // Gate still standing, both stood at the wall, neither with anything left to hit down here.
+        assertTrue(SiegeRules.mayScaleWall(state, player, hasReachableTarget = false))
+        assertTrue(SiegeRules.mayScaleWall(state, squire, hasReachableTarget = false))
+
+        // A foe he can actually close with keeps him on the ground — and it must keep BOTH of them
+        // on the ground, which is the half that was broken.
+        assertFalse(SiegeRules.mayScaleWall(state, player, hasReachableTarget = true))
+        assertFalse(SiegeRules.mayScaleWall(state, squire, hasReachableTarget = true))
+
+        // No climbing from the beach.
+        player.posX = GameViewModel.SIEGE_GATE_X - 400f
+        assertFalse(SiegeRules.mayScaleWall(state, player, hasReachableTarget = false))
+
+        // And no ladder at all without the reward or a broken gate.
+        val noLadder = SiegeState(50f, 100f, setOf(wall.id), emptySet())
+        assertFalse(SiegeRules.mayScaleWall(noLadder, squire, hasReachableTarget = false))
+    }
+
     @Test
     fun `4 elevated player automatically descends after last parapet death`() {
         val player = fighter("player", player = true).apply { elevated = true }
